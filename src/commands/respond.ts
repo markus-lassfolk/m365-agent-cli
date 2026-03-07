@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
-import { getCalendarEvents, respondToEvent, getOwaUserInfo, ResponseType } from '../lib/owa-client.js';
+import { getCalendarEvents, respondToEvent, getOwaUserInfo, ResponseType } from '../lib/ews-client.js';
 
 function formatTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -34,7 +34,6 @@ export const respondCommand = new Command('respond')
   .option('--only-required', 'Only show required invitations')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
-  .option('-i, --interactive', 'Open browser to extract token automatically')
   .action(async (action: string | undefined, eventIndex: string | undefined, options: {
     id?: string;
     comment?: string;
@@ -43,11 +42,9 @@ export const respondCommand = new Command('respond')
     onlyRequired?: boolean;
     json?: boolean;
     token?: string;
-    interactive?: boolean;
   }) => {
     const authResult = await resolveAuth({
       token: options.token,
-      interactive: options.interactive,
     });
 
     if (!authResult.success) {
@@ -55,7 +52,7 @@ export const respondCommand = new Command('respond')
         console.log(JSON.stringify({ error: authResult.error }, null, 2));
       } else {
         console.error(`Error: ${authResult.error}`);
-        console.error('\nRun `clippy login --interactive` to authenticate.');
+        console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
       }
       process.exit(1);
     }

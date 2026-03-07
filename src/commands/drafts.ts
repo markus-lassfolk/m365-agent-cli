@@ -1,13 +1,10 @@
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
-import { getEmails, getEmail, OwaResponse } from '../lib/owa-client.js';
+import { getEmails, getEmail, createDraft, updateDraft, sendDraftById, deleteDraftById, addAttachmentToDraft } from '../lib/ews-client.js';
 import { markdownToHtml } from '../lib/markdown.js';
 import { readFile, stat } from 'fs/promises';
 import { basename } from 'path';
 import { lookup } from 'mime-types';
-
-const USER_AGENT =
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
@@ -28,279 +25,6 @@ function truncate(str: string, maxLen: number): string {
   return str.substring(0, maxLen - 1) + '\u2026';
 }
 
-async function createDraft(
-  token: string,
-  options: {
-    to?: string[];
-    cc?: string[];
-    subject?: string;
-    body?: string;
-    bodyType?: 'Text' | 'HTML';
-  }
-): Promise<OwaResponse<{ Id: string }>> {
-  const url = 'https://outlook.office.com/api/v2.0/me/messages';
-
-  const message: Record<string, unknown> = {};
-
-  if (options.subject) {
-    message.Subject = options.subject;
-  }
-
-  if (options.body) {
-    message.Body = {
-      ContentType: options.bodyType || 'Text',
-      Content: options.body,
-    };
-  }
-
-  if (options.to && options.to.length > 0) {
-    message.ToRecipients = options.to.map(email => ({
-      EmailAddress: { Address: email },
-    }));
-  }
-
-  if (options.cc && options.cc.length > 0) {
-    message.CcRecipients = options.cc.map(email => ({
-      EmailAddress: { Address: email },
-    }));
-  }
-
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        'User-Agent': USER_AGENT,
-        Accept: 'application/json',
-      },
-      body: JSON.stringify(message),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      return {
-        ok: false,
-        status: response.status,
-        error: {
-          code: `HTTP_${response.status}`,
-          message: errorText || response.statusText,
-        },
-      };
-    }
-
-    const data = await response.json() as { Id: string };
-    return { ok: true, status: response.status, data };
-  } catch (err) {
-    return {
-      ok: false,
-      status: 0,
-      error: {
-        code: 'NETWORK_ERROR',
-        message: err instanceof Error ? err.message : 'Unknown error',
-      },
-    };
-  }
-}
-
-async function updateDraft(
-  token: string,
-  draftId: string,
-  options: {
-    to?: string[];
-    cc?: string[];
-    subject?: string;
-    body?: string;
-    bodyType?: 'Text' | 'HTML';
-  }
-): Promise<OwaResponse<void>> {
-  const url = `https://outlook.office.com/api/v2.0/me/messages/${encodeURIComponent(draftId)}`;
-
-  const message: Record<string, unknown> = {};
-
-  if (options.subject !== undefined) {
-    message.Subject = options.subject;
-  }
-
-  if (options.body !== undefined) {
-    message.Body = {
-      ContentType: options.bodyType || 'Text',
-      Content: options.body,
-    };
-  }
-
-  if (options.to !== undefined) {
-    message.ToRecipients = options.to.map(email => ({
-      EmailAddress: { Address: email },
-    }));
-  }
-
-  if (options.cc !== undefined) {
-    message.CcRecipients = options.cc.map(email => ({
-      EmailAddress: { Address: email },
-    }));
-  }
-
-  try {
-    const response = await fetch(url, {
-      method: 'PATCH',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        'User-Agent': USER_AGENT,
-        Accept: 'application/json',
-      },
-      body: JSON.stringify(message),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      return {
-        ok: false,
-        status: response.status,
-        error: {
-          code: `HTTP_${response.status}`,
-          message: errorText || response.statusText,
-        },
-      };
-    }
-
-    return { ok: true, status: response.status };
-  } catch (err) {
-    return {
-      ok: false,
-      status: 0,
-      error: {
-        code: 'NETWORK_ERROR',
-        message: err instanceof Error ? err.message : 'Unknown error',
-      },
-    };
-  }
-}
-
-async function sendDraft(token: string, draftId: string): Promise<OwaResponse<void>> {
-  const url = `https://outlook.office.com/api/v2.0/me/messages/${encodeURIComponent(draftId)}/send`;
-
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'User-Agent': USER_AGENT,
-      },
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      return {
-        ok: false,
-        status: response.status,
-        error: {
-          code: `HTTP_${response.status}`,
-          message: errorText || response.statusText,
-        },
-      };
-    }
-
-    return { ok: true, status: response.status };
-  } catch (err) {
-    return {
-      ok: false,
-      status: 0,
-      error: {
-        code: 'NETWORK_ERROR',
-        message: err instanceof Error ? err.message : 'Unknown error',
-      },
-    };
-  }
-}
-
-async function deleteDraft(token: string, draftId: string): Promise<OwaResponse<void>> {
-  const url = `https://outlook.office.com/api/v2.0/me/messages/${encodeURIComponent(draftId)}`;
-
-  try {
-    const response = await fetch(url, {
-      method: 'DELETE',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'User-Agent': USER_AGENT,
-      },
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      return {
-        ok: false,
-        status: response.status,
-        error: {
-          code: `HTTP_${response.status}`,
-          message: errorText || response.statusText,
-        },
-      };
-    }
-
-    return { ok: true, status: response.status };
-  } catch (err) {
-    return {
-      ok: false,
-      status: 0,
-      error: {
-        code: 'NETWORK_ERROR',
-        message: err instanceof Error ? err.message : 'Unknown error',
-      },
-    };
-  }
-}
-
-async function addAttachmentToDraft(
-  token: string,
-  draftId: string,
-  attachment: { name: string; contentType: string; contentBytes: string }
-): Promise<OwaResponse<void>> {
-  const url = `https://outlook.office.com/api/v2.0/me/messages/${encodeURIComponent(draftId)}/attachments`;
-
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        'User-Agent': USER_AGENT,
-        Accept: 'application/json',
-      },
-      body: JSON.stringify({
-        '@odata.type': '#Microsoft.OutlookServices.FileAttachment',
-        Name: attachment.name,
-        ContentType: attachment.contentType,
-        ContentBytes: attachment.contentBytes,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      return {
-        ok: false,
-        status: response.status,
-        error: {
-          code: `HTTP_${response.status}`,
-          message: errorText || response.statusText,
-        },
-      };
-    }
-
-    return { ok: true, status: response.status };
-  } catch (err) {
-    return {
-      ok: false,
-      status: 0,
-      error: {
-        code: 'NETWORK_ERROR',
-        message: err instanceof Error ? err.message : 'Unknown error',
-      },
-    };
-  }
-}
-
 export const draftsCommand = new Command('drafts')
   .description('Manage email drafts')
   .option('-n, --limit <number>', 'Number of drafts to show', '10')
@@ -318,7 +42,6 @@ export const draftsCommand = new Command('drafts')
   .option('--html', 'Treat body as HTML')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
-  .option('-i, --interactive', 'Open browser to extract token automatically')
   .action(async (options: {
     limit: string;
     read?: string;
@@ -335,11 +58,9 @@ export const draftsCommand = new Command('drafts')
     html?: boolean;
     json?: boolean;
     token?: string;
-    interactive?: boolean;
   }) => {
     const authResult = await resolveAuth({
       token: options.token,
-      interactive: options.interactive,
     });
 
     if (!authResult.success) {
@@ -347,14 +68,14 @@ export const draftsCommand = new Command('drafts')
         console.log(JSON.stringify({ error: authResult.error }, null, 2));
       } else {
         console.error(`Error: ${authResult.error}`);
-        console.error('\nRun `clippy login --interactive` to authenticate.');
+        console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
       }
       process.exit(1);
     }
 
     const limit = parseInt(options.limit) || 10;
 
-    // Get drafts for listing and index-based operations
+    // Get drafts for listing
     const draftsResult = await getEmails({
       token: authResult.token!,
       folder: 'drafts',
@@ -540,7 +261,7 @@ export const draftsCommand = new Command('drafts')
     // Handle send
     if (options.send) {
       const id = options.send.trim();
-      const result = await sendDraft(authResult.token!, id);
+      const result = await sendDraftById(authResult.token!, id);
 
       if (!result.ok) {
         console.error(`Error: ${result.error?.message || 'Failed to send draft'}`);
@@ -554,7 +275,7 @@ export const draftsCommand = new Command('drafts')
     // Handle delete
     if (options.delete) {
       const id = options.delete.trim();
-      const result = await deleteDraft(authResult.token!, id);
+      const result = await deleteDraftById(authResult.token!, id);
 
       if (!result.ok) {
         console.error(`Error: ${result.error?.message || 'Failed to delete draft'}`);

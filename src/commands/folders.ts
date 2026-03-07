@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
-import { getMailFolders, createMailFolder, updateMailFolder, deleteMailFolder } from '../lib/owa-client.js';
+import { getMailFolders, createMailFolder, updateMailFolder, deleteMailFolder } from '../lib/ews-client.js';
 
 export const foldersCommand = new Command('folders')
   .description('Manage mail folders')
@@ -10,7 +10,6 @@ export const foldersCommand = new Command('folders')
   .option('--to <newname>', 'New name for rename operation')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
-  .option('-i, --interactive', 'Open browser to extract token automatically')
   .action(async (options: {
     create?: string;
     rename?: string;
@@ -18,11 +17,9 @@ export const foldersCommand = new Command('folders')
     to?: string;
     json?: boolean;
     token?: string;
-    interactive?: boolean;
   }) => {
     const authResult = await resolveAuth({
       token: options.token,
-      interactive: options.interactive,
     });
 
     if (!authResult.success) {
@@ -30,7 +27,7 @@ export const foldersCommand = new Command('folders')
         console.log(JSON.stringify({ error: authResult.error }, null, 2));
       } else {
         console.error(`Error: ${authResult.error}`);
-        console.error('\nRun `clippy login --interactive` to authenticate.');
+        console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
       }
       process.exit(1);
     }

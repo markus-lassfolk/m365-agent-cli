@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
-import { getCalendarEvents, type CalendarEvent, type CalendarAttendee } from '../lib/owa-client.js';
+import { getCalendarEvents, type CalendarEvent, type CalendarAttendee } from '../lib/ews-client.js';
 
 function formatTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -178,11 +178,9 @@ export const calendarCommand = new Command('calendar')
   .option('-v, --verbose', 'Show attendees and more details')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
-  .option('-i, --interactive', 'Open browser to extract token automatically')
-  .action(async (startDay: string, endDay: string | undefined, options: { json?: boolean; token?: string; interactive?: boolean; verbose?: boolean }) => {
+  .action(async (startDay: string, endDay: string | undefined, options: { json?: boolean; token?: string; verbose?: boolean }) => {
     const authResult = await resolveAuth({
       token: options.token,
-      interactive: options.interactive,
     });
 
     if (!authResult.success) {
@@ -190,7 +188,7 @@ export const calendarCommand = new Command('calendar')
         console.log(JSON.stringify({ error: authResult.error }, null, 2));
       } else {
         console.error(`Error: ${authResult.error}`);
-        console.error('\nRun `clippy login --interactive` to authenticate.');
+        console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
       }
       process.exit(1);
     }

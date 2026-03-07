@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
-import { sendEmail, EmailAttachment } from '../lib/owa-client.js';
+import { sendEmail, EmailAttachment } from '../lib/ews-client.js';
 import { markdownToHtml } from '../lib/markdown.js';
 import { readFile, stat } from 'fs/promises';
 import { basename } from 'path';
@@ -18,7 +18,6 @@ export const sendCommand = new Command('send')
   .option('--markdown', 'Parse body as markdown (bold, links, lists)')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
-  .option('-i, --interactive', 'Open browser to extract token automatically')
   .action(async (options: {
     to: string;
     subject: string;
@@ -30,11 +29,9 @@ export const sendCommand = new Command('send')
     markdown?: boolean;
     json?: boolean;
     token?: string;
-    interactive?: boolean;
   }) => {
     const authResult = await resolveAuth({
       token: options.token,
-      interactive: options.interactive,
     });
 
     if (!authResult.success) {
@@ -42,7 +39,7 @@ export const sendCommand = new Command('send')
         console.log(JSON.stringify({ error: authResult.error }, null, 2));
       } else {
         console.error(`Error: ${authResult.error}`);
-        console.error('\nRun `clippy login --interactive` to authenticate.');
+        console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
       }
       process.exit(1);
     }

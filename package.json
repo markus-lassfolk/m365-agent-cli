@@ -1,7 +1,7 @@
 {
   "name": "clippy",
   "version": "0.1.1",
-  "description": "CLI for Microsoft 365/OWA using cookie-based authentication",
+  "description": "CLI for Microsoft 365/EWS using OAuth2 refresh token authentication",
   "type": "module",
   "main": "src/index.ts",
   "bin": {
@@ -13,8 +13,7 @@
   },
   "dependencies": {
     "commander": "^12.0.0",
-    "mime-types": "^3.0.2",
-    "playwright": "^1.40.0"
+    "mime-types": "^3.0.2"
   },
   "devDependencies": {
     "@types/bun": "latest",

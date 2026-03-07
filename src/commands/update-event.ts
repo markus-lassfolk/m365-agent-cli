@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
-import { getCalendarEvents, updateEvent, searchRooms, getRooms, getCalendarEvent } from '../lib/owa-client.js';
+import { getCalendarEvents, updateEvent, searchRooms, getRooms, getCalendarEvent } from '../lib/ews-client.js';
 
 function formatTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -78,7 +78,6 @@ export const updateEventCommand = new Command('update-event')
   .option('--no-teams', 'Remove Teams meeting')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
-  .option('-i, --interactive', 'Open browser to extract token automatically')
   .action(async (eventIndex: string | undefined, options: {
     id?: string;
     day: string;
@@ -92,11 +91,9 @@ export const updateEventCommand = new Command('update-event')
     teams?: boolean;
     json?: boolean;
     token?: string;
-    interactive?: boolean;
   }) => {
     const authResult = await resolveAuth({
       token: options.token,
-      interactive: options.interactive,
     });
 
     if (!authResult.success) {
@@ -104,7 +101,7 @@ export const updateEventCommand = new Command('update-event')
         console.log(JSON.stringify({ error: authResult.error }, null, 2));
       } else {
         console.error(`Error: ${authResult.error}`);
-        console.error('\nRun `clippy login --interactive` to authenticate.');
+        console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
       }
       process.exit(1);
     }

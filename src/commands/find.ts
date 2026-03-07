@@ -1,47 +1,6 @@
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
-
-interface Person {
-  DisplayName?: string;
-  GivenName?: string;
-  Surname?: string;
-  JobTitle?: string;
-  Department?: string;
-  OfficeLocation?: string;
-  UserPrincipalName?: string;
-  ScoredEmailAddresses?: Array<{ Address?: string }>;
-  Phones?: Array<{ Number?: string; Type?: string }>;
-  PersonType?: { Class?: string; Subclass?: string };
-}
-
-async function searchPeople(
-  token: string,
-  query: string,
-  filter?: 'people' | 'rooms'
-): Promise<Person[]> {
-  const url = `https://outlook.office.com/api/v2.0/me/people?$search=${encodeURIComponent(query)}&$top=25`;
-
-  const response = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/json',
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Search failed: ${response.status}`);
-  }
-
-  const data = (await response.json()) as { value: Person[] };
-
-  if (filter === 'rooms') {
-    return data.value.filter(p => p.PersonType?.Subclass === 'Room');
-  } else if (filter === 'people') {
-    return data.value.filter(p => p.PersonType?.Subclass !== 'Room');
-  }
-
-  return data.value;
-}
+import { resolveNames } from '../lib/ews-client.js';
 
 export const findCommand = new Command('find')
   .description('Search for people or rooms')
@@ -50,17 +9,14 @@ export const findCommand = new Command('find')
   .option('--people', 'Only show people (exclude rooms)')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
-  .option('-i, --interactive', 'Open browser to extract token automatically')
   .action(async (query: string, options: {
     rooms?: boolean;
     people?: boolean;
     json?: boolean;
     token?: string;
-    interactive?: boolean;
   }) => {
     const authResult = await resolveAuth({
       token: options.token,
-      interactive: options.interactive,
     });
 
     if (!authResult.success) {
@@ -68,24 +24,40 @@ export const findCommand = new Command('find')
         console.log(JSON.stringify({ error: authResult.error }, null, 2));
       } else {
         console.error(`Error: ${authResult.error}`);
-        console.error('\nRun `clippy login --interactive` to authenticate.');
+        console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
       }
       process.exit(1);
     }
 
-    const filter = options.rooms ? 'rooms' : options.people ? 'people' : undefined;
-
     try {
-      const results = await searchPeople(authResult.token!, query, filter);
+      const result = await resolveNames(authResult.token!, query);
+
+      if (!result.ok || !result.data) {
+        if (options.json) {
+          console.log(JSON.stringify({ error: result.error?.message || 'Search failed' }, null, 2));
+        } else {
+          console.error(`Error: ${result.error?.message || 'Search failed'}`);
+        }
+        process.exit(1);
+      }
+
+      let results = result.data;
+
+      // Filter by type if requested
+      if (options.rooms) {
+        results = results.filter(p => p.MailboxType === 'Room');
+      } else if (options.people) {
+        results = results.filter(p => p.MailboxType !== 'Room');
+      }
 
       if (options.json) {
         console.log(JSON.stringify({
           results: results.map(p => ({
             name: p.DisplayName,
-            email: p.ScoredEmailAddresses?.[0]?.Address || p.UserPrincipalName,
+            email: p.EmailAddress,
             title: p.JobTitle,
             department: p.Department,
-            type: p.PersonType?.Subclass === 'Room' ? 'Room' : 'Person',
+            type: p.MailboxType === 'Room' ? 'Room' : 'Person',
           })),
         }, null, 2));
         return;
@@ -100,13 +72,12 @@ export const findCommand = new Command('find')
       console.log('\u2500'.repeat(60));
 
       for (const person of results) {
-        const isRoom = person.PersonType?.Subclass === 'Room';
-        const email = person.ScoredEmailAddresses?.[0]?.Address || person.UserPrincipalName;
+        const isRoom = person.MailboxType === 'Room';
         const icon = isRoom ? '\u{1F4CD}' : '\u{1F464}';
 
         console.log(`\n  ${icon} ${person.DisplayName}`);
-        if (email) {
-          console.log(`     ${email}`);
+        if (person.EmailAddress) {
+          console.log(`     ${person.EmailAddress}`);
         }
         if (!isRoom) {
           if (person.JobTitle) {
