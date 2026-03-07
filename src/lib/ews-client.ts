@@ -356,7 +356,9 @@ function parseCalendarItem(block: string): CalendarEvent {
   const organizerBlock = extractSelfClosingOrBlock(block, 'Organizer');
   const organizerName = extractTag(organizerBlock, 'Name');
   const organizerEmail = extractTag(organizerBlock, 'EmailAddress');
-  const isOrganizer = organizerEmail.toLowerCase() === EWS_USERNAME.toLowerCase();
+  const myResponseType = extractTag(block, 'MyResponseType');
+  const isOrganizer = myResponseType === 'Organizer' ||
+    organizerEmail.toLowerCase() === EWS_USERNAME.toLowerCase();
 
   // Attendees
   const attendees: CalendarAttendee[] = [];
@@ -586,6 +588,7 @@ export async function getCalendarEvents(
           <t:FieldURI FieldURI="item:Categories" />
           <t:FieldURI FieldURI="calendar:IsAllDayEvent" />
           <t:FieldURI FieldURI="calendar:IsCancelled" />
+          <t:FieldURI FieldURI="calendar:MyResponseType" />
           <t:FieldURI FieldURI="calendar:LegacyFreeBusyStatus" />
           <t:FieldURI FieldURI="item:Importance" />
           <t:FieldURI FieldURI="item:TextBody" />
@@ -625,6 +628,7 @@ export async function getCalendarEvent(
           <t:FieldURI FieldURI="item:Categories" />
           <t:FieldURI FieldURI="calendar:IsAllDayEvent" />
           <t:FieldURI FieldURI="calendar:IsCancelled" />
+          <t:FieldURI FieldURI="calendar:MyResponseType" />
           <t:FieldURI FieldURI="calendar:LegacyFreeBusyStatus" />
           <t:FieldURI FieldURI="item:Importance" />
           <t:FieldURI FieldURI="item:TextBody" />
