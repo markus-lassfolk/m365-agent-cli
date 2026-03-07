@@ -1,6 +1,6 @@
 # Clippy
 
-A command-line interface for Microsoft 365 / Outlook Web Access (OWA). Manage your calendar and email directly from the terminal.
+A command-line interface for Microsoft 365 using Exchange Web Services (EWS). Manage your calendar and email directly from the terminal.
 
 ## Installation
 
@@ -22,52 +22,29 @@ clippy <command>
 
 ## Authentication
 
-Clippy uses browser-based authentication to obtain tokens from Outlook. During login, it captures both an access token (short-lived, ~1 hour) and a refresh token (long-lived, days/weeks).
+Clippy uses OAuth2 with a refresh token to authenticate against EWS. You need an Azure AD app registration with EWS permissions.
+
+### Setup
+
+Create a `.env` file in the project root (or set environment variables):
 
 ```bash
-# First time setup - opens browser for login
-clippy login --interactive
+EWS_CLIENT_ID=your-azure-app-client-id
+EWS_REFRESH_TOKEN=your-refresh-token
+```
 
+### How It Works
+
+1. Clippy uses the refresh token to obtain a short-lived access token via Microsoft's OAuth2 endpoint
+2. Access tokens are cached in `~/.config/clippy/token-cache.json` and refreshed automatically when expired
+3. Microsoft may rotate the refresh token on each use — the latest one is cached automatically
+
+### Verify Authentication
+
+```bash
 # Check who you're logged in as
 clippy whoami
-
-# Refresh token (also runs automatically in background)
-clippy refresh
 ```
-
-### How Token Refresh Works
-
-1. **Initial login**: Browser opens, you sign in, Clippy captures both access and refresh tokens
-2. **Access token expires**: Clippy automatically uses the refresh token to get a new access token via API (no browser needed)
-3. **Refresh token rotates**: Microsoft issues a new refresh token with each refresh, keeping the chain alive
-
-This is more reliable than session cookies, which Microsoft can invalidate server-side at any time.
-
-### Background Session Keepalive
-
-To keep your session alive indefinitely:
-
-```bash
-# Start keepalive (keeps browser session warm)
-clippy keepalive
-
-# Or install as macOS LaunchAgent (recommended)
-# Create ~/Library/LaunchAgents/com.clippy.keepalive.plist
-```
-
-The keepalive:
-- Refreshes the browser session every 10 minutes
-- Validates tokens against Microsoft's servers
-- Sets a `needs-login` marker if session expires (prevents browser spam)
-- After manual re-login, automatically resumes
-
-### Token Storage
-
-Tokens are stored in `~/.config/clippy/`:
-- `token-cache.json` - Access token, refresh token, expiry
-- `storage-state.json` - Browser cookies/session
-- `needs-login` - Marker file when re-auth is required
-- `keepalive-health.txt` - Last successful keepalive timestamp
 
 ---
 
@@ -80,15 +57,22 @@ Tokens are stored in `~/.config/clippy/`:
 clippy calendar
 
 # Specific day
-clippy calendar --day tomorrow
-clippy calendar --day monday
-clippy calendar --day 2024-02-15
+clippy calendar tomorrow
+clippy calendar monday
+clippy calendar 2024-02-15
 
-# Week view
-clippy calendar --week
+# Date ranges
+clippy calendar monday friday
+clippy calendar 2024-02-15 2024-02-20
 
-# Include details (description, attendees)
-clippy calendar --details
+# Week views
+clippy calendar week          # This week (Mon-Sun)
+clippy calendar lastweek
+clippy calendar nextweek
+
+# Include details (attendees, body preview, categories)
+clippy calendar -v
+clippy calendar week --verbose
 ```
 
 ### Create Events
@@ -138,15 +122,20 @@ clippy create-event "Sprint Planning" 09:00 11:00 \
 ### Update Events
 
 ```bash
-# List today's events to get index
+# List today's events
 clippy update-event
 
-# Update by index
-clippy update-event 1 --title "New Title"
-clippy update-event 2 --start 10:00 --end 11:00
-clippy update-event 3 --add-attendee "new@company.com"
-clippy update-event 4 --teams        # Add Teams meeting
-clippy update-event 5 --no-teams     # Remove Teams meeting
+# Update by event ID
+clippy update-event --id <eventId> --title "New Title"
+clippy update-event --id <eventId> --start 10:00 --end 11:00
+clippy update-event --id <eventId> --add-attendee "new@company.com"
+clippy update-event --id <eventId> --room "Room B"
+clippy update-event --id <eventId> --location "Off-site"
+clippy update-event --id <eventId> --teams        # Add Teams meeting
+clippy update-event --id <eventId> --no-teams     # Remove Teams meeting
+
+# Show events from a specific day
+clippy update-event --day tomorrow
 ```
 
 ### Delete/Cancel Events
@@ -155,14 +144,17 @@ clippy update-event 5 --no-teams     # Remove Teams meeting
 # List your events
 clippy delete-event
 
-# Delete event (cancels and notifies attendees if any)
-clippy delete-event 1
+# Delete event by ID
+clippy delete-event --id <eventId>
 
 # With cancellation message
-clippy delete-event 2 --message "Sorry, need to reschedule"
+clippy delete-event --id <eventId> --message "Sorry, need to reschedule"
 
 # Force delete without notification
-clippy delete-event 3 --force-delete
+clippy delete-event --id <eventId> --force-delete
+
+# Search for events by title
+clippy delete-event --search "standup"
 ```
 
 ### Respond to Invitations
@@ -171,23 +163,32 @@ clippy delete-event 3 --force-delete
 # List events needing response
 clippy respond
 
-# Accept/decline/tentative
-clippy respond 1 --accept
-clippy respond 2 --decline --message "Conflict with another meeting"
-clippy respond 3 --tentative
+# Accept/decline/tentative by event ID
+clippy respond accept --id <eventId>
+clippy respond decline --id <eventId> --comment "Conflict with another meeting"
+clippy respond tentative --id <eventId>
+
+# Don't send response to organizer
+clippy respond accept --id <eventId> --no-notify
+
+# Only show required invitations
+clippy respond list --only-required
 ```
 
 ### Find Meeting Times
 
 ```bash
-# Find free slots for yourself
-clippy findtime
+# Find free slots next week for yourself and others
+clippy findtime nextweek alice@company.com bob@company.com
 
-# Find times when multiple people are free
-clippy findtime --attendees "alice@company.com,bob@company.com"
+# Specific date range
+clippy findtime monday friday alice@company.com
 
-# Specific duration and date range
-clippy findtime --duration 60 --days 5
+# Custom duration and working hours
+clippy findtime nextweek alice@company.com --duration 60 --start 10 --end 16
+
+# Only check specified people (exclude yourself)
+clippy findtime nextweek alice@company.com --solo
 ```
 
 ---
@@ -212,7 +213,8 @@ clippy mail -p 2            # Page 2
 
 # Filters
 clippy mail --unread        # Only unread
-clippy mail --search "invoice"
+clippy mail --flagged       # Only flagged
+clippy mail -s "invoice"    # Search
 
 # Read an email
 clippy mail -r 1            # Read email #1
@@ -265,6 +267,9 @@ clippy mail --reply-all 1 --message "Thanks everyone!"
 
 # Reply with markdown
 clippy mail --reply 1 --message "**Got it!** Will do." --markdown
+
+# Save reply as draft instead of sending
+clippy mail --reply 1 --message "Draft reply" --draft
 
 # Forward an email
 clippy mail --forward 1 --to-addr "colleague@example.com"
@@ -332,7 +337,7 @@ clippy folders
 clippy folders --create "Projects"
 
 # Rename a folder
-clippy folders --rename "Projects" --new-name "Active Projects"
+clippy folders --rename "Projects" --to "Active Projects"
 
 # Delete a folder
 clippy folders --delete "Old Folder"
@@ -348,6 +353,9 @@ clippy find "john"
 
 # Search for rooms
 clippy find "conference" --rooms
+
+# Only people (exclude rooms)
+clippy find "smith" --people
 ```
 
 ---
@@ -358,8 +366,7 @@ All commands support:
 
 ```bash
 --json              # Output as JSON (for scripting)
---token <token>     # Use a specific token
--i, --interactive   # Force interactive browser login
+--token <token>     # Use a specific access token
 ```
 
 ---
@@ -407,8 +414,8 @@ clippy send \
 ## Requirements
 
 - [Bun](https://bun.sh) runtime
-- macOS (for browser-based authentication via Playwright)
-- Microsoft 365 / Outlook account
+- Microsoft 365 account
+- Azure AD app registration with EWS permissions (`EWS.AccessAsUser.All`)
 
 ## License
 
