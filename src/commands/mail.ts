@@ -294,6 +294,10 @@ export const mailCommand = new Command('mail')
       // Handle mark as read/unread
       if (options.markRead || options.markUnread) {
         const id = (options.markRead || options.markUnread)?.trim();
+        if (!id) {
+          console.error('Error: --mark-read/--mark-unread requires a message ID');
+          process.exit(1);
+        }
         const isRead = !!options.markRead;
 
         const result = await updateEmail(authResult.token!, id, { IsRead: isRead });
@@ -324,6 +328,10 @@ export const mailCommand = new Command('mail')
           actionLabel = 'Unflagged';
         }
 
+        if (!id) {
+          console.error('Error: --flag/--unflag/--complete requires a message ID');
+          process.exit(1);
+        }
         const result = await updateEmail(authResult.token!, id, {
           Flag: { FlagStatus: flagStatus }
         });
@@ -418,6 +426,10 @@ export const mailCommand = new Command('mail')
         }
 
         if (options.draft) {
+          if (!id) {
+            console.error('Error: --reply/--reply-all requires a message ID');
+            process.exit(1);
+          }
           const result = await replyToEmailDraft(authResult.token!, id, message, isReplyAll, isHtml, options.mailbox);
 
           if (!result.ok || !result.data) {
@@ -430,6 +442,10 @@ export const mailCommand = new Command('mail')
           return;
         }
 
+        if (!id) {
+          console.error('Error: --reply/--reply-all requires a message ID');
+          process.exit(1);
+        }
         const result = await replyToEmail(authResult.token!, id, message, isReplyAll, isHtml, options.mailbox);
 
         if (!result.ok) {
@@ -457,6 +473,10 @@ export const mailCommand = new Command('mail')
           .map((e) => e.trim())
           .filter(Boolean);
 
+        if (!id) {
+          console.error('Error: --forward requires a message ID');
+          process.exit(1);
+        }
         const result = await forwardEmail(authResult.token!, id, recipients, options.message, options.mailbox);
 
         if (!result.ok) {

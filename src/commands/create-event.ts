@@ -233,7 +233,9 @@ export const createEventCommand = new Command('create-event')
           }
 
           if (roomsResult.ok && roomsResult.data) {
-            const found = roomsResult.data.find((r) => r.Name.toLowerCase().includes(options.room?.toLowerCase()));
+            const found = roomsResult.data.find((r) =>
+              options.room ? r.Name.toLowerCase().includes(options.room.toLowerCase()) : false
+            );
             if (found) {
               roomEmail = found.Address;
               roomName = found.Name;
