@@ -14,7 +14,7 @@ interface CachedToken {
   expiresAt: number;
 }
 
-const TOKEN_CACHE_FILE = join(homedir(), '.config', 'clippy', 'token-cache.json');
+const TOKEN_CACHE_FILE_TEMPLATE = join(homedir(), '.config', 'clippy', 'token-cache-${identity}.json');
 
 function getJwtExpiration(token: string): number | null {
   try {
@@ -27,8 +27,9 @@ function getJwtExpiration(token: string): number | null {
   }
 }
 
-async function loadCachedToken(): Promise<CachedToken | null> {
+async function loadCachedToken(identity: string): Promise<CachedToken | null> {
   try {
+    const TOKEN_CACHE_FILE = TOKEN_CACHE_FILE_TEMPLATE.replace('${identity}', identity);
     const data = await readFile(TOKEN_CACHE_FILE, 'utf-8');
     return JSON.parse(data) as CachedToken;
   } catch {
@@ -36,10 +37,11 @@ async function loadCachedToken(): Promise<CachedToken | null> {
   }
 }
 
-async function saveCachedToken(token: CachedToken): Promise<void> {
+async function saveCachedToken(identity: string, token: CachedToken): Promise<void> {
   try {
     const dir = join(homedir(), '.config', 'clippy');
     await mkdir(dir, { recursive: true });
+    const TOKEN_CACHE_FILE = TOKEN_CACHE_FILE_TEMPLATE.replace('${identity}', identity);
     await writeFile(TOKEN_CACHE_FILE, JSON.stringify(token, null, 2), 'utf-8');
   } catch {
     // Ignore write errors
@@ -88,7 +90,7 @@ async function refreshAccessToken(clientId: string, refreshToken: string): Promi
   throw new Error(`Token refresh failed: ${lastError}`);
 }
 
-export async function resolveAuth(options?: { token?: string }): Promise<AuthResult> {
+export async function resolveAuth(options?: { token?: string, identity?: string }): Promise<AuthResult> {
   if (options?.token) {
     return { success: true, token: options.token };
   }
@@ -104,8 +106,10 @@ export async function resolveAuth(options?: { token?: string }): Promise<AuthRes
       };
     }
 
+    const identity = options?.identity || 'default';
+
     // Check cached token
-    const cached = await loadCachedToken();
+    const cached = await loadCachedToken(identity);
     if (cached && cached.expiresAt > Date.now() + 60_000) {
       return { success: true, token: cached.accessToken };
     }
@@ -116,7 +120,7 @@ export async function resolveAuth(options?: { token?: string }): Promise<AuthRes
     for (const rt of refreshTokens) {
       try {
         const result = await refreshAccessToken(clientId, rt);
-        await saveCachedToken(result);
+        await saveCachedToken(identity, result);
         return { success: true, token: result.accessToken };
       } catch {
         // Try next
