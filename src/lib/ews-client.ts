@@ -1014,7 +1014,7 @@ export async function getEmails(options: GetEmailsOptions): Promise<OwaResponse<
     }
 
     const queryStringXml = search
-      ? `<m:QueryString>${xmlEscape(`"${search.replace(/"/g, '\\"')}"`)}</m:QueryString>`
+      ? `<m:QueryString>${xmlEscape(search)}</m:QueryString>`
       : '';
 
     const envelope = soapEnvelope(`
