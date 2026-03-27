@@ -296,7 +296,7 @@ export const mailCommand = new Command('mail')
         const id = (options.markRead || options.markUnread)?.trim();
         const isRead = !!options.markRead;
 
-        const result = await updateEmail(authResult.token!, id, { IsRead: isRead });
+        const result = await updateEmail(authResult.token!, id ?? "", { IsRead: isRead });
 
         if (!result.ok) {
           console.error(`Error: ${result.error?.message || 'Failed to update email'}`);
@@ -324,7 +324,7 @@ export const mailCommand = new Command('mail')
           actionLabel = 'Unflagged';
         }
 
-        const result = await updateEmail(authResult.token!, id, {
+        const result = await updateEmail(authResult.token!, id ?? "", {
           Flag: { FlagStatus: flagStatus }
         });
 
@@ -418,7 +418,7 @@ export const mailCommand = new Command('mail')
         }
 
         if (options.draft) {
-          const result = await replyToEmailDraft(authResult.token!, id, message, isReplyAll, isHtml, options.mailbox);
+          const result = await replyToEmailDraft(authResult.token!, id ?? "", message, isReplyAll, isHtml, options.mailbox);
 
           if (!result.ok || !result.data) {
             console.error(`Error: ${result.error?.message || 'Failed to create reply draft'}`);
@@ -430,7 +430,7 @@ export const mailCommand = new Command('mail')
           return;
         }
 
-        const result = await replyToEmail(authResult.token!, id, message, isReplyAll, isHtml, options.mailbox);
+        const result = await replyToEmail(authResult.token!, id ?? "", message, isReplyAll, isHtml, options.mailbox);
 
         if (!result.ok) {
           console.error(`Error: ${result.error?.message || 'Failed to send reply'}`);
@@ -457,7 +457,7 @@ export const mailCommand = new Command('mail')
           .map((e) => e.trim())
           .filter(Boolean);
 
-        const result = await forwardEmail(authResult.token!, id, recipients, options.message, options.mailbox);
+        const result = await forwardEmail(authResult.token!, id ?? "", recipients ?? [], options.message ?? "", options.mailbox);
 
         if (!result.ok) {
           console.error(`Error: ${result.error?.message || 'Failed to forward email'}`);
