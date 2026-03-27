@@ -282,7 +282,7 @@ export const mailCommand = new Command('mail')
       const id = (options.markRead || options.markUnread)!.trim();
       const isRead = !!options.markRead;
 
-      const result = await updateEmail(authResult.token!, id, { IsRead: isRead });
+      const result = await updateEmail(authResult.token!, id ?? "", { IsRead: isRead });
 
       if (!result.ok) {
         console.error(`Error: ${result.error?.message || 'Failed to update email'}`);
@@ -310,7 +310,7 @@ export const mailCommand = new Command('mail')
         actionLabel = 'Unflagged';
       }
 
-      const result = await updateEmail(authResult.token!, id, {
+      const result = await updateEmail(authResult.token!, id ?? "", {
         Flag: { FlagStatus: flagStatus },
       });
 

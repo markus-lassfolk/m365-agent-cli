@@ -167,7 +167,7 @@ export const deleteEventCommand = new Command('delete-event')
     console.log(`\nDeleting: ${targetEvent.Subject}`);
     console.log(`  ${formatDate(targetEvent.Start.DateTime)} ${formatTime(targetEvent.Start.DateTime)} - ${formatTime(targetEvent.End.DateTime)}`);
 
-    let deleteResult;
+    let deleteResult: Awaited<ReturnType<typeof deleteEvent>>;
     let action: string;
 
     if (hasAttendees && !options.forceDelete) {
