@@ -572,9 +572,14 @@ export async function getOwaUserInfo(token: string): Promise<OwaResponse<OwaUser
 export async function getCalendarEvents(
   token: string,
   startDateTime: string,
-  endDateTime: string
+  endDateTime: string,
+  mailbox?: string
 ): Promise<OwaResponse<CalendarEvent[]>> {
   try {
+    const calendarFolderXml = mailbox
+      ? `<t:DistinguishedFolderId Id="calendar"><t:Mailbox><t:EmailAddress>${xmlEscape(mailbox)}</t:EmailAddress></t:Mailbox></t:DistinguishedFolderId>`
+      : `<t:DistinguishedFolderId Id="calendar" />`;
+
     const envelope = soapEnvelope(`
     <m:FindItem Traversal="Shallow">
       <m:ItemShape>
@@ -596,11 +601,11 @@ export async function getCalendarEvents(
       </m:ItemShape>
       <m:CalendarView StartDate="${xmlEscape(startDateTime)}" EndDate="${xmlEscape(endDateTime)}" />
       <m:ParentFolderIds>
-        <t:DistinguishedFolderId Id="calendar" />
+        ${calendarFolderXml}
       </m:ParentFolderIds>
     </m:FindItem>`);
 
-    const xml = await callEws(token, envelope);
+    const xml = await callEws(token, envelope, mailbox);
     const blocks = extractBlocks(xml, 'CalendarItem');
     const events = blocks.map(parseCalendarItem);
 
@@ -846,7 +851,7 @@ export async function updateEvent(options: UpdateEventOptions): Promise<OwaRespo
       </m:ItemChanges>
     </m:UpdateItem>`);
 
-    const xml = await callEws(token, envelope);
+    const xml = await callEws(token, envelope, mailbox);
     const block = extractBlocks(xml, 'CalendarItem')[0] || '';
     const newId = extractAttribute(block, 'ItemId', 'Id') || eventId;
 
@@ -943,7 +948,7 @@ export async function respondToEvent(options: RespondToEventOptions): Promise<Ow
       </m:Items>
     </m:CreateItem>`);
 
-    await callEws(token, envelope);
+    await callEws(token, envelope, mailbox);
     return { ok: true, status: 200 };
   } catch (err) {
     return ewsError(err);

@@ -76,7 +76,12 @@ export const deleteEventCommand = new Command('delete-event')
       const endOfDay = new Date(baseDate);
       endOfDay.setHours(23, 59, 59, 999);
 
-      const result = await getCalendarEvents(authResult.token!, startOfDay.toISOString(), endOfDay.toISOString());
+      const result = await getCalendarEvents(
+        authResult.token!,
+        startOfDay.toISOString(),
+        endOfDay.toISOString(),
+        options.mailbox
+      );
 
       if (!result.ok || !result.data) {
         if (options.json) {

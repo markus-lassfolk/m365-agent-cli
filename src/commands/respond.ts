@@ -78,7 +78,12 @@ export const respondCommand = new Command('respond')
       const futureDate = new Date(now);
       futureDate.setDate(futureDate.getDate() + 30); // Look 30 days ahead
 
-      const result = await getCalendarEvents(authResult.token!, now.toISOString(), futureDate.toISOString());
+      const result = await getCalendarEvents(
+        authResult.token!,
+        now.toISOString(),
+        futureDate.toISOString(),
+        options.mailbox
+      );
 
       if (!result.ok || !result.data) {
         if (options.json) {
