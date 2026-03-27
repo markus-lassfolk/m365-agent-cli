@@ -77,7 +77,6 @@ function extractSelfClosingOrBlock(xml: string, tagName: string): string {
 
 const EWS_ENDPOINT = process.env.EWS_ENDPOINT || 'https://outlook.office365.com/EWS/Exchange.asmx';
 const EWS_USERNAME = process.env.EWS_USERNAME || '';
-const EWS_TARGET_MAILBOX = process.env.EWS_TARGET_MAILBOX || '';
 
 function getEffectiveMailbox(mailbox?: string): string {
   return (mailbox || '').trim();

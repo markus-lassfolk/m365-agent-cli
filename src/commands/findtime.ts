@@ -149,10 +149,8 @@ export const findtimeCommand = new Command('findtime')
       }
     }
 
-    const mailbox = resolveMailbox(options);
-
     // Get current user's email to include in search (unless --solo)
-    if (!options.solo && !mailbox) {
+    if (!options.solo && !options.mailbox) {
       const userInfo = await getOwaUserInfo(authResult.token!);
       if (userInfo.ok && userInfo.data?.email) {
         // Add current user if not already in the list
@@ -161,6 +159,8 @@ export const findtimeCommand = new Command('findtime')
         }
       }
     }
+
+    const mailbox = resolveMailbox(options);
 
     if (emails.length === 0) {
       console.error('Error: Please provide at least one email address.');
