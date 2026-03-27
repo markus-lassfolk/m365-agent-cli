@@ -55,7 +55,8 @@ export function markdownToHtml(text: string): string {
   let html = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, rawUrl) => {
     const safeUrl = sanitizeLinkUrl(rawUrl);
     const escapedLabel = escapeHtml(label);
-    const linkHtml = `<a href="${safeUrl}">${escapedLabel}</a>`;
+    const escapedUrl = escapeHtml(safeUrl);
+    const linkHtml = `<a href="${escapedUrl}">${escapedLabel}</a>`;
     const placeholder = `__LINK_${linkIndex}__`;
     links.push({ placeholder, html: linkHtml });
     linkIndex++;
