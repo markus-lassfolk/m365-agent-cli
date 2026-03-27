@@ -375,7 +375,14 @@ export async function createOfficeCollaborationLink(
 
   const link = await shareFile(token, itemId, 'edit', 'organization');
   if (!link.ok || !link.data) {
-    return graphError(link.error?.message || 'Failed to create collaboration link', link.error?.code, link.error?.status);
+    if (options.lock) {
+      await checkinFile(token, itemId);
+    }
+    return graphError(
+      link.error?.message || 'Failed to create collaboration link',
+      link.error?.code,
+      link.error?.status
+    );
   }
 
   return graphResult({
