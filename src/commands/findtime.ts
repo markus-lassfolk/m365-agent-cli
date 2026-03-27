@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
 import { getScheduleViaOutlook, getOwaUserInfo } from '../lib/ews-client.js';
+import { parseDay } from '../lib/dates.js';
 
 function formatTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -19,40 +20,6 @@ function _formatDateTime(dateStr: string): string {
 
 function isValidEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-}
-
-function parseDay(day: string, baseDate: Date = new Date()): Date {
-  const now = new Date(baseDate);
-
-  switch (day.toLowerCase()) {
-    case 'today':
-      return now;
-    case 'tomorrow':
-      now.setDate(now.getDate() + 1);
-      return now;
-    case 'monday':
-    case 'tuesday':
-    case 'wednesday':
-    case 'thursday':
-    case 'friday':
-    case 'saturday':
-    case 'sunday': {
-      const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-      const targetDay = days.indexOf(day.toLowerCase());
-      const currentDay = now.getDay();
-      let diff = targetDay - currentDay;
-      if (diff <= 0) diff += 7;
-      now.setDate(now.getDate() + diff);
-      return now;
-    }
-    default: {
-      const parsed = new Date(day);
-      if (Number.isNaN(parsed.getTime())) {
-        throw new Error(`Invalid date value: ${day}`);
-      }
-      return parsed;
-    }
-  }
 }
 
 function getDateRange(startDay: string, endDay?: string): { start: Date; end: Date; label: string } {
@@ -83,11 +50,11 @@ function getDateRange(startDay: string, endDay?: string): { start: Date; end: Da
     }
   }
 
-  const startDate = parseDay(startDay);
+  const startDate = parseDay(startDay, { throwOnInvalid: true });
   startDate.setHours(0, 0, 0, 0);
 
   if (endDay) {
-    const endDate = parseDay(endDay, startDate);
+    const endDate = parseDay(endDay, { baseDate: startDate, weekdayDirection: 'nearestForward', throwOnInvalid: true });
     endDate.setHours(23, 59, 59, 999);
     return {
       start: startDate,
