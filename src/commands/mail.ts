@@ -5,6 +5,10 @@ import { markdownToHtml } from '../lib/markdown.js';
 import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 
+function resolveMailbox(options: { mailbox?: string }): string | undefined {
+  return options.mailbox?.trim() || process.env.EWS_TARGET_MAILBOX?.trim() || undefined;
+}
+
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
   const now = new Date();
@@ -54,6 +58,7 @@ export const mailCommand = new Command('mail')
   .option('--to-addr <emails>', 'Forward recipients (comma-separated)')
   .option('--message <text>', 'Reply/forward message text')
   .option('--markdown', 'Parse message as markdown (bold, links, lists)')
+  .option('--mailbox <email>', 'Read from a shared/target mailbox (read-only paths)')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .action(async (folder: string, options: {
@@ -78,6 +83,7 @@ export const mailCommand = new Command('mail')
     toAddr?: string;
     message?: string;
     markdown?: boolean;
+    mailbox?: string;
     json?: boolean;
     token?: string;
     draft?: boolean;
@@ -111,11 +117,12 @@ export const mailCommand = new Command('mail')
       spam: 'junkemail',
     };
 
+    const mailbox = resolveMailbox(options);
     let apiFolder = folderMap[folder.toLowerCase()];
 
     // If not a well-known folder, look up by name
     if (!apiFolder) {
-      const foldersResult = await getMailFolders(authResult.token!);
+      const foldersResult = await getMailFolders(authResult.token!, undefined, mailbox);
       if (foldersResult.ok && foldersResult.data) {
         const found = foldersResult.data.value.find(
           f => f.DisplayName.toLowerCase() === folder.toLowerCase()
@@ -152,6 +159,7 @@ export const mailCommand = new Command('mail')
       skip,
       filter: filters.length > 0 ? filters.join(' and ') : undefined,
       search: options.search,
+      mailbox,
     });
 
     if (!result.ok || !result.data) {

@@ -31,6 +31,8 @@ Create a `.env` file in the project root (or set environment variables):
 ```bash
 EWS_CLIENT_ID=your-azure-app-client-id
 EWS_REFRESH_TOKEN=your-refresh-token
+# Optional: default shared mailbox for read-only commands
+EWS_TARGET_MAILBOX=shared-mailbox@example.com
 ```
 
 ### How It Works
@@ -45,6 +47,25 @@ EWS_REFRESH_TOKEN=your-refresh-token
 # Check who you're logged in as
 clippy whoami
 ```
+
+### Read from a Shared Mailbox (read-only)
+
+For read-only commands you can either set `EWS_TARGET_MAILBOX` in `.env` or pass `--mailbox <email>` per command.
+
+Currently supported read-only paths:
+- `clippy mail ...`
+- `clippy calendar ...`
+- `clippy findtime ...`
+- `clippy find ...`
+
+Example:
+
+```bash
+clippy mail inbox --mailbox shared-mailbox@example.com
+clippy calendar week --mailbox shared-mailbox@example.com
+```
+
+Write paths intentionally remain unchanged.
 
 ---
 

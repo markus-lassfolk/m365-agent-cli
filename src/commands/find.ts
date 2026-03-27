@@ -2,16 +2,22 @@ import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
 import { resolveNames } from '../lib/ews-client.js';
 
+function resolveMailbox(options: { mailbox?: string }): string | undefined {
+  return options.mailbox?.trim() || process.env.EWS_TARGET_MAILBOX?.trim() || undefined;
+}
+
 export const findCommand = new Command('find')
   .description('Search for people or rooms')
   .argument('<query>', 'Search query (name, email, etc.)')
   .option('--rooms', 'Only show rooms')
   .option('--people', 'Only show people (exclude rooms)')
+  .option('--mailbox <email>', 'Search in the context of a shared/target mailbox (read-only path)')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .action(async (query: string, options: {
     rooms?: boolean;
     people?: boolean;
+    mailbox?: string;
     json?: boolean;
     token?: string;
   }) => {
@@ -30,7 +36,7 @@ export const findCommand = new Command('find')
     }
 
     try {
-      const result = await resolveNames(authResult.token!, query);
+      const result = await resolveNames(authResult.token!, query, resolveMailbox(options));
 
       if (!result.ok || !result.data) {
         if (options.json) {

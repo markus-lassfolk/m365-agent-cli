@@ -2,6 +2,10 @@ import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
 import { getCalendarEvents, type CalendarEvent, type CalendarAttendee } from '../lib/ews-client.js';
 
+function resolveMailbox(options: { mailbox?: string }): string | undefined {
+  return options.mailbox?.trim() || process.env.EWS_TARGET_MAILBOX?.trim() || undefined;
+}
+
 function formatTime(dateStr: string): string {
   const date = new Date(dateStr);
   return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -176,9 +180,10 @@ export const calendarCommand = new Command('calendar')
   .argument('[start]', 'Start day: today, yesterday, tomorrow, monday-sunday, week, lastweek, nextweek, or YYYY-MM-DD', 'today')
   .argument('[end]', 'End day for range (optional)')
   .option('-v, --verbose', 'Show attendees and more details')
+  .option('--mailbox <email>', 'Read from a shared/target mailbox (read-only paths)')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
-  .action(async (startDay: string, endDay: string | undefined, options: { json?: boolean; token?: string; verbose?: boolean }) => {
+  .action(async (startDay: string, endDay: string | undefined, options: { json?: boolean; token?: string; verbose?: boolean; mailbox?: string }) => {
     const authResult = await resolveAuth({
       token: options.token,
     });
@@ -194,7 +199,8 @@ export const calendarCommand = new Command('calendar')
     }
 
     const { start, end, label } = getDateRange(startDay, endDay);
-    const result = await getCalendarEvents(authResult.token!, start, end);
+    const mailbox = resolveMailbox(options);
+    const result = await getCalendarEvents(authResult.token!, start, end, mailbox);
 
     if (!result.ok || !result.data) {
       if (options.json) {

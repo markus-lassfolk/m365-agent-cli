@@ -2,6 +2,10 @@ import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
 import { getScheduleViaOutlook, getOwaUserInfo } from '../lib/ews-client.js';
 
+function resolveMailbox(options: { mailbox?: string }): string | undefined {
+  return options.mailbox?.trim() || process.env.EWS_TARGET_MAILBOX?.trim() || undefined;
+}
+
 function formatTime(dateStr: string): string {
   const date = new Date(dateStr);
   return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -101,6 +105,7 @@ export const findtimeCommand = new Command('findtime')
   .option('--start <hour>', 'Work day start hour (0-23)', '9')
   .option('--end <hour>', 'Work day end hour (0-23)', '17')
   .option('--solo', 'Only check specified people, don\'t include yourself')
+  .option('--mailbox <email>', 'Read availability from a shared/target mailbox (read-only path)')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .action(async (startDay: string, endOrEmails: string[], options: {
@@ -108,6 +113,7 @@ export const findtimeCommand = new Command('findtime')
     start: string;
     end: string;
     solo?: boolean;
+    mailbox?: string;
     json?: boolean;
     token?: string;
   }) => {
@@ -146,8 +152,10 @@ export const findtimeCommand = new Command('findtime')
       }
     }
 
+    const mailbox = resolveMailbox(options);
+
     // Get current user's email to include in search (unless --solo)
-    if (!options.solo) {
+    if (!options.solo && !mailbox) {
       const userInfo = await getOwaUserInfo(authResult.token!);
       if (userInfo.ok && userInfo.data?.email) {
         // Add current user if not already in the list
@@ -171,7 +179,8 @@ export const findtimeCommand = new Command('findtime')
       emails,
       start.toISOString(),
       end.toISOString(),
-      duration
+      duration,
+      mailbox
     );
 
     if (!result.ok || !result.data) {

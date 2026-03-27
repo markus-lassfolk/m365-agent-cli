@@ -77,6 +77,18 @@ function extractSelfClosingOrBlock(xml: string, tagName: string): string {
 
 const EWS_ENDPOINT = process.env.EWS_ENDPOINT || 'https://outlook.office365.com/EWS/Exchange.asmx';
 const EWS_USERNAME = process.env.EWS_USERNAME || '';
+const EWS_TARGET_MAILBOX = process.env.EWS_TARGET_MAILBOX || '';
+
+function getEffectiveMailbox(mailbox?: string): string {
+  return (mailbox || EWS_TARGET_MAILBOX || '').trim();
+}
+
+function mailboxXml(mailbox?: string): string {
+  const effectiveMailbox = getEffectiveMailbox(mailbox);
+  return effectiveMailbox
+    ? `<t:Mailbox><t:EmailAddress>${xmlEscape(effectiveMailbox)}</t:EmailAddress></t:Mailbox>`
+    : '';
+}
 
 function soapEnvelope(body: string): string {
   return `<?xml version="1.0" encoding="utf-8"?>
@@ -290,6 +302,7 @@ export interface GetEmailsOptions {
   skip?: number;
   filter?: string;
   search?: string;
+  mailbox?: string;
   select?: string[];
   orderBy?: string;
 }
@@ -519,10 +532,10 @@ const FOLDER_MAP: Record<string, string> = {
   archive: 'archivemsgfolderoot',
 };
 
-function folderIdXml(folder: string): string {
+function folderIdXml(folder: string, mailbox?: string): string {
   const distinguished = FOLDER_MAP[folder.toLowerCase()];
   if (distinguished) {
-    return `<t:DistinguishedFolderId Id="${distinguished}" />`;
+    return `<t:DistinguishedFolderId Id="${distinguished}">${mailboxXml(mailbox)}</t:DistinguishedFolderId>`;
   }
   return `<t:FolderId Id="${xmlEscape(folder)}" />`;
 }
@@ -572,7 +585,8 @@ export async function getOwaUserInfo(token: string): Promise<OwaResponse<OwaUser
 export async function getCalendarEvents(
   token: string,
   startDateTime: string,
-  endDateTime: string
+  endDateTime: string,
+  mailbox?: string
 ): Promise<OwaResponse<CalendarEvent[]>> {
   try {
     const envelope = soapEnvelope(`
@@ -596,7 +610,7 @@ export async function getCalendarEvents(
       </m:ItemShape>
       <m:CalendarView StartDate="${xmlEscape(startDateTime)}" EndDate="${xmlEscape(endDateTime)}" />
       <m:ParentFolderIds>
-        <t:DistinguishedFolderId Id="calendar" />
+        <t:DistinguishedFolderId Id="calendar">${mailboxXml(mailbox)}</t:DistinguishedFolderId>
       </m:ParentFolderIds>
     </m:FindItem>`);
 
@@ -911,6 +925,7 @@ export async function getEmails(options: GetEmailsOptions): Promise<OwaResponse<
       skip = 0,
       filter,
       search,
+      mailbox,
     } = options;
 
     // Build restriction for filters
@@ -967,7 +982,7 @@ export async function getEmails(options: GetEmailsOptions): Promise<OwaResponse<
       </m:SortOrder>` : ''}
       ${queryStringXml}
       <m:ParentFolderIds>
-        ${folderIdXml(folder)}
+        ${folderIdXml(folder, options.mailbox)}
       </m:ParentFolderIds>
     </m:FindItem>`);
 
@@ -1407,12 +1422,13 @@ export async function addAttachmentToDraft(
 
 export async function getMailFolders(
   token: string,
-  parentFolderId?: string
+  parentFolderId?: string,
+  mailbox?: string
 ): Promise<OwaResponse<MailFolderListResponse>> {
   try {
     const parentXml = parentFolderId
       ? `<t:FolderId Id="${xmlEscape(parentFolderId)}" />`
-      : '<t:DistinguishedFolderId Id="msgfolderroot" />';
+      : `<t:DistinguishedFolderId Id="msgfolderroot">${mailboxXml(mailbox)}</t:DistinguishedFolderId>`;
 
     const envelope = soapEnvelope(`
     <m:FindFolder Traversal="Shallow">
@@ -1602,7 +1618,8 @@ export async function getAttachment(
 
 export async function resolveNames(
   token: string,
-  query: string
+  query: string,
+  mailbox?: string
 ): Promise<OwaResponse<Array<{
   DisplayName?: string;
   EmailAddress?: string;
@@ -1614,6 +1631,7 @@ export async function resolveNames(
   try {
     const envelope = soapEnvelope(`
     <m:ResolveNames ReturnFullContactData="true" SearchScope="ActiveDirectoryContacts">
+      ${mailbox ? `<m:ParentFolderIds><t:DistinguishedFolderId Id="directory">${mailboxXml(mailbox)}</t:DistinguishedFolderId></m:ParentFolderIds>` : ''}
       <m:UnresolvedEntry>${xmlEscape(query)}</m:UnresolvedEntry>
     </m:ResolveNames>`);
 
@@ -1640,9 +1658,9 @@ export async function resolveNames(
   }
 }
 
-export async function getRoomLists(token: string): Promise<OwaResponse<RoomList[]>> {
+export async function getRoomLists(token: string, mailbox?: string): Promise<OwaResponse<RoomList[]>> {
   try {
-    const envelope = soapEnvelope('<m:GetRoomLists />');
+    const envelope = soapEnvelope(`<m:GetRoomLists>${mailbox ? mailboxXml(mailbox) : ''}</m:GetRoomLists>`);
     const xml = await callEws(token, envelope);
     const addresses = extractBlocks(xml, 'Address');
 
@@ -1659,7 +1677,8 @@ export async function getRoomLists(token: string): Promise<OwaResponse<RoomList[
 
 export async function getRooms(
   token: string,
-  roomListAddress?: string
+  roomListAddress?: string,
+  mailbox?: string
 ): Promise<OwaResponse<Room[]>> {
   try {
     if (roomListAddress) {
@@ -1681,14 +1700,14 @@ export async function getRooms(
     }
 
     // No room list specified: get all room lists first, then rooms from each
-    const listsResult = await getRoomLists(token);
+    const listsResult = await getRoomLists(token, mailbox);
     if (!listsResult.ok || !listsResult.data || listsResult.data.length === 0) {
       return ewsResult([]);
     }
 
     const allRooms: Room[] = [];
     for (const list of listsResult.data) {
-      const roomsResult = await getRooms(token, list.Address);
+      const roomsResult = await getRooms(token, list.Address, mailbox);
       if (roomsResult.ok && roomsResult.data) {
         allRooms.push(...roomsResult.data);
       }
@@ -1702,11 +1721,12 @@ export async function getRooms(
 
 export async function searchRooms(
   token: string,
-  query: string = 'room'
+  query: string = 'room',
+  mailbox?: string
 ): Promise<OwaResponse<Room[]>> {
   // Use ResolveNames to find rooms by name
   try {
-    const result = await resolveNames(token, query);
+    const result = await resolveNames(token, query, mailbox);
     if (!result.ok || !result.data) return ewsResult([]);
 
     // Try to filter to rooms (MailboxType might indicate this)
@@ -1730,7 +1750,8 @@ export async function getScheduleViaOutlook(
   emails: string[],
   startDateTime: string,
   endDateTime: string,
-  durationMinutes: number = 30
+  durationMinutes: number = 30,
+  mailbox?: string
 ): Promise<OwaResponse<ScheduleInfo[]>> {
   try {
     // SuggestionsViewOptions requires dates at midnight with no timezone offset
@@ -1769,6 +1790,7 @@ export async function getScheduleViaOutlook(
           <t:DayOfWeek>Sunday</t:DayOfWeek>
         </t:DaylightTime>
       </t:TimeZone>
+      ${mailbox ? `<t:MailboxDataArray><t:MailboxData><t:Email><t:Address>${xmlEscape(mailbox)}</t:Address></t:Email><t:AttendeeType>Organizer</t:AttendeeType></t:MailboxData></t:MailboxDataArray>` : ''}
       <m:MailboxDataArray>
         ${mailboxDataXml}
       </m:MailboxDataArray>
@@ -1846,9 +1868,10 @@ export async function getScheduleViaOutlook(
 export async function getFreeBusy(
   token: string,
   startDateTime: string,
-  endDateTime: string
+  endDateTime: string,
+  mailbox?: string
 ): Promise<OwaResponse<FreeBusySlot[]>> {
-  const result = await getCalendarEvents(token, startDateTime, endDateTime);
+  const result = await getCalendarEvents(token, startDateTime, endDateTime, mailbox);
   if (!result.ok || !result.data) return { ok: false, status: result.status, error: result.error };
 
   const slots: FreeBusySlot[] = result.data
