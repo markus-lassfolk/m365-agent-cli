@@ -156,9 +156,7 @@ function buildItemPath(reference?: DriveItemReference): string {
 }
 
 function encodeGraphSearchQuery(query: string): string {
-  return encodeURIComponent(query)
-    .replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`)
-    .replace(/'/g, '%27');
+  return encodeURIComponent(query).replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
 }
 
 export async function listFiles(token: string, folder?: DriveItemReference): Promise<GraphResponse<DriveItem[]>> {

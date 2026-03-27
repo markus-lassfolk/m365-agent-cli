@@ -48,7 +48,27 @@ function sanitizeLinkUrl(url: string): string {
  * Supports: bold, italic, links, unordered lists, ordered lists, line breaks.
  */
 export function markdownToHtml(text: string): string {
-  let html = escapeHtml(text);
+  // Extract and process links first to avoid double-encoding URLs
+  const links: Array<{ placeholder: string; html: string }> = [];
+  let linkIndex = 0;
+
+  let html = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, rawUrl) => {
+    const safeUrl = sanitizeLinkUrl(rawUrl);
+    const escapedLabel = escapeHtml(label);
+    const linkHtml = `<a href="${safeUrl}">${escapedLabel}</a>`;
+    const placeholder = `__LINK_${linkIndex}__`;
+    links.push({ placeholder, html: linkHtml });
+    linkIndex++;
+    return placeholder;
+  });
+
+  // Escape HTML in the rest of the text
+  html = escapeHtml(html);
+
+  // Restore links
+  for (const { placeholder, html: linkHtml } of links) {
+    html = html.replace(placeholder, linkHtml);
+  }
 
   // Bold: **text** or __text__
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
@@ -57,12 +77,6 @@ export function markdownToHtml(text: string): string {
   // Italic: *text* or _text_ (but not inside words)
   html = html.replace(/(?<!\w)\*([^*]+?)\*(?!\w)/g, '<em>$1</em>');
   html = html.replace(/(?<!\w)_([^_]+?)_(?!\w)/g, '<em>$1</em>');
-
-  // Links: [text](url)
-  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, rawUrl) => {
-    const safeUrl = escapeHtml(sanitizeLinkUrl(rawUrl));
-    return `<a href="${safeUrl}">${label}</a>`;
-  });
 
   // Process lists - need to handle line by line
   const lines = html.split('\n');
