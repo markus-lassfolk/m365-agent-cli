@@ -181,8 +181,9 @@ clippy respond list --only-required
 # Find free slots next week for yourself and others
 clippy findtime nextweek alice@company.com bob@company.com
 
-# Specific date range
+# Specific date range (keywords or YYYY-MM-DD)
 clippy findtime monday friday alice@company.com
+clippy findtime 2026-04-01 2026-04-03 alice@company.com
 
 # Custom duration and working hours
 clippy findtime nextweek alice@company.com --duration 60 --start 10 --end 16

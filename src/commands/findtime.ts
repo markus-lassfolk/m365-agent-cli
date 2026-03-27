@@ -17,6 +17,10 @@ function _formatDateTime(dateStr: string): string {
   return `${formatDate(dateStr)} ${formatTime(dateStr)}`;
 }
 
+function isValidEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
 function parseDay(day: string, baseDate: Date = new Date()): Date {
   const now = new Date(baseDate);
 
@@ -43,7 +47,10 @@ function parseDay(day: string, baseDate: Date = new Date()): Date {
     }
     default: {
       const parsed = new Date(day);
-      return Number.isNaN(parsed.getTime()) ? now : parsed;
+      if (Number.isNaN(parsed.getTime())) {
+        throw new Error(`Invalid date value: ${day}`);
+      }
+      return parsed;
     }
   }
 }
@@ -156,13 +163,18 @@ export const findtimeCommand = new Command('findtime')
       const emails: string[] = [];
 
       for (const arg of endOrEmails) {
-        if (arg.includes('@')) {
-          emails.push(arg);
-        } else if (isDateArg(arg) && !endDay) {
+        if (isDateArg(arg) && !endDay) {
           endDay = arg;
-        } else {
-          emails.push(arg);
+          continue;
         }
+
+        if (!isValidEmail(arg)) {
+          console.error(`Error: Invalid attendee email: ${arg}`);
+          console.error('All attendee arguments must be valid email addresses.');
+          process.exit(1);
+        }
+
+        emails.push(arg);
       }
 
       // Get current user's email to include in search (unless --solo)
@@ -182,7 +194,21 @@ export const findtimeCommand = new Command('findtime')
         process.exit(1);
       }
 
-      const { start, end, label } = getDateRange(startDay, endDay);
+      let start: Date;
+      let end: Date;
+      let label: string;
+
+      try {
+        ({ start, end, label } = getDateRange(startDay, endDay));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Invalid date value';
+        if (options.json) {
+          console.log(JSON.stringify({ error: message }, null, 2));
+        } else {
+          console.error(`Error: ${message}`);
+        }
+        process.exit(1);
+      }
       const duration = parseInt(options.duration, 10);
 
       const result = await getScheduleViaOutlook(

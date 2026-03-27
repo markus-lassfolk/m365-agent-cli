@@ -2,6 +2,13 @@
   "name": "clippy",
   "version": "0.1.1",
   "description": "CLI for Microsoft 365/EWS using OAuth2 refresh token authentication",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/markus-lassfolk/clippy.git"
+  },
+  "bugs": {
+    "url": "https://github.com/markus-lassfolk/clippy/issues"
+  },
   "type": "module",
   "main": "src/index.ts",
   "bin": {

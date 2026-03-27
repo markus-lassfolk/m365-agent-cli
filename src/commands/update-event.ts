@@ -26,7 +26,10 @@ function parseDay(day: string): Date {
       return now;
     default: {
       const parsed = new Date(day);
-      return Number.isNaN(parsed.getTime()) ? now : parsed;
+      if (Number.isNaN(parsed.getTime())) {
+        throw new Error(`Invalid day value: ${day}`);
+      }
+      return parsed;
     }
   }
 }
@@ -119,7 +122,18 @@ export const updateEventCommand = new Command('update-event')
       }
 
       // Get events for the day
-      const baseDate = parseDay(options.day);
+      let baseDate: Date;
+      try {
+        baseDate = parseDay(options.day);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Invalid day value';
+        if (options.json) {
+          console.log(JSON.stringify({ error: message }, null, 2));
+        } else {
+          console.error(`Error: ${message}`);
+        }
+        process.exit(1);
+      }
       const startOfDay = new Date(baseDate);
       startOfDay.setHours(0, 0, 0, 0);
       const endOfDay = new Date(baseDate);
@@ -207,12 +221,6 @@ export const updateEventCommand = new Command('update-event')
       }
 
       // Get the target event by ID
-      if (!options.id) {
-        console.error('Please specify the event id with --id.');
-        console.error('Run `clippy update-event` to list events and IDs.');
-        process.exit(1);
-      }
-
       const targetEvent = events.find((e) => e.Id === options.id);
       if (!targetEvent) {
         console.error(`Invalid event id: ${options.id}`);

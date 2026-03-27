@@ -30,9 +30,12 @@ async function loadCachedToken(identity: string): Promise<CachedToken | null> {
 async function saveCachedToken(identity: string, token: CachedToken): Promise<void> {
   try {
     const dir = join(homedir(), '.config', 'clippy');
-    await mkdir(dir, { recursive: true });
+    await mkdir(dir, { recursive: true, mode: 0o700 });
     const TOKEN_CACHE_FILE = TOKEN_CACHE_FILE_TEMPLATE.replace('${identity}', identity);
-    await writeFile(TOKEN_CACHE_FILE, JSON.stringify(token, null, 2), 'utf-8');
+    await writeFile(TOKEN_CACHE_FILE, JSON.stringify(token, null, 2), {
+      encoding: 'utf-8',
+      mode: 0o600
+    });
   } catch {
     // Ignore write errors
   }
