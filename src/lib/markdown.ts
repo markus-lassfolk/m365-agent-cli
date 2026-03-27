@@ -75,7 +75,7 @@ export function markdownToHtml(text: string): string {
 
   // Restore links
   for (const { placeholder, html: linkHtml } of links) {
-    html = html.replace(placeholder, linkHtml);
+    html = html.replace(placeholder, () => linkHtml);
   }
 
   // Bold: **text** or __text__
