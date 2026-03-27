@@ -199,6 +199,7 @@ export interface CreateEventOptions {
   attendees?: Array<{ email: string; name?: string; type?: 'Required' | 'Optional' | 'Resource' }>;
   isOnlineMeeting?: boolean;
   recurrence?: Recurrence;
+  mailbox?: string;
 }
 
 export interface CreatedEvent {
@@ -220,6 +221,7 @@ export interface UpdateEventOptions {
   location?: string;
   attendees?: Array<{ email: string; name?: string; type?: 'Required' | 'Optional' | 'Resource' }>;
   isOnlineMeeting?: boolean;
+  mailbox?: string;
 }
 
 export interface ScheduleInfo {
@@ -330,6 +332,7 @@ export interface RespondToEventOptions {
   response: ResponseType;
   comment?: string;
   sendResponse?: boolean;
+  mailbox?: string;
 }
 
 // ─── Parsing Helpers ───
@@ -684,7 +687,7 @@ function buildRecurrenceXml(recurrence: Recurrence): string {
 
 export async function createEvent(options: CreateEventOptions): Promise<OwaResponse<CreatedEvent>> {
   try {
-    const { token, subject, start, end, body, location, attendees, isOnlineMeeting, recurrence } = options;
+    const { token, subject, start, end, body, location, attendees, isOnlineMeeting, recurrence, mailbox } = options;
 
     let attendeesXml = '';
     if (attendees && attendees.length > 0) {
@@ -736,7 +739,7 @@ export async function createEvent(options: CreateEventOptions): Promise<OwaRespo
       </m:Items>
     </m:CreateItem>`);
 
-    const xml = await callEws(token, envelope);
+    const xml = await callEws(token, envelope, mailbox);
     const block = extractBlocks(xml, 'CalendarItem')[0] || '';
     const id = extractAttribute(block, 'ItemId', 'Id');
 
@@ -755,7 +758,7 @@ export async function createEvent(options: CreateEventOptions): Promise<OwaRespo
 
 export async function updateEvent(options: UpdateEventOptions): Promise<OwaResponse<CreatedEvent>> {
   try {
-    const { token, eventId, subject, start, end, body, location, attendees, isOnlineMeeting } = options;
+    const { token, eventId, subject, start, end, body, location, attendees, isOnlineMeeting, mailbox } = options;
 
     const updates: string[] = [];
 
@@ -839,7 +842,7 @@ export async function updateEvent(options: UpdateEventOptions): Promise<OwaRespo
       </m:ItemChanges>
     </m:UpdateItem>`);
 
-    const xml = await callEws(token, envelope);
+    const xml = await callEws(token, envelope, mailbox);
     const block = extractBlocks(xml, 'CalendarItem')[0] || '';
     const newId = extractAttribute(block, 'ItemId', 'Id') || eventId;
 
@@ -854,7 +857,7 @@ export async function updateEvent(options: UpdateEventOptions): Promise<OwaRespo
   }
 }
 
-export async function deleteEvent(token: string, eventId: string): Promise<OwaResponse<void>> {
+export async function deleteEvent(token: string, eventId: string, mailbox?: string): Promise<OwaResponse<void>> {
   try {
     const envelope = soapEnvelope(`
     <m:DeleteItem DeleteType="MoveToDeletedItems" SendMeetingCancellations="SendToNone">
@@ -862,7 +865,7 @@ export async function deleteEvent(token: string, eventId: string): Promise<OwaRe
         <t:ItemId Id="${xmlEscape(eventId)}" />
       </m:ItemIds>
     </m:DeleteItem>`);
-    await callEws(token, envelope);
+    await callEws(token, envelope, mailbox);
     return { ok: true, status: 200 };
   } catch (err) {
     return ewsError(err);
@@ -901,7 +904,7 @@ export async function cancelEvent(token: string, eventId: string, comment?: stri
 
 export async function respondToEvent(options: RespondToEventOptions): Promise<OwaResponse<void>> {
   try {
-    const { token, eventId, response, comment, sendResponse = true } = options;
+    const { token, eventId, response, comment, sendResponse = true, mailbox } = options;
     const disposition = sendResponse ? 'SendAndSaveCopy' : 'SaveOnly';
 
     const responseTagMap: Record<ResponseType, string> = {
@@ -921,7 +924,7 @@ export async function respondToEvent(options: RespondToEventOptions): Promise<Ow
       </m:Items>
     </m:CreateItem>`);
 
-    await callEws(token, envelope);
+    await callEws(token, envelope, mailbox);
     return { ok: true, status: 200 };
   } catch (err) {
     return ewsError(err);

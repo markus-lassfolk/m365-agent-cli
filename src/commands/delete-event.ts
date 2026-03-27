@@ -40,6 +40,7 @@ export const deleteEventCommand = new Command('delete-event')
   .option('--force-delete', 'Delete without sending cancellation (even with attendees)')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
+  .option('--mailbox <email>', 'Shared mailbox to act on behalf of')
   .action(async (eventIndex: string | undefined, options: {
     id?: string;
     day: string;
@@ -48,6 +49,7 @@ export const deleteEventCommand = new Command('delete-event')
     forceDelete?: boolean;
     json?: boolean;
     token?: string;
+    mailbox?: string;
   }) => {
     const authResult = await resolveAuth({
       token: options.token,
@@ -178,7 +180,7 @@ export const deleteEventCommand = new Command('delete-event')
       action = 'cancelled';
     } else {
       // Just delete without notification
-      deleteResult = await deleteEvent(authResult.token!, targetEvent.Id);
+      deleteResult = await deleteEvent(authResult.token!, targetEvent.Id, options.mailbox);
       action = 'deleted';
     }
 
