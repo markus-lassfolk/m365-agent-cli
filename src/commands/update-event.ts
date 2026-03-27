@@ -84,6 +84,7 @@ export const updateEventCommand = new Command('update-event')
   .option('--no-teams', 'Remove Teams meeting')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
+  .option('--mailbox <email>', 'Update event in shared mailbox calendar')
   .action(
     async (
       _eventIndex: string | undefined,
@@ -100,6 +101,7 @@ export const updateEventCommand = new Command('update-event')
         teams?: boolean;
         json?: boolean;
         token?: string;
+        mailbox?: string;
       }
     ) => {
       const authResult = await resolveAuth({
@@ -123,7 +125,12 @@ export const updateEventCommand = new Command('update-event')
       const endOfDay = new Date(baseDate);
       endOfDay.setHours(23, 59, 59, 999);
 
-      const result = await getCalendarEvents(authResult.token!, startOfDay.toISOString(), endOfDay.toISOString());
+      const result = await getCalendarEvents(
+        authResult.token!,
+        startOfDay.toISOString(),
+        endOfDay.toISOString(),
+        options.mailbox
+      );
 
       if (!result.ok || !result.data) {
         if (options.json) {
@@ -246,7 +253,8 @@ export const updateEventCommand = new Command('update-event')
       // Build update payload
       const updateOptions: Parameters<typeof updateEvent>[0] = {
         token: authResult.token!,
-        eventId: targetEvent.Id
+        eventId: targetEvent.Id,
+        mailbox: options.mailbox
       };
 
       if (options.title) {

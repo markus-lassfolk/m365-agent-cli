@@ -73,6 +73,9 @@ export const respondCommand = new Command('respond')
       const userInfo = await getOwaUserInfo(authResult.token!);
       const userEmail = userInfo.data?.email?.toLowerCase();
 
+      // When using a shared mailbox, the attendee email is the mailbox, not the authenticated user
+      const attendeeEmail = options.mailbox?.toLowerCase() || userEmail;
+
       // Fetch upcoming events
       const now = new Date();
       const futureDate = new Date(now);
@@ -100,7 +103,7 @@ export const respondCommand = new Command('respond')
         if (event.IsOrganizer) return false;
 
         // Find user's attendance record
-        const myAttendance = event.Attendees?.find((a) => a.EmailAddress?.Address?.toLowerCase() === userEmail);
+        const myAttendance = event.Attendees?.find((a) => a.EmailAddress?.Address?.toLowerCase() === attendeeEmail);
 
         // Some events don't include attendee records; fall back to event-level ResponseStatus if present
         const eventResponse = (event as any).ResponseStatus?.Response as string | undefined;
@@ -156,7 +159,7 @@ export const respondCommand = new Command('respond')
           const startTime = formatTime(event.Start.DateTime);
           const endTime = formatTime(event.End.DateTime);
 
-          const myAttendance = event.Attendees?.find((a) => a.EmailAddress?.Address?.toLowerCase() === userEmail);
+          const myAttendance = event.Attendees?.find((a) => a.EmailAddress?.Address?.toLowerCase() === attendeeEmail);
           const eventResponse = (event as any).ResponseStatus?.Response as string | undefined;
           const response = myAttendance?.Status?.Response || eventResponse || 'None';
           const icon = getResponseIcon(response);

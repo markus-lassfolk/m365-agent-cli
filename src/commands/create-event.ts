@@ -105,6 +105,7 @@ export const createEventCommand = new Command('create-event')
   .option('--count <n>', 'Number of occurrences (alternative to --until)')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
+  .option('--mailbox <email>', 'Create event in shared mailbox calendar')
   .action(
     async (
       title: string,
@@ -125,6 +126,7 @@ export const createEventCommand = new Command('create-event')
         count?: string;
         json?: boolean;
         token?: string;
+        mailbox?: string;
       }
     ) => {
       const authResult = await resolveAuth({
@@ -345,7 +347,8 @@ export const createEventCommand = new Command('create-event')
         location: roomName,
         attendees: attendees.length > 0 ? attendees : undefined,
         isOnlineMeeting: options.teams,
-        recurrence
+        recurrence,
+        mailbox: options.mailbox
       });
 
       if (!result.ok || !result.data) {
