@@ -7,7 +7,14 @@ function sanitizeLinkUrl(url: string): string {
   const withoutControlChars = Array.from(trimmed)
     .filter((char) => {
       const code = char.charCodeAt(0);
-      return !(code <= 0x20 || (code >= 0x7f && code <= 0x9f));
+      return !(
+        code <= 0x20 ||
+        (code >= 0x7f && code <= 0x9f) ||
+        code === 0x200b ||
+        code === 0x200c ||
+        code === 0x200d ||
+        code === 0xfeff
+      );
     })
     .join('');
   const decoded = withoutControlChars.replace(/&(#x?[\da-f]+|[a-z]+);?/gi, (entity) => {
@@ -40,7 +47,7 @@ function sanitizeLinkUrl(url: string): string {
     return '#';
   }
 
-  return trimmed;
+  return withoutControlChars;
 }
 
 /**

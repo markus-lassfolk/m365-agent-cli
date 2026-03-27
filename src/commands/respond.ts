@@ -71,10 +71,19 @@ export const respondCommand = new Command('respond')
 
       // Get user's email to identify their response status
       const userInfo = await getOwaUserInfo(authResult.token!);
-      const userEmail = userInfo.data?.email?.toLowerCase();
+      const userEmail = userInfo.ok ? userInfo.data?.email?.toLowerCase() : undefined;
 
       // When using a shared mailbox, the attendee email is the mailbox, not the authenticated user
       const attendeeEmail = options.mailbox?.toLowerCase() || userEmail;
+
+      if (!attendeeEmail) {
+        if (options.json) {
+          console.log(JSON.stringify({ error: 'Failed to determine user email' }, null, 2));
+        } else {
+          console.error('Error: Failed to determine user email');
+        }
+        process.exit(1);
+      }
 
       // Fetch upcoming events
       const now = new Date();
