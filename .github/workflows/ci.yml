@@ -7,40 +7,16 @@ on:
     branches: [main]
 
 jobs:
-  typecheck:
-    name: TypeScript Check
+  checks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
-      - name: Install dependencies
-        run: bun install
-
-      - name: TypeScript check
-        run: bun run typecheck
-
-  lint-and-format:
-    name: Lint & Format Check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Install dependencies
-        run: bun install
-
-      - name: Biome lint
-        run: bunx @biomejs/biome lint --max-diagnostics=none --diagnostic-level=error .
-
-      - name: Biome format check
-        run: |
-          bunx @biomejs/biome format .
+      - run: bun install
+      - run: bun run typecheck
+      - run: bunx biome lint .
+      - run: bunx biome format --check .
