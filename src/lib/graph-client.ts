@@ -118,9 +118,12 @@ export async function listFiles(token: string, folder?: DriveItemReference): Pro
 }
 
 export async function searchFiles(token: string, query: string): Promise<GraphResponse<DriveItem[]>> {
+  const encodedQuery = encodeURIComponent(query)
+    .replace(/%20/g, ' ')
+    .replace(/'/g, '%27');
   const result = await callGraph<DriveItemListResponse>(
     token,
-    `/me/drive/root/search(q='${encodeURIComponent(query).replace(/%20/g, ' ')}')`
+    `/me/drive/root/search(q='${encodedQuery}')`
   );
   if (!result.ok || !result.data) {
     return graphError(result.error?.message || 'Failed to search files', result.error?.code, result.error?.status);
@@ -195,19 +198,26 @@ export async function createLargeUploadSession(
 export async function downloadFile(
   token: string,
   itemId: string,
-  outputPath?: string
+  outputPath?: string,
+  metadata?: DriveItem
 ): Promise<GraphResponse<{ path: string; item: DriveItem }>> {
   try {
-    const metadata = await getFileMetadata(token, itemId);
-    if (!metadata.ok || !metadata.data) {
-      return graphError(
-        metadata.error?.message || 'Failed to fetch file metadata before download',
-        metadata.error?.code,
-        metadata.error?.status
-      );
+    let itemMetadata: DriveItem;
+    if (metadata) {
+      itemMetadata = metadata;
+    } else {
+      const metadataResult = await getFileMetadata(token, itemId);
+      if (!metadataResult.ok || !metadataResult.data) {
+        return graphError(
+          metadataResult.error?.message || 'Failed to fetch file metadata before download',
+          metadataResult.error?.code,
+          metadataResult.error?.status
+        );
+      }
+      itemMetadata = metadataResult.data;
     }
 
-    const downloadUrl = metadata.data['@microsoft.graph.downloadUrl'];
+    const downloadUrl = itemMetadata['@microsoft.graph.downloadUrl'];
     if (!downloadUrl) {
       return graphError('Download URL missing from Graph metadata response.');
     }
@@ -218,11 +228,11 @@ export async function downloadFile(
     }
 
     const bytes = new Uint8Array(await response.arrayBuffer());
-    const targetPath = resolve(outputPath || metadata.data.name || itemId);
+    const targetPath = resolve(outputPath || itemMetadata.name || itemId);
     await mkdir(resolve(targetPath, '..'), { recursive: true }).catch(() => undefined);
     await writeFile(targetPath, bytes);
 
-    return graphResult({ path: targetPath, item: metadata.data });
+    return graphResult({ path: targetPath, item: itemMetadata });
   } catch (err) {
     return graphError(err instanceof Error ? err.message : 'Download failed');
   }
