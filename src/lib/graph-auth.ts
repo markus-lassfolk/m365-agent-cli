@@ -1,7 +1,7 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { getJwtExpiration } from './jwt-utils.js';
+import { getJwtExpiration, getMicrosoftTenantPathSegment } from './jwt-utils.js';
 
 export interface GraphAuthResult {
   success: boolean;
@@ -46,11 +46,15 @@ async function saveCachedGraphToken(token: CachedGraphToken): Promise<void> {
   }
 }
 
-async function refreshGraphAccessToken(clientId: string, refreshToken: string): Promise<CachedGraphToken> {
+async function refreshGraphAccessToken(
+  clientId: string,
+  refreshToken: string,
+  tenant: string
+): Promise<CachedGraphToken> {
   let lastError = '';
 
   for (const scope of GRAPH_SCOPES) {
-    const response = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
+    const response = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -99,6 +103,8 @@ export async function resolveGraphAuth(options?: { token?: string }): Promise<Gr
       };
     }
 
+    const tenant = getMicrosoftTenantPathSegment();
+
     const cached = await loadCachedGraphToken();
     if (cached && cached.expiresAt > Date.now() + 60_000) {
       return { success: true, token: cached.accessToken };
@@ -108,7 +114,7 @@ export async function resolveGraphAuth(options?: { token?: string }): Promise<Gr
 
     for (const refreshToken of refreshTokens) {
       try {
-        const result = await refreshGraphAccessToken(clientId, refreshToken);
+        const result = await refreshGraphAccessToken(clientId, refreshToken, tenant);
         await saveCachedGraphToken(result);
         return { success: true, token: result.accessToken };
       } catch {
