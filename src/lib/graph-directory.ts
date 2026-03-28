@@ -91,9 +91,10 @@ export async function expandGroup(token: string, groupId: string): Promise<Graph
     if (result.data['@odata.nextLink']) {
       const nextUrl = new URL(result.data['@odata.nextLink']);
       const baseUrl = new URL(GRAPH_BASE_URL);
-      const relativePath = nextUrl.pathname.startsWith(baseUrl.pathname)
-        ? nextUrl.pathname.slice(baseUrl.pathname.length)
-        : nextUrl.pathname;
+      const relativePath =
+        nextUrl.pathname.startsWith(baseUrl.pathname) && baseUrl.pathname !== '/'
+          ? nextUrl.pathname.slice(baseUrl.pathname.length)
+          : nextUrl.pathname;
       path = relativePath + nextUrl.search;
     } else {
       path = '';
