@@ -17,16 +17,16 @@ export interface ForwardEventOptions {
 export async function forwardEvent(options: ForwardEventOptions): Promise<GraphResponse<void>> {
   const { token, eventId, toRecipients, comment } = options;
 
-  const recipientsList: Recipient[] = toRecipients.map((email) => ({
-    emailAddress: { address: email }
+  const recipientsList = toRecipients.map((email) => ({
+    EmailAddress: { Address: email }
   }));
 
   const body: any = {
-    toRecipients: recipientsList
+    ToRecipients: recipientsList
   };
 
   if (comment) {
-    body.comment = comment;
+    body.Comment = comment;
   }
 
   return callGraph<void>(
