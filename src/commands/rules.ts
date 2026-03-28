@@ -24,7 +24,11 @@ function parseCondition(key: string, raw: string): unknown {
   // Addresses fields expect JSON array; plain strings are split by comma
   if (key === 'fromAddresses' || key === 'sentToAddresses') {
     try {
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.map((item) => (typeof item === 'string' ? { emailAddress: { address: item } } : item));
+      }
+      return parsed;
     } catch {
       return raw.split(',').map((s) => ({ emailAddress: { address: s.trim() } }));
     }
@@ -42,7 +46,11 @@ function parseAction(key: string, raw: string): MessageRuleAction[keyof MessageR
   }
   if (key === 'forwardToRecipients' || key === 'forwardAsAttachmentToRecipients') {
     try {
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.map((item) => (typeof item === 'string' ? { emailAddress: { address: item } } : item));
+      }
+      return parsed;
     } catch {
       return raw.split(',').map((s) => ({ emailAddress: { address: s.trim() } }));
     }
