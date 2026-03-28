@@ -1,29 +1,11 @@
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
 import { getCalendarEvents, type CalendarEvent, type CalendarAttendee } from '../lib/ews-client.js';
-import { parseDay } from '../lib/dates.js';
+import { parseDay, parseLocalDate } from '../lib/dates.js';
 
 function formatTime(dateStr: string): string {
   const date = parseLocalDate(dateStr);
   return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
-}
-
-/**
- * Parse a date string that may have a timezone offset suffix (e.g. "+01:00")
- * and return the local date components in the user's system timezone.
- * This avoids the bug where `new Date("2026-03-29")` defaults to midnight UTC
- * instead of interpreting it as the local date.
- */
-function parseLocalDate(dateStr: string): Date {
-  // Handle date-only strings (YYYY-MM-DD) as local midnight
-  const dateOnlyMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (dateOnlyMatch) {
-    const [, yearStr, monthStr, dayOfMonthStr] = dateOnlyMatch;
-    return new Date(parseInt(yearStr, 10), parseInt(monthStr, 10) - 1, parseInt(dayOfMonthStr, 10), 0, 0, 0, 0);
-  }
-  // Handle the "+01:00" suffix format by inserting a 'T' before the time
-  const withTime = dateStr.replace(' ', 'T');
-  return new Date(withTime);
 }
 
 function formatDate(dateStr: string): string {
@@ -66,7 +48,7 @@ function getDateRange(startDay: string, endDay?: string): { start: string; end: 
       start.setHours(0, 0, 0, 0);
       const end = new Date(start);
       end.setDate(end.getDate() + 7); // exclusive end = next Monday midnight
-      return { ...toEWSRange(start), end: end.toISOString(), label: 'This Week' };
+      return { start: start.toISOString(), end: end.toISOString(), label: 'This Week' };
     }
     case 'lastweek': {
       const start = new Date(now);
@@ -76,7 +58,7 @@ function getDateRange(startDay: string, endDay?: string): { start: string; end: 
       start.setHours(0, 0, 0, 0);
       const end = new Date(start);
       end.setDate(end.getDate() + 7); // exclusive end = next Monday midnight
-      return { ...toEWSRange(start), end: end.toISOString(), label: 'Last Week' };
+      return { start: start.toISOString(), end: end.toISOString(), label: 'Last Week' };
     }
     case 'nextweek': {
       const start = new Date(now);
@@ -86,7 +68,7 @@ function getDateRange(startDay: string, endDay?: string): { start: string; end: 
       start.setHours(0, 0, 0, 0);
       const end = new Date(start);
       end.setDate(end.getDate() + 7); // exclusive end = next Monday midnight
-      return { ...toEWSRange(start), end: end.toISOString(), label: 'Next Week' };
+      return { start: start.toISOString(), end: end.toISOString(), label: 'Next Week' };
     }
   }
 

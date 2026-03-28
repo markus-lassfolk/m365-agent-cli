@@ -44,17 +44,21 @@ export function toLocalISOString(date: Date): string {
 }
 
 /**
- * Parse a YYYY-MM-DD string as local midnight (in the user's timezone),
- * not UTC midnight. This fixes off-by-one day shifts for UTC-X timezones.
- *
- * `new Date('YYYY-MM-DD')` parses as UTC midnight, which becomes the
- * previous calendar day when local timezone is west of UTC.
+ * Parse a date string that may have a timezone offset suffix (e.g. "+01:00")
+ * and return the local date components in the user's system timezone.
+ * This avoids the bug where `new Date("2026-03-29")` defaults to midnight UTC
+ * instead of interpreting it as the local date.
  */
-function parseLocalDate(dayStr: string): Date {
-  const match = dayStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!match) return new Date(dayStr);
-  const [, yearStr, monthStr, dayOfMonthStr] = match;
-  return new Date(parseInt(yearStr, 10), parseInt(monthStr, 10) - 1, parseInt(dayOfMonthStr, 10), 0, 0, 0, 0);
+export function parseLocalDate(dateStr: string): Date {
+  // Handle date-only strings (YYYY-MM-DD) as local midnight
+  const dateOnlyMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (dateOnlyMatch) {
+    const [, yearStr, monthStr, dayOfMonthStr] = dateOnlyMatch;
+    return new Date(parseInt(yearStr, 10), parseInt(monthStr, 10) - 1, parseInt(dayOfMonthStr, 10), 0, 0, 0, 0);
+  }
+  // Handle the "+01:00" suffix format by inserting a 'T' before the time
+  const withTime = dateStr.replace(' ', 'T');
+  return new Date(withTime);
 }
 
 export function parseDay(day: string, options: ParseDayOptions = {}): Date {
