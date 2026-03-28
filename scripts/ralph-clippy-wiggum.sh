@@ -153,7 +153,7 @@ while true; do
   fi
 
   # Python analysis
-  ANALYSIS=$(python3 - <<PYEOF
+  ANALYSIS=$(fetch_issues | python3 -c '
 import json, sys
 from datetime import datetime, timezone
 
@@ -193,10 +193,8 @@ print(f"OPEN={len(data)}")
 print(f"ENRICHED={len(enriched)}")
 print(f"UNENRICHED={len(unenriched)}")
 print(f"NEEDS_TRIAGE={len(needs_triage)}")
-print(f"FORGE_CANDIDATE={forge_cand or ''}")
-print(f"PRIORITY_COUNTS={json.dumps(counts)}")
-PYEOF
-)
+print(f"FORGE_CANDIDATE={forge_cand or '"'"'}")
+')
 
   eval "$ANALYSIS"
 
