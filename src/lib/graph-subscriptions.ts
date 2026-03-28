@@ -18,12 +18,12 @@ async function fetchGraph(endpoint: string, options: RequestInit = {}): Promise<
     throw new Error(auth.error || 'Failed to authenticate to Graph API');
   }
 
-  const headers = new Headers(options.headers);
-  headers.set('Content-Type', 'application/json');
-
   return fetchGraphRaw(auth.token, endpoint, {
     ...options,
-    headers
+    headers: {
+      ...options.headers,
+      'Content-Type': 'application/json'
+    }
   });
 }
 

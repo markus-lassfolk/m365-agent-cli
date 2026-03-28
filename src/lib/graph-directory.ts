@@ -1,4 +1,4 @@
-import { callGraph, GRAPH_BASE_URL, type GraphResponse, fetchAllPages } from './graph-client.js';
+import { callGraph, type GraphResponse, fetchAllPages } from './graph-client.js';
 
 export interface Person {
   id: string;
