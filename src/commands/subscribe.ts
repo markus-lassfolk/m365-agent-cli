@@ -53,7 +53,14 @@ export const subscribeCommand = new Command('subscribe')
 
     try {
       console.log(`Creating subscription for ${graphResource}...`);
-      const sub = await createSubscription(graphResource, options.changeType, options.url, expiry, clientState, options.token);
+      const sub = await createSubscription(
+        graphResource,
+        options.changeType,
+        options.url,
+        expiry,
+        clientState,
+        options.token
+      );
       console.log('Subscription created successfully!');
       console.log(JSON.stringify(sub, null, 2));
     } catch (err) {

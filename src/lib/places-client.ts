@@ -1,5 +1,5 @@
 import { resolveGraphAuth } from './graph-auth.js';
-import { callGraph, graphResult, graphError, fetchAllPages } from './graph-client.js';
+import { callGraph, graphResult, graphError, fetchAllPages, GraphApiError } from './graph-client.js';
 
 export interface Place {
   id?: string;
@@ -123,12 +123,17 @@ export async function isRoomFree(
   startISO: string,
   endISO: string
 ): Promise<boolean | null> {
-  const result = await callGraph<{ value: Array<{ showAs?: string }> }>(
-    token,
-    `/users/${encodeURIComponent(roomEmail)}/calendar/calendarView?startDateTime=${encodeURIComponent(
-      startISO
-    )}&endDateTime=${encodeURIComponent(endISO)}`
-  );
+  let result;
+  try {
+    result = await callGraph<{ value: Array<{ showAs?: string }> }>(
+      token,
+      `/users/${encodeURIComponent(roomEmail)}/calendar/calendarView?startDateTime=${encodeURIComponent(
+        startISO
+      )}&endDateTime=${encodeURIComponent(endISO)}`
+    );
+  } catch (err) {
+    return null;
+  }
 
   if (!result.ok || !result.data) {
     return null;

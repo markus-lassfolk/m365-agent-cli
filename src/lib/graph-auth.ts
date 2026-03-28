@@ -1,7 +1,7 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { getJwtExpiration, getMicrosoftTenantPathSegment } from './jwt-utils.js';
+import { getJwtExpiration, getMicrosoftTenantPathSegment, isValidJwtStructure } from './jwt-utils.js';
 
 export interface GraphAuthResult {
   success: boolean;
@@ -13,18 +13,6 @@ interface CachedGraphToken {
   accessToken: string;
   refreshToken: string;
   expiresAt: number;
-}
-
-/** Validate that a string is a well-formed JWT with three base64url parts. */
-function isValidJwtStructure(token: string): boolean {
-  const parts = token.split('.');
-  if (parts.length !== 3) return false;
-  try {
-    Buffer.from(parts[1], 'base64url').toString();
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 const GRAPH_TOKEN_CACHE_FILE = join(homedir(), '.config', 'clippy', 'graph-token-cache.json');

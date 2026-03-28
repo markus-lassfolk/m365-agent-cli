@@ -1,4 +1,4 @@
-import { callGraph, GraphResponse, graphError, graphResult } from './graph-client.js';
+import { callGraph, GraphResponse, graphError, graphResult, GraphApiError } from './graph-client.js';
 
 export interface GetScheduleRequest {
   schedules: string[];
@@ -56,13 +56,21 @@ export async function getSchedule(
   token: string,
   request: GetScheduleRequest
 ): Promise<GraphResponse<GetScheduleResponse>> {
-  const result = await callGraph<GetScheduleResponse>(token, '/me/calendar/getSchedule', {
-    method: 'POST',
-    body: JSON.stringify(request),
-    headers: {
-      Prefer: 'outlook.timezone="UTC"'
+  let result: GraphResponse<GetScheduleResponse>;
+  try {
+    result = await callGraph<GetScheduleResponse>(token, '/me/calendar/getSchedule', {
+      method: 'POST',
+      body: JSON.stringify(request),
+      headers: {
+        Prefer: 'outlook.timezone="UTC"'
+      }
+    });
+  } catch (err) {
+    if (err instanceof GraphApiError) {
+      return graphError(err.message, err.code, err.status);
     }
-  });
+    return graphError(err instanceof Error ? err.message : 'Failed to get schedule');
+  }
 
   if (!result.ok || !result.data) {
     return graphError(result.error?.message || 'Failed to get schedule', result.error?.code, result.error?.status);
@@ -135,13 +143,21 @@ export async function findMeetingTimes(
   token: string,
   request: FindMeetingTimesRequest
 ): Promise<GraphResponse<FindMeetingTimesResponse>> {
-  const result = await callGraph<FindMeetingTimesResponse>(token, '/me/findMeetingTimes', {
-    method: 'POST',
-    body: JSON.stringify(request),
-    headers: {
-      Prefer: 'outlook.timezone="UTC"'
+  let result: GraphResponse<FindMeetingTimesResponse>;
+  try {
+    result = await callGraph<FindMeetingTimesResponse>(token, '/me/findMeetingTimes', {
+      method: 'POST',
+      body: JSON.stringify(request),
+      headers: {
+        Prefer: 'outlook.timezone="UTC"'
+      }
+    });
+  } catch (err) {
+    if (err instanceof GraphApiError) {
+      return graphError(err.message, err.code, err.status);
     }
-  });
+    return graphError(err instanceof Error ? err.message : 'Failed to find meeting times');
+  }
 
   if (!result.ok || !result.data) {
     return graphError(

@@ -1,4 +1,4 @@
-import { callGraph, GraphResponse, graphError, graphResult } from './graph-client.js';
+import { callGraph, GraphResponse, graphError, graphResult, GraphApiError } from './graph-client.js';
 
 export type TodoImportance = 'low' | 'normal' | 'high';
 export type TodoStatus = 'notStarted' | 'inProgress' | 'completed' | 'waitingOnOthers' | 'deferred';
@@ -42,7 +42,15 @@ export interface TodoList {
 }
 
 export async function getTodoLists(token: string): Promise<GraphResponse<TodoList[]>> {
-  const result = await callGraph<{ value: TodoList[] }>(token, '/me/todo/lists');
+  let result: GraphResponse<{ value: TodoList[] }>;
+  try {
+    result = await callGraph<{ value: TodoList[] }>(token, '/me/todo/lists');
+  } catch (err) {
+    if (err instanceof GraphApiError) {
+      return graphError(err.message, err.code, err.status);
+    }
+    return graphError(err instanceof Error ? err.message : 'Failed to get todo lists');
+  }
   if (!result.ok || !result.data) {
     return graphError(result.error?.message || 'Failed to get todo lists', result.error?.code, result.error?.status);
   }
@@ -53,8 +61,10 @@ export async function getTodoList(token: string, listId: string): Promise<GraphR
   try {
     return await callGraph<TodoList>(token, `/me/todo/lists/${encodeURIComponent(listId)}`);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Failed to get todo list';
-    return graphError(msg);
+    if (err instanceof GraphApiError) {
+      return graphError(err.message, err.code, err.status);
+    }
+    return graphError(err instanceof Error ? err.message : 'Failed to get todo list');
   }
 }
 
@@ -62,10 +72,18 @@ export async function getTasks(token: string, listId: string, filter?: string): 
   const params = new URLSearchParams();
   if (filter) params.set('$filter', filter);
   const query = params.toString() ? `?${params.toString()}` : '';
-  const result = await callGraph<{ value: TodoTask[] }>(
-    token,
-    `/me/todo/lists/${encodeURIComponent(listId)}/tasks${query}`
-  );
+  let result: GraphResponse<{ value: TodoTask[] }>;
+  try {
+    result = await callGraph<{ value: TodoTask[] }>(
+      token,
+      `/me/todo/lists/${encodeURIComponent(listId)}/tasks${query}`
+    );
+  } catch (err) {
+    if (err instanceof GraphApiError) {
+      return graphError(err.message, err.code, err.status);
+    }
+    return graphError(err instanceof Error ? err.message : 'Failed to get tasks');
+  }
   if (!result.ok || !result.data) {
     return graphError(result.error?.message || 'Failed to get tasks', result.error?.code, result.error?.status);
   }
@@ -74,10 +92,15 @@ export async function getTasks(token: string, listId: string, filter?: string): 
 
 export async function getTask(token: string, listId: string, taskId: string): Promise<GraphResponse<TodoTask>> {
   try {
-    return await callGraph<TodoTask>(token, `/me/todo/lists/${encodeURIComponent(listId)}/tasks/${encodeURIComponent(taskId)}`);
+    return await callGraph<TodoTask>(
+      token,
+      `/me/todo/lists/${encodeURIComponent(listId)}/tasks/${encodeURIComponent(taskId)}`
+    );
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Failed to get task';
-    return graphError(msg);
+    if (err instanceof GraphApiError) {
+      return graphError(err.message, err.code, err.status);
+    }
+    return graphError(err instanceof Error ? err.message : 'Failed to get task');
   }
 }
 
@@ -109,10 +132,18 @@ export async function createTask(
     payload.reminderDateTime = { dateTime: options.reminderDateTime, timeZone: options.timeZone || 'UTC' };
   }
   if (options.linkedResources?.length) payload.linkedResources = options.linkedResources;
-  const result = await callGraph<TodoTask>(token, `/me/todo/lists/${encodeURIComponent(listId)}/tasks`, {
-    method: 'POST',
-    body: JSON.stringify(payload)
-  });
+  let result: GraphResponse<TodoTask>;
+  try {
+    result = await callGraph<TodoTask>(token, `/me/todo/lists/${encodeURIComponent(listId)}/tasks`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  } catch (err) {
+    if (err instanceof GraphApiError) {
+      return graphError(err.message, err.code, err.status);
+    }
+    return graphError(err instanceof Error ? err.message : 'Failed to create task');
+  }
   if (!result.ok || !result.data) {
     return graphError(result.error?.message || 'Failed to create task', result.error?.code, result.error?.status);
   }
@@ -163,11 +194,19 @@ export async function updateTask(
         : { dateTime: options.completedDateTime, timeZone: options.timeZone || 'UTC' };
   }
   if (options.linkedResources !== undefined) payload.linkedResources = options.linkedResources;
-  const result = await callGraph<TodoTask>(
-    token,
-    `/me/todo/lists/${encodeURIComponent(listId)}/tasks/${encodeURIComponent(taskId)}`,
-    { method: 'PATCH', body: JSON.stringify(payload) }
-  );
+  let result: GraphResponse<TodoTask>;
+  try {
+    result = await callGraph<TodoTask>(
+      token,
+      `/me/todo/lists/${encodeURIComponent(listId)}/tasks/${encodeURIComponent(taskId)}`,
+      { method: 'PATCH', body: JSON.stringify(payload) }
+    );
+  } catch (err) {
+    if (err instanceof GraphApiError) {
+      return graphError(err.message, err.code, err.status);
+    }
+    return graphError(err instanceof Error ? err.message : 'Failed to update task');
+  }
   if (!result.ok || !result.data) {
     return graphError(result.error?.message || 'Failed to update task', result.error?.code, result.error?.status);
   }
@@ -183,8 +222,10 @@ export async function deleteTask(token: string, listId: string, taskId: string):
       false
     );
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Failed to delete task';
-    return graphError(msg);
+    if (err instanceof GraphApiError) {
+      return graphError(err.message, err.code, err.status);
+    }
+    return graphError(err instanceof Error ? err.message : 'Failed to delete task');
   }
 }
 
@@ -194,11 +235,19 @@ export async function addChecklistItem(
   taskId: string,
   displayName: string
 ): Promise<GraphResponse<TodoChecklistItem>> {
-  const result = await callGraph<TodoChecklistItem>(
-    token,
-    `/me/todo/lists/${encodeURIComponent(listId)}/tasks/${encodeURIComponent(taskId)}/checklistItems`,
-    { method: 'POST', body: JSON.stringify({ displayName }) }
-  );
+  let result: GraphResponse<TodoChecklistItem>;
+  try {
+    result = await callGraph<TodoChecklistItem>(
+      token,
+      `/me/todo/lists/${encodeURIComponent(listId)}/tasks/${encodeURIComponent(taskId)}/checklistItems`,
+      { method: 'POST', body: JSON.stringify({ displayName }) }
+    );
+  } catch (err) {
+    if (err instanceof GraphApiError) {
+      return graphError(err.message, err.code, err.status);
+    }
+    return graphError(err instanceof Error ? err.message : 'Failed to add checklist item');
+  }
   if (!result.ok || !result.data) {
     return graphError(
       result.error?.message || 'Failed to add checklist item',
@@ -223,7 +272,9 @@ export async function deleteChecklistItem(
       false
     );
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Failed to delete checklist item';
-    return graphError(msg);
+    if (err instanceof GraphApiError) {
+      return graphError(err.message, err.code, err.status);
+    }
+    return graphError(err instanceof Error ? err.message : 'Failed to delete checklist item');
   }
 }

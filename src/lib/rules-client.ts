@@ -1,4 +1,4 @@
-import { callGraph, graphError, graphResult } from './graph-client.js';
+import { callGraph, graphError, graphResult, GraphApiError } from './graph-client.js';
 import type { GraphResponse } from './graph-client.js';
 
 export interface MessageRuleCondition {
@@ -81,7 +81,15 @@ export interface UpdateMessageRulePayload {
 
 /** List all inbox message rules */
 export async function listMessageRules(token: string): Promise<GraphResponse<MessageRule[]>> {
-  const result = await callGraph<MessageRuleListResponse>(token, '/me/mailFolders/inbox/messageRules');
+  let result: GraphResponse<MessageRuleListResponse>;
+  try {
+    result = await callGraph<MessageRuleListResponse>(token, '/me/mailFolders/inbox/messageRules');
+  } catch (err) {
+    if (err instanceof GraphApiError) {
+      return graphError(err.message, err.code, err.status);
+    }
+    return graphError(err instanceof Error ? err.message : 'Failed to list message rules');
+  }
   if (!result.ok || !result.data) {
     return graphError(
       result.error?.message || 'Failed to list message rules',
@@ -97,8 +105,10 @@ export async function getMessageRule(token: string, ruleId: string): Promise<Gra
   try {
     return await callGraph<MessageRule>(token, `/me/mailFolders/inbox/messageRules/${encodeURIComponent(ruleId)}`);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Failed to get message rule';
-    return graphError(msg);
+    if (err instanceof GraphApiError) {
+      return graphError(err.message, err.code, err.status);
+    }
+    return graphError(err instanceof Error ? err.message : 'Failed to get message rule');
   }
 }
 
@@ -113,8 +123,10 @@ export async function createMessageRule(
       body: JSON.stringify(payload)
     });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Failed to create message rule';
-    return graphError(msg);
+    if (err instanceof GraphApiError) {
+      return graphError(err.message, err.code, err.status);
+    }
+    return graphError(err instanceof Error ? err.message : 'Failed to create message rule');
   }
 }
 
@@ -130,17 +142,26 @@ export async function updateMessageRule(
       body: JSON.stringify(payload)
     });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Failed to update message rule';
-    return graphError(msg);
+    if (err instanceof GraphApiError) {
+      return graphError(err.message, err.code, err.status);
+    }
+    return graphError(err instanceof Error ? err.message : 'Failed to update message rule');
   }
 }
 
 /** Delete an inbox message rule */
 export async function deleteMessageRule(token: string, ruleId: string): Promise<GraphResponse<void>> {
-  return callGraph<void>(
-    token,
-    `/me/mailFolders/inbox/messageRules/${encodeURIComponent(ruleId)}`,
-    { method: 'DELETE' },
-    false
-  );
+  try {
+    return await callGraph<void>(
+      token,
+      `/me/mailFolders/inbox/messageRules/${encodeURIComponent(ruleId)}`,
+      { method: 'DELETE' },
+      false
+    );
+  } catch (err) {
+    if (err instanceof GraphApiError) {
+      return graphError(err.message, err.code, err.status);
+    }
+    return graphError(err instanceof Error ? err.message : 'Failed to delete message rule');
+  }
 }

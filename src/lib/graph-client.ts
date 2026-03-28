@@ -131,7 +131,15 @@ export async function fetchAllPages<T>(
   let path = initialPath;
 
   while (path) {
-    const result = await callGraph<{ value: T[]; '@odata.nextLink'?: string }>(token, path);
+    let result: GraphResponse<{ value: T[]; '@odata.nextLink'?: string }>;
+    try {
+      result = await callGraph<{ value: T[]; '@odata.nextLink'?: string }>(token, path);
+    } catch (err) {
+      if (err instanceof GraphApiError) {
+        return graphError(err.message, err.code, err.status) as GraphResponse<T[]>;
+      }
+      return graphError(err instanceof Error ? err.message : errorMessage) as GraphResponse<T[]>;
+    }
     if (!result.ok || !result.data) {
       return graphError(
         result.error?.message || errorMessage,
@@ -222,7 +230,15 @@ function encodeGraphSearchQuery(query: string): string {
 
 export async function listFiles(token: string, folder?: DriveItemReference): Promise<GraphResponse<DriveItem[]>> {
   const basePath = buildItemPath(folder);
-  const result = await callGraph<DriveItemListResponse>(token, `${basePath}/children`);
+  let result: GraphResponse<DriveItemListResponse>;
+  try {
+    result = await callGraph<DriveItemListResponse>(token, `${basePath}/children`);
+  } catch (err) {
+    if (err instanceof GraphApiError) {
+      return graphError(err.message, err.code, err.status);
+    }
+    return graphError(err instanceof Error ? err.message : 'Failed to list files');
+  }
   if (!result.ok || !result.data) {
     return graphError(result.error?.message || 'Failed to list files', result.error?.code, result.error?.status);
   }
@@ -230,10 +246,18 @@ export async function listFiles(token: string, folder?: DriveItemReference): Pro
 }
 
 export async function searchFiles(token: string, query: string): Promise<GraphResponse<DriveItem[]>> {
-  const result = await callGraph<DriveItemListResponse>(
-    token,
-    `/me/drive/root/search(q='${encodeGraphSearchQuery(query)}')`
-  );
+  let result: GraphResponse<DriveItemListResponse>;
+  try {
+    result = await callGraph<DriveItemListResponse>(
+      token,
+      `/me/drive/root/search(q='${encodeGraphSearchQuery(query)}')`
+    );
+  } catch (err) {
+    if (err instanceof GraphApiError) {
+      return graphError(err.message, err.code, err.status);
+    }
+    return graphError(err instanceof Error ? err.message : 'Failed to search files');
+  }
   if (!result.ok || !result.data) {
     return graphError(result.error?.message || 'Failed to search files', result.error?.code, result.error?.status);
   }
@@ -241,7 +265,14 @@ export async function searchFiles(token: string, query: string): Promise<GraphRe
 }
 
 export async function getFileMetadata(token: string, itemId: string): Promise<GraphResponse<DriveItem>> {
-  return callGraph<DriveItem>(token, `/me/drive/items/${encodeURIComponent(itemId)}`);
+  try {
+    return await callGraph<DriveItem>(token, `/me/drive/items/${encodeURIComponent(itemId)}`);
+  } catch (err) {
+    if (err instanceof GraphApiError) {
+      return graphError(err.message, err.code, err.status);
+    }
+    return graphError(err instanceof Error ? err.message : 'Failed to get file metadata');
+  }
 }
 
 export async function uploadFile(
@@ -259,15 +290,21 @@ export async function uploadFile(
 
     const fileName = basename(absolutePath);
     const folderPath = folder?.id ? `${buildItemPath(folder)}:/` : '/me/drive/root:/';
-    const result = await callGraph<DriveItem>(token, `${folderPath}${encodeURIComponent(fileName)}:/content`, {
-      method: 'PUT',
-      body: createReadStream(absolutePath) as unknown as BodyInit,
-      headers: {
-        'Content-Type': 'application/octet-stream'
+    try {
+      const result = await callGraph<DriveItem>(token, `${folderPath}${encodeURIComponent(fileName)}:/content`, {
+        method: 'PUT',
+        body: createReadStream(absolutePath) as unknown as BodyInit,
+        headers: {
+          'Content-Type': 'application/octet-stream'
+        }
+      });
+      return result;
+    } catch (err) {
+      if (err instanceof GraphApiError) {
+        return graphError(err.message, err.code, err.status);
       }
-    });
-
-    return result;
+      return graphError(err instanceof Error ? err.message : 'Upload failed');
+    }
   } catch (err) {
     return graphError(err instanceof Error ? err.message : 'Upload failed');
   }
@@ -288,16 +325,22 @@ export async function createLargeUploadSession(
 
     const fileName = basename(absolutePath);
     const folderPath = folder?.id ? `${buildItemPath(folder)}:/` : '/me/drive/root:/';
-    const result = await callGraph<UploadLargeResult>(
-      token,
-      `${folderPath}${encodeURIComponent(fileName)}:/createUploadSession`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ item: { '@microsoft.graph.conflictBehavior': 'replace', name: fileName } })
+    try {
+      const result = await callGraph<UploadLargeResult>(
+        token,
+        `${folderPath}${encodeURIComponent(fileName)}:/createUploadSession`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ item: { '@microsoft.graph.conflictBehavior': 'replace', name: fileName } })
+        }
+      );
+      return result;
+    } catch (err) {
+      if (err instanceof GraphApiError) {
+        return graphError(err.message, err.code, err.status);
       }
-    );
-
-    return result;
+      return graphError(err instanceof Error ? err.message : 'Failed to create upload session');
+    }
   } catch (err) {
     return graphError(err instanceof Error ? err.message : 'Failed to create upload session');
   }
@@ -369,9 +412,7 @@ export async function downloadFile(
           // Clean up corrupted temp file
           await unlink(tmpPath).catch(() => {});
           tmpPath = undefined;
-          return graphError(
-            `Download failed: size mismatch (expected ${expected} bytes, got ${bytesWritten})`
-          );
+          return graphError(`Download failed: size mismatch (expected ${expected} bytes, got ${bytesWritten})`);
         }
       }
 
@@ -408,7 +449,14 @@ export async function downloadFile(
 }
 
 export async function deleteFile(token: string, itemId: string): Promise<GraphResponse<void>> {
-  return callGraph<void>(token, `/me/drive/items/${encodeURIComponent(itemId)}`, { method: 'DELETE' }, false);
+  try {
+    return await callGraph<void>(token, `/me/drive/items/${encodeURIComponent(itemId)}`, { method: 'DELETE' }, false);
+  } catch (err) {
+    if (err instanceof GraphApiError) {
+      return graphError(err.message, err.code, err.status);
+    }
+    return graphError(err instanceof Error ? err.message : 'Failed to delete file');
+  }
 }
 
 export async function shareFile(
@@ -417,21 +465,41 @@ export async function shareFile(
   type: 'view' | 'edit' = 'view',
   scope: 'anonymous' | 'organization' = 'organization'
 ): Promise<GraphResponse<SharingLinkResult>> {
-  const result = await callGraph<{ link?: SharingLinkResult }>(
-    token,
-    `/me/drive/items/${encodeURIComponent(itemId)}/createLink`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ type, scope })
+  let result: GraphResponse<{ link?: SharingLinkResult }>;
+  try {
+    result = await callGraph<{ link?: SharingLinkResult }>(
+      token,
+      `/me/drive/items/${encodeURIComponent(itemId)}/createLink`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ type, scope })
+      }
+    );
+  } catch (err) {
+    if (err instanceof GraphApiError) {
+      return graphError(err.message, err.code, err.status);
     }
-  );
+    return graphError(err instanceof Error ? err.message : 'Failed to share file');
+  }
 
   if (!result.ok || !result.data) return result as GraphResponse<SharingLinkResult>;
   return graphResult(result.data.link || {});
 }
 
 export async function checkoutFile(token: string, itemId: string): Promise<GraphResponse<void>> {
-  return callGraph<void>(token, `/me/drive/items/${encodeURIComponent(itemId)}/checkout`, { method: 'POST' }, false);
+  try {
+    return await callGraph<void>(
+      token,
+      `/me/drive/items/${encodeURIComponent(itemId)}/checkout`,
+      { method: 'POST' },
+      false
+    );
+  } catch (err) {
+    if (err instanceof GraphApiError) {
+      return graphError(err.message, err.code, err.status);
+    }
+    return graphError(err instanceof Error ? err.message : 'Failed to checkout file');
+  }
 }
 
 export async function checkinFile(
@@ -439,15 +507,23 @@ export async function checkinFile(
   itemId: string,
   comment?: string
 ): Promise<GraphResponse<CheckinResult>> {
-  const result = await callGraph<void>(
-    token,
-    `/me/drive/items/${encodeURIComponent(itemId)}/checkin`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ comment: comment || '' })
-    },
-    false
-  );
+  let result: GraphResponse<void>;
+  try {
+    result = await callGraph<void>(
+      token,
+      `/me/drive/items/${encodeURIComponent(itemId)}/checkin`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ comment: comment || '' })
+      },
+      false
+    );
+  } catch (err) {
+    if (err instanceof GraphApiError) {
+      return graphError(err.message, err.code, err.status);
+    }
+    return graphError(err instanceof Error ? err.message : 'Check-in failed');
+  }
 
   if (!result.ok) {
     return graphError(result.error?.message || 'Check-in failed', result.error?.code, result.error?.status);

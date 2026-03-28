@@ -1,4 +1,4 @@
-import { callGraph, graphError } from './graph-client.js';
+import { callGraph, graphError, GraphApiError } from './graph-client.js';
 
 export type OofStatus = 'alwaysEnabled' | 'scheduled' | 'disabled';
 
@@ -31,8 +31,18 @@ export async function getMailboxSettings(token: string): Promise<{
   try {
     return await callGraph<GetMailboxSettingsResponse>(token, '/me/mailboxSettings');
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to get mailbox settings';
-    return graphError(message) as { ok: boolean; data?: GetMailboxSettingsResponse; error?: { message: string; code?: string; status?: number } };
+    if (err instanceof GraphApiError) {
+      return graphError(err.message, err.code, err.status) as {
+        ok: boolean;
+        data?: GetMailboxSettingsResponse;
+        error?: { message: string; code?: string; status?: number };
+      };
+    }
+    return graphError(err instanceof Error ? err.message : 'Failed to get mailbox settings') as {
+      ok: boolean;
+      data?: GetMailboxSettingsResponse;
+      error?: { message: string; code?: string; status?: number };
+    };
   }
 }
 
@@ -70,15 +80,29 @@ export async function setMailboxSettings(
     }
   };
 
-  const result = await callGraph<Record<string, never>>(
-    token,
-    '/me/mailboxSettings',
-    {
-      method: 'PATCH',
-      body: JSON.stringify(payload)
-    },
-    false // don't expect JSON on 204
-  );
+  let result;
+  try {
+    result = await callGraph<Record<string, never>>(
+      token,
+      '/me/mailboxSettings',
+      {
+        method: 'PATCH',
+        body: JSON.stringify(payload)
+      },
+      false // don't expect JSON on 204
+    );
+  } catch (err) {
+    if (err instanceof GraphApiError) {
+      return {
+        ok: false,
+        error: { message: err.message, code: err.code, status: err.status }
+      };
+    }
+    return {
+      ok: false,
+      error: { message: err instanceof Error ? err.message : 'Failed to update mailbox settings' }
+    };
+  }
 
   if (!result.ok) {
     return {

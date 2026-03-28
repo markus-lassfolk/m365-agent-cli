@@ -21,3 +21,14 @@ export function getJwtExpiration(token: string): number | null {
     return null;
   }
 }
+
+export function isValidJwtStructure(token: string): boolean {
+  const parts = token.split('.');
+  if (parts.length !== 3) return false;
+  try {
+    Buffer.from(parts[1], 'base64url').toString();
+    return true;
+  } catch {
+    return false;
+  }
+}

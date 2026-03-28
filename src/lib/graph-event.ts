@@ -1,4 +1,4 @@
-import { callGraph, graphError, type GraphResponse } from './graph-client.js';
+import { callGraph, graphError, type GraphResponse, GraphApiError } from './graph-client.js';
 
 export interface ForwardEventOptions {
   token: string;
@@ -33,8 +33,10 @@ export async function forwardEvent(options: ForwardEventOptions): Promise<GraphR
       false
     );
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Failed to forward event';
-    return graphError(msg);
+    if (err instanceof GraphApiError) {
+      return graphError(err.message, err.code, err.status);
+    }
+    return graphError(err instanceof Error ? err.message : 'Failed to forward event');
   }
 }
 
@@ -68,7 +70,9 @@ export async function proposeNewTime(options: ProposeNewTimeOptions): Promise<Gr
       false
     );
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Failed to propose new time';
-    return graphError(msg);
+    if (err instanceof GraphApiError) {
+      return graphError(err.message, err.code, err.status);
+    }
+    return graphError(err instanceof Error ? err.message : 'Failed to propose new time');
   }
 }

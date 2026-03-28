@@ -184,7 +184,6 @@ export type {
   UpdateTaskOptions
 } from './lib/todo-client.js';
 
-
 // Inbox rules
 export {
   listMessageRules,

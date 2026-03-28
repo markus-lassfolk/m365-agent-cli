@@ -45,10 +45,14 @@ export async function createSubscription(
     body.clientState = clientState;
   }
 
-  const response = await fetchGraph('/subscriptions', {
-    method: 'POST',
-    body: JSON.stringify(body)
-  }, token);
+  const response = await fetchGraph(
+    '/subscriptions',
+    {
+      method: 'POST',
+      body: JSON.stringify(body)
+    },
+    token
+  );
 
   if (!response.ok) {
     const error = await response.text();
@@ -59,9 +63,13 @@ export async function createSubscription(
 }
 
 export async function listSubscriptions(token?: string): Promise<Subscription[]> {
-  const response = await fetchGraph('/subscriptions', {
-    method: 'GET'
-  }, token);
+  const response = await fetchGraph(
+    '/subscriptions',
+    {
+      method: 'GET'
+    },
+    token
+  );
 
   if (!response.ok) {
     const error = await response.text();
@@ -73,9 +81,13 @@ export async function listSubscriptions(token?: string): Promise<Subscription[]>
 }
 
 export async function deleteSubscription(id: string, token?: string): Promise<void> {
-  const response = await fetchGraph(`/subscriptions/${encodeURIComponent(id)}`, {
-    method: 'DELETE'
-  }, token);
+  const response = await fetchGraph(
+    `/subscriptions/${encodeURIComponent(id)}`,
+    {
+      method: 'DELETE'
+    },
+    token
+  );
 
   if (!response.ok) {
     const error = await response.text();
@@ -84,12 +96,16 @@ export async function deleteSubscription(id: string, token?: string): Promise<vo
 }
 
 export async function renewSubscription(id: string, expirationDateTime: string, token?: string): Promise<void> {
-  const response = await fetchGraph(`/subscriptions/${encodeURIComponent(id)}`, {
-    method: 'PATCH',
-    body: JSON.stringify({
-      expirationDateTime
-    })
-  }, token);
+  const response = await fetchGraph(
+    `/subscriptions/${encodeURIComponent(id)}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({
+        expirationDateTime
+      })
+    },
+    token
+  );
 
   if (!response.ok) {
     const error = await response.text();
