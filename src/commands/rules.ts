@@ -430,6 +430,11 @@ const updateCmd = new Command('update')
       process.exit(1);
     }
 
+    if (opts.enable && opts.disable) {
+      console.error('Error: --enable and --disable cannot be used together.');
+      process.exit(1);
+    }
+
     const conditions = conditionsFromOpts(opts as Record<string, unknown>);
     const actions = actionsFromOpts(opts as Record<string, unknown>);
 

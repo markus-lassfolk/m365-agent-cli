@@ -128,7 +128,11 @@ docs/GOALS.md
 BRIEF_EOF
   fi
 
-  [[ "$IS_GOALS_GAP" == "true" ]] && log "Dispatching Forge for GOALS gap-:#$ISSUE_NUM" || log "Dispatching Forge for :#$ISSUE_NUM"
+  if [[ "$IS_GOALS_GAP" == "true" ]]; then
+    log "Dispatching Forge for GOALS gap-fill"
+  else
+    log "Dispatching Forge for :#$ISSUE_NUM"
+  fi
 
   if [[ "$IS_GOALS_GAP" == "false" ]]; then
     gh issue edit "$ISSUE_NUM" --repo "$REPO" --add-label "in-progress" 2>/dev/null || true
@@ -137,7 +141,11 @@ BRIEF_EOF
   LABEL="forge-clippy-$(date +%s)"
   sessions_spawn runtime="subagent" agentId="forge" mode="run" timeoutSeconds="3600" \
     task="$(cat "$FORGE_BRIEF")" label="$LABEL" 2>/dev/null &
-  [[ "$IS_GOALS_GAP" == "true" ]] && echo "$(date +%s) pid=$! label=$LABEL issue=$ISSUE_NUM goals_gap=1" > "$FORGE_GUARD" || echo "$(date +%s) pid=$! label=$LABEL issue=$ISSUE_NUM" > "$FORGE_GUARD"
+  if [[ "$IS_GOALS_GAP" == "true" ]]; then
+    echo "$(date +%s) pid=$! label=$LABEL issue=goals-gap goals_gap=1" > "$FORGE_GUARD"
+  else
+    echo "$(date +%s) pid=$! label=$LABEL issue=$ISSUE_NUM" > "$FORGE_GUARD"
+  fi
 
   rm -f "$FORGE_BRIEF"
   log "Forge dispatched (label=$LABEL)"
