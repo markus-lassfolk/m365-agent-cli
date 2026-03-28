@@ -1,6 +1,12 @@
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
-import { getCalendarEvents, respondToEvent, getOwaUserInfo, getCalendarEvent, type ResponseType } from '../lib/ews-client.js';
+import {
+  getCalendarEvents,
+  respondToEvent,
+  getOwaUserInfo,
+  getCalendarEvent,
+  type ResponseType
+} from '../lib/ews-client.js';
 
 function formatTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -208,14 +214,32 @@ export const respondCommand = new Command('respond')
       }
 
       // Look up the event directly to check IsOrganizer (pendingEvents filters out organizer events)
-      const eventResult = await getCalendarEvent(authResult.token!, options.id);
+      const eventResult = await getCalendarEvent(authResult.token!, options.id, options.mailbox);
       if (!eventResult.ok || !eventResult.data) {
-        console.error(`Invalid event id: ${options.id}`);
+        if (options.json) {
+          console.log(JSON.stringify({ error: `Invalid event id: ${options.id}` }, null, 2));
+        } else {
+          console.error(`Invalid event id: ${options.id}`);
+        }
         process.exit(1);
       }
 
       if (eventResult.data.IsOrganizer) {
-        console.error('You are the organizer of this meeting. Use \'clippy update-event\' instead to modify the meeting.');
+        if (options.json) {
+          console.log(
+            JSON.stringify(
+              {
+                error: "You are the organizer of this meeting. Use 'clippy update-event' instead to modify the meeting."
+              },
+              null,
+              2
+            )
+          );
+        } else {
+          console.error(
+            "You are the organizer of this meeting. Use 'clippy update-event' instead to modify the meeting."
+          );
+        }
         process.exit(1);
       }
 

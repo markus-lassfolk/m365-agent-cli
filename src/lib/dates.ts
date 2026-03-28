@@ -54,12 +54,7 @@ function parseLocalDate(dayStr: string): Date {
   const match = dayStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return new Date(dayStr);
   const [, yearStr, monthStr, dayOfMonthStr] = match;
-  return new Date(
-    parseInt(yearStr, 10),
-    parseInt(monthStr, 10) - 1,
-    parseInt(dayOfMonthStr, 10),
-    0, 0, 0, 0
-  );
+  return new Date(parseInt(yearStr, 10), parseInt(monthStr, 10) - 1, parseInt(dayOfMonthStr, 10), 0, 0, 0, 0);
 }
 
 export function parseDay(day: string, options: ParseDayOptions = {}): Date {

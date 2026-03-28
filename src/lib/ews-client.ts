@@ -632,7 +632,11 @@ export async function getCalendarEvents(
   }
 }
 
-export async function getCalendarEvent(token: string, eventId: string): Promise<OwaResponse<CalendarEvent>> {
+export async function getCalendarEvent(
+  token: string,
+  eventId: string,
+  mailbox?: string
+): Promise<OwaResponse<CalendarEvent>> {
   try {
     const envelope = soapEnvelope(`
     <m:GetItem>
@@ -658,11 +662,11 @@ export async function getCalendarEvent(token: string, eventId: string): Promise<
       </m:ItemIds>
     </m:GetItem>`);
 
-    const xml = await callEws(token, envelope);
+    const xml = await callEws(token, envelope, mailbox);
     const block = extractBlocks(xml, 'CalendarItem')[0];
     if (!block) return { ok: false, status: 404, error: { code: 'NOT_FOUND', message: 'Event not found' } };
 
-    return ewsResult(parseCalendarItem(block));
+    return ewsResult(parseCalendarItem(block, mailbox));
   } catch (err) {
     return ewsError(err);
   }
@@ -703,7 +707,14 @@ function buildRecurrenceXml(recurrence: Recurrence): string {
 
   let patternXml = '';
   const p = recurrence.Pattern;
-  const validTypes = ['Daily', 'Weekly', 'AbsoluteMonthly', 'RelativeMonthly', 'AbsoluteYearly', 'RelativeYearly'] as const;
+  const validTypes = [
+    'Daily',
+    'Weekly',
+    'AbsoluteMonthly',
+    'RelativeMonthly',
+    'AbsoluteYearly',
+    'RelativeYearly'
+  ] as const;
 
   switch (p.Type) {
     case 'Daily':
@@ -733,7 +744,9 @@ function buildRecurrenceXml(recurrence: Recurrence): string {
     case 'EndDate': {
       const endDate = r.EndDate || r.StartDate;
       if (!r.EndDate) {
-        console.warn('[Recurrence] Range.EndDate is missing; EndDate will equal StartDate (effectively a single-occurrence event)');
+        console.warn(
+          '[Recurrence] Range.EndDate is missing; EndDate will equal StartDate (effectively a single-occurrence event)'
+        );
       }
       rangeXml = `<t:EndDateRecurrence><t:StartDate>${xmlEscape(r.StartDate)}</t:StartDate><t:EndDate>${xmlEscape(endDate)}</t:EndDate></t:EndDateRecurrence>`;
       break;
@@ -1005,7 +1018,11 @@ export async function cancelEvent(options: CancelEventOptions): Promise<OwaRespo
       await callEws(token, envelope, mailbox);
       // Fallback succeeded after primary failed — report it so caller knows what happened
       const primaryMsg = primaryErr instanceof Error ? primaryErr.message : String(primaryErr);
-      return { ok: true, status: 200, info: `Primary cancellation failed (${primaryMsg}); cancellation sent via fallback DeleteItem instead.` };
+      return {
+        ok: true,
+        status: 200,
+        info: `Primary cancellation failed (${primaryMsg}); cancellation sent via fallback DeleteItem instead.`
+      };
     } catch (fallbackErr) {
       // Both failed — report both errors clearly
       const primaryMsg = primaryErr instanceof Error ? primaryErr.message : String(primaryErr);

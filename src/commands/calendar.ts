@@ -19,12 +19,7 @@ function parseLocalDate(dateStr: string): Date {
   const dateOnlyMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (dateOnlyMatch) {
     const [, yearStr, monthStr, dayOfMonthStr] = dateOnlyMatch;
-    return new Date(
-      parseInt(yearStr, 10),
-      parseInt(monthStr, 10) - 1,
-      parseInt(dayOfMonthStr, 10),
-      0, 0, 0, 0
-    );
+    return new Date(parseInt(yearStr, 10), parseInt(monthStr, 10) - 1, parseInt(dayOfMonthStr, 10), 0, 0, 0, 0);
   }
   // Handle the "+01:00" suffix format by inserting a 'T' before the time
   const withTime = dateStr.replace(' ', 'T');
