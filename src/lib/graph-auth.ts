@@ -3,6 +3,16 @@ import { join } from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { getJwtExpiration } from './jwt-utils.js';
 
+const VALID_TENANT_ID = /^(?:common|organizations|consumers|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$/;
+
+function getMicrosoftTenantPathSegment(): string {
+  const rawTenant = process.env.EWS_TENANT_ID?.trim() || 'common';
+  if (!VALID_TENANT_ID.test(rawTenant)) {
+    throw new Error('Invalid EWS_TENANT_ID. Use common/organizations/consumers or a valid tenant UUID.');
+  }
+  return rawTenant;
+}
+
 export interface GraphAuthResult {
   success: boolean;
   token?: string;
@@ -49,8 +59,10 @@ async function saveCachedGraphToken(token: CachedGraphToken): Promise<void> {
 async function refreshGraphAccessToken(clientId: string, refreshToken: string): Promise<CachedGraphToken> {
   let lastError = '';
 
+  const tenant = getMicrosoftTenantPathSegment();
+
   for (const scope of GRAPH_SCOPES) {
-    const response = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
+    const response = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
