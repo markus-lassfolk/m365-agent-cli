@@ -160,23 +160,6 @@ export type {
   RemoveDelegateOptions
 } from './lib/delegate-client.js';
 
-// Inbox rules
-export {
-  listMessageRules,
-  getMessageRule,
-  createMessageRule,
-  updateMessageRule,
-  deleteMessageRule
-} from './lib/rules-client.js';
-
-export type {
-  MessageRule,
-  MessageRuleCondition,
-  MessageRuleAction,
-  CreateMessageRulePayload,
-  UpdateMessageRulePayload
-} from './lib/rules-client.js';
-
 // To-Do
 export {
   getTodoLists,

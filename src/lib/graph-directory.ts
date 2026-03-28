@@ -1,4 +1,4 @@
-import { callGraph, GRAPH_BASE_URL, type GraphResponse } from './graph-client.js';
+import { callGraph, GRAPH_BASE_URL, type GraphResponse, fetchAllPages } from './graph-client.js';
 
 export interface Person {
   id: string;
@@ -69,35 +69,24 @@ export async function searchGroups(token: string, query: string): Promise<GraphR
 }
 
 export async function expandGroup(token: string, groupId: string): Promise<GraphResponse<User[]>> {
-  const members: User[] = [];
-  let path = `/groups/${encodeURIComponent(groupId)}/members?$top=100`;
+  const result = await fetchAllPages<any>(
+    token,
+    `/groups/${encodeURIComponent(groupId)}/members?$top=100`,
+    'Failed to expand group'
+  );
 
-  while (path) {
-    const result = await callGraph<{ value: any[]; '@odata.nextLink'?: string }>(token, path);
-    if (!result.ok || !result.data) {
-      return { ok: false, error: result.error };
-    }
-
-    const userMembers = result.data.value.filter((member: any) => {
-      const odataType = member['@odata.type'];
-      return (
-        (typeof odataType === 'string' && odataType.toLowerCase().endsWith('.user')) ||
-        typeof member.mail === 'string' ||
-        typeof member.userPrincipalName === 'string'
-      );
-    }) as User[];
-
-    members.push(...userMembers);
-    path = result.data['@odata.nextLink']
-      ? (() => {
-          const nextUrl = new URL(result.data['@odata.nextLink']);
-          // Strip the API version prefix (/v1.0 or /beta) since callGraph
-          // already prepends GRAPH_BASE_URL which includes it
-          const relativePath = nextUrl.pathname.replace(/^\/v1\.0/, '');
-          return relativePath + nextUrl.search;
-        })()
-      : '';
+  if (!result.ok || !result.data) {
+    return { ok: false, error: result.error };
   }
 
-  return { ok: true, data: members };
+  const userMembers = result.data.filter((member: any) => {
+    const odataType = member['@odata.type'];
+    return (
+      (typeof odataType === 'string' && odataType.toLowerCase().endsWith('.user')) ||
+      typeof member.mail === 'string' ||
+      typeof member.userPrincipalName === 'string'
+    );
+  }) as User[];
+
+  return { ok: true, data: userMembers };
 }
