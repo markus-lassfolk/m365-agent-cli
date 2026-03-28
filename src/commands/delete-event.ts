@@ -201,13 +201,17 @@ export const deleteEventCommand = new Command('delete-event')
               success: true,
               action,
               event: targetEvent.Subject,
-              attendeesNotified: hasAttendees && !options.forceDelete ? attendees.length : 0
+              attendeesNotified: hasAttendees && !options.forceDelete ? attendees.length : 0,
+              ...(deleteResult.info ? { info: deleteResult.info } : {})
             },
             null,
             2
           )
         );
       } else {
+        if (deleteResult.info) {
+          console.warn(`\nNote: ${deleteResult.info}\n`);
+        }
         if (hasAttendees && !options.forceDelete) {
           console.log(`\n\u2713 Event cancelled. ${attendees.length} attendee(s) notified.\n`);
         } else {
