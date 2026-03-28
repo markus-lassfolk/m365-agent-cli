@@ -106,6 +106,35 @@ export function graphError(message: string, code?: string, status?: number): Gra
   return { ok: false, error: { message, code, status } };
 }
 
+export async function fetchAllPages<T>(
+  token: string,
+  initialPath: string,
+  errorMessage: string
+): Promise<GraphResponse<T[]>> {
+  const items: T[] = [];
+  let path = initialPath;
+
+  while (path) {
+    const result = await callGraph<{ value: T[]; '@odata.nextLink'?: string }>(token, path);
+    if (!result.ok || !result.data) {
+      return graphError(
+        result.error?.message || errorMessage,
+        result.error?.code,
+        result.error?.status
+      ) as GraphResponse<T[]>;
+    }
+    items.push(...(result.data.value || []));
+    path = result.data['@odata.nextLink']
+      ? (() => {
+          const nextUrl = new URL(result.data['@odata.nextLink']);
+          const relativePath = nextUrl.pathname.replace(/^\/v1\.0/, '');
+          return relativePath + nextUrl.search;
+        })()
+      : '';
+  }
+  return graphResult(items);
+}
+
 export async function fetchGraphRaw(token: string, path: string, options: RequestInit = {}): Promise<Response> {
   return fetch(`${GRAPH_BASE_URL}${path}`, {
     ...options,

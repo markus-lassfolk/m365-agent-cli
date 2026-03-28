@@ -162,6 +162,7 @@ export const roomsCommand = new Command('rooms')
               const free = await isRoomFree(authResult.token!, room.emailAddress, options.start, options.end);
               if (free === null) {
                 availabilityCheckFailed = true;
+                freeRooms.push(room);
               } else if (free) {
                 freeRooms.push(room);
               }
