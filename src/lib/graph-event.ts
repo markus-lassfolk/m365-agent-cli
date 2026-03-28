@@ -11,15 +11,15 @@ export async function forwardEvent(options: ForwardEventOptions): Promise<GraphR
   const { token, eventId, toRecipients, comment } = options;
 
   const recipientsList = toRecipients.map((email) => ({
-    EmailAddress: { Address: email }
+    emailAddress: { address: email }
   }));
 
   const body: any = {
-    ToRecipients: recipientsList
+    toRecipients: recipientsList
   };
 
   if (comment) {
-    body.Comment = comment;
+    body.comment = comment;
   }
 
   return callGraph<void>(
