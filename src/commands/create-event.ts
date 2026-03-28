@@ -10,6 +10,7 @@ import {
   type RecurrenceRange
 } from '../lib/ews-client.js';
 import { parseDay, parseTimeToDate, toLocalISOString } from '../lib/dates.js';
+import { findRooms as graphFindRooms, isRoomFree as graphIsRoomFree, type Place } from '../lib/places-client.js';
 
 function formatTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -82,7 +83,31 @@ export const createEventCommand = new Command('create-event')
       if (options.listRooms) {
         console.log('\nFetching available meeting rooms...\n');
 
-        // Search with multiple queries to find more rooms
+        // Try Places API first
+        const placesResult = await graphFindRooms();
+        if (placesResult.ok && placesResult.data && placesResult.data.length > 0) {
+          const placesRooms = placesResult.data;
+          console.log(`Found ${placesRooms.length} room(s) via Places API:\n`);
+          const byBuilding = new Map<string, Place[]>();
+          for (const room of placesRooms) {
+            const key = room.building || 'No Building';
+            if (!byBuilding.has(key)) byBuilding.set(key, []);
+            byBuilding.get(key)!.push(room);
+          }
+          for (const [building, buildingRooms] of byBuilding) {
+            if (building !== 'No Building') console.log(`  ${building}:`);
+            for (const room of buildingRooms) {
+              const tags = room.tags?.length ? ` [${room.tags.join(', ')}]` : '';
+              const cap = room.capacity ? ` (cap: ${room.capacity})` : '';
+              const floor = room.floorNumber ? `, floor ${room.floorNumber}` : '';
+              console.log(`    - ${room.displayName}${cap}${floor}${tags}`);
+              console.log(`      ${room.emailAddress || ''}`);
+            }
+          }
+          return;
+        }
+
+        // Fallback to EWS search
         const allRooms = new Map<string, { Name: string; Address: string }>();
         const queries = ['room', 'meeting', 'vergader', 'nv-', 'conference'];
 
@@ -136,22 +161,38 @@ export const createEventCommand = new Command('create-event')
       if (options.findRoom) {
         console.log('Searching for available rooms...');
 
-        const roomsResult = await getRooms(authResult.token!);
+        const roomsResult = await graphFindRooms();
 
         if (!roomsResult.ok || !roomsResult.data || roomsResult.data.length === 0) {
-          console.error('Could not fetch room list.');
+          // Fallback to EWS room list
+          const ewsResult = await getRooms(authResult.token!);
+          if (!ewsResult.ok || !ewsResult.data || ewsResult.data.length === 0) {
+            console.error('Could not fetch room list.');
+          } else {
+            for (const room of ewsResult.data) {
+              const free = await isRoomFree(authResult.token!, room.Address, start.toISOString(), end.toISOString());
+              if (free) {
+                roomEmail = room.Address;
+                roomName = room.Name;
+                console.log(`Found available room: ${room.Name}`);
+                break;
+              }
+            }
+            if (!roomEmail) {
+              console.log('No available rooms found for this time slot.');
+            }
+          }
         } else {
           for (const room of roomsResult.data) {
-            const free = await isRoomFree(authResult.token!, room.Address, start.toISOString(), end.toISOString());
-
+            if (!room.emailAddress) continue;
+            const free = await graphIsRoomFree(authResult.token!, room.emailAddress, start.toISOString(), end.toISOString());
             if (free) {
-              roomEmail = room.Address;
-              roomName = room.Name;
-              console.log(`Found available room: ${room.Name}`);
+              roomEmail = room.emailAddress;
+              roomName = room.displayName;
+              console.log(`Found available room: ${room.displayName}`);
               break;
             }
           }
-
           if (!roomEmail) {
             console.log('No available rooms found for this time slot.');
           }

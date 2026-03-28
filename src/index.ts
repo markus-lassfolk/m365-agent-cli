@@ -134,3 +134,21 @@ export {
 } from './lib/graph-subscriptions.js';
 
 export type { Subscription } from './lib/graph-subscriptions.js';
+
+export {
+  getDelegates,
+  addDelegate,
+  updateDelegate,
+  removeDelegate
+} from './lib/delegate-client.js';
+
+export type {
+  DelegateInfo,
+  DelegatePermissions,
+  DelegateFolderPermissionLevel,
+  DeliverMeetingRequests,
+  AddDelegateOptions,
+  UpdateDelegateOptions,
+  RemoveDelegateOptions
+} from './lib/delegate-client.js';
+

@@ -19,8 +19,10 @@ import { counterCommand } from './commands/counter.js';
 import { scheduleCommand } from './commands/schedule.js';
 import { suggestCommand } from './commands/suggest.js';
 import { subscribeCommand } from './commands/subscribe.js';
+import { roomsCommand } from './commands/rooms.js';
 import { subscriptionsCommand } from './commands/subscriptions.js';
 import { serveCommand } from './commands/serve.js';
+import { delegatesCommand } from './commands/delegates.js';
 
 const program = new Command();
 
@@ -45,7 +47,9 @@ program.addCommand(counterCommand);
 program.addCommand(scheduleCommand);
 program.addCommand(suggestCommand);
 program.addCommand(subscribeCommand);
+program.addCommand(roomsCommand);
 program.addCommand(subscriptionsCommand);
 program.addCommand(serveCommand);
+program.addCommand(delegatesCommand);
 
 program.parse();
