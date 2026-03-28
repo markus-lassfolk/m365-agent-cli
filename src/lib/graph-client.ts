@@ -11,6 +11,17 @@ export interface GraphError {
   status?: number;
 }
 
+export class GraphApiError extends Error {
+  constructor(
+    message: string,
+    public readonly code?: string,
+    public readonly status?: number
+  ) {
+    super(message);
+    this.name = 'GraphApiError';
+  }
+}
+
 export interface GraphResponse<T> {
   ok: boolean;
   data?: T;
@@ -155,8 +166,9 @@ export async function callGraph<T>(
   options: RequestInit = {},
   expectJson: boolean = true
 ): Promise<GraphResponse<T>> {
+  let response: Response;
   try {
-    const response = await fetch(`${GRAPH_BASE_URL}${path}`, {
+    response = await fetch(`${GRAPH_BASE_URL}${path}`, {
       ...options,
       headers: {
         Authorization: `Bearer ${token}`,
@@ -167,28 +179,29 @@ export async function callGraph<T>(
         ...(options.headers || {})
       }
     });
-
-    if (!response.ok) {
-      let message = `Graph request failed: HTTP ${response.status}`;
-      let code: string | undefined;
-      try {
-        const json = (await response.json()) as { error?: { code?: string; message?: string } };
-        message = json.error?.message || message;
-        code = json.error?.code;
-      } catch {
-        // Ignore JSON parse failures for error responses
-      }
-      return graphError(message, code, response.status);
-    }
-
-    if (!expectJson || response.status === 204) {
-      return graphResult(undefined as T);
-    }
-
-    return graphResult((await response.json()) as T);
   } catch (err) {
-    return graphError(err instanceof Error ? err.message : 'Graph request failed');
+    // Network-level failure (DNS, connection refused, etc.) — surface it as a thrown error
+    throw new GraphApiError(err instanceof Error ? err.message : 'Graph request failed');
   }
+
+  if (!response.ok) {
+    let message = `Graph request failed: HTTP ${response.status}`;
+    let code: string | undefined;
+    try {
+      const json = (await response.json()) as { error?: { code?: string; message?: string } };
+      message = json.error?.message || message;
+      code = json.error?.code;
+    } catch {
+      // Ignore JSON parse failures for error responses
+    }
+    throw new GraphApiError(message, code, response.status);
+  }
+
+  if (!expectJson || response.status === 204) {
+    return graphResult(undefined as T);
+  }
+
+  return graphResult((await response.json()) as T);
 }
 
 function buildItemPath(reference?: DriveItemReference): string {

@@ -94,7 +94,12 @@ export async function listMessageRules(token: string): Promise<GraphResponse<Mes
 
 /** Get a single message rule by ID */
 export async function getMessageRule(token: string, ruleId: string): Promise<GraphResponse<MessageRule>> {
-  return callGraph<MessageRule>(token, `/me/mailFolders/inbox/messageRules/${encodeURIComponent(ruleId)}`);
+  try {
+    return await callGraph<MessageRule>(token, `/me/mailFolders/inbox/messageRules/${encodeURIComponent(ruleId)}`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to get message rule';
+    return graphError(msg);
+  }
 }
 
 /** Create a new inbox message rule */
@@ -102,10 +107,15 @@ export async function createMessageRule(
   token: string,
   payload: CreateMessageRulePayload
 ): Promise<GraphResponse<MessageRule>> {
-  return callGraph<MessageRule>(token, '/me/mailFolders/inbox/messageRules', {
-    method: 'POST',
-    body: JSON.stringify(payload)
-  });
+  try {
+    return await callGraph<MessageRule>(token, '/me/mailFolders/inbox/messageRules', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to create message rule';
+    return graphError(msg);
+  }
 }
 
 /** Update an existing inbox message rule */
@@ -114,10 +124,15 @@ export async function updateMessageRule(
   ruleId: string,
   payload: UpdateMessageRulePayload
 ): Promise<GraphResponse<MessageRule>> {
-  return callGraph<MessageRule>(token, `/me/mailFolders/inbox/messageRules/${encodeURIComponent(ruleId)}`, {
-    method: 'PATCH',
-    body: JSON.stringify(payload)
-  });
+  try {
+    return await callGraph<MessageRule>(token, `/me/mailFolders/inbox/messageRules/${encodeURIComponent(ruleId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload)
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to update message rule';
+    return graphError(msg);
+  }
 }
 
 /** Delete an inbox message rule */

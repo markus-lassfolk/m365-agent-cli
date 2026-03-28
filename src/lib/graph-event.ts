@@ -1,4 +1,4 @@
-import { callGraph, type GraphResponse } from './graph-client.js';
+import { callGraph, graphError, type GraphResponse } from './graph-client.js';
 
 export interface ForwardEventOptions {
   token: string;
@@ -22,15 +22,20 @@ export async function forwardEvent(options: ForwardEventOptions): Promise<GraphR
     body.Comment = comment;
   }
 
-  return callGraph<void>(
-    token,
-    `/me/events/${encodeURIComponent(eventId)}/forward`,
-    {
-      method: 'POST',
-      body: JSON.stringify(body)
-    },
-    false
-  );
+  try {
+    return await callGraph<void>(
+      token,
+      `/me/events/${encodeURIComponent(eventId)}/forward`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body)
+      },
+      false
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to forward event';
+    return graphError(msg);
+  }
 }
 
 export interface ProposeNewTimeOptions {
@@ -52,13 +57,18 @@ export async function proposeNewTime(options: ProposeNewTimeOptions): Promise<Gr
     sendResponse: true
   };
 
-  return callGraph<void>(
-    token,
-    `/me/events/${encodeURIComponent(eventId)}/tentativelyAccept`,
-    {
-      method: 'POST',
-      body: JSON.stringify(body)
-    },
-    false
-  );
+  try {
+    return await callGraph<void>(
+      token,
+      `/me/events/${encodeURIComponent(eventId)}/tentativelyAccept`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body)
+      },
+      false
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to propose new time';
+    return graphError(msg);
+  }
 }

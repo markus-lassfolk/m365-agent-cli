@@ -50,7 +50,12 @@ export async function getTodoLists(token: string): Promise<GraphResponse<TodoLis
 }
 
 export async function getTodoList(token: string, listId: string): Promise<GraphResponse<TodoList>> {
-  return callGraph<TodoList>(token, `/me/todo/lists/${encodeURIComponent(listId)}`);
+  try {
+    return await callGraph<TodoList>(token, `/me/todo/lists/${encodeURIComponent(listId)}`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to get todo list';
+    return graphError(msg);
+  }
 }
 
 export async function getTasks(token: string, listId: string, filter?: string): Promise<GraphResponse<TodoTask[]>> {
@@ -68,7 +73,12 @@ export async function getTasks(token: string, listId: string, filter?: string): 
 }
 
 export async function getTask(token: string, listId: string, taskId: string): Promise<GraphResponse<TodoTask>> {
-  return callGraph<TodoTask>(token, `/me/todo/lists/${encodeURIComponent(listId)}/tasks/${encodeURIComponent(taskId)}`);
+  try {
+    return await callGraph<TodoTask>(token, `/me/todo/lists/${encodeURIComponent(listId)}/tasks/${encodeURIComponent(taskId)}`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to get task';
+    return graphError(msg);
+  }
 }
 
 export interface CreateTaskOptions {
@@ -165,12 +175,17 @@ export async function updateTask(
 }
 
 export async function deleteTask(token: string, listId: string, taskId: string): Promise<GraphResponse<void>> {
-  return callGraph<void>(
-    token,
-    `/me/todo/lists/${encodeURIComponent(listId)}/tasks/${encodeURIComponent(taskId)}`,
-    { method: 'DELETE' },
-    false
-  );
+  try {
+    return await callGraph<void>(
+      token,
+      `/me/todo/lists/${encodeURIComponent(listId)}/tasks/${encodeURIComponent(taskId)}`,
+      { method: 'DELETE' },
+      false
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to delete task';
+    return graphError(msg);
+  }
 }
 
 export async function addChecklistItem(
@@ -200,10 +215,15 @@ export async function deleteChecklistItem(
   taskId: string,
   checklistItemId: string
 ): Promise<GraphResponse<void>> {
-  return callGraph<void>(
-    token,
-    `/me/todo/lists/${encodeURIComponent(listId)}/tasks/${encodeURIComponent(taskId)}/checklistItems/${encodeURIComponent(checklistItemId)}`,
-    { method: 'DELETE' },
-    false
-  );
+  try {
+    return await callGraph<void>(
+      token,
+      `/me/todo/lists/${encodeURIComponent(listId)}/tasks/${encodeURIComponent(taskId)}/checklistItems/${encodeURIComponent(checklistItemId)}`,
+      { method: 'DELETE' },
+      false
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to delete checklist item';
+    return graphError(msg);
+  }
 }

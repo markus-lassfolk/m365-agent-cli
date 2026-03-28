@@ -1,4 +1,4 @@
-import { callGraph } from './graph-client.js';
+import { callGraph, graphError } from './graph-client.js';
 
 export type OofStatus = 'alwaysEnabled' | 'scheduled' | 'disabled';
 
@@ -28,7 +28,12 @@ export async function getMailboxSettings(token: string): Promise<{
   data?: GetMailboxSettingsResponse;
   error?: { message: string; code?: string; status?: number };
 }> {
-  return callGraph<GetMailboxSettingsResponse>(token, '/me/mailboxSettings');
+  try {
+    return await callGraph<GetMailboxSettingsResponse>(token, '/me/mailboxSettings');
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to get mailbox settings';
+    return graphError(message) as { ok: boolean; data?: GetMailboxSettingsResponse; error?: { message: string; code?: string; status?: number } };
+  }
 }
 
 export async function setMailboxSettings(
