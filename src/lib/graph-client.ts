@@ -151,9 +151,19 @@ export async function fetchAllPages<T>(
     path = result.data['@odata.nextLink']
       ? (() => {
           try {
-            const nextUrl = new URL(result.data['@odata.nextLink']);
-            const relativePath = nextUrl.pathname.replace(/^\/v1\.0/, '');
-            return relativePath + nextUrl.search;
+            const nextLink = result.data['@odata.nextLink']!;
+            if (nextLink.startsWith(GRAPH_BASE_URL)) {
+              return nextLink.substring(GRAPH_BASE_URL.length);
+            }
+            const nextUrl = new URL(nextLink);
+            const baseUrlUrl = new URL(GRAPH_BASE_URL);
+            if (nextUrl.origin === baseUrlUrl.origin) {
+              const baseDir = baseUrlUrl.pathname.replace(/\/$/, '');
+              if (nextUrl.pathname.startsWith(baseDir)) {
+                return nextUrl.pathname.substring(baseDir.length) + nextUrl.search;
+              }
+            }
+            return '';
           } catch {
             return '';
           }

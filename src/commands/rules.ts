@@ -44,15 +44,16 @@ function parseCondition(key: string, raw: string): unknown {
   return raw;
 }
 
-function parseAction(key: string, raw: string): MessageRuleAction[keyof MessageRuleAction] {
+function parseAction(key: string, raw: any): MessageRuleAction[keyof MessageRuleAction] {
   if (key === 'delete' || key === 'permanentDelete' || key === 'markAsRead' || key === 'stopProcessingRules') {
-    return raw.toLowerCase() === 'true';
+    if (typeof raw === 'boolean') return raw;
+    return String(raw).toLowerCase() === 'true';
   }
   if (key === 'forwardToRecipients' || key === 'forwardAsAttachmentToRecipients') {
-    return parseEmailAddresses(raw);
+    return parseEmailAddresses(String(raw));
   }
   if (key === 'assignCategories') {
-    return raw.split(',').map((s) => s.trim());
+    return String(raw).split(',').map((s: string) => s.trim());
   }
   return raw;
 }
@@ -85,24 +86,19 @@ function conditionsFromOpts(options: Record<string, unknown>): MessageRuleCondit
 function actionsFromOpts(options: Record<string, unknown>): MessageRuleAction {
   const actions: MessageRuleAction = {};
 
-  const entries: [keyof MessageRuleAction, unknown][] = [
-    ['moveToFolder', options.moveToFolder],
-    ['copyToFolder', options.copyToFolder],
-    ['delete', options.delete],
-    ['permanentDelete', options.permanentDelete],
-    ['markAsRead', options.markAsRead],
-    ['markImportance', options.markImportance],
-    ['forwardToRecipients', options.forwardTo],
-    ['forwardAsAttachmentToRecipients', options.forwardAsAttachmentTo],
-    ['assignCategories', options.assignCategories],
-    ['stopProcessingRules', options.stopProcessingRules]
-  ];
+  if (options.delete === true || options.delete === 'true') actions.delete = true;
+  if (options.permanentDelete === true || options.permanentDelete === 'true') actions.permanentDelete = true;
+  if (options.markAsRead === true || options.markAsRead === 'true') actions.markAsRead = true;
+  if (options.stopProcessingRules === true || options.stopProcessingRules === 'true') actions.stopProcessingRules = true;
 
-  for (const [key, val] of entries) {
-    if (val !== undefined) {
-      (actions as Record<string, unknown>)[key] = parseAction(key as string, String(val));
-    }
-  }
+  if (options.moveToFolder !== undefined) actions.moveToFolder = String(options.moveToFolder);
+  if (options.copyToFolder !== undefined) actions.copyToFolder = String(options.copyToFolder);
+  if (options.markImportance !== undefined) actions.markImportance = String(options.markImportance) as any;
+  
+  if (options.forwardTo !== undefined) actions.forwardToRecipients = parseAction('forwardToRecipients', options.forwardTo as string) as any;
+  if (options.forwardAsAttachmentTo !== undefined) actions.forwardAsAttachmentToRecipients = parseAction('forwardAsAttachmentToRecipients', options.forwardAsAttachmentTo as string) as any;
+  if (options.assignCategories !== undefined) actions.assignCategories = parseAction('assignCategories', options.assignCategories as string) as any;
+
   return actions;
 }
 

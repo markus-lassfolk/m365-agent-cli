@@ -6,21 +6,6 @@
 const SOAP_NS =
   'xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages" xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"';
 
-function _soapEnvelope(body: string): string {
-  return `<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope ${SOAP_NS}>
-  <soap:Header><t:RequestServerVersion Version="Exchange2016" /></soap:Header>
-  <soap:Body>${body}</soap:Body>
-</soap:Envelope>`;
-}
-
-function _soapEnvelopeNoHeader(body: string): string {
-  return `<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope ${SOAP_NS}>
-  <soap:Body>${body}</soap:Body>
-</soap:Envelope>`;
-}
-
 function soapResponse(body: string): string {
   return `<?xml version="1.0" encoding="utf-8"?>
 <soap:Envelope ${SOAP_NS}>

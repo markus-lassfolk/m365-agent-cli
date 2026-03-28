@@ -1,6 +1,5 @@
 /**
  * Command-level integration tests for the clippy CLI.
- * All 13 commands are tested with various argument combinations, outputs, and error conditions.
  *
  * Network calls are mocked via globalThis.fetch interception.
  * Each command handler is called directly to test the full CLI path including
@@ -112,6 +111,7 @@ beforeEach(() => {
 // ─── Import commands ───────────────────────────────────────────────────────
 
 import { whoamiCommand } from '../commands/whoami.js';
+import { autoReplyCommand } from '../commands/auto-reply.js';
 import { calendarCommand } from '../commands/calendar.js';
 import { findtimeCommand } from '../commands/findtime.js';
 import { respondCommand } from '../commands/respond.js';
@@ -124,8 +124,18 @@ import { foldersCommand } from '../commands/folders.js';
 import { sendCommand } from '../commands/send.js';
 import { draftsCommand } from '../commands/drafts.js';
 import { filesCommand } from '../commands/files.js';
+import { forwardEventCommand } from '../commands/forward-event.js';
+import { counterCommand } from '../commands/counter.js';
 import { scheduleCommand } from '../commands/schedule.js';
 import { suggestCommand } from '../commands/suggest.js';
+import { subscribeCommand } from '../commands/subscribe.js';
+import { subscriptionsCommand } from '../commands/subscriptions.js';
+import { serveCommand } from '../commands/serve.js';
+import { roomsCommand } from '../commands/rooms.js';
+import { oofCommand } from '../commands/oof.js';
+import { rulesCommand } from '../commands/rules.js';
+import { delegatesCommand } from '../commands/delegates.js';
+import { todoCommand } from '../commands/todo.js';
 
 // Helper to call a command action with options
 type CommandAction = (opts: any) => Promise<void>;
@@ -153,6 +163,7 @@ import { Command } from 'commander';
 function makeProgram(): Command {
   const p = new Command();
   p.name('clippy').version('0.1.0').addCommand(whoamiCommand);
+  p.addCommand(autoReplyCommand);
   p.addCommand(calendarCommand);
   p.addCommand(findtimeCommand);
   p.addCommand(respondCommand);
@@ -165,8 +176,18 @@ function makeProgram(): Command {
   p.addCommand(sendCommand);
   p.addCommand(draftsCommand);
   p.addCommand(filesCommand);
+  p.addCommand(forwardEventCommand);
+  p.addCommand(counterCommand);
   p.addCommand(scheduleCommand);
   p.addCommand(suggestCommand);
+  p.addCommand(subscribeCommand);
+  p.addCommand(subscriptionsCommand);
+  p.addCommand(serveCommand);
+  p.addCommand(roomsCommand);
+  p.addCommand(oofCommand);
+  p.addCommand(rulesCommand);
+  p.addCommand(delegatesCommand);
+  p.addCommand(todoCommand);
   return p;
 }
 

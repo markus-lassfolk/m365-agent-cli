@@ -8,7 +8,12 @@ subscriptionsCommand
   .description('List all active subscriptions')
   .action(async () => {
     try {
-      const subs = await listSubscriptions();
+      const res = await listSubscriptions();
+      if (!res.ok || !res.data) {
+        console.error(`Failed to list subscriptions: ${res.error?.message}`);
+        process.exit(1);
+      }
+      const subs = res.data;
       if (subs.length === 0) {
         console.log('No active subscriptions found.');
         return;

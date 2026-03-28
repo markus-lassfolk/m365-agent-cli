@@ -135,12 +135,8 @@ export function createMockFetch(): any {
       // Calendar events (used by calendar, respond, delete-event, update-event)
       if (hasTag(body, 'FindItem') && hasTag(body, 'CalendarView')) {
         // Check for specific event IDs (for respond)
-        if (hasTag(body, 'invite-')) {
+        if (body.includes('invite-')) {
           return makeResponse(mockRespondListResponse);
-        }
-        // Check if looking for cancelled events
-        if (hasTag(body, 'Cancelled')) {
-          return makeResponse(mockCalendarEventsWithCancelled);
         }
         // Default calendar events
         return makeResponse(mockCalendarEventsResponse);

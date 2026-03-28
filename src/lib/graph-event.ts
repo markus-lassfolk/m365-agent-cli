@@ -14,7 +14,7 @@ export async function forwardEvent(options: ForwardEventOptions): Promise<GraphR
     emailAddress: { address: email }
   }));
 
-  const body: any = {
+  const body: { toRecipients: { emailAddress: { address: string } }[]; comment?: string } = {
     toRecipients: recipientsList
   };
 

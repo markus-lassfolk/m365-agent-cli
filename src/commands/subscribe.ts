@@ -53,7 +53,7 @@ export const subscribeCommand = new Command('subscribe')
 
     try {
       console.log(`Creating subscription for ${graphResource}...`);
-      const sub = await createSubscription(
+      const res = await createSubscription(
         graphResource,
         options.changeType,
         options.url,
@@ -61,6 +61,11 @@ export const subscribeCommand = new Command('subscribe')
         clientState,
         options.token
       );
+      if (!res.ok) {
+        console.error(`Failed to create subscription: ${res.error?.message}`);
+        process.exit(1);
+      }
+      const sub = res.data;
       console.log('Subscription created successfully!');
       console.log(JSON.stringify(sub, null, 2));
     } catch (err) {
@@ -76,7 +81,11 @@ subscribeCommand
   .action(async (id, options) => {
     try {
       console.log(`Deleting subscription ${id}...`);
-      await deleteSubscription(id, options.token);
+      const res = await deleteSubscription(id, options.token);
+      if (!res.ok) {
+        console.error(`Failed to delete subscription: ${res.error?.message}`);
+        process.exit(1);
+      }
       console.log('Subscription deleted successfully.');
     } catch (err) {
       console.error(err instanceof Error ? err.message : err);

@@ -271,7 +271,8 @@ todoCommand
 
       let linkedResources;
       if (opts.link) {
-        const ewsAuth = await resolveAuth({ token: opts.token });
+        // Do not pass the Graph --token to EWS auth, as they require different tokens
+        const ewsAuth = await resolveAuth({});
         if (!ewsAuth.success) {
           console.error(`EWS Auth error: ${ewsAuth.error}`);
           process.exit(1);

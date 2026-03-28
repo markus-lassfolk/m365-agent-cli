@@ -1,5 +1,5 @@
 import { resolveGraphAuth } from './graph-auth.js';
-import { fetchGraphRaw } from './graph-client.js';
+import { callGraph, graphError, type GraphResponse } from './graph-client.js';
 
 export interface Subscription {
   id: string;
@@ -12,19 +12,12 @@ export interface Subscription {
   creatorId?: string;
 }
 
-async function fetchGraph(endpoint: string, options: RequestInit = {}, token?: string): Promise<Response> {
+async function getAuthToken(token?: string): Promise<string> {
   const auth = await resolveGraphAuth({ token });
   if (!auth.success || !auth.token) {
     throw new Error(auth.error || 'Failed to authenticate to Graph API');
   }
-
-  return fetchGraphRaw(auth.token, endpoint, {
-    ...options,
-    headers: {
-      ...options.headers,
-      'Content-Type': 'application/json'
-    }
-  });
+  return auth.token;
 }
 
 export async function createSubscription(
@@ -34,81 +27,62 @@ export async function createSubscription(
   expirationDateTime: string,
   clientState?: string,
   token?: string
-): Promise<Subscription> {
-  const body: Record<string, string> = {
-    changeType,
-    notificationUrl,
-    resource,
-    expirationDateTime
-  };
-  if (clientState) {
-    body.clientState = clientState;
-  }
+): Promise<GraphResponse<Subscription>> {
+  try {
+    const authToken = await getAuthToken(token);
+    const body: Record<string, string> = {
+      changeType,
+      notificationUrl,
+      resource,
+      expirationDateTime
+    };
+    if (clientState) {
+      body.clientState = clientState;
+    }
 
-  const response = await fetchGraph(
-    '/subscriptions',
-    {
+    return await callGraph<Subscription>(authToken, '/subscriptions', {
       method: 'POST',
       body: JSON.stringify(body)
-    },
-    token
-  );
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Failed to create subscription: ${response.status} ${response.statusText} - ${error}`);
+    });
+  } catch (err: any) {
+    return graphError(err.message, err.code, err.status);
   }
-
-  return response.json() as Promise<Subscription>;
 }
 
-export async function listSubscriptions(token?: string): Promise<Subscription[]> {
-  const response = await fetchGraph(
-    '/subscriptions',
-    {
+export async function listSubscriptions(token?: string): Promise<GraphResponse<Subscription[]>> {
+  try {
+    const authToken = await getAuthToken(token);
+    const res = await callGraph<{ value: Subscription[] }>(authToken, '/subscriptions', {
       method: 'GET'
-    },
-    token
-  );
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Failed to list subscriptions: ${response.status} ${response.statusText} - ${error}`);
+    });
+    if (!res.ok) return res as unknown as GraphResponse<Subscription[]>;
+    return { ok: true, data: res.data!.value };
+  } catch (err: any) {
+    return graphError(err.message, err.code, err.status);
   }
-
-  const data = (await response.json()) as { value: Subscription[] };
-  return data.value;
 }
 
-export async function deleteSubscription(id: string, token?: string): Promise<void> {
-  const response = await fetchGraph(
-    `/subscriptions/${encodeURIComponent(id)}`,
-    {
+export async function deleteSubscription(id: string, token?: string): Promise<GraphResponse<void>> {
+  try {
+    const authToken = await getAuthToken(token);
+    return await callGraph<void>(authToken, `/subscriptions/${encodeURIComponent(id)}`, {
       method: 'DELETE'
-    },
-    token
-  );
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Failed to delete subscription: ${response.status} ${response.statusText} - ${error}`);
+    });
+  } catch (err: any) {
+    return graphError(err.message, err.code, err.status);
   }
 }
 
-export async function renewSubscription(id: string, expirationDateTime: string, token?: string): Promise<void> {
-  const response = await fetchGraph(
-    `/subscriptions/${encodeURIComponent(id)}`,
-    {
+export async function renewSubscription(id: string, expirationDateTime: string, token?: string): Promise<GraphResponse<void>> {
+  try {
+    const authToken = await getAuthToken(token);
+    return await callGraph<void>(authToken, `/subscriptions/${encodeURIComponent(id)}`, {
       method: 'PATCH',
       body: JSON.stringify({
         expirationDateTime
       })
-    },
-    token
-  );
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Failed to renew subscription: ${response.status} ${response.statusText} - ${error}`);
+    });
+  } catch (err: any) {
+    return graphError(err.message, err.code, err.status);
   }
 }
