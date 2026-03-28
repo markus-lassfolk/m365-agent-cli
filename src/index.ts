@@ -135,6 +135,13 @@ export {
 
 export type { Subscription } from './lib/graph-subscriptions.js';
 
+// places-client re-exports (aliases from EWS: getRoomLists/getRooms conflict)
+export { listPlaceRoomLists as getPlaceRoomLists, listRoomsInRoomList as getPlaceRooms } from './lib/places-client.js';
+export type { Place as PlaceRoom, RoomList as PlaceRoomList } from './lib/places-client.js';
+
+export { getMailboxSettings, setMailboxSettings } from './lib/oof-client.js';
+export type { OofStatus, AutomaticRepliesSetting, MailboxSettings } from './lib/oof-client.js';
+
 // Delegate management
 export {
   getDelegates,

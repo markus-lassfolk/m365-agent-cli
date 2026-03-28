@@ -115,7 +115,7 @@ export async function fetchGraphRaw(token: string, path: string, options: Reques
   });
 }
 
-async function callGraph<T>(
+export async function callGraph<T>(
   token: string,
   path: string,
   options: RequestInit = {},

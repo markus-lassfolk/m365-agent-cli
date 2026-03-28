@@ -1,6 +1,6 @@
 // ─── XML Utilities ───
 
-function xmlEscape(value: string): string {
+export function xmlEscape(value: string): string {
   return String(value)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -28,7 +28,7 @@ function xmlDecode(value: string): string {
     .replace(/\r/g, '');
 }
 
-function extractTag(xml: string, tagName: string): string {
+export function extractTag(xml: string, tagName: string): string {
   const regex = new RegExp(
     `<(?:[A-Za-z0-9_]+:)?${tagName}\\b[^>]*>([\\s\\S]*?)<\\/(?:[A-Za-z0-9_]+:)?${tagName}>`,
     'i'
@@ -46,18 +46,18 @@ function _extractTagRaw(xml: string, tagName: string): string {
   return match ? match[1] : '';
 }
 
-function extractAttribute(xml: string, tagName: string, attrName: string): string {
+export function extractAttribute(xml: string, tagName: string, attrName: string): string {
   const regex = new RegExp(`<(?:[A-Za-z0-9_]+:)?${tagName}\\b[^>]*\\b${attrName}="([^"]*)"`, 'i');
   const match = xml.match(regex);
   return match ? xmlDecode(match[1]) : '';
 }
 
-function extractBlocks(xml: string, tagName: string): string[] {
+export function extractBlocks(xml: string, tagName: string): string[] {
   const regex = new RegExp(`<(?:[A-Za-z0-9_]+:)?${tagName}\\b[\\s\\S]*?<\\/(?:[A-Za-z0-9_]+:)?${tagName}>`, 'g');
   return [...xml.matchAll(regex)].map((m) => m[0]);
 }
 
-function extractSelfClosingOrBlock(xml: string, tagName: string): string {
+export function extractSelfClosingOrBlock(xml: string, tagName: string): string {
   // Matches both <Tag ... /> and <Tag ...>...</Tag>
   const regex = new RegExp(
     `<(?:[A-Za-z0-9_]+:)?${tagName}\\b[^>]*(?:\\/>|>[\\s\\S]*?<\\/(?:[A-Za-z0-9_]+:)?${tagName}>)`,
@@ -69,10 +69,10 @@ function extractSelfClosingOrBlock(xml: string, tagName: string): string {
 
 // ─── SOAP Core ───
 
-const EWS_ENDPOINT = process.env.EWS_ENDPOINT || 'https://outlook.office365.com/EWS/Exchange.asmx';
-const EWS_USERNAME = process.env.EWS_USERNAME || '';
+export const EWS_ENDPOINT = process.env.EWS_ENDPOINT || 'https://outlook.office365.com/EWS/Exchange.asmx';
+export const EWS_USERNAME = process.env.EWS_USERNAME || '';
 
-function soapEnvelope(body: string): string {
+export function soapEnvelope(body: string): string {
   return `<?xml version="1.0" encoding="utf-8"?>
 <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages"
@@ -87,7 +87,7 @@ function soapEnvelope(body: string): string {
 </soap:Envelope>`;
 }
 
-async function callEws(token: string, envelope: string, mailbox?: string): Promise<string> {
+export async function callEws(token: string, envelope: string, mailbox?: string): Promise<string> {
   const anchorMailbox = mailbox || EWS_USERNAME;
   const response = await fetch(EWS_ENDPOINT, {
     method: 'POST',
@@ -496,11 +496,11 @@ function parseFolder(block: string): MailFolder {
   };
 }
 
-function ewsResult<T>(data: T): OwaResponse<T> {
+export function ewsResult<T>(data: T): OwaResponse<T> {
   return { ok: true, status: 200, data };
 }
 
-function ewsError(err: unknown): OwaResponse<never> {
+export function ewsError(err: unknown): OwaResponse<never> {
   const message = err instanceof Error ? err.message : 'Unknown error';
   return { ok: false, status: 0, error: { code: 'EWS_ERROR', message } };
 }
