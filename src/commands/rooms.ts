@@ -161,6 +161,9 @@ export const roomsCommand = new Command('rooms')
               } else if (free) {
                 freeRooms.push(room);
               }
+            } else {
+              freeRooms.push(room);
+              availabilityCheckFailed = true;
             }
           }
           availableRooms = freeRooms;
