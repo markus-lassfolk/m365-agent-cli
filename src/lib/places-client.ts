@@ -158,6 +158,6 @@ export async function isRoomFree(
     return null;
   }
 
-  const busyEvents = result.data.value.filter((event) => event.showAs !== 'free');
+  const busyEvents = (result.data.value || []).filter((event) => event.showAs !== 'free');
   return busyEvents.length === 0;
 }
