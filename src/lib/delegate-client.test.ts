@@ -63,7 +63,7 @@ describe('delegate-client', () => {
         permissions: { inbox: 'Reviewer' },
         deliverMeetingRequests: 'DelegatesAndSendInformationToMe'
       });
-      
+
       const body = fetchCalls[0].init.body as string;
       expect(body).toContain('<m:DeliverMeetingRequests>DelegatesAndSendInformationToMe</m:DeliverMeetingRequests>');
       expect(body).toContain('<t:InboxFolderPermissionLevel>Reviewer</t:InboxFolderPermissionLevel>');

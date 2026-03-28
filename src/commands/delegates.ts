@@ -186,7 +186,8 @@ updateCommand
       token: auth.token,
       delegateEmail: opts.email,
       permissions: hasPerms ? permsOut : undefined,
-      viewPrivateItems: opts.viewPrivate === undefined ? undefined : (opts.viewPrivate === 'true' || opts.viewPrivate === true),
+      viewPrivateItems:
+        opts.viewPrivate === undefined ? undefined : opts.viewPrivate === 'true' || opts.viewPrivate === true,
       deliverMeetingRequests: deliver,
       mailbox: opts.mailbox
     });

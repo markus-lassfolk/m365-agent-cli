@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
-import { getMailboxSettings, setMailboxSettings, type OofStatus } from '../lib/oof-client.js';
+import { getMailboxSettings, setMailboxSettings, type OofStatus, type DateTimeTimeZone } from '../lib/oof-client.js';
 
 function formatStatus(status: OofStatus): string {
   switch (status) {
@@ -47,7 +47,13 @@ export const oofCommand = new Command('oof')
     const token = authResult.token;
 
     // --- READ mode: no write options provided ---
-    if (!options.status && !options.internalMessage && !options.externalMessage && !options.start && !options.end) {
+    if (
+      !options.status &&
+      options.internalMessage === undefined &&
+      options.externalMessage === undefined &&
+      !options.start &&
+      !options.end
+    ) {
       const res = await getMailboxSettings(token);
       if (!res.ok || !res.data) {
         const msg = res.error?.message || 'Failed to retrieve mailbox settings';
@@ -126,8 +132,8 @@ export const oofCommand = new Command('oof')
       }
     }
 
-    let scheduledStartDateTime: string | undefined;
-    let scheduledEndDateTime: string | undefined;
+    let scheduledStartDateTime: string | DateTimeTimeZone | undefined;
+    let scheduledEndDateTime: string | DateTimeTimeZone | undefined;
 
     if (options.start) {
       try {
@@ -170,8 +176,9 @@ export const oofCommand = new Command('oof')
       if (currentRes.ok && currentRes.data?.automaticRepliesSetting) {
         status = currentRes.data.automaticRepliesSetting.status;
         if (status === 'scheduled') {
-           scheduledStartDateTime = scheduledStartDateTime ?? currentRes.data.automaticRepliesSetting.scheduledStartDateTime?.dateTime;
-           scheduledEndDateTime = scheduledEndDateTime ?? currentRes.data.automaticRepliesSetting.scheduledEndDateTime?.dateTime;
+          scheduledStartDateTime =
+            scheduledStartDateTime ?? currentRes.data.automaticRepliesSetting.scheduledStartDateTime;
+          scheduledEndDateTime = scheduledEndDateTime ?? currentRes.data.automaticRepliesSetting.scheduledEndDateTime;
         }
       } else {
         status = 'disabled'; // fallback if we couldn't fetch

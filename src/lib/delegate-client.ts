@@ -158,7 +158,7 @@ export async function getDelegates(
     const delegateBlocks = extractBlocks(xml, 'DelegateUser');
     const globalDeliverStr = extractTag(xml, 'DeliverMeetingRequests');
     const globalDeliver = globalDeliverStr ? (globalDeliverStr as DeliverMeetingRequests) : undefined;
-    const delegates = delegateBlocks.map(block => parseDelegateInfo(block, globalDeliver));
+    const delegates = delegateBlocks.map((block) => parseDelegateInfo(block, globalDeliver));
 
     return ewsResult(delegates);
   } catch (err) {

@@ -40,11 +40,11 @@ describe('oof-client', () => {
         internalReplyMessage: 'Away',
         scheduledStartDateTime: '2025-01-01T00:00:00.000Z'
       });
-      
+
       expect(res.ok).toBe(true);
       expect(fetchCalls).toHaveLength(1);
       expect(fetchCalls[0].init.method).toBe('PATCH');
-      
+
       const body = JSON.parse(fetchCalls[0].init.body);
       expect(body.automaticRepliesSetting.status).toBe('scheduled');
       expect(body.automaticRepliesSetting.internalReplyMessage).toBe('Away');

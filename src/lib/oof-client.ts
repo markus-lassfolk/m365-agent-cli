@@ -33,7 +33,7 @@ export async function getMailboxSettings(token: string): Promise<{
 
 export async function setMailboxSettings(
   token: string,
-  settings: Partial<AutomaticRepliesSetting> & {
+  settings: Omit<Partial<AutomaticRepliesSetting>, 'scheduledStartDateTime' | 'scheduledEndDateTime'> & {
     scheduledStartDateTime?: string | DateTimeTimeZone;
     scheduledEndDateTime?: string | DateTimeTimeZone;
   }
@@ -44,12 +44,8 @@ export async function setMailboxSettings(
   const payload = {
     automaticRepliesSetting: {
       ...(settings.status !== undefined ? { status: settings.status } : {}),
-      ...(settings.internalReplyMessage !== undefined
-        ? { internalReplyMessage: settings.internalReplyMessage }
-        : {}),
-      ...(settings.externalReplyMessage !== undefined
-        ? { externalReplyMessage: settings.externalReplyMessage }
-        : {}),
+      ...(settings.internalReplyMessage !== undefined ? { internalReplyMessage: settings.internalReplyMessage } : {}),
+      ...(settings.externalReplyMessage !== undefined ? { externalReplyMessage: settings.externalReplyMessage } : {}),
       ...(settings.scheduledStartDateTime !== undefined
         ? {
             scheduledStartDateTime:
