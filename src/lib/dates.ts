@@ -1,7 +1,5 @@
 const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
 
-export type RelativeDay = 'today' | 'tomorrow' | 'yesterday';
-
 export interface ParseDayOptions {
   baseDate?: Date;
   weekdayDirection?: 'next' | 'previous' | 'nearestForward';
