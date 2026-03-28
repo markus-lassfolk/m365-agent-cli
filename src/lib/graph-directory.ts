@@ -42,7 +42,7 @@ export async function searchPeople(token: string, query: string): Promise<GraphR
 
 export async function searchUsers(token: string, query: string): Promise<GraphResponse<User[]>> {
   const escapedQuery = query.replace(/'/g, "''");
-  const filter = encodeURIComponent(`startsWith(displayName,'${escapedQuery}')`);
+  const filter = encodeURIComponent(`startswith(displayName,'${escapedQuery}')`);
   const result = await callGraph<{ value: User[] }>(token, `/users?$filter=${filter}&$count=true`, {
     headers: {
       ConsistencyLevel: 'eventual'
@@ -56,7 +56,7 @@ export async function searchUsers(token: string, query: string): Promise<GraphRe
 
 export async function searchGroups(token: string, query: string): Promise<GraphResponse<Group[]>> {
   const escapedQuery = query.replace(/'/g, "''");
-  const filter = encodeURIComponent(`startsWith(displayName,'${escapedQuery}')`);
+  const filter = encodeURIComponent(`startswith(displayName,'${escapedQuery}')`);
   const result = await callGraph<{ value: Group[] }>(token, `/groups?$filter=${filter}&$count=true`, {
     headers: {
       ConsistencyLevel: 'eventual'
@@ -89,10 +89,13 @@ export async function expandGroup(token: string, groupId: string): Promise<Graph
 
     members.push(...userMembers);
     path = result.data['@odata.nextLink']
-      ? result.data['@odata.nextLink'].replace(
-          new RegExp(`^${GRAPH_BASE_URL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`),
-          ''
-        )
+      ? (() => {
+          const nextUrl = new URL(result.data['@odata.nextLink']);
+          // Strip the API version prefix (/v1.0 or /beta) since callGraph
+          // already prepends GRAPH_BASE_URL which includes it
+          const relativePath = nextUrl.pathname.replace(/^\/v1\.0/, '');
+          return relativePath + nextUrl.search;
+        })()
       : '';
   }
 
