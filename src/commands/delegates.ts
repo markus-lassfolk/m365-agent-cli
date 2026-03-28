@@ -11,7 +11,17 @@ import {
   type DeliverMeetingRequests
 } from '../lib/delegate-client.js';
 
-const VALID_PERMISSIONS = ['None', 'Owner', 'PublishingEditor', 'Editor', 'PublishingAuthor', 'Author', 'Reviewer', 'NonEditingAuthor', 'FolderVisible'] as const;
+const VALID_PERMISSIONS = [
+  'None',
+  'Owner',
+  'PublishingEditor',
+  'Editor',
+  'PublishingAuthor',
+  'Author',
+  'Reviewer',
+  'NonEditingAuthor',
+  'FolderVisible'
+] as const;
 const VALID_FOLDERS = ['calendar', 'inbox', 'contacts', 'tasks', 'notes'] as const;
 const VALID_DELIVER = ['DelegatesAndMe', 'DelegatesOnly', 'DelegatesAndSendInformationToMe', 'NoForward'] as const;
 
@@ -87,10 +97,10 @@ addCommand
     // Validate permission levels
     const perms: DelegatePermissions = {};
     for (const folder of VALID_FOLDERS) {
-      const key = folder as typeof VALID_FOLDERS[number];
+      const key = folder as (typeof VALID_FOLDERS)[number];
       const level = opts[key] as string | undefined;
       if (level) {
-        if (!VALID_PERMISSIONS.includes(level as typeof VALID_PERMISSIONS[number])) {
+        if (!VALID_PERMISSIONS.includes(level as (typeof VALID_PERMISSIONS)[number])) {
           console.error(`Invalid permission level "${level}" for ${folder}. Valid: ${VALID_PERMISSIONS.join(', ')}`);
           process.exit(1);
         }
@@ -133,7 +143,7 @@ addCommand
 
 const updateCommand = new Command('update');
 updateCommand
-  .description('Update an existing delegate\'s permissions')
+  .description("Update an existing delegate's permissions")
   .requiredOption('--email <email>', 'delegate email address')
   .option('--calendar <level>', `Calendar permission level (${VALID_PERMISSIONS.join('|')})`)
   .option('--inbox <level>', `Inbox permission level (${VALID_PERMISSIONS.join('|')})`)
@@ -145,15 +155,14 @@ updateCommand
   .option('--deliver <mode>', `deliver meeting requests (${VALID_DELIVER.join('|')})`)
   .option('--mailbox <email>', 'mailbox (shared/alternative primary)')
   .action(async (opts) => {
-    const perms: DelegatePermissions | undefined = undefined;
     const permsOut: DelegatePermissions = {};
     let hasPerms = false;
 
     for (const folder of VALID_FOLDERS) {
-      const key = folder as typeof VALID_FOLDERS[number];
+      const key = folder as (typeof VALID_FOLDERS)[number];
       const level = opts[key] as string | undefined;
       if (level !== undefined) {
-        if (!VALID_PERMISSIONS.includes(level as typeof VALID_PERMISSIONS[number])) {
+        if (!VALID_PERMISSIONS.includes(level as (typeof VALID_PERMISSIONS)[number])) {
           console.error(`Invalid permission level "${level}" for ${folder}. Valid: ${VALID_PERMISSIONS.join(', ')}`);
           process.exit(1);
         }
