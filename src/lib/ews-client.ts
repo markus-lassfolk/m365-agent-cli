@@ -1,3 +1,10 @@
+// ─── Timezone Utilities ───────────────────────────────────────────────────────
+
+/** Returns the IANA timezone name for the current process, e.g. 'Europe/Stockholm'. */
+export function getLocalTimezone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone;
+}
+
 // ─── XML Utilities ───
 
 export function xmlEscape(value: string): string {
@@ -411,8 +418,8 @@ function parseCalendarItem(block: string, mailbox?: string): CalendarEvent {
     Id: id,
     ChangeKey: changeKey,
     Subject: subject,
-    Start: { DateTime: start, TimeZone: 'UTC' },
-    End: { DateTime: end, TimeZone: 'UTC' },
+    Start: { DateTime: start, TimeZone: getLocalTimezone() },
+    End: { DateTime: end, TimeZone: getLocalTimezone() },
     Location: location ? { DisplayName: location } : undefined,
     Organizer: { EmailAddress: { Name: organizerName, Address: organizerEmail } },
     Attendees: attendees.length > 0 ? attendees : undefined,
@@ -763,8 +770,8 @@ export async function createEvent(options: CreateEventOptions): Promise<OwaRespo
     return ewsResult({
       Id: id,
       Subject: subject,
-      Start: { DateTime: start, TimeZone: 'UTC' },
-      End: { DateTime: end, TimeZone: 'UTC' },
+      Start: { DateTime: start, TimeZone: getLocalTimezone() },
+      End: { DateTime: end, TimeZone: getLocalTimezone() },
       WebLink: undefined,
       OnlineMeetingUrl: undefined
     });
@@ -887,8 +894,8 @@ export async function updateEvent(options: UpdateEventOptions): Promise<OwaRespo
     return ewsResult({
       Id: newId,
       Subject: subject || '',
-      Start: { DateTime: start || '', TimeZone: 'UTC' },
-      End: { DateTime: end || '', TimeZone: 'UTC' }
+      Start: { DateTime: start || '', TimeZone: getLocalTimezone() },
+      End: { DateTime: end || '', TimeZone: getLocalTimezone() }
     });
   } catch (err) {
     return ewsError(err);
