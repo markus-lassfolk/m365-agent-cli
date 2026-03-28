@@ -286,7 +286,15 @@ export function createMockFetch(): any {
         return makeJsonResponse(mockGraphUploadResponse);
       }
       // Get file metadata
-      if (url.includes('/me/drive/items/') && !url.includes('/children') && !url.includes('/content') && !url.includes('/createLink') && !url.includes('/checkin') && !url.includes('/checkout') && !url.includes('/createUploadSession')) {
+      if (
+        url.includes('/me/drive/items/') &&
+        !url.includes('/children') &&
+        !url.includes('/content') &&
+        !url.includes('/createLink') &&
+        !url.includes('/checkin') &&
+        !url.includes('/checkout') &&
+        !url.includes('/createUploadSession')
+      ) {
         return makeJsonResponse(mockGraphGetFileMetadataResponse);
       }
       // Create upload session
