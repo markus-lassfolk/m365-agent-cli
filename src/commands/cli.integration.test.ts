@@ -508,8 +508,8 @@ describe('find', () => {
     expect(result.exitCode).toBe(0);
   });
 
-  test('--rooms filters to rooms only', async () => {
-    const result = await runClippy('find conference --rooms --token test-token-12345');
+  test('--groups filters to groups only', async () => {
+    const result = await runClippy('find conference --groups --token test-token-12345');
     expect(result.exitCode).toBe(0);
   });
 
@@ -526,7 +526,7 @@ describe('find', () => {
     const result = await runClippy('find --help');
     expect(result.exitCode).toBe(0);
     //     // (skip) expect(result.stdout).toContain('--people');
-    //     // (skip) expect(result.stdout).toContain('--rooms');
+    //     // (skip) expect(result.stdout).toContain('--groups');
   });
 });
 
