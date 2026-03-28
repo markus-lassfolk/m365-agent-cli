@@ -6,9 +6,10 @@ export const subscriptionsCommand = new Command('subscriptions').description('Ma
 subscriptionsCommand
   .command('list')
   .description('List all active subscriptions')
-  .action(async () => {
+  .option('--token <token>', 'Use a specific token')
+  .action(async (options: { token?: string }) => {
     try {
-      const res = await listSubscriptions();
+      const res = await listSubscriptions(options.token);
       if (!res.ok || !res.data) {
         console.error(`Failed to list subscriptions: ${res.error?.message}`);
         process.exit(1);

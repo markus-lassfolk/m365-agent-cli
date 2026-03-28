@@ -52,8 +52,9 @@ const listCommand = new Command('list');
 listCommand
   .description('List all delegates on the mailbox')
   .option('--mailbox <email>', 'mailbox (shared/alternative primary)')
-  .action(async (opts) => {
-    const auth = await resolveAuth();
+  .option('--token <token>', 'Use a specific token')
+  .action(async (opts: { mailbox?: string; token?: string }) => {
+    const auth = await resolveAuth({ token: opts.token });
     if (!auth.success || !auth.token) {
       console.error('Auth failed:', auth.error);
       process.exit(1);
@@ -93,51 +94,66 @@ addCommand
   .option('--view-private', 'allow delegate to view private items', false)
   .option('--deliver <mode>', `deliver meeting requests (${VALID_DELIVER.join('|')})`, 'DelegatesAndMe')
   .option('--mailbox <email>', 'mailbox to add delegate to (shared/alternative primary)')
-  .action(async (opts) => {
-    // Validate permission levels
-    const perms: DelegatePermissions = {};
-    for (const folder of VALID_FOLDERS) {
-      const key = folder as (typeof VALID_FOLDERS)[number];
-      const level = opts[key] as string | undefined;
-      if (level) {
-        if (!VALID_PERMISSIONS.includes(level as (typeof VALID_PERMISSIONS)[number])) {
-          console.error(`Invalid permission level "${level}" for ${folder}. Valid: ${VALID_PERMISSIONS.join(', ')}`);
-          process.exit(1);
+  .option('--token <token>', 'Use a specific token')
+  .action(
+    async (opts: {
+      email: string;
+      name?: string;
+      calendar?: string;
+      inbox?: string;
+      contacts?: string;
+      tasks?: string;
+      notes?: string;
+      viewPrivate?: boolean;
+      deliver: string;
+      mailbox?: string;
+      token?: string;
+    }) => {
+      // Validate permission levels
+      const perms: DelegatePermissions = {};
+      for (const folder of VALID_FOLDERS) {
+        const key = folder as (typeof VALID_FOLDERS)[number];
+        const level = opts[key] as string | undefined;
+        if (level) {
+          if (!VALID_PERMISSIONS.includes(level as (typeof VALID_PERMISSIONS)[number])) {
+            console.error(`Invalid permission level "${level}" for ${folder}. Valid: ${VALID_PERMISSIONS.join(', ')}`);
+            process.exit(1);
+          }
+          (perms as Record<string, string>)[key] = level;
         }
-        (perms as Record<string, string>)[key] = level;
       }
+
+      const deliver = opts.deliver as DeliverMeetingRequests;
+      if (!VALID_DELIVER.includes(deliver)) {
+        console.error(`Invalid deliver mode "${deliver}". Valid: ${VALID_DELIVER.join(', ')}`);
+        process.exit(1);
+      }
+
+      const auth = await resolveAuth({ token: opts.token });
+      if (!auth.success || !auth.token) {
+        console.error('Auth failed:', auth.error);
+        process.exit(1);
+      }
+
+      const result = await addDelegate({
+        token: auth.token,
+        delegateEmail: opts.email,
+        delegateName: opts.name,
+        permissions: perms,
+        viewPrivateItems: opts.viewPrivate,
+        deliverMeetingRequests: deliver,
+        mailbox: opts.mailbox
+      });
+
+      if (!result.ok) {
+        console.error('AddDelegate failed:', result.error?.message);
+        process.exit(1);
+      }
+
+      console.log('Delegate added:');
+      console.log(formatDelegate(result.data!));
     }
-
-    const deliver = opts.deliver as DeliverMeetingRequests;
-    if (!VALID_DELIVER.includes(deliver)) {
-      console.error(`Invalid deliver mode "${deliver}". Valid: ${VALID_DELIVER.join(', ')}`);
-      process.exit(1);
-    }
-
-    const auth = await resolveAuth();
-    if (!auth.success || !auth.token) {
-      console.error('Auth failed:', auth.error);
-      process.exit(1);
-    }
-
-    const result = await addDelegate({
-      token: auth.token,
-      delegateEmail: opts.email,
-      delegateName: opts.name,
-      permissions: perms,
-      viewPrivateItems: opts.viewPrivate,
-      deliverMeetingRequests: deliver,
-      mailbox: opts.mailbox
-    });
-
-    if (!result.ok) {
-      console.error('AddDelegate failed:', result.error?.message);
-      process.exit(1);
-    }
-
-    console.log('Delegate added:');
-    console.log(formatDelegate(result.data!));
-  });
+  );
 
 // ─── update ───
 
@@ -153,53 +169,67 @@ updateCommand
   .option('--view-private <boolean>', 'allow delegate to view private items (true/false)')
   .option('--deliver <mode>', `deliver meeting requests (${VALID_DELIVER.join('|')})`)
   .option('--mailbox <email>', 'mailbox (shared/alternative primary)')
-  .action(async (opts) => {
-    const permsOut: DelegatePermissions = {};
-    let hasPerms = false;
+  .option('--token <token>', 'Use a specific token')
+  .action(
+    async (opts: {
+      email: string;
+      calendar?: string;
+      inbox?: string;
+      contacts?: string;
+      tasks?: string;
+      notes?: string;
+      viewPrivate?: string | boolean;
+      deliver?: string;
+      mailbox?: string;
+      token?: string;
+    }) => {
+      const permsOut: DelegatePermissions = {};
+      let hasPerms = false;
 
-    for (const folder of VALID_FOLDERS) {
-      const key = folder as (typeof VALID_FOLDERS)[number];
-      const level = opts[key] as string | undefined;
-      if (level !== undefined) {
-        if (!VALID_PERMISSIONS.includes(level as (typeof VALID_PERMISSIONS)[number])) {
-          console.error(`Invalid permission level "${level}" for ${folder}. Valid: ${VALID_PERMISSIONS.join(', ')}`);
-          process.exit(1);
+      for (const folder of VALID_FOLDERS) {
+        const key = folder as (typeof VALID_FOLDERS)[number];
+        const level = opts[key] as string | undefined;
+        if (level !== undefined) {
+          if (!VALID_PERMISSIONS.includes(level as (typeof VALID_PERMISSIONS)[number])) {
+            console.error(`Invalid permission level "${level}" for ${folder}. Valid: ${VALID_PERMISSIONS.join(', ')}`);
+            process.exit(1);
+          }
+          (permsOut as Record<string, string>)[key] = level;
+          hasPerms = true;
         }
-        (permsOut as Record<string, string>)[key] = level;
-        hasPerms = true;
       }
+
+      const deliver = opts.deliver as DeliverMeetingRequests | undefined;
+      if (deliver && !VALID_DELIVER.includes(deliver)) {
+        console.error(`Invalid deliver mode "${deliver}". Valid: ${VALID_DELIVER.join(', ')}`);
+        process.exit(1);
+      }
+
+      const auth = await resolveAuth({ token: opts.token });
+      if (!auth.success || !auth.token) {
+        console.error('Auth failed:', auth.error);
+        process.exit(1);
+      }
+
+      const result = await updateDelegate({
+        token: auth.token,
+        delegateEmail: opts.email,
+        permissions: hasPerms ? permsOut : undefined,
+        viewPrivateItems:
+          opts.viewPrivate === undefined ? undefined : opts.viewPrivate === 'true' || opts.viewPrivate === true,
+        deliverMeetingRequests: deliver,
+        mailbox: opts.mailbox
+      });
+
+      if (!result.ok) {
+        console.error('UpdateDelegate failed:', result.error?.message);
+        process.exit(1);
+      }
+
+      console.log('Delegate updated:');
+      console.log(formatDelegate(result.data!));
     }
-
-    const deliver = opts.deliver as DeliverMeetingRequests | undefined;
-    if (deliver && !VALID_DELIVER.includes(deliver)) {
-      console.error(`Invalid deliver mode "${deliver}". Valid: ${VALID_DELIVER.join(', ')}`);
-      process.exit(1);
-    }
-
-    const auth = await resolveAuth();
-    if (!auth.success || !auth.token) {
-      console.error('Auth failed:', auth.error);
-      process.exit(1);
-    }
-
-    const result = await updateDelegate({
-      token: auth.token,
-      delegateEmail: opts.email,
-      permissions: hasPerms ? permsOut : undefined,
-      viewPrivateItems:
-        opts.viewPrivate === undefined ? undefined : opts.viewPrivate === 'true' || opts.viewPrivate === true,
-      deliverMeetingRequests: deliver,
-      mailbox: opts.mailbox
-    });
-
-    if (!result.ok) {
-      console.error('UpdateDelegate failed:', result.error?.message);
-      process.exit(1);
-    }
-
-    console.log('Delegate updated:');
-    console.log(formatDelegate(result.data!));
-  });
+  );
 
 // ─── remove ───
 
@@ -208,8 +238,9 @@ removeCommand
   .description('Remove a delegate from the mailbox')
   .requiredOption('--email <email>', 'delegate email address')
   .option('--mailbox <email>', 'mailbox (shared/alternative primary)')
-  .action(async (opts) => {
-    const auth = await resolveAuth();
+  .option('--token <token>', 'Use a specific token')
+  .action(async (opts: { email: string; mailbox?: string; token?: string }) => {
+    const auth = await resolveAuth({ token: opts.token });
     if (!auth.success || !auth.token) {
       console.error('Auth failed:', auth.error);
       process.exit(1);

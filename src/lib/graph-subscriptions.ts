@@ -73,7 +73,11 @@ export async function deleteSubscription(id: string, token?: string): Promise<Gr
   }
 }
 
-export async function renewSubscription(id: string, expirationDateTime: string, token?: string): Promise<GraphResponse<void>> {
+export async function renewSubscription(
+  id: string,
+  expirationDateTime: string,
+  token?: string
+): Promise<GraphResponse<void>> {
   try {
     const authToken = await getAuthToken(token);
     return await callGraph<void>(authToken, `/subscriptions/${encodeURIComponent(id)}`, {

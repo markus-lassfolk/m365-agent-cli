@@ -53,7 +53,9 @@ function parseAction(key: string, raw: any): MessageRuleAction[keyof MessageRule
     return parseEmailAddresses(String(raw));
   }
   if (key === 'assignCategories') {
-    return String(raw).split(',').map((s: string) => s.trim());
+    return String(raw)
+      .split(',')
+      .map((s: string) => s.trim());
   }
   return raw;
 }
@@ -89,15 +91,22 @@ function actionsFromOpts(options: Record<string, unknown>): MessageRuleAction {
   if (options.delete === true || options.delete === 'true') actions.delete = true;
   if (options.permanentDelete === true || options.permanentDelete === 'true') actions.permanentDelete = true;
   if (options.markAsRead === true || options.markAsRead === 'true') actions.markAsRead = true;
-  if (options.stopProcessingRules === true || options.stopProcessingRules === 'true') actions.stopProcessingRules = true;
+  if (options.stopProcessingRules === true || options.stopProcessingRules === 'true')
+    actions.stopProcessingRules = true;
 
   if (options.moveToFolder !== undefined) actions.moveToFolder = String(options.moveToFolder);
   if (options.copyToFolder !== undefined) actions.copyToFolder = String(options.copyToFolder);
   if (options.markImportance !== undefined) actions.markImportance = String(options.markImportance) as any;
-  
-  if (options.forwardTo !== undefined) actions.forwardToRecipients = parseAction('forwardToRecipients', options.forwardTo as string) as any;
-  if (options.forwardAsAttachmentTo !== undefined) actions.forwardAsAttachmentToRecipients = parseAction('forwardAsAttachmentToRecipients', options.forwardAsAttachmentTo as string) as any;
-  if (options.assignCategories !== undefined) actions.assignCategories = parseAction('assignCategories', options.assignCategories as string) as any;
+
+  if (options.forwardTo !== undefined)
+    actions.forwardToRecipients = parseAction('forwardToRecipients', options.forwardTo as string) as any;
+  if (options.forwardAsAttachmentTo !== undefined)
+    actions.forwardAsAttachmentToRecipients = parseAction(
+      'forwardAsAttachmentToRecipients',
+      options.forwardAsAttachmentTo as string
+    ) as any;
+  if (options.assignCategories !== undefined)
+    actions.assignCategories = parseAction('assignCategories', options.assignCategories as string) as any;
 
   return actions;
 }
