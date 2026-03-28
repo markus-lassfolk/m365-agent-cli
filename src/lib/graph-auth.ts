@@ -15,6 +15,18 @@ interface CachedGraphToken {
   expiresAt: number;
 }
 
+/** Validate that a string is a well-formed JWT with three base64url parts. */
+function isValidJwtStructure(token: string): boolean {
+  const parts = token.split('.');
+  if (parts.length !== 3) return false;
+  try {
+    Buffer.from(parts[1], 'base64url').toString();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const GRAPH_TOKEN_CACHE_FILE = join(homedir(), '.config', 'clippy', 'graph-token-cache.json');
 const GRAPH_SCOPES = [
   'https://graph.microsoft.com/Files.ReadWrite offline_access User.Read',
@@ -74,10 +86,22 @@ async function refreshGraphAccessToken(
     };
 
     if (response.ok && json.access_token) {
+      const accessToken = json.access_token;
+
+      // Refuse to cache tokens that are not well-formed JWTs
+      if (!isValidJwtStructure(accessToken)) {
+        throw new Error('OAuth server returned an invalid token structure — refusing to cache');
+      }
+
+      const expiresAt = getJwtExpiration(accessToken) ?? Date.now() + (json.expires_in || 3600) * 1000;
+      if (expiresAt <= Date.now()) {
+        throw new Error('OAuth server returned an already-expired token — refusing to cache');
+      }
+
       return {
-        accessToken: json.access_token,
+        accessToken,
         refreshToken: json.refresh_token || refreshToken,
-        expiresAt: getJwtExpiration(json.access_token) || Date.now() + (json.expires_in || 3600) * 1000
+        expiresAt
       };
     }
 
@@ -107,7 +131,12 @@ export async function resolveGraphAuth(options?: { token?: string }): Promise<Gr
 
     const cached = await loadCachedGraphToken();
     if (cached && cached.expiresAt > Date.now() + 60_000) {
-      return { success: true, token: cached.accessToken };
+      // Guard against corrupted cache: validate JWT structure before returning
+      if (!isValidJwtStructure(cached.accessToken)) {
+        // Treat a malformed cached token as if there were no cache
+      } else {
+        return { success: true, token: cached.accessToken };
+      }
     }
 
     const refreshTokens = [...new Set([cached?.refreshToken, envRefreshToken].filter((t): t is string => !!t))];
