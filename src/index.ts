@@ -193,27 +193,3 @@ export type {
   CreateTaskOptions,
   UpdateTaskOptions
 } from "./lib/todo-client.js";
-
-// To-Do
-export {
-  getTodoLists,
-  getTodoList,
-  getTasks,
-  getTask,
-  createTask,
-  updateTask,
-  deleteTask,
-  addChecklistItem,
-  deleteChecklistItem
-} from "./lib/todo-client.js";
-
-export type {
-  TodoImportance,
-  TodoStatus,
-  TodoLinkedResource,
-  TodoChecklistItem,
-  TodoTask,
-  TodoList,
-  CreateTaskOptions,
-  UpdateTaskOptions
-} from "./lib/todo-client.js";

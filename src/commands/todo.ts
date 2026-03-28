@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { resolveGraphAuth } from "../lib/graph-auth.js";
+import { resolveAuth } from "../lib/auth.js";
 import { getEmail } from "../lib/ews-client.js";
 import {
   getTodoLists, getTodoList, getTasks, getTask,
@@ -134,7 +135,7 @@ todoCommand
 
     const filters: string[] = [];
     if (opts.status) filters.push(`status eq '${opts.status}'`);
-    if (opts.importance) filters.push(`importance eq ${opts.importance}`);
+    if (opts.importance) filters.push(`importance eq '${opts.importance}'`);
     const result = await getTasks(auth.token!, listId, filters.join(" and ") || undefined);
     if (!result.ok || !result.data) { console.error(`Error: ${result.error?.message}`); process.exit(1); }
     const tasks: TodoTask[] = result.data;
@@ -188,7 +189,9 @@ todoCommand
 
     let linkedResources;
     if (opts.link) {
-      const er = await getEmail(auth.token!, opts.link);
+      const ewsAuth = await resolveAuth({ token: opts.token });
+      if (!ewsAuth.success) { console.error(`EWS Auth error: ${ewsAuth.error}`); process.exit(1); }
+      const er = await getEmail(ewsAuth.token!, opts.link);
       if (!er.ok || !er.data) { console.error(`Could not fetch email: ${er.error?.message}`); process.exit(1); }
       linkedResources = [{ webUrl: emailUrl(er.data.Id), description: er.data.Subject || "Linked email" }];
     }
