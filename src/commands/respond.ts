@@ -243,11 +243,7 @@ export const respondCommand = new Command('respond')
         process.exit(1);
       }
 
-      const targetEvent = pendingEvents.find((e) => e.Id === options.id);
-      if (!targetEvent) {
-        console.error(`Invalid event id: ${options.id}`);
-        process.exit(1);
-      }
+      const targetEvent = eventResult.data;
 
       console.log(`\nResponding to: ${targetEvent.Subject}`);
       console.log(

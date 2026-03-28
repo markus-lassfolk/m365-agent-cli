@@ -829,8 +829,8 @@ export async function createEvent(options: CreateEventOptions): Promise<OwaRespo
     return ewsResult({
       Id: id,
       Subject: subject,
-      Start: { DateTime: start, TimeZone: undefined },
-      End: { DateTime: end, TimeZone: undefined },
+      Start: { DateTime: start, TimeZone: 'UTC' },
+      End: { DateTime: end, TimeZone: 'UTC' },
       WebLink: undefined,
       OnlineMeetingUrl: undefined
     });

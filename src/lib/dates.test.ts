@@ -11,12 +11,10 @@ describe('dates helpers', () => {
     expect(parseTimeToDate('12am', base).getHours()).toBe(0);
   });
 
-  it('toLocalISOString formats with local timezone offset', () => {
-    const date = new Date(2026, 2, 27, 9, 5, 7);
-    // Must include a +HH:MM or -HH:MM offset suffix (not Z, not absent)
+  it('toLocalISOString formats as UTC with Z suffix', () => {
+    const date = new Date(Date.UTC(2026, 2, 27, 9, 5, 7));
     const result = toLocalISOString(date);
-    expect(result).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/);
-    expect(result).toMatch(/^2026-03-27T09:05:07[+-]\d{2}:\d{2}$/);
+    expect(result).toBe('2026-03-27T09:05:07.000Z');
   });
 
   it('parseDay supports relative values and weekday directions', () => {

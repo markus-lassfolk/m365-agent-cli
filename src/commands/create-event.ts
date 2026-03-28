@@ -256,7 +256,10 @@ export const createEventCommand = new Command('create-event')
         }
 
         // Build range — use local date to avoid UTC shift for late-evening events
-        const localDate = toLocalISOString(start).split('T')[0];
+        const year = start.getFullYear();
+        const month = String(start.getMonth() + 1).padStart(2, '0');
+        const day = String(start.getDate()).padStart(2, '0');
+        const localDate = `${year}-${month}-${day}`;
         const range: RecurrenceRange = {
           Type: 'NoEnd',
           StartDate: localDate
