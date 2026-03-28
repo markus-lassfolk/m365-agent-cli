@@ -140,6 +140,8 @@ export interface OwaResponse<T = unknown> {
   status: number;
   data?: T;
   error?: OwaError;
+  /** Informational message (e.g., fallback used, partial success) */
+  info?: string;
 }
 
 export interface OwaUserInfo {
@@ -932,8 +934,10 @@ export interface CancelEventOptions {
 }
 
 export async function cancelEvent(options: CancelEventOptions): Promise<OwaResponse<void>> {
+  const { token, eventId, comment, mailbox } = options;
+
+  // Primary: CancelCalendarItem
   try {
-    const { token, eventId, comment, mailbox } = options;
     const envelope = soapEnvelope(`
     <m:CreateItem MessageDisposition="SendAndSaveCopy">
       <m:Items>
@@ -945,10 +949,9 @@ export async function cancelEvent(options: CancelEventOptions): Promise<OwaRespo
     </m:CreateItem>`);
     await callEws(token, envelope, mailbox);
     return { ok: true, status: 200 };
-  } catch {
-    // Fallback: delete with cancellation notices
+  } catch (primaryErr) {
+    // Fallback: DeleteItem with SendMeetingCancellations
     try {
-      const { token, eventId, mailbox } = options;
       const envelope = soapEnvelope(`
       <m:DeleteItem DeleteType="MoveToDeletedItems" SendMeetingCancellations="SendToAllAndSaveCopy">
         <m:ItemIds>
@@ -956,9 +959,21 @@ export async function cancelEvent(options: CancelEventOptions): Promise<OwaRespo
         </m:ItemIds>
       </m:DeleteItem>`);
       await callEws(token, envelope, mailbox);
-      return { ok: true, status: 200 };
-    } catch (err) {
-      return ewsError(err);
+      // Fallback succeeded after primary failed — report it so caller knows what happened
+      const primaryMsg = primaryErr instanceof Error ? primaryErr.message : String(primaryErr);
+      return { ok: true, status: 200, info: `Primary cancellation failed (${primaryMsg}); cancellation sent via fallback DeleteItem instead.` };
+    } catch (fallbackErr) {
+      // Both failed — report both errors clearly
+      const primaryMsg = primaryErr instanceof Error ? primaryErr.message : String(primaryErr);
+      const fallbackMsg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+      return {
+        ok: false,
+        status: 0,
+        error: {
+          code: 'EWS_CANCEL_FAILED',
+          message: `Primary cancellation failed: ${primaryMsg}. Fallback also failed: ${fallbackMsg}`
+        }
+      };
     }
   }
 }
