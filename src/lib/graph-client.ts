@@ -126,9 +126,13 @@ export async function fetchAllPages<T>(
     items.push(...(result.data.value || []));
     path = result.data['@odata.nextLink']
       ? (() => {
-          const nextUrl = new URL(result.data['@odata.nextLink']);
-          const relativePath = nextUrl.pathname.replace(/^\/v1\.0/, '');
-          return relativePath + nextUrl.search;
+          try {
+            const nextUrl = new URL(result.data['@odata.nextLink']);
+            const relativePath = nextUrl.pathname.replace(/^\/v1\.0/, '');
+            return relativePath + nextUrl.search;
+          } catch {
+            return '';
+          }
         })()
       : '';
   }

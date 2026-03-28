@@ -11,7 +11,7 @@ WORKSPACE="/home/markus/.openclaw/workspace/markus-lassfolk-clippy"
 GOALS_FILE="$WORKSPACE/docs/GOALS.md"
 LOG_DIR="$HOME/.openclaw/workspace/ralph/logs"
 LOG_FILE="$LOG_DIR/clippy-$(date +%Y-%m-%d).md"
-GUARD_FILE="$HOME/.openclaw/workspace/tmp/guards/ralph-clippy-wiggum.ms"
+GUARD_FILE="$HOME/.openclaw/workspace/tmp/guards/ralph-clippy-wiggum.ts"
 FORGE_GUARD="$HOME/.openclaw/workspace/tmp/guards/ralph-clippy-forge-running.txt"
 
 mkdir -p "$LOG_DIR"
@@ -151,6 +151,15 @@ while true; do
   if (( BUDGET < MIN_BUDGET )); then
     log "Budget exhausted (${BUDGET}s left, need >${MIN_BUDGET}s). Stopping."
     break
+  fi
+
+  # Check if Forge from this run is still active
+  if [[ -f "$FORGE_GUARD" ]]; then
+    FORGE_AGE=$(($(date +%s) - $(sed 's/ .*//' < "$FORGE_GUARD")))
+    if (( FORGE_AGE < 2700 )); then
+      log "Forge still running (${FORGE_AGE}s), waiting for completion."
+      break
+    fi
   fi
 
   # Python analysis

@@ -12,8 +12,8 @@ export interface Subscription {
   creatorId?: string;
 }
 
-async function fetchGraph(endpoint: string, options: RequestInit = {}): Promise<Response> {
-  const auth = await resolveGraphAuth();
+async function fetchGraph(endpoint: string, options: RequestInit = {}, token?: string): Promise<Response> {
+  const auth = await resolveGraphAuth({ token });
   if (!auth.success || !auth.token) {
     throw new Error(auth.error || 'Failed to authenticate to Graph API');
   }
@@ -32,7 +32,8 @@ export async function createSubscription(
   changeType: string,
   notificationUrl: string,
   expirationDateTime: string,
-  clientState?: string
+  clientState?: string,
+  token?: string
 ): Promise<Subscription> {
   const body: Record<string, string> = {
     changeType,
@@ -47,7 +48,7 @@ export async function createSubscription(
   const response = await fetchGraph('/subscriptions', {
     method: 'POST',
     body: JSON.stringify(body)
-  });
+  }, token);
 
   if (!response.ok) {
     const error = await response.text();
@@ -57,10 +58,10 @@ export async function createSubscription(
   return response.json() as Promise<Subscription>;
 }
 
-export async function listSubscriptions(): Promise<Subscription[]> {
+export async function listSubscriptions(token?: string): Promise<Subscription[]> {
   const response = await fetchGraph('/subscriptions', {
     method: 'GET'
-  });
+  }, token);
 
   if (!response.ok) {
     const error = await response.text();
@@ -71,10 +72,10 @@ export async function listSubscriptions(): Promise<Subscription[]> {
   return data.value;
 }
 
-export async function deleteSubscription(id: string): Promise<void> {
+export async function deleteSubscription(id: string, token?: string): Promise<void> {
   const response = await fetchGraph(`/subscriptions/${encodeURIComponent(id)}`, {
     method: 'DELETE'
-  });
+  }, token);
 
   if (!response.ok) {
     const error = await response.text();
@@ -82,13 +83,13 @@ export async function deleteSubscription(id: string): Promise<void> {
   }
 }
 
-export async function renewSubscription(id: string, expirationDateTime: string): Promise<void> {
+export async function renewSubscription(id: string, expirationDateTime: string, token?: string): Promise<void> {
   const response = await fetchGraph(`/subscriptions/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     body: JSON.stringify({
       expirationDateTime
     })
-  });
+  }, token);
 
   if (!response.ok) {
     const error = await response.text();

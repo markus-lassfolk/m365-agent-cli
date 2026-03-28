@@ -7,6 +7,7 @@ export const subscribeCommand = new Command('subscribe')
   .option('--url <url>', 'Webhook notification URL')
   .option('--expiry <datetime>', 'Expiration datetime (ISO 8601, defaults to 3 days from now)')
   .option('--change-type <type>', 'Change type (comma-separated)', 'created,updated')
+  .option('--token <token>', 'Use a specific token')
   .action(async (resource, options, cmd) => {
     if (!resource) {
       return cmd.help();
@@ -52,7 +53,7 @@ export const subscribeCommand = new Command('subscribe')
 
     try {
       console.log(`Creating subscription for ${graphResource}...`);
-      const sub = await createSubscription(graphResource, options.changeType, options.url, expiry, clientState);
+      const sub = await createSubscription(graphResource, options.changeType, options.url, expiry, clientState, options.token);
       console.log('Subscription created successfully!');
       console.log(JSON.stringify(sub, null, 2));
     } catch (err) {
@@ -64,10 +65,11 @@ export const subscribeCommand = new Command('subscribe')
 subscribeCommand
   .command('cancel <id>')
   .description('Cancel an existing subscription')
-  .action(async (id) => {
+  .option('--token <token>', 'Use a specific token')
+  .action(async (id, options) => {
     try {
       console.log(`Deleting subscription ${id}...`);
-      await deleteSubscription(id);
+      await deleteSubscription(id, options.token);
       console.log('Subscription deleted successfully.');
     } catch (err) {
       console.error(err instanceof Error ? err.message : err);
