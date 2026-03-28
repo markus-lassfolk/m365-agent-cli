@@ -1,7 +1,8 @@
 import { basename, dirname, resolve } from 'node:path';
 import { createReadStream, createWriteStream } from 'node:fs';
-import { mkdir, stat, unlink } from 'node:fs/promises';
+import { mkdir, stat, unlink, rename } from 'node:fs/promises';
 import { homedir } from 'node:os';
+import { randomBytes } from 'node:crypto';
 import { GRAPH_BASE_URL } from './graph-constants.js';
 export { GRAPH_BASE_URL };
 
@@ -65,8 +66,9 @@ export interface UploadLargeResult {
   expirationDateTime?: string;
 }
 
-async function streamWebToFile(body: ReadableStream<Uint8Array>, filePath: string): Promise<void> {
+async function streamWebToFile(body: ReadableStream<Uint8Array>, filePath: string): Promise<number> {
   const stream = createWriteStream(filePath, { flags: 'w', mode: 0o600 });
+  let bytesWritten = 0;
 
   try {
     for await (const chunk of body) {
@@ -84,6 +86,7 @@ async function streamWebToFile(body: ReadableStream<Uint8Array>, filePath: strin
           stream.once('error', onError);
         });
       }
+      bytesWritten += chunk.byteLength;
     }
 
     await new Promise<void>((resolveClose, rejectClose) => {
@@ -92,6 +95,8 @@ async function streamWebToFile(body: ReadableStream<Uint8Array>, filePath: strin
         else resolveClose();
       });
     });
+
+    return bytesWritten;
   } catch (err) {
     stream.destroy();
     throw err;
@@ -291,42 +296,100 @@ export async function downloadFile(
   outputPath?: string,
   item?: DriveItem
 ): Promise<GraphResponse<{ path: string; item: DriveItem }>> {
-  try {
-    let resolvedItem = item;
+  let resolvedItem = item;
+  let targetPath: string | undefined;
+  let tmpPath: string | undefined;
 
-    if (!resolvedItem) {
-      const metadata = await getFileMetadata(token, itemId);
-      if (!metadata.ok || !metadata.data) {
-        return graphError(
-          metadata.error?.message || 'Failed to fetch file metadata before download',
-          metadata.error?.code,
-          metadata.error?.status
-        );
-      }
-      resolvedItem = metadata.data;
+  // Step 1: resolve item metadata
+  if (!resolvedItem) {
+    const metadata = await getFileMetadata(token, itemId);
+    if (!metadata.ok || !metadata.data) {
+      return graphError(
+        metadata.error?.message || 'Failed to fetch file metadata before download',
+        metadata.error?.code,
+        metadata.error?.status
+      );
     }
-
-    const downloadUrl = resolvedItem['@microsoft.graph.downloadUrl'];
-    if (!downloadUrl) {
-      return graphError('Download URL missing from Graph metadata response.');
-    }
-
-    const response = await fetch(downloadUrl);
-    if (!response.ok) {
-      return graphError(`Download failed: HTTP ${response.status}`);
-    }
-    if (!response.body) {
-      return graphError('Download failed: response body missing');
-    }
-
-    const targetPath = resolve(outputPath || defaultDownloadPath(basename(resolvedItem.name || itemId)));
-    await mkdir(dirname(targetPath), { recursive: true });
-    await streamWebToFile(response.body, targetPath);
-
-    return graphResult({ path: targetPath, item: resolvedItem });
-  } catch (err) {
-    return graphError(err instanceof Error ? err.message : 'Download failed');
+    resolvedItem = metadata.data;
   }
+
+  const downloadUrl = resolvedItem['@microsoft.graph.downloadUrl'];
+  if (!downloadUrl) {
+    return graphError('Download URL missing from Graph metadata response.');
+  }
+
+  targetPath = resolve(outputPath || defaultDownloadPath(basename(resolvedItem.name || itemId)));
+  await mkdir(dirname(targetPath), { recursive: true });
+
+  // Step 2: retry loop for transient network errors
+  const MAX_RETRIES = 2;
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const response = await fetch(downloadUrl);
+
+      if (!response.ok) {
+        // Non-transient HTTP errors: don't retry
+        return graphError(`Download failed: HTTP ${response.status}`);
+      }
+      if (!response.body) {
+        return graphError('Download failed: response body missing');
+      }
+
+      const contentLength = response.headers.get('content-length');
+      const tmpFileName = `.${resolvedItem.name ?? itemId}.${randomBytes(8).toString('hex')}.tmp`;
+      tmpPath = resolve(dirname(targetPath), 'tmp', tmpFileName);
+      await mkdir(dirname(tmpPath), { recursive: true });
+
+      const bytesWritten = await streamWebToFile(response.body, tmpPath);
+
+      // Verify integrity when Content-Length is available
+      if (contentLength !== null) {
+        const expected = Number(contentLength);
+        if (!Number.isFinite(expected)) {
+          return graphError(`Download failed: invalid Content-Length header`);
+        }
+        if (bytesWritten !== expected) {
+          // Clean up corrupted temp file
+          await unlink(tmpPath).catch(() => {});
+          tmpPath = undefined;
+          return graphError(
+            `Download failed: size mismatch (expected ${expected} bytes, got ${bytesWritten})`
+          );
+        }
+      }
+
+      // Atomic rename: temp → final path
+      await rename(tmpPath, targetPath);
+
+      return graphResult({ path: targetPath, item: resolvedItem });
+    } catch (err) {
+      lastError = err;
+
+      // Clean up temp file on any error
+      if (tmpPath) {
+        await unlink(tmpPath).catch(() => {});
+        tmpPath = undefined;
+      }
+
+      // Only retry on network/stream errors, not on business-logic errors (size mismatch etc.)
+      const isRetryable =
+        err instanceof Error &&
+        (err.message.includes('fetch failed') ||
+          err.message.includes('network') ||
+          err.message.includes('ECONNREFUSED') ||
+          err.message.includes('ETIMEDOUT') ||
+          err.message.includes('ENOTFOUND'));
+
+      if (isRetryable && attempt < MAX_RETRIES) {
+        continue;
+      }
+      break;
+    }
+  }
+
+  return graphError(lastError instanceof Error ? lastError.message : 'Download failed');
 }
 
 export async function deleteFile(token: string, itemId: string): Promise<GraphResponse<void>> {
