@@ -153,22 +153,6 @@ export type {
   RemoveDelegateOptions
 } from './lib/delegate-client.js';
 
-// Inbox rules
-export {
-  listMessageRules,
-  getMessageRule,
-  createMessageRule,
-  updateMessageRule,
-  deleteMessageRule
-} from './lib/rules-client.js';
-
-export type {
-  MessageRule,
-  MessageRuleCondition,
-  MessageRuleAction,
-  CreateMessageRulePayload,
-  UpdateMessageRulePayload
-} from './lib/rules-client.js';
 
 // To-Do
 export {
@@ -193,3 +177,13 @@ export type {
   CreateTaskOptions,
   UpdateTaskOptions
 } from './lib/todo-client.js';
+
+
+// Places API
+export {
+  listPlaceRoomLists,
+  listRoomsInRoomList,
+  findRooms,
+  isRoomFree
+} from './lib/places-client.js';
+export type { Place as PlaceRoom, RoomList as PlaceRoomList, PlacesApiResponse, RoomFilters } from './lib/places-client.js';

@@ -22,6 +22,7 @@ import { subscribeCommand } from './commands/subscribe.js';
 import { subscriptionsCommand } from './commands/subscriptions.js';
 import { serveCommand } from './commands/serve.js';
 import { roomsCommand } from './commands/rooms.js';
+import { delegatesCommand } from './commands/delegates.js';
 import { todoCommand } from './commands/todo.js';
 
 const program = new Command();
@@ -50,6 +51,7 @@ program.addCommand(subscribeCommand);
 program.addCommand(subscriptionsCommand);
 program.addCommand(serveCommand);
 program.addCommand(roomsCommand);
+program.addCommand(delegatesCommand);
 program.addCommand(todoCommand);
 
 program.parse();

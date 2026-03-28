@@ -3,6 +3,7 @@ import { createReadStream, createWriteStream } from 'node:fs';
 import { mkdir, stat, unlink } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { GRAPH_BASE_URL } from './graph-constants.js';
+export { GRAPH_BASE_URL };
 
 export interface GraphError {
   message: string;
@@ -115,7 +116,7 @@ export async function fetchGraphRaw(token: string, path: string, options: Reques
   });
 }
 
-async function callGraph<T>(
+export async function callGraph<T>(
   token: string,
   path: string,
   options: RequestInit = {},
