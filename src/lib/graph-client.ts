@@ -348,6 +348,8 @@ export async function downloadFile(
       if (contentLength !== null) {
         const expected = Number(contentLength);
         if (!Number.isFinite(expected)) {
+          await unlink(tmpPath).catch(() => {});
+          tmpPath = undefined;
           return graphError(`Download failed: invalid Content-Length header`);
         }
         if (bytesWritten !== expected) {
