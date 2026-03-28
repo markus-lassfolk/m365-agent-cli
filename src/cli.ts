@@ -13,6 +13,8 @@ import { foldersCommand } from './commands/folders.js';
 import { sendCommand } from './commands/send.js';
 import { draftsCommand } from './commands/drafts.js';
 import { filesCommand } from './commands/files.js';
+import { forwardEventCommand } from './commands/forward-event.js';
+import { counterCommand } from './commands/counter.js';
 
 const program = new Command();
 
@@ -31,5 +33,7 @@ program.addCommand(foldersCommand);
 program.addCommand(sendCommand);
 program.addCommand(draftsCommand);
 program.addCommand(filesCommand);
+program.addCommand(forwardEventCommand);
+program.addCommand(counterCommand);
 
 program.parse();

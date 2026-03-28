@@ -106,7 +106,7 @@ function graphError(message: string, code?: string, status?: number): GraphRespo
   return { ok: false, error: { message, code, status } };
 }
 
-async function callGraph<T>(
+export async function callGraph<T>(
   token: string,
   path: string,
   options: RequestInit = {},
