@@ -141,3 +141,62 @@ export type { Place as PlaceRoom, RoomList as PlaceRoomList } from './lib/places
 
 export { getMailboxSettings, setMailboxSettings } from './lib/oof-client.js';
 export type { OofStatus, AutomaticRepliesSetting, MailboxSettings } from './lib/oof-client.js';
+
+// Delegate management
+export {
+  getDelegates,
+  addDelegate,
+  updateDelegate,
+  removeDelegate
+} from './lib/delegate-client.js';
+
+export type {
+  DelegateInfo,
+  DelegatePermissions,
+  DelegateFolderPermissionLevel,
+  DeliverMeetingRequests,
+  AddDelegateOptions,
+  UpdateDelegateOptions,
+  RemoveDelegateOptions
+} from './lib/delegate-client.js';
+
+// Inbox rules
+export {
+  listMessageRules,
+  getMessageRule,
+  createMessageRule,
+  updateMessageRule,
+  deleteMessageRule
+} from './lib/rules-client.js';
+
+export type {
+  MessageRule,
+  MessageRuleCondition,
+  MessageRuleAction,
+  CreateMessageRulePayload,
+  UpdateMessageRulePayload
+} from './lib/rules-client.js';
+
+// To-Do
+export {
+  getTodoLists,
+  getTodoList,
+  getTasks,
+  getTask,
+  createTask,
+  updateTask,
+  deleteTask,
+  addChecklistItem,
+  deleteChecklistItem
+} from './lib/todo-client.js';
+
+export type {
+  TodoImportance,
+  TodoStatus,
+  TodoLinkedResource,
+  TodoChecklistItem,
+  TodoTask,
+  TodoList,
+  CreateTaskOptions,
+  UpdateTaskOptions
+} from './lib/todo-client.js';
