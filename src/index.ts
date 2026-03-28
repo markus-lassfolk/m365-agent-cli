@@ -97,3 +97,16 @@ export type {
   CheckinResult,
   UploadLargeResult
 } from './lib/graph-client.js';
+
+export {
+  searchPeople,
+  searchUsers,
+  searchGroups,
+  expandGroup
+} from './lib/graph-directory.js';
+
+export type {
+  Person,
+  User,
+  Group
+} from './lib/graph-directory.js';
