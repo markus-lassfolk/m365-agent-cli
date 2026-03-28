@@ -1,17 +1,7 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { getJwtExpiration } from './jwt-utils.js';
-
-const VALID_TENANT_ID = /^(?:common|organizations|consumers|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$/;
-
-function getMicrosoftTenantPathSegment(): string {
-  const rawTenant = process.env.EWS_TENANT_ID?.trim() || 'common';
-  if (!VALID_TENANT_ID.test(rawTenant)) {
-    throw new Error('Invalid EWS_TENANT_ID. Use common/organizations/consumers or a valid tenant UUID.');
-  }
-  return rawTenant;
-}
+import { getJwtExpiration, getMicrosoftTenantPathSegment } from './jwt-utils.js';
 
 export interface AuthResult {
   success: boolean;
@@ -56,15 +46,13 @@ async function saveCachedToken(identity: string, token: CachedToken): Promise<vo
   }
 }
 
-async function refreshAccessToken(clientId: string, refreshToken: string): Promise<CachedToken> {
+async function refreshAccessToken(clientId: string, refreshToken: string, tenant: string): Promise<CachedToken> {
   const scopes = [
     'https://outlook.office365.com/EWS.AccessAsUser.All offline_access',
     'https://outlook.office365.com/.default offline_access'
   ];
 
   let lastError = '';
-
-  const tenant = getMicrosoftTenantPathSegment();
 
   for (const scope of scopes) {
     const response = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, {
@@ -118,6 +106,8 @@ export async function resolveAuth(options?: { token?: string; identity?: string 
 
     const identity = options?.identity || 'default';
 
+    const tenant = getMicrosoftTenantPathSegment();
+
     // Check cached token
     const cached = await loadCachedToken(identity);
     if (cached && cached.expiresAt > Date.now() + 60_000) {
@@ -129,7 +119,7 @@ export async function resolveAuth(options?: { token?: string; identity?: string 
 
     for (const rt of refreshTokens) {
       try {
-        const result = await refreshAccessToken(clientId, rt);
+        const result = await refreshAccessToken(clientId, rt, tenant);
         await saveCachedToken(identity, result);
         return { success: true, token: result.accessToken };
       } catch {

@@ -1,17 +1,7 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { getJwtExpiration } from './jwt-utils.js';
-
-const VALID_TENANT_ID = /^(?:common|organizations|consumers|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$/;
-
-function getMicrosoftTenantPathSegment(): string {
-  const rawTenant = process.env.EWS_TENANT_ID?.trim() || 'common';
-  if (!VALID_TENANT_ID.test(rawTenant)) {
-    throw new Error('Invalid EWS_TENANT_ID. Use common/organizations/consumers or a valid tenant UUID.');
-  }
-  return rawTenant;
-}
+import { getJwtExpiration, getMicrosoftTenantPathSegment } from './jwt-utils.js';
 
 export interface GraphAuthResult {
   success: boolean;
@@ -56,10 +46,12 @@ async function saveCachedGraphToken(token: CachedGraphToken): Promise<void> {
   }
 }
 
-async function refreshGraphAccessToken(clientId: string, refreshToken: string): Promise<CachedGraphToken> {
+async function refreshGraphAccessToken(
+  clientId: string,
+  refreshToken: string,
+  tenant: string
+): Promise<CachedGraphToken> {
   let lastError = '';
-
-  const tenant = getMicrosoftTenantPathSegment();
 
   for (const scope of GRAPH_SCOPES) {
     const response = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, {
@@ -111,6 +103,8 @@ export async function resolveGraphAuth(options?: { token?: string }): Promise<Gr
       };
     }
 
+    const tenant = getMicrosoftTenantPathSegment();
+
     const cached = await loadCachedGraphToken();
     if (cached && cached.expiresAt > Date.now() + 60_000) {
       return { success: true, token: cached.accessToken };
@@ -120,7 +114,7 @@ export async function resolveGraphAuth(options?: { token?: string }): Promise<Gr
 
     for (const refreshToken of refreshTokens) {
       try {
-        const result = await refreshGraphAccessToken(clientId, refreshToken);
+        const result = await refreshGraphAccessToken(clientId, refreshToken, tenant);
         await saveCachedGraphToken(result);
         return { success: true, token: result.accessToken };
       } catch {
