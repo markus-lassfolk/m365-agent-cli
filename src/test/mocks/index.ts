@@ -96,8 +96,14 @@ export function createMockFetch(): any {
     }
 
     // OAuth token endpoint
-    if (url.includes('login.microsoftonline.com') && url.includes('/token')) {
-      return makeJsonResponse(JSON.parse(mockOAuthTokenResponse));
+    // Uses URL hostname parsing (not string includes) to avoid CodeQL injection alert
+    // and to be more precise — login.microsoftonline.com must be the actual host, not a query string value
+    try {
+      if (new URL(url).hostname === 'login.microsoftonline.com' && url.includes('/token')) {
+        return makeJsonResponse(JSON.parse(mockOAuthTokenResponse));
+      }
+    } catch {
+      // Not a valid URL, skip OAuth check
     }
 
     // EWS endpoint
