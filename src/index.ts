@@ -151,4 +151,3 @@ export type {
   UpdateDelegateOptions,
   RemoveDelegateOptions
 } from './lib/delegate-client.js';
-

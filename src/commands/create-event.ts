@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
+import { resolveGraphAuth } from '../lib/graph-auth.js';
 import {
   createEvent,
   getRooms,
@@ -183,14 +184,22 @@ export const createEventCommand = new Command('create-event')
             }
           }
         } else {
-          for (const room of roomsResult.data) {
-            if (!room.emailAddress) continue;
-            const free = await graphIsRoomFree(authResult.token!, room.emailAddress, start.toISOString(), end.toISOString());
-            if (free) {
-              roomEmail = room.emailAddress;
-              roomName = room.displayName;
-              console.log(`Found available room: ${room.displayName}`);
-              break;
+          const graphAuth = await resolveGraphAuth();
+          if (graphAuth.success && graphAuth.token) {
+            for (const room of roomsResult.data) {
+              if (!room.emailAddress) continue;
+              const free = await graphIsRoomFree(
+                graphAuth.token,
+                room.emailAddress,
+                start.toISOString(),
+                end.toISOString()
+              );
+              if (free) {
+                roomEmail = room.emailAddress;
+                roomName = room.displayName;
+                console.log(`Found available room: ${room.displayName}`);
+                break;
+              }
             }
           }
           if (!roomEmail) {

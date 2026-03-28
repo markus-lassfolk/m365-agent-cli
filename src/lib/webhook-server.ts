@@ -29,7 +29,9 @@ export function startWebhookServer(port: number = 3000) {
                 notifications.length > 0 &&
                 notifications.every((n: any) => n && n.clientState === expectedClientState);
               if (!allClientStatesValid) {
-                console.warn(`[${new Date().toISOString()}] Received Graph notification with invalid or missing clientState.`);
+                console.warn(
+                  `[${new Date().toISOString()}] Received Graph notification with invalid or missing clientState.`
+                );
                 return new Response('Invalid clientState', { status: 401 });
               }
             }

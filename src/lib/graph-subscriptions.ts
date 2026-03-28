@@ -21,9 +21,14 @@ async function fetchGraph(endpoint: string, options: RequestInit = {}): Promise<
   const headers = new Headers(options.headers);
   headers.set('Content-Type', 'application/json');
 
+  const headersObj: Record<string, string> = {};
+  headers.forEach((value, key) => {
+    headersObj[key] = value;
+  });
+
   return fetchGraphRaw(auth.token, endpoint, {
     ...options,
-    headers
+    headers: headersObj
   });
 }
 
