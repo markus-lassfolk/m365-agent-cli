@@ -2172,23 +2172,7 @@ export async function setAutoReplyRule(
       }
     }
 
-    // 2. Delete the old template draft if it exists
-    if (oldTemplateId) {
-      try {
-        const deleteTemplateEnvelope = soapEnvelope(`
-          <m:DeleteItem DeleteType="HardDelete">
-            <m:ItemIds>
-              <t:ItemId Id="${xmlEscape(oldTemplateId)}" />
-            </m:ItemIds>
-          </m:DeleteItem>
-        `);
-        await callEws(token, deleteTemplateEnvelope, address);
-      } catch (err) {
-        // Old template might already be deleted, continue
-      }
-    }
-
-    // 3. Create a draft message for the template
+    // 2. Create a draft message for the template
     const draftEnvelope = soapEnvelope(`
       <m:CreateItem MessageDisposition="SaveOnly">
         <m:Items>
@@ -2252,6 +2236,22 @@ export async function setAutoReplyRule(
     `);
 
     await callEws(token, setRulesEnvelope, address);
+
+    // 5. Delete the old template draft if it exists (after successful rule update)
+    if (oldTemplateId) {
+      try {
+        const deleteTemplateEnvelope = soapEnvelope(`
+          <m:DeleteItem DeleteType="HardDelete">
+            <m:ItemIds>
+              <t:ItemId Id="${xmlEscape(oldTemplateId)}" />
+            </m:ItemIds>
+          </m:DeleteItem>
+        `);
+        await callEws(token, deleteTemplateEnvelope, address);
+      } catch (err) {
+        // Old template might already be deleted, continue
+      }
+    }
 
     return ewsResult(undefined);
   } catch (err) {
