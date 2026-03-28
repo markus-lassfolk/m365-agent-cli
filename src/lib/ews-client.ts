@@ -420,8 +420,8 @@ function parseCalendarItem(block: string, mailbox?: string): CalendarEvent {
     Id: id,
     ChangeKey: changeKey,
     Subject: subject,
-    Start: { DateTime: start, TimeZone: getLocalTimezone() },
-    End: { DateTime: end, TimeZone: getLocalTimezone() },
+    Start: { DateTime: start, TimeZone: 'UTC' },
+    End: { DateTime: end, TimeZone: 'UTC' },
     Location: location ? { DisplayName: location } : undefined,
     Organizer: { EmailAddress: { Name: organizerName, Address: organizerEmail } },
     Attendees: attendees.length > 0 ? attendees : undefined,
@@ -816,8 +816,8 @@ export async function createEvent(options: CreateEventOptions): Promise<OwaRespo
     return ewsResult({
       Id: id,
       Subject: subject,
-      Start: { DateTime: start, TimeZone: getLocalTimezone() },
-      End: { DateTime: end, TimeZone: getLocalTimezone() },
+      Start: { DateTime: start, TimeZone: 'UTC' },
+      End: { DateTime: end, TimeZone: 'UTC' },
       WebLink: undefined,
       OnlineMeetingUrl: undefined
     });
@@ -940,8 +940,8 @@ export async function updateEvent(options: UpdateEventOptions): Promise<OwaRespo
     return ewsResult({
       Id: newId,
       Subject: subject || '',
-      Start: { DateTime: start || '', TimeZone: getLocalTimezone() },
-      End: { DateTime: end || '', TimeZone: getLocalTimezone() }
+      Start: { DateTime: start || '', TimeZone: 'UTC' },
+      End: { DateTime: end || '', TimeZone: 'UTC' }
     });
   } catch (err) {
     return ewsError(err);

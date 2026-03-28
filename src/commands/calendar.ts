@@ -15,6 +15,17 @@ function formatTime(dateStr: string): string {
  * instead of interpreting it as the local date.
  */
 function parseLocalDate(dateStr: string): Date {
+  // Handle date-only strings (YYYY-MM-DD) as local midnight
+  const dateOnlyMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (dateOnlyMatch) {
+    const [, yearStr, monthStr, dayOfMonthStr] = dateOnlyMatch;
+    return new Date(
+      parseInt(yearStr, 10),
+      parseInt(monthStr, 10) - 1,
+      parseInt(dayOfMonthStr, 10),
+      0, 0, 0, 0
+    );
+  }
   // Handle the "+01:00" suffix format by inserting a 'T' before the time
   const withTime = dateStr.replace(' ', 'T');
   return new Date(withTime);
