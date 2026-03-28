@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
 import { getCalendarEvents, type CalendarEvent, type CalendarAttendee } from '../lib/ews-client.js';
+import { parseDay } from '../lib/dates.js';
 
 function formatTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -10,47 +11,6 @@ function formatTime(dateStr: string): string {
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
   return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-}
-
-function parseDate(day: string, baseDate: Date = new Date(), forwardOnly: boolean = false): Date {
-  const now = new Date(baseDate);
-
-  switch (day.toLowerCase()) {
-    case 'today':
-      return now;
-    case 'yesterday':
-      now.setDate(now.getDate() - 1);
-      return now;
-    case 'tomorrow':
-      now.setDate(now.getDate() + 1);
-      return now;
-    case 'monday':
-    case 'tuesday':
-    case 'wednesday':
-    case 'thursday':
-    case 'friday':
-    case 'saturday':
-    case 'sunday': {
-      const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-      const targetDay = days.indexOf(day.toLowerCase());
-      const currentDay = now.getDay();
-      let diff = targetDay - currentDay;
-      if (forwardOnly) {
-        // For end dates, go forward to next occurrence if needed
-        if (diff < 0) diff += 7;
-      } else {
-        // For start dates, go back to previous occurrence
-        if (diff > 0) diff -= 7;
-      }
-      now.setDate(now.getDate() + diff);
-      return now;
-    }
-    default: {
-      // Try to parse as date
-      const parsed = new Date(day);
-      return Number.isNaN(parsed.getTime()) ? now : parsed;
-    }
-  }
 }
 
 function getDateRange(startDay: string, endDay?: string): { start: string; end: string; label: string } {
@@ -95,12 +55,12 @@ function getDateRange(startDay: string, endDay?: string): { start: string; end: 
   }
 
   // Single day or start of range
-  const startDate = parseDate(startDay);
+  const startDate = parseDay(startDay, { weekdayDirection: 'previous' });
   startDate.setHours(0, 0, 0, 0);
 
   if (endDay) {
     // Date range - use forwardOnly for end date
-    const endDate = parseDate(endDay, startDate, true);
+    const endDate = parseDay(endDay, { baseDate: startDate, weekdayDirection: 'nearestForward' });
     endDate.setHours(23, 59, 59, 999);
 
     const label = `${formatDate(startDate.toISOString())} - ${formatDate(endDate.toISOString())}`;

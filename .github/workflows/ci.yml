@@ -18,5 +18,6 @@ jobs:
 
       - run: bun install
       - run: bun run typecheck
-      - run: bunx biome lint .
-      - run: bunx biome format .
+      - run: bun run lint
+      - run: bun run format:check
+      - run: bun test

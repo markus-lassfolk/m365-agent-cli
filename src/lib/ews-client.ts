@@ -214,6 +214,7 @@ export interface CreatedEvent {
 export interface UpdateEventOptions {
   token: string;
   eventId: string;
+  changeKey?: string;
   subject?: string;
   start?: string;
   end?: string;
@@ -562,9 +563,10 @@ export async function getOwaUserInfo(token: string): Promise<OwaResponse<OwaUser
     const email = extractTag(mailbox, 'EmailAddress') || EWS_USERNAME;
 
     return ewsResult({ displayName: name, email });
-  } catch (_err) {
-    // Fallback to env
-    return ewsResult({ displayName: EWS_USERNAME, email: EWS_USERNAME });
+  } catch (err) {
+    return ewsError(
+      new Error(`Failed to resolve OWA user info: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    );
   }
 }
 
@@ -768,7 +770,8 @@ export async function createEvent(options: CreateEventOptions): Promise<OwaRespo
 
 export async function updateEvent(options: UpdateEventOptions): Promise<OwaResponse<CreatedEvent>> {
   try {
-    const { token, eventId, subject, start, end, body, location, attendees, isOnlineMeeting, mailbox } = options;
+    const { token, eventId, changeKey, subject, start, end, body, location, attendees, isOnlineMeeting, mailbox } =
+      options;
 
     const updates: string[] = [];
 
@@ -840,11 +843,12 @@ export async function updateEvent(options: UpdateEventOptions): Promise<OwaRespo
 
     const sendUpdates = attendees && attendees.length > 0 ? 'SendToAllAndSaveCopy' : 'SendToNone';
 
-    const envelope = soapEnvelope(`
-    <m:UpdateItem ConflictResolution="AlwaysOverwrite" SendMeetingInvitationsOrCancellations="${sendUpdates}">
+    const buildEnvelope = (conflictResolution: 'AutoResolve' | 'AlwaysOverwrite', includeChangeKey: boolean): string =>
+      soapEnvelope(`
+    <m:UpdateItem ConflictResolution="${conflictResolution}" SendMeetingInvitationsOrCancellations="${sendUpdates}">
       <m:ItemChanges>
         <t:ItemChange>
-          <t:ItemId Id="${xmlEscape(eventId)}" />
+          <t:ItemId Id="${xmlEscape(eventId)}"${includeChangeKey && changeKey ? ` ChangeKey="${xmlEscape(changeKey)}"` : ''} />
           <t:Updates>
             ${updates.join('\n')}
           </t:Updates>
@@ -852,7 +856,26 @@ export async function updateEvent(options: UpdateEventOptions): Promise<OwaRespo
       </m:ItemChanges>
     </m:UpdateItem>`);
 
-    const xml = await callEws(token, envelope, mailbox);
+    let xml: string;
+    try {
+      xml = await callEws(
+        token,
+        buildEnvelope(changeKey ? 'AutoResolve' : 'AlwaysOverwrite', Boolean(changeKey)),
+        mailbox
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '';
+      const isConflict =
+        message.includes('ErrorIrresolvableConflict') ||
+        message.includes('ErrorConflictResolutionRequired') ||
+        message.includes('ErrorChangeKeyRequiredForWriteOperations');
+
+      if (!changeKey || !isConflict) {
+        throw err;
+      }
+
+      xml = await callEws(token, buildEnvelope('AlwaysOverwrite', false), mailbox);
+    }
     const block = extractBlocks(xml, 'CalendarItem')[0] || '';
     const newId = extractAttribute(block, 'ItemId', 'Id') || eventId;
 

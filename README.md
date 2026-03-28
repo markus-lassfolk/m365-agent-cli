@@ -6,7 +6,7 @@ A command-line interface for Microsoft 365 using Exchange Web Services (EWS) and
 
 ```bash
 # Clone the repository
-git clone https://github.com/foeken/clippy.git
+git clone https://github.com/markus-lassfolk/clippy.git
 cd clippy
 
 # Install dependencies
@@ -22,7 +22,7 @@ clippy <command>
 
 ## Authentication
 
-Clippy uses OAuth2 with a refresh token to authenticate against EWS. You need an Azure AD app registration with EWS permissions.
+Clippy uses OAuth2 with a refresh token to authenticate against Microsoft 365. You need an Azure AD app registration.
 
 ### Setup
 
@@ -31,7 +31,20 @@ Create a `.env` file in the project root (or set environment variables):
 ```bash
 EWS_CLIENT_ID=your-azure-app-client-id
 EWS_REFRESH_TOKEN=your-refresh-token
+EWS_USERNAME=your@email.com
+EWS_ENDPOINT=https://outlook.office365.com/EWS/Exchange.asmx
+EWS_TENANT_ID=common  # or your tenant ID
 ```
+
+### Shared Mailbox Access
+
+To send from or access a shared mailbox, set the default in your env:
+
+```bash
+EWS_TARGET_MAILBOX=shared@company.com
+```
+
+Or pass `--mailbox` per-command (see examples below).
 
 ### How It Works
 
@@ -44,6 +57,17 @@ EWS_REFRESH_TOKEN=your-refresh-token
 ```bash
 # Check who you're logged in as
 clippy whoami
+```
+
+---
+
+## Global Options
+
+All commands support these global options:
+
+```bash
+--json              # Output as JSON (for scripting)
+--token <token>     # Use a specific access token (overrides cached token)
 ```
 
 ---
@@ -73,6 +97,10 @@ clippy calendar nextweek
 # Include details (attendees, body preview, categories)
 clippy calendar -v
 clippy calendar week --verbose
+
+# Shared mailbox calendar
+clippy calendar --mailbox shared@company.com
+clippy calendar nextweek --mailbox shared@company.com
 ```
 
 ### Create Events
@@ -94,6 +122,9 @@ clippy create-event "Workshop" 10:00 12:00 --find-room
 
 # List available rooms
 clippy create-event "x" 10:00 11:00 --list-rooms
+
+# Create in shared mailbox calendar
+clippy create-event "Team Standup" 09:00 09:30 --mailbox shared@company.com
 ```
 
 ### Recurring Events
@@ -132,10 +163,13 @@ clippy update-event --id <eventId> --add-attendee "new@company.com"
 clippy update-event --id <eventId> --room "Room B"
 clippy update-event --id <eventId> --location "Off-site"
 clippy update-event --id <eventId> --teams        # Add Teams meeting
-clippy update-event --id <eventId> --no-teams     # Remove Teams meeting
+clippy update-event --id <eventId> --no-teams      # Remove Teams meeting
 
 # Show events from a specific day
 clippy update-event --day tomorrow
+
+# Update event in shared mailbox calendar
+clippy update-event --id <eventId> --title "Updated Title" --mailbox shared@company.com
 ```
 
 ### Delete/Cancel Events
@@ -150,11 +184,14 @@ clippy delete-event --id <eventId>
 # With cancellation message
 clippy delete-event --id <eventId> --message "Sorry, need to reschedule"
 
-# Force delete without notification
+# Force delete without sending cancellation
 clippy delete-event --id <eventId> --force-delete
 
 # Search for events by title
 clippy delete-event --search "standup"
+
+# Delete event in shared mailbox calendar
+clippy delete-event --id <eventId> --mailbox shared@company.com
 ```
 
 ### Respond to Invitations
@@ -171,8 +208,11 @@ clippy respond tentative --id <eventId>
 # Don't send response to organizer
 clippy respond accept --id <eventId> --no-notify
 
-# Only show required invitations
+# Only show required invitations (exclude optional)
 clippy respond list --only-required
+
+# Respond to invitation in shared mailbox calendar
+clippy respond accept --id <eventId> --mailbox shared@company.com
 ```
 
 ### Find Meeting Times
@@ -181,13 +221,14 @@ clippy respond list --only-required
 # Find free slots next week for yourself and others
 clippy findtime nextweek alice@company.com bob@company.com
 
-# Specific date range
+# Specific date range (keywords or YYYY-MM-DD)
 clippy findtime monday friday alice@company.com
+clippy findtime 2026-04-01 2026-04-03 alice@company.com
 
 # Custom duration and working hours
 clippy findtime nextweek alice@company.com --duration 60 --start 10 --end 16
 
-# Only check specified people (exclude yourself)
+# Only check specified people (exclude yourself from availability check)
 clippy findtime nextweek alice@company.com --solo
 ```
 
@@ -222,12 +263,20 @@ clippy mail -r 1            # Read email #1
 # Download attachments
 clippy mail -d 3            # Download from email #3
 clippy mail -d 3 -o ~/Downloads
+
+# Shared mailbox inbox
+clippy mail --mailbox shared@company.com
 ```
 
 ### Send Email
 
 ```bash
-# Simple email
+# Simple email (--body is optional)
+clippy send \
+  --to "recipient@example.com" \
+  --subject "Hello"
+
+# With body
 clippy send \
   --to "recipient@example.com" \
   --subject "Hello" \
@@ -254,83 +303,14 @@ clippy send \
   --subject "Report" \
   --body "Please find attached." \
   --attach "report.pdf,data.xlsx"
+
+# Send from shared mailbox
+clippy send \
+  --to "recipient@example.com" \
+  --subject "From shared mailbox" \
+  --body "..." \
+  --mailbox shared@company.com
 ```
-
----
-
-## OneDrive / Office Online Commands
-
-### List, Search, and Inspect Files
-
-```bash
-# List root files
-clippy files list
-
-# List a folder by item ID
-clippy files list --folder <folderId>
-
-# Search OneDrive
-clippy files search "budget 2026"
-
-# Inspect metadata
-clippy files meta <fileId>
-```
-
-### Upload, Download, Delete, and Share
-
-```bash
-# Upload a normal file (<=250MB)
-clippy files upload ./report.docx
-
-# Create a large upload session (>250MB, <=4GB)
-clippy files upload-large ./large-video.mp4
-
-# Download a file
-clippy files download <fileId>
-clippy files download <fileId> --out ./local-copy.docx
-
-# Delete a file
-clippy files delete <fileId>
-
-# Create a normal share link
-clippy files share <fileId> --type view --scope org
-clippy files share <fileId> --type edit --scope anonymous
-```
-
-### Collaborative Editing via Office Online
-
-Microsoft Graph cannot join or control a live Office Online editing session. What Clippy can do is prepare the handoff properly:
-
-1. Find the document in OneDrive
-2. Create an organization-scoped edit link
-3. Return the Office Online URL (`webUrl`) for the user to open
-4. Optionally checkout the file first for exclusive editing workflows
-
-```bash
-# Search for the document first
-clippy files search "budget 2026.xlsx"
-
-# Create a collaboration handoff for Word/Excel/PowerPoint Online
-clippy files share <fileId> --collab
-
-# Same, but checkout the file first
-clippy files share <fileId> --collab --lock
-
-# When the exclusive-edit workflow is done, check the file back in
-clippy files checkin <fileId> --comment "Updated Q1 numbers"
-```
-
-**Supported collaboration file types:**
-- `.docx`
-- `.xlsx`
-- `.pptx`
-
-Legacy Office formats such as `.doc`, `.xls`, and `.ppt` must be converted first.
-
-**Important clarification:**
-- Clippy does **not** participate in the real-time editing session
-- Office Online handles the actual co-authoring once the user opens the returned URL
-- Clippy handles the file lifecycle around that workflow
 
 ### Reply & Forward
 
@@ -347,9 +327,14 @@ clippy mail --reply 1 --message "**Got it!** Will do." --markdown
 # Save reply as draft instead of sending
 clippy mail --reply 1 --message "Draft reply" --draft
 
-# Forward an email
+# Forward an email (uses --to-addr, not --to)
 clippy mail --forward 1 --to-addr "colleague@example.com"
 clippy mail --forward 1 --to-addr "a@example.com,b@example.com" --message "FYI"
+
+# Reply/forward from shared mailbox
+clippy mail --reply 1 --message "..." --mailbox shared@company.com
+clippy mail --reply-all 1 --message "..." --mailbox shared@company.com
+clippy mail --forward 1 --to-addr "colleague@example.com" --mailbox shared@company.com
 ```
 
 ### Email Actions
@@ -364,7 +349,7 @@ clippy mail --flag 1
 clippy mail --unflag 2
 clippy mail --complete 3    # Mark flag as complete
 
-# Move to folder
+# Move to folder (--to here is for folder destination, not email recipient)
 clippy mail --move 1 --to archive
 clippy mail --move 2 --to deleted
 clippy mail --move 3 --to "My Custom Folder"
@@ -421,6 +406,82 @@ clippy folders --delete "Old Folder"
 
 ---
 
+## OneDrive / Office Online Commands
+
+### List, Search, and Inspect Files
+
+```bash
+# List root files
+clippy files list
+
+# List a folder by item ID
+clippy files list --folder <folderId>
+
+# Search OneDrive
+clippy files search "budget 2026"
+
+# Inspect metadata
+clippy files meta <fileId>
+```
+
+### Upload, Download, Delete, and Share
+
+```bash
+# Upload a normal file (<=250MB)
+clippy files upload ./report.docx
+
+# Upload to a specific folder
+clippy files upload ./report.docx --folder <folderId>
+
+# Create a large upload session (>250MB, <=4GB)
+clippy files upload-large ./large-video.mp4
+
+# Download a file
+clippy files download <fileId>
+clippy files download <fileId> --out ./local-copy.docx
+
+# Delete a file
+clippy files delete <fileId>
+
+# Create a share link
+clippy files share <fileId> --type view --scope org
+clippy files share <fileId> --type edit --scope anonymous
+```
+
+### Collaborative Editing via Office Online
+
+Microsoft Graph cannot join or control a live Office Online editing session. What Clippy can do is prepare the handoff properly:
+
+1. Find the document in OneDrive
+2. Create an organization-scoped edit link (or anonymous)
+3. Return the Office Online URL (`webUrl`) for the user to open
+4. Optionally checkout the file first for exclusive editing workflows
+
+```bash
+# Search for the document first
+clippy files search "budget 2026.xlsx"
+
+# Create a collaboration handoff for Word/Excel/PowerPoint Online
+clippy files share <fileId> --collab
+
+# Same, but checkout the file first (exclusive edit lock)
+clippy files share <fileId> --collab --lock
+
+# When the exclusive-edit workflow is done, check the file back in
+clippy files checkin <fileId> --comment "Updated Q1 numbers"
+```
+
+**Supported collaboration file types:** `.docx`, `.xlsx`, `.pptx`
+
+Legacy Office formats such as `.doc`, `.xls`, and `.ppt` must be converted first.
+
+**Important clarification:**
+- Clippy does **not** participate in the real-time editing session
+- Office Online handles the actual co-authoring once the user opens the returned URL
+- Clippy handles the file lifecycle around that workflow
+
+---
+
 ## People & Room Search
 
 ```bash
@@ -432,17 +493,6 @@ clippy find "conference" --rooms
 
 # Only people (exclude rooms)
 clippy find "smith" --people
-```
-
----
-
-## Global Options
-
-All commands support:
-
-```bash
---json              # Output as JSON (for scripting)
---token <token>     # Use a specific access token
 ```
 
 ---
@@ -484,6 +534,37 @@ clippy send \
   --body "Please find this week's report attached." \
   --attach "weekly-report.pdf"
 ```
+
+### Shared Mailbox Operations
+
+```bash
+# Check shared mailbox calendar
+clippy calendar --mailbox shared@company.com
+
+# Send email from shared mailbox
+clippy send \
+  --to "team@company.com" \
+  --subject "Team Update" \
+  --body "..." \
+  --mailbox shared@company.com
+
+# Read shared mailbox inbox
+clippy mail --mailbox shared@company.com
+
+# Reply from shared mailbox
+clippy mail --reply 1 --message "Done!" --mailbox shared@company.com
+```
+
+---
+
+## Recent Security Hardening
+
+Recent commits have strengthened input validation and API security:
+
+- **Graph search queries** and **markdown links** are now properly escaped/validated
+- **Date and email input validation** has been tightened
+- **Token cache file permissions** are secured (readable only by owner)
+- **String pattern replacement** bug fixed (prevents regex injection via malformed `$pattern`)
 
 ---
 

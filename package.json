@@ -2,6 +2,13 @@
   "name": "clippy",
   "version": "0.1.1",
   "description": "CLI for Microsoft 365/EWS using OAuth2 refresh token authentication",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/markus-lassfolk/clippy.git"
+  },
+  "bugs": {
+    "url": "https://github.com/markus-lassfolk/clippy/issues"
+  },
   "type": "module",
   "main": "src/index.ts",
   "bin": {
@@ -13,7 +20,7 @@
     "lint": "biome lint --max-diagnostics=none --diagnostic-level=error .",
     "lint:fix": "biome lint --write --unsafe --diagnostic-level=error .",
     "format": "biome format --write .",
-    "format:check": "biome format --max-diagnostics=none ."
+    "format:check": "biome format ."
   },
   "dependencies": {
     "commander": "^12.0.0",

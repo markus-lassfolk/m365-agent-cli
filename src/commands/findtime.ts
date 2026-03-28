@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
 import { getScheduleViaOutlook, getOwaUserInfo } from '../lib/ews-client.js';
+import { parseDay } from '../lib/dates.js';
 
 function formatTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -17,35 +18,8 @@ function _formatDateTime(dateStr: string): string {
   return `${formatDate(dateStr)} ${formatTime(dateStr)}`;
 }
 
-function parseDay(day: string, baseDate: Date = new Date()): Date {
-  const now = new Date(baseDate);
-
-  switch (day.toLowerCase()) {
-    case 'today':
-      return now;
-    case 'tomorrow':
-      now.setDate(now.getDate() + 1);
-      return now;
-    case 'monday':
-    case 'tuesday':
-    case 'wednesday':
-    case 'thursday':
-    case 'friday':
-    case 'saturday':
-    case 'sunday': {
-      const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-      const targetDay = days.indexOf(day.toLowerCase());
-      const currentDay = now.getDay();
-      let diff = targetDay - currentDay;
-      if (diff <= 0) diff += 7;
-      now.setDate(now.getDate() + diff);
-      return now;
-    }
-    default: {
-      const parsed = new Date(day);
-      return Number.isNaN(parsed.getTime()) ? now : parsed;
-    }
-  }
+function isValidEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
 function getDateRange(startDay: string, endDay?: string): { start: Date; end: Date; label: string } {
@@ -76,11 +50,11 @@ function getDateRange(startDay: string, endDay?: string): { start: Date; end: Da
     }
   }
 
-  const startDate = parseDay(startDay);
+  const startDate = parseDay(startDay, { throwOnInvalid: true });
   startDate.setHours(0, 0, 0, 0);
 
   if (endDay) {
-    const endDate = parseDay(endDay, startDate);
+    const endDate = parseDay(endDay, { baseDate: startDate, weekdayDirection: 'next', throwOnInvalid: true });
     endDate.setHours(23, 59, 59, 999);
     return {
       start: startDate,
@@ -156,23 +130,34 @@ export const findtimeCommand = new Command('findtime')
       const emails: string[] = [];
 
       for (const arg of endOrEmails) {
-        if (arg.includes('@')) {
-          emails.push(arg);
-        } else if (isDateArg(arg) && !endDay) {
+        if (isDateArg(arg) && !endDay) {
           endDay = arg;
-        } else {
-          emails.push(arg);
+          continue;
         }
+
+        if (!isValidEmail(arg)) {
+          console.error(`Error: Invalid attendee email: ${arg}`);
+          console.error('All attendee arguments must be valid email addresses.');
+          process.exit(1);
+        }
+
+        emails.push(arg);
       }
 
       // Get current user's email to include in search (unless --solo)
       if (!options.solo) {
         const userInfo = await getOwaUserInfo(authResult.token!);
-        if (userInfo.ok && userInfo.data?.email) {
-          // Add current user if not already in the list
-          if (!emails.includes(userInfo.data.email)) {
-            emails.unshift(userInfo.data.email);
+        if (!userInfo.ok || !userInfo.data?.email) {
+          if (options.json) {
+            console.log(JSON.stringify({ error: 'Failed to determine user email' }, null, 2));
+          } else {
+            console.error('Error: Failed to determine user email');
           }
+          process.exit(1);
+        }
+        // Add current user if not already in the list
+        if (!emails.includes(userInfo.data.email)) {
+          emails.unshift(userInfo.data.email);
         }
       }
 
@@ -182,7 +167,21 @@ export const findtimeCommand = new Command('findtime')
         process.exit(1);
       }
 
-      const { start, end, label } = getDateRange(startDay, endDay);
+      let start: Date;
+      let end: Date;
+      let label: string;
+
+      try {
+        ({ start, end, label } = getDateRange(startDay, endDay));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Invalid date value';
+        if (options.json) {
+          console.log(JSON.stringify({ error: message }, null, 2));
+        } else {
+          console.error(`Error: ${message}`);
+        }
+        process.exit(1);
+      }
       const duration = parseInt(options.duration, 10);
 
       const result = await getScheduleViaOutlook(

@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
 import { getCalendarEvents, deleteEvent, cancelEvent } from '../lib/ews-client.js';
+import { parseDay } from '../lib/dates.js';
 
 function formatTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -10,24 +11,6 @@ function formatTime(dateStr: string): string {
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
   return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-}
-
-function parseDay(day: string): Date {
-  const now = new Date();
-
-  switch (day.toLowerCase()) {
-    case 'today':
-      return now;
-    case 'tomorrow':
-      now.setDate(now.getDate() + 1);
-      return now;
-    case 'yesterday':
-      now.setDate(now.getDate() - 1);
-      return now;
-    default:
-      const parsed = new Date(day);
-      return isNaN(parsed.getTime()) ? now : parsed;
-  }
 }
 
 export const deleteEventCommand = new Command('delete-event')

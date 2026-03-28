@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
 import { getCalendarEvents, updateEvent, searchRooms, getRooms } from '../lib/ews-client.js';
+import { parseDay, parseTimeToDate, toLocalISOString } from '../lib/dates.js';
 
 function formatTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -10,57 +11,6 @@ function formatTime(dateStr: string): string {
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
   return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-}
-
-function parseDay(day: string): Date {
-  const now = new Date();
-
-  switch (day.toLowerCase()) {
-    case 'today':
-      return now;
-    case 'tomorrow':
-      now.setDate(now.getDate() + 1);
-      return now;
-    case 'yesterday':
-      now.setDate(now.getDate() - 1);
-      return now;
-    default: {
-      const parsed = new Date(day);
-      return Number.isNaN(parsed.getTime()) ? now : parsed;
-    }
-  }
-}
-
-function parseTimeToDate(timeStr: string, baseDate: Date): Date {
-  const result = new Date(baseDate);
-
-  const timeMatch = timeStr.match(/^(\d{1,2}):(\d{2})$/);
-  if (timeMatch) {
-    result.setHours(parseInt(timeMatch[1], 10), parseInt(timeMatch[2], 10), 0, 0);
-    return result;
-  }
-
-  const hourMatch = timeStr.match(/^(\d{1,2})(am|pm)?$/i);
-  if (hourMatch) {
-    let hour = parseInt(hourMatch[1], 10);
-    const isPM = hourMatch[2]?.toLowerCase() === 'pm';
-    if (isPM && hour < 12) hour += 12;
-    if (!isPM && hour === 12) hour = 0;
-    result.setHours(hour, 0, 0, 0);
-    return result;
-  }
-
-  return result;
-}
-
-function toLocalISOString(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  const seconds = String(date.getSeconds()).padStart(2, '0');
-  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
 }
 
 export const updateEventCommand = new Command('update-event')
@@ -119,7 +69,18 @@ export const updateEventCommand = new Command('update-event')
       }
 
       // Get events for the day
-      const baseDate = parseDay(options.day);
+      let baseDate: Date;
+      try {
+        baseDate = parseDay(options.day, { throwOnInvalid: true });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Invalid day value';
+        if (options.json) {
+          console.log(JSON.stringify({ error: message }, null, 2));
+        } else {
+          console.error(`Error: ${message}`);
+        }
+        process.exit(1);
+      }
       const startOfDay = new Date(baseDate);
       startOfDay.setHours(0, 0, 0, 0);
       const endOfDay = new Date(baseDate);
@@ -207,12 +168,6 @@ export const updateEventCommand = new Command('update-event')
       }
 
       // Get the target event by ID
-      if (!options.id) {
-        console.error('Please specify the event id with --id.');
-        console.error('Run `clippy update-event` to list events and IDs.');
-        process.exit(1);
-      }
-
       const targetEvent = events.find((e) => e.Id === options.id);
       if (!targetEvent) {
         console.error(`Invalid event id: ${options.id}`);
@@ -254,6 +209,7 @@ export const updateEventCommand = new Command('update-event')
       const updateOptions: Parameters<typeof updateEvent>[0] = {
         token: authResult.token!,
         eventId: targetEvent.Id,
+        changeKey: targetEvent.ChangeKey,
         mailbox: options.mailbox
       };
 
