@@ -85,8 +85,8 @@ export const scheduleCommand = new Command('schedule')
         console.log('  Busy times:');
         for (const item of schedule.scheduleItems) {
           const status = item.status || 'Busy';
-          const start = item.start?.dateTime ? new Date(item.start.dateTime).toLocaleString() : 'Unknown';
-          const end = item.end?.dateTime ? new Date(item.end.dateTime).toLocaleString() : 'Unknown';
+          const start = item.start?.dateTime ? new Date(item.start.dateTime + 'Z').toLocaleString() : 'Unknown';
+          const end = item.end?.dateTime ? new Date(item.end.dateTime + 'Z').toLocaleString() : 'Unknown';
           const subject = item.subject ? ` - ${item.subject}` : '';
           console.log(`    [${status}] ${start} to ${end}${subject}`);
         }

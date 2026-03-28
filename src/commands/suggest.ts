@@ -115,10 +115,10 @@ export const suggestCommand = new Command('suggest')
 
     for (const suggestion of meetingTimeSuggestions) {
       const start = suggestion.meetingTimeSlot?.start?.dateTime
-        ? new Date(suggestion.meetingTimeSlot.start.dateTime).toLocaleString()
+        ? new Date(suggestion.meetingTimeSlot.start.dateTime + 'Z').toLocaleString()
         : 'Unknown';
       const end = suggestion.meetingTimeSlot?.end?.dateTime
-        ? new Date(suggestion.meetingTimeSlot.end.dateTime).toLocaleString()
+        ? new Date(suggestion.meetingTimeSlot.end.dateTime + 'Z').toLocaleString()
         : 'Unknown';
 
       const confidence = suggestion.confidence !== undefined ? `${suggestion.confidence}%` : 'Unknown';
