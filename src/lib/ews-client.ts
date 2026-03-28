@@ -69,7 +69,48 @@ export function extractSelfClosingOrBlock(xml: string, tagName: string): string 
 
 // ─── SOAP Core ───
 
-export const EWS_ENDPOINT = process.env.EWS_ENDPOINT || 'https://outlook.office365.com/EWS/Exchange.asmx';
+/**
+ * Validates a URL is safe for use as an API endpoint.
+ * Blocks SSRF vectors: non-HTTPS protocols, localhost, link-local, and internal IPs.
+ */
+function validateUrl(urlString: string, name: string): string {
+  let url: URL;
+  try {
+    url = new URL(urlString);
+  } catch {
+    throw new Error(`Invalid URL for ${name}: "${urlString}"`);
+  }
+
+  if (url.protocol !== 'https:') {
+    throw new Error(`${name} must use HTTPS, got: "${urlString}"`);
+  }
+
+  const hostname = url.hostname.toLowerCase();
+
+  // Block localhost variants
+  if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname === '[::1]') {
+    throw new Error(`${name} must not point to localhost: "${urlString}"`);
+  }
+
+  // Block bare IPv4 addresses — reject all IP literals to prevent internal network access
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { isIP } = require('node:net');
+  if (isIP(hostname)) {
+    throw new Error(`${name} must not be an IP address (use hostname): "${urlString}"`);
+  }
+
+  // Block cloud metadata endpoints (common SSRF target)
+  if (hostname === 'metadata.google.internal' || hostname.startsWith('169.254.')) {
+    throw new Error(`${name} must not point to link-local/metadata endpoint: "${urlString}"`);
+  }
+
+  return urlString;
+}
+
+export const EWS_ENDPOINT = validateUrl(
+  process.env.EWS_ENDPOINT || 'https://outlook.office365.com/EWS/Exchange.asmx',
+  'EWS_ENDPOINT'
+);
 export const EWS_USERNAME = process.env.EWS_USERNAME || '';
 
 export function soapEnvelope(body: string): string {
