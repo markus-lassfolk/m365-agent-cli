@@ -112,9 +112,9 @@ export type {
 } from './lib/graph-directory.js';
 
 export { getSchedule, findMeetingTimes } from './lib/graph-schedule.js';
-export type { 
-  GetScheduleRequest, 
-  GetScheduleResponse, 
+export type {
+  GetScheduleRequest,
+  GetScheduleResponse,
   ScheduleInformation,
   FindMeetingTimesRequest,
   FindMeetingTimesResponse,

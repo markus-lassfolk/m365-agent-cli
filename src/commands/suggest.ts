@@ -98,15 +98,13 @@ export const suggestCommand = new Command('suggest')
       return;
     }
 
-    const { emptyReasons, meetingTimeSuggestions } = result.data;
+    const { emptySuggestionsReason, meetingTimeSuggestions } = result.data;
 
     console.log('\nAI Meeting Time Suggestions:\n');
 
-    if (emptyReasons && emptyReasons.length > 0) {
-      console.log('No suitable meeting times found for the following reasons:');
-      for (const reason of emptyReasons) {
-        console.log(`  - ${reason}`);
-      }
+    if (emptySuggestionsReason) {
+      console.log('No suitable meeting times found for the following reason:');
+      console.log(`  - ${emptySuggestionsReason}`);
       return;
     }
 

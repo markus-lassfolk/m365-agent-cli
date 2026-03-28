@@ -127,7 +127,7 @@ export interface MeetingTimeSuggestion {
 }
 
 export interface FindMeetingTimesResponse {
-  emptyReasons?: string[];
+  emptySuggestionsReason?: string;
   meetingTimeSuggestions?: MeetingTimeSuggestion[];
 }
 
