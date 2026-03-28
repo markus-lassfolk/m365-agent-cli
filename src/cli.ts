@@ -23,6 +23,7 @@ import { subscriptionsCommand } from './commands/subscriptions.js';
 import { serveCommand } from './commands/serve.js';
 import { roomsCommand } from './commands/rooms.js';
 import { oofCommand } from './commands/oof.js';
+import { rulesCommand } from './commands/rules.js';
 import { delegatesCommand } from './commands/delegates.js';
 import { todoCommand } from './commands/todo.js';
 
@@ -53,6 +54,7 @@ program.addCommand(subscriptionsCommand);
 program.addCommand(serveCommand);
 program.addCommand(roomsCommand);
 program.addCommand(oofCommand);
+program.addCommand(rulesCommand);
 program.addCommand(delegatesCommand);
 program.addCommand(todoCommand);
 
