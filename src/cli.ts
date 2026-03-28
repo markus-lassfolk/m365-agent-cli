@@ -15,6 +15,8 @@ import { draftsCommand } from './commands/drafts.js';
 import { filesCommand } from './commands/files.js';
 import { forwardEventCommand } from './commands/forward-event.js';
 import { counterCommand } from './commands/counter.js';
+import { scheduleCommand } from './commands/schedule.js';
+import { suggestCommand } from './commands/suggest.js';
 
 const program = new Command();
 
@@ -35,5 +37,7 @@ program.addCommand(draftsCommand);
 program.addCommand(filesCommand);
 program.addCommand(forwardEventCommand);
 program.addCommand(counterCommand);
+program.addCommand(scheduleCommand);
+program.addCommand(suggestCommand);
 
 program.parse();

@@ -110,3 +110,15 @@ export type {
   User,
   Group
 } from './lib/graph-directory.js';
+
+export { getSchedule, findMeetingTimes } from './lib/graph-schedule.js';
+export type {
+  GetScheduleRequest,
+  GetScheduleResponse,
+  ScheduleInformation,
+  FindMeetingTimesRequest,
+  FindMeetingTimesResponse,
+  MeetingTimeSuggestion,
+  TimeConstraint,
+  AttendeeBase
+} from './lib/graph-schedule.js';

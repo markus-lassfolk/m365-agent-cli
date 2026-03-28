@@ -98,11 +98,11 @@ async function streamWebToFile(body: ReadableStream<Uint8Array>, filePath: strin
   }
 }
 
-function graphResult<T>(data: T): GraphResponse<T> {
+export function graphResult<T>(data: T): GraphResponse<T> {
   return { ok: true, data };
 }
 
-function graphError(message: string, code?: string, status?: number): GraphResponse<never> {
+export function graphError(message: string, code?: string, status?: number): GraphResponse<never> {
   return { ok: false, error: { message, code, status } };
 }
 

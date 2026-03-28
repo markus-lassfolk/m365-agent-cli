@@ -124,6 +124,8 @@ import { foldersCommand } from '../commands/folders.js';
 import { sendCommand } from '../commands/send.js';
 import { draftsCommand } from '../commands/drafts.js';
 import { filesCommand } from '../commands/files.js';
+import { scheduleCommand } from '../commands/schedule.js';
+import { suggestCommand } from '../commands/suggest.js';
 
 // Helper to call a command action with options
 type CommandAction = (opts: any) => Promise<void>;
@@ -163,6 +165,8 @@ function makeProgram(): Command {
   p.addCommand(sendCommand);
   p.addCommand(draftsCommand);
   p.addCommand(filesCommand);
+  p.addCommand(scheduleCommand);
+  p.addCommand(suggestCommand);
   return p;
 }
 
