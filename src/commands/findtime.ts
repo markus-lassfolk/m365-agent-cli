@@ -54,7 +54,7 @@ function getDateRange(startDay: string, endDay?: string): { start: Date; end: Da
   startDate.setHours(0, 0, 0, 0);
 
   if (endDay) {
-    const endDate = parseDay(endDay, { baseDate: startDate, weekdayDirection: 'nearestForward', throwOnInvalid: true });
+    const endDate = parseDay(endDay, { baseDate: startDate, weekdayDirection: 'next', throwOnInvalid: true });
     endDate.setHours(23, 59, 59, 999);
     return {
       start: startDate,
