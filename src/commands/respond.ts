@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
-import { getCalendarEvents, respondToEvent, getOwaUserInfo, type ResponseType } from '../lib/ews-client.js';
+import { getCalendarEvents, respondToEvent, getOwaUserInfo, getCalendarEvent, type ResponseType } from '../lib/ews-client.js';
 
 function formatTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -204,6 +204,18 @@ export const respondCommand = new Command('respond')
       if (!options.id) {
         console.error('Please specify the event id with --id.');
         console.error('Run `clippy respond list` to see pending invitations and IDs.');
+        process.exit(1);
+      }
+
+      // Look up the event directly to check IsOrganizer (pendingEvents filters out organizer events)
+      const eventResult = await getCalendarEvent(authResult.token!, options.id);
+      if (!eventResult.ok || !eventResult.data) {
+        console.error(`Invalid event id: ${options.id}`);
+        process.exit(1);
+      }
+
+      if (eventResult.data.IsOrganizer) {
+        console.error('You are the organizer of this meeting. Use \'clippy update-event\' instead to modify the meeting.');
         process.exit(1);
       }
 
