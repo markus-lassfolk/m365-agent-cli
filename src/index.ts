@@ -36,7 +36,9 @@ export {
   getRooms,
   searchRooms,
   getScheduleViaOutlook,
-  getFreeBusy
+  getFreeBusy,
+  setAutoReplyRule,
+  getAutoReplyRule
 } from './lib/ews-client.js';
 
 export type {
@@ -64,7 +66,8 @@ export type {
   RecurrencePattern,
   RecurrenceRange,
   ResponseType,
-  RespondToEventOptions
+  RespondToEventOptions,
+  AutoReplyRule
 } from './lib/ews-client.js';
 
 export { resolveGraphAuth } from './lib/graph-auth.js';

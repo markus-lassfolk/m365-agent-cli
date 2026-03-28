@@ -2046,3 +2046,197 @@ export async function isRoomFree(
     return false;
   }
 }
+
+export interface AutoReplyRule {
+  messageText: string;
+  enabled: boolean;
+  startTime?: Date;
+  endTime?: Date;
+}
+
+export async function getAutoReplyRule(
+  token: string,
+  mailbox?: string
+): Promise<OwaResponse<AutoReplyRule | null>> {
+  try {
+    const address = mailbox || EWS_USERNAME;
+    const envelope = soapEnvelope(`
+      <m:GetInboxRules>
+        <m:MailboxSmtpAddress>${xmlEscape(address)}</m:MailboxSmtpAddress>
+      </m:GetInboxRules>
+    `);
+
+    const xml = await callEws(token, envelope, address);
+
+    // Parse the rules
+    // Find the rule with DisplayName = "AutoReplyTemplate"
+    const rulesRegex = /<t:Rule>(.*?)<\/t:Rule>/gs;
+    let match;
+    let ruleXml = null;
+    while ((match = rulesRegex.exec(xml)) !== null) {
+      if (match[1].includes('<t:DisplayName>AutoReplyTemplate</t:DisplayName>')) {
+        ruleXml = match[1];
+        break;
+      }
+    }
+
+    if (!ruleXml) {
+      return ewsResult(null);
+    }
+
+    const enabledStr = extractTag(ruleXml, 'IsEnabled');
+    const enabled = enabledStr === 'true';
+
+    // Dates
+    const startStr = extractTag(ruleXml, 'StartDateTime');
+    const endStr = extractTag(ruleXml, 'EndDateTime');
+
+    // To get the message text, we need the template item ID
+    const templateId = extractAttribute(ruleXml, 'ItemId', 'Id');
+    let messageText = '';
+
+    if (templateId) {
+      // Fetch the template draft to read the body
+      const getTemplateEnvelope = soapEnvelope(`
+        <m:GetItem>
+          <m:ItemShape>
+            <t:BaseShape>Default</t:BaseShape>
+            <t:AdditionalProperties>
+              <t:FieldURI FieldURI="item:Body" />
+            </t:AdditionalProperties>
+          </m:ItemShape>
+          <m:ItemIds>
+            <t:ItemId Id="${xmlEscape(templateId)}" />
+          </m:ItemIds>
+        </m:GetItem>
+      `);
+      
+      try {
+        const itemXml = await callEws(token, getTemplateEnvelope, address);
+        const bodyMatch = itemXml.match(/<t:Body[^>]*>(.*?)<\/t:Body>/s);
+        if (bodyMatch) {
+          messageText = bodyMatch[1].replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&apos;/g, "'");
+          // remove HTML tags if it's HTML, or just return as is?
+          // Since it's a template, maybe it's HTML. We can do a basic strip
+          // or just return the raw text if it's plain text.
+        }
+      } catch (err) {
+        // template missing or error
+      }
+    }
+
+    return ewsResult({
+      messageText,
+      enabled,
+      startTime: startStr ? new Date(startStr) : undefined,
+      endTime: endStr ? new Date(endStr) : undefined
+    });
+
+  } catch (err) {
+    return ewsError(err);
+  }
+}
+
+export async function setAutoReplyRule(
+  token: string,
+  messageText: string,
+  enabled: boolean,
+  startTime?: Date,
+  endTime?: Date,
+  mailbox?: string
+): Promise<OwaResponse<void>> {
+  try {
+    const address = mailbox || EWS_USERNAME;
+
+    // 1. Create a draft message for the template
+    const draftEnvelope = soapEnvelope(`
+      <m:CreateItem MessageDisposition="SaveOnly">
+        <m:Items>
+          <t:Message>
+            <t:Subject>AutoReplyTemplate</t:Subject>
+            <t:Body BodyType="HTML">${xmlEscape(messageText)}</t:Body>
+          </t:Message>
+        </m:Items>
+      </m:CreateItem>
+    `);
+    
+    const draftXml = await callEws(token, draftEnvelope, address);
+    const templateId = extractAttribute(draftXml, 'ItemId', 'Id');
+    const templateChangeKey = extractAttribute(draftXml, 'ItemId', 'ChangeKey');
+
+    if (!templateId) {
+      throw new Error('Failed to create template message');
+    }
+
+    // 2. See if the rule exists to delete it
+    const getRulesEnvelope = soapEnvelope(`
+      <m:GetInboxRules>
+        <m:MailboxSmtpAddress>${xmlEscape(address)}</m:MailboxSmtpAddress>
+      </m:GetInboxRules>
+    `);
+    const rulesXml = await callEws(token, getRulesEnvelope, address);
+    
+    let ruleIdStr = '';
+    const rulesRegex = /<t:Rule>(.*?)<\/t:Rule>/gs;
+    let match;
+    while ((match = rulesRegex.exec(rulesXml)) !== null) {
+      if (match[1].includes('<t:DisplayName>AutoReplyTemplate</t:DisplayName>')) {
+        const idMatch = match[1].match(/<t:RuleId>(.*?)<\/t:RuleId>/);
+        if (idMatch) {
+          ruleIdStr = idMatch[1];
+        }
+        break;
+      }
+    }
+
+    let deleteOp = '';
+    if (ruleIdStr) {
+      deleteOp = `
+        <t:DeleteRuleOperation>
+          <t:RuleId>${xmlEscape(ruleIdStr)}</t:RuleId>
+        </t:DeleteRuleOperation>
+      `;
+    }
+
+    // 3. Create the new rule
+    let dateRangeXml = '';
+    if (startTime || endTime) {
+      dateRangeXml = '<t:WithinDateRange>';
+      if (startTime) dateRangeXml += `<t:StartDateTime>${startTime.toISOString()}</t:StartDateTime>`;
+      if (endTime) dateRangeXml += `<t:EndDateTime>${endTime.toISOString()}</t:EndDateTime>`;
+      dateRangeXml += '</t:WithinDateRange>';
+    }
+
+    const setRulesEnvelope = soapEnvelope(`
+      <m:UpdateInboxRules>
+        <m:MailboxSmtpAddress>${xmlEscape(address)}</m:MailboxSmtpAddress>
+        <m:RemoveOutlookRuleBlob>false</m:RemoveOutlookRuleBlob>
+        <m:Operations>
+          ${deleteOp}
+          <t:CreateRuleOperation>
+            <t:Rule>
+              <t:DisplayName>AutoReplyTemplate</t:DisplayName>
+              <t:Sequence>1</t:Sequence>
+              <t:IsEnabled>${enabled ? 'true' : 'false'}</t:IsEnabled>
+              <t:Conditions>
+                ${dateRangeXml}
+              </t:Conditions>
+              <t:Actions>
+                <t:ServerReplyWithMessage>
+                  <t:ItemId Id="${xmlEscape(templateId)}" ChangeKey="${xmlEscape(templateChangeKey)}" />
+                </t:ServerReplyWithMessage>
+              </t:Actions>
+            </t:Rule>
+          </t:CreateRuleOperation>
+        </m:Operations>
+      </m:UpdateInboxRules>
+    `);
+
+    await callEws(token, setRulesEnvelope, address);
+
+    return ewsResult(undefined);
+
+  } catch (err) {
+    return ewsError(err);
+  }
+}
