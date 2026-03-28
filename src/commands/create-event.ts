@@ -255,10 +255,13 @@ export const createEventCommand = new Command('create-event')
           pattern.DayOfMonth = start.getDate();
         }
 
-        // Build range
+        // Build range — use local date to avoid UTC shift for late-evening events
+        const localDate = new Intl.DateTimeFormat('en-CA', { // en-CA gives YYYY-MM-DD
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        }).format(start);
         const range: RecurrenceRange = {
           Type: 'NoEnd',
-          StartDate: start.toISOString().split('T')[0]
+          StartDate: localDate
         };
 
         if (options.until) {
