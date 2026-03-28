@@ -57,7 +57,14 @@ export const findCommand = new Command('find')
               }))
             );
           } else if (peopleRes.error) {
-            errors.push(`People search failed: ${peopleRes.error.message || peopleRes.error.status}`);
+            if (peopleRes.error.status === 403) {
+              // Default auth scopes may not cover People API - suppress 403 unless --people was explicitly requested
+              if (options.people) {
+                errors.push(`People search failed: ${peopleRes.error.message}`);
+              }
+            } else {
+              errors.push(`People search failed: ${peopleRes.error.message}`);
+            }
           }
 
           const usersRes = await searchUsers(token, query);
@@ -84,13 +91,22 @@ export const findCommand = new Command('find')
               }
             }
           } else if (usersRes.error) {
-            errors.push(`Users search failed: ${usersRes.error.message || usersRes.error.status}`);
+            if (usersRes.error.status === 403) {
+              // Default auth scopes may not cover Users API - suppress 403 unless --people was explicitly requested
+              if (options.people) {
+                errors.push(`Users search failed: ${usersRes.error.message}`);
+              }
+            } else {
+              errors.push(`Users search failed: ${usersRes.error.message}`);
+            }
           }
         }
 
         if (searchAll || options.groups) {
           const groupsRes = await searchGroups(token, query);
           if (groupsRes.ok && groupsRes.data) {
+            // Only expand members of the first group to avoid N+1 API calls
+            const groupsToExpand = options.expand ? groupsRes.data.slice(0, 1) : [];
             for (const g of groupsRes.data) {
               let groupItem: any = {
                 id: g.id,
@@ -100,7 +116,7 @@ export const findCommand = new Command('find')
                 description: g.description
               };
 
-              if (options.expand) {
+              if (groupsToExpand.some((ge) => ge.id === g.id)) {
                 const membersRes = await expandGroup(token, g.id);
                 if (membersRes.ok && membersRes.data) {
                   groupItem.members = membersRes.data.map((m: any) => ({
@@ -113,7 +129,14 @@ export const findCommand = new Command('find')
               results.push(groupItem);
             }
           } else if (groupsRes.error) {
-            errors.push(`Groups search failed: ${groupsRes.error.message || groupsRes.error.status}`);
+            if (groupsRes.error.status === 403) {
+              // Default auth scopes may not cover Groups API - suppress 403 unless --groups was explicitly requested
+              if (options.groups) {
+                errors.push(`Groups search failed: ${groupsRes.error.message}`);
+              }
+            } else {
+              errors.push(`Groups search failed: ${groupsRes.error.message}`);
+            }
           }
         }
 
