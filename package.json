@@ -20,7 +20,7 @@
     "lint": "biome lint --max-diagnostics=none --diagnostic-level=error .",
     "lint:fix": "biome lint --write --unsafe --diagnostic-level=error .",
     "format": "biome format --write .",
-    "format:check": "biome format --max-diagnostics=none ."
+    "format:check": "biome format ."
   },
   "dependencies": {
     "commander": "^12.0.0",
