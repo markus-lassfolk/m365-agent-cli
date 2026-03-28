@@ -3,7 +3,7 @@ import { createReadStream, createWriteStream } from 'node:fs';
 import { mkdir, stat, unlink } from 'node:fs/promises';
 import { homedir } from 'node:os';
 
-const GRAPH_BASE_URL = process.env.GRAPH_BASE_URL || 'https://graph.microsoft.com/v1.0';
+export const GRAPH_BASE_URL = process.env.GRAPH_BASE_URL || 'https://graph.microsoft.com/v1.0';
 
 export interface GraphError {
   message: string;
