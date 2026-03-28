@@ -1,12 +1,5 @@
 import { callGraph, type GraphResponse } from './graph-client.js';
 
-export interface Recipient {
-  EmailAddress: {
-    Address: string;
-    Name?: string;
-  };
-}
-
 export interface ForwardEventOptions {
   token: string;
   eventId: string;
