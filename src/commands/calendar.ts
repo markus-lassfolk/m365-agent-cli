@@ -4,12 +4,24 @@ import { getCalendarEvents, type CalendarEvent, type CalendarAttendee } from '..
 import { parseDay } from '../lib/dates.js';
 
 function formatTime(dateStr: string): string {
-  const date = new Date(dateStr);
+  const date = parseLocalDate(dateStr);
   return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
 }
 
+/**
+ * Parse a date string that may have a timezone offset suffix (e.g. "+01:00")
+ * and return the local date components in the user's system timezone.
+ * This avoids the bug where `new Date("2026-03-29")` defaults to midnight UTC
+ * instead of interpreting it as the local date.
+ */
+function parseLocalDate(dateStr: string): Date {
+  // Handle the "+01:00" suffix format by inserting a 'T' before the time
+  const withTime = dateStr.replace(' ', 'T');
+  return new Date(withTime);
+}
+
 function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
+  const date = parseLocalDate(dateStr);
   return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
@@ -197,7 +209,8 @@ export const calendarCommand = new Command('calendar')
         // Group by date for multi-day ranges
         const eventsByDate = new Map<string, CalendarEvent[]>();
         for (const event of events) {
-          const dateKey = event.Start.DateTime.split('T')[0];
+          const localDate = parseLocalDate(event.Start.DateTime);
+          const dateKey = `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, '0')}-${String(localDate.getDate()).padStart(2, '0')}`;
           if (!eventsByDate.has(dateKey)) {
             eventsByDate.set(dateKey, []);
           }
@@ -207,7 +220,7 @@ export const calendarCommand = new Command('calendar')
         // Check if multiple days
         if (eventsByDate.size > 1) {
           for (const [dateKey, dayEvents] of eventsByDate) {
-            const dayLabel = formatDate(new Date(dateKey).toISOString());
+            const dayLabel = formatDate(dateKey);
             console.log(`\n  ${dayLabel}`);
             for (const event of dayEvents) {
               displayEvent(event, options.verbose ?? false);
