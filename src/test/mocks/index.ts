@@ -267,16 +267,6 @@ export function createMockFetch(): any {
         return makeResponse(mockAddAttachmentResponse);
       }
 
-      // SendItem (for drafts send)
-      if (hasTag(body, 'SendItem')) {
-        return makeResponse(mockSendDraftResponse);
-      }
-
-      // DeleteItem (for drafts delete)
-      if (hasTag(body, 'DeleteItem')) {
-        return makeResponse(mockDeleteDraftResponse);
-      }
-
       // Default: return empty calendar
       return makeResponse(mockCalendarEventsEmptyResponse);
     }
@@ -291,13 +281,13 @@ export function createMockFetch(): any {
       if (url.includes('/me/drive/root/search')) {
         return makeJsonResponse(mockGraphSearchFilesResponse);
       }
-      // Get file metadata
-      if (url.includes('/me/drive/items/') && !url.includes('/children')) {
-        return makeJsonResponse(mockGraphGetFileMetadataResponse);
-      }
       // Upload file
       if (url.includes('/me/drive/items/') && url.includes('/content')) {
         return makeJsonResponse(mockGraphUploadResponse);
+      }
+      // Get file metadata
+      if (url.includes('/me/drive/items/') && !url.includes('/children') && !url.includes('/content') && !url.includes('/createLink') && !url.includes('/checkin') && !url.includes('/checkout') && !url.includes('/createUploadSession')) {
+        return makeJsonResponse(mockGraphGetFileMetadataResponse);
       }
       // Create upload session
       if (url.includes('/createUploadSession')) {
@@ -307,13 +297,9 @@ export function createMockFetch(): any {
       if ((url.includes('/me/drive/items/') || url.includes('/me/drive/')) && init?.method === 'DELETE') {
         return makeJsonResponse(mockGraphDeleteResponse);
       }
-      // Share file
+      // Share file / Office collaboration
       if (url.includes('/me/drive/items/') && url.includes('/createLink')) {
         return makeJsonResponse(mockGraphShareResponse);
-      }
-      // Office collaboration
-      if (url.includes('/me/drive/items/') && url.includes('/createLink')) {
-        return makeJsonResponse(mockGraphCollabResponse);
       }
       // Checkin
       if (url.includes('/me/drive/items/') && url.includes('/checkin')) {

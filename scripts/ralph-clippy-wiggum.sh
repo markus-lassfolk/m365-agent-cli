@@ -40,7 +40,7 @@ log "Ralph clippy Wiggum run: $(date -Iminutes)"
 # ── 1. Repo & issue stats ────────────────────────────────────────────────────
 OPEN=$(gh issue list --repo "$REPO" --state open --json number --jq 'length')
 ENRICHED=$(gh issue list --repo "$REPO" --state open --label enriched --json number --jq 'length')
-UNENRICHED=$(gh issue list --repo "$REPO" --state open --json number,labels --jq '.[] | select(.labels[] | .name == "enriched") | not | select(. == true)' 2>/dev/null | wc -l || echo 0)
+UNENRICHED=$(gh issue list --repo "$REPO" --state open --json number,labels --jq '[.[] | select([.labels[].name] | index("enriched") | not)] | length' 2>/dev/null || echo 0)
 log "Open: $OPEN | Enriched: $ENRICHED | Unenriched: $UNENRICHED"
 
 # ── 2. Priority breakdown ────────────────────────────────────────────────────
@@ -51,7 +51,7 @@ done
 
 # ── 3. Enriched but unprioritized ──────────────────────────────────────────
 UNPRIORITIZED=$(gh issue list --repo "$REPO" --state open --json number,title,labels \
-  --jq '.[] | select(.labels[] | .name == "enriched") | select(.labels | map(select(startswith("Queue:"))) | length == 0) | "\(.number) \(.title)"' 2>/dev/null || true)
+  --jq '.[] | select([.labels[].name] | index("enriched")) | select([.labels[].name | startswith("Queue:")] | any | not) | "\(.number) \(.title)"' 2>/dev/null || true)
 if [[ -n "$UNPRIORITIZED" ]]; then
   log "Enriched but unprioritized:"
   log "$UNPRIORITIZED"
@@ -59,7 +59,7 @@ fi
 
 # ── 4. Stale unenriched ─────────────────────────────────────────────────────
 OLD_UNENRICHED=$(gh issue list --repo "$REPO" --state open --json number,title,createdAt,labels \
-  --jq '.[] | select(.labels[] | .name == "enriched" | not) | select((now - (.createdAt | fromdateiso8601) > 86400)) | "\(.number) \(.title) — created \(.createdAt[0:10])"' 2>/dev/null || true)
+  --jq '.[] | select([.labels[].name] | index("enriched") | not) | select((now - (.createdAt | fromdateiso8601) > 86400)) | "\(.number) \(.title) — created \(.createdAt[0:10])"' 2>/dev/null || true)
 if [[ -n "$OLD_UNENRICHED" ]]; then
   log "Stale unenriched (>24h, needs Scholar):"
   log "$OLD_UNENRICHED"
