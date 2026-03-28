@@ -161,6 +161,23 @@ export const oofCommand = new Command('oof')
       process.exit(1);
     }
 
+    // Fetch existing settings if we are not explicitly overriding status,
+    // because Graph requires status in the PATCH payload or resets it to disabled.
+    let statusWasUndefined = false;
+    if (!status && (options.internalMessage !== undefined || options.externalMessage !== undefined)) {
+      statusWasUndefined = true;
+      const currentRes = await getMailboxSettings(token);
+      if (currentRes.ok && currentRes.data?.automaticRepliesSetting) {
+        status = currentRes.data.automaticRepliesSetting.status;
+        if (status === 'scheduled') {
+           scheduledStartDateTime = scheduledStartDateTime ?? currentRes.data.automaticRepliesSetting.scheduledStartDateTime?.dateTime;
+           scheduledEndDateTime = scheduledEndDateTime ?? currentRes.data.automaticRepliesSetting.scheduledEndDateTime?.dateTime;
+        }
+      } else {
+        status = 'disabled'; // fallback if we couldn't fetch
+      }
+    }
+
     // --- Apply updates ---
     const patchResult = await setMailboxSettings(token, {
       status,
@@ -181,28 +198,31 @@ export const oofCommand = new Command('oof')
     }
 
     if (options.json) {
-      console.log(
-        JSON.stringify(
-          {
-            status: 'success',
-            automaticRepliesSetting: {
-              status,
-              scheduledStartDateTime: scheduledStartDateTime ?? null,
-              scheduledEndDateTime: scheduledEndDateTime ?? null,
-              internalReplyMessage: options.internalMessage ?? null,
-              externalReplyMessage: options.externalMessage ?? null
-            }
-          },
-          null,
-          2
-        )
-      );
+      const responseBody: any = {
+        status: 'success',
+        automaticRepliesSetting: {
+          scheduledStartDateTime: scheduledStartDateTime ?? null,
+          scheduledEndDateTime: scheduledEndDateTime ?? null,
+          internalReplyMessage: options.internalMessage ?? null,
+          externalReplyMessage: options.externalMessage ?? null
+        }
+      };
+      if (status !== undefined) {
+        responseBody.automaticRepliesSetting.status = status;
+      }
+      console.log(JSON.stringify(responseBody, null, 2));
     } else {
       console.log('Out-of-office settings updated.');
-      console.log(`  Status: ${formatStatus(status!)}`);
-      if (status === 'scheduled') {
-        console.log(`  Start: ${scheduledStartDateTime ?? '(not set)'}`);
-        console.log(`  End:   ${scheduledEndDateTime ?? '(not set)'}`);
+      if (statusWasUndefined && status !== undefined) {
+        console.log(`  Status: ${formatStatus(status)} (unchanged)`);
+      } else if (status !== undefined) {
+        console.log(`  Status: ${formatStatus(status)}`);
+      } else {
+        console.log(`  Status: (unchanged)`);
+      }
+      if (status === 'scheduled' || (status === undefined && (scheduledStartDateTime || scheduledEndDateTime))) {
+        if (scheduledStartDateTime) console.log(`  Start: ${scheduledStartDateTime}`);
+        if (scheduledEndDateTime) console.log(`  End:   ${scheduledEndDateTime}`);
       }
       if (options.internalMessage) console.log(`  Internal message: ${options.internalMessage}`);
       if (options.externalMessage) console.log(`  External message: ${options.externalMessage}`);

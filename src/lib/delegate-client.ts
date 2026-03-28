@@ -100,7 +100,7 @@ function buildDelegatePermissionsXml(permissions: DelegatePermissions): string {
     .join('\n          ');
 }
 
-function parseDelegateInfo(block: string): DelegateInfo {
+function parseDelegateInfo(block: string, globalDeliver?: DeliverMeetingRequests): DelegateInfo {
   const primaryEmail = extractTag(block, 'PrimarySmtpAddress') || undefined;
   const smtpAddress = extractTag(block, 'SmtpAddress') || undefined;
   const userId = primaryEmail || smtpAddress || '';
@@ -109,7 +109,7 @@ function parseDelegateInfo(block: string): DelegateInfo {
   const viewPrivateStr = extractTag(block, 'ViewPrivateItems').toLowerCase();
   const viewPrivateItems = viewPrivateStr === 'true';
 
-  const deliverStr = extractTag(block, 'DeliverMeetingRequests');
+  const deliverStr = globalDeliver || extractTag(block, 'DeliverMeetingRequests');
   const deliverMeetingRequests = (deliverStr || 'DelegatesAndMe') as DeliverMeetingRequests;
 
   // Parse per-folder permissions
@@ -156,7 +156,9 @@ export async function getDelegates(
     const xml = await callEws(token, envelope, address);
 
     const delegateBlocks = extractBlocks(xml, 'DelegateUser');
-    const delegates = delegateBlocks.map(parseDelegateInfo);
+    const globalDeliverStr = extractTag(xml, 'DeliverMeetingRequests');
+    const globalDeliver = globalDeliverStr ? (globalDeliverStr as DeliverMeetingRequests) : undefined;
+    const delegates = delegateBlocks.map(block => parseDelegateInfo(block, globalDeliver));
 
     return ewsResult(delegates);
   } catch (err) {
@@ -209,8 +211,10 @@ export async function addDelegate(
 
     const xml = await callEws(token, envelope, address);
     const delegateBlock = extractBlocks(xml, 'DelegateUser')[0] || '';
+    const globalDeliverStr = extractTag(xml, 'DeliverMeetingRequests');
+    const globalDeliver = globalDeliverStr ? (globalDeliverStr as DeliverMeetingRequests) : undefined;
 
-    return ewsResult(parseDelegateInfo(delegateBlock));
+    return ewsResult(parseDelegateInfo(delegateBlock, globalDeliver));
   } catch (err) {
     return ewsError(err);
   }
@@ -281,8 +285,10 @@ export async function updateDelegate(
 
     const xml = await callEws(token, envelope, address);
     const delegateBlock = extractBlocks(xml, 'DelegateUser')[0] || '';
+    const globalDeliverStr = extractTag(xml, 'DeliverMeetingRequests');
+    const globalDeliver = globalDeliverStr ? (globalDeliverStr as DeliverMeetingRequests) : undefined;
 
-    return ewsResult(parseDelegateInfo(delegateBlock));
+    return ewsResult(parseDelegateInfo(delegateBlock, globalDeliver));
   } catch (err) {
     return ewsError(err);
   }

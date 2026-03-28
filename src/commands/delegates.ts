@@ -150,8 +150,7 @@ updateCommand
   .option('--contacts <level>', `Contacts permission level (${VALID_PERMISSIONS.join('|')})`)
   .option('--tasks <level>', `Tasks permission level (${VALID_PERMISSIONS.join('|')})`)
   .option('--notes <level>', `Notes permission level (${VALID_PERMISSIONS.join('|')})`)
-  .option('--view-private', 'allow delegate to view private items')
-  .option('--no-view-private', 'deny delegate from viewing private items')
+  .option('--view-private <boolean>', 'allow delegate to view private items (true/false)')
   .option('--deliver <mode>', `deliver meeting requests (${VALID_DELIVER.join('|')})`)
   .option('--mailbox <email>', 'mailbox (shared/alternative primary)')
   .action(async (opts) => {
@@ -187,7 +186,7 @@ updateCommand
       token: auth.token,
       delegateEmail: opts.email,
       permissions: hasPerms ? permsOut : undefined,
-      viewPrivateItems: opts.viewPrivate === undefined ? undefined : opts.viewPrivate,
+      viewPrivateItems: opts.viewPrivate === undefined ? undefined : (opts.viewPrivate === 'true' || opts.viewPrivate === true),
       deliverMeetingRequests: deliver,
       mailbox: opts.mailbox
     });
