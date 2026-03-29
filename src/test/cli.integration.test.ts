@@ -162,7 +162,10 @@ import { Command } from 'commander';
 
 function makeProgram(): Command {
   const p = new Command();
-  p.name('m365-agent-cli').version('0.1.0').option('--read-only', 'Run in read-only mode, blocking any mutating operations').addCommand(whoamiCommand);
+  p.name('m365-agent-cli')
+    .version('0.1.0')
+    .option('--read-only', 'Run in read-only mode, blocking any mutating operations')
+    .addCommand(whoamiCommand);
   p.addCommand(autoReplyCommand);
   p.addCommand(calendarCommand);
   p.addCommand(findtimeCommand);
