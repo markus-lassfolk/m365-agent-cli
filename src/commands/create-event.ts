@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
-import { parseDay, parseTimeToDate, toUTCISOString } from '../lib/dates.js';
+import { parseDay, parseTimeToDate, toUTCISOString, toNaiveISOString } from '../lib/dates.js';
 import {
   createEvent,
   getRooms,
@@ -307,8 +307,8 @@ export const createEventCommand = new Command('create-event')
       const result = await createEvent({
         token: authResult.token!,
         subject: title,
-        start: toUTCISOString(start),
-        end: toUTCISOString(end),
+        start: options.timezone ? toNaiveISOString(start) : toUTCISOString(start),
+        end: options.timezone ? toNaiveISOString(end) : toUTCISOString(end),
         body: options.description,
         location: roomName,
         attendees: attendees.length > 0 ? attendees : undefined,
