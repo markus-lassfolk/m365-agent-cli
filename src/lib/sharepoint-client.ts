@@ -81,9 +81,9 @@ export async function updateListItem(
   listId: string,
   itemId: string,
   fields: Record<string, any>
-): Promise<GraphResponse<SharePointListItem>> {
+): Promise<GraphResponse<Record<string, any>>> {
   try {
-    return await callGraph<SharePointListItem>(token, `/sites/${siteId}/lists/${listId}/items/${itemId}/fields`, {
+    return await callGraph<Record<string, any>>(token, `/sites/${siteId}/lists/${listId}/items/${itemId}/fields`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json'
