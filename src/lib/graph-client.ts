@@ -3,6 +3,7 @@ import { createReadStream, createWriteStream } from 'node:fs';
 import { mkdir, rename, stat, unlink } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, dirname, resolve } from 'node:path';
+import { Readable } from 'node:stream';
 import { GRAPH_BASE_URL } from './graph-constants.js';
 
 export { GRAPH_BASE_URL };
@@ -292,20 +293,22 @@ export async function uploadFile(
 
     const fileName = basename(absolutePath);
     const folderPath = folder?.id ? `${buildItemPath(folder)}:/` : '/me/drive/root:/';
+    const stream = createReadStream(absolutePath);
     try {
-      const result = await callGraph<DriveItem>(token, `${folderPath}${encodeURIComponent(fileName)}:/content`, {
+      return await callGraph<DriveItem>(token, `${folderPath}${encodeURIComponent(fileName)}:/content`, {
         method: 'PUT',
-        body: createReadStream(absolutePath) as unknown as BodyInit,
+        body: Readable.toWeb(stream) as unknown as BodyInit,
         headers: {
           'Content-Type': 'application/octet-stream'
         }
       });
-      return result;
     } catch (err) {
       if (err instanceof GraphApiError) {
         return graphError(err.message, err.code, err.status);
       }
       return graphError(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      stream.destroy();
     }
   } catch (err) {
     return graphError(err instanceof Error ? err.message : 'Upload failed');
