@@ -8,6 +8,8 @@ import { GRAPH_BASE_URL } from './graph-constants.js';
 
 export { GRAPH_BASE_URL };
 
+const GRAPH_TIMEOUT_MS = Number(process.env.GRAPH_TIMEOUT_MS) || 30_000; // 30s default
+
 export interface GraphError {
   message: string;
   code?: string;
@@ -194,6 +196,9 @@ export async function callGraph<T>(
   options: RequestInit = {},
   expectJson: boolean = true
 ): Promise<GraphResponse<T>> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), GRAPH_TIMEOUT_MS);
+
   let response: Response;
   try {
     response = await fetch(`${GRAPH_BASE_URL}${path}`, {
@@ -205,10 +210,15 @@ export async function callGraph<T>(
           ? { 'Content-Type': 'application/json' }
           : {}),
         ...(options.headers || {})
-      }
+      },
+      signal: controller.signal
     });
   } catch (err) {
-    // Network-level failure (DNS, connection refused, etc.) — surface it as a thrown error
+    clearTimeout(timeout);
+    // Network-level failure (DNS, connection refused, timeout, etc.) — surface it as a thrown error
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new GraphApiError(`Graph request timed out after ${GRAPH_TIMEOUT_MS / 1000}s`, undefined, 408);
+    }
     throw new GraphApiError(err instanceof Error ? err.message : 'Graph request failed');
   }
 
@@ -221,16 +231,21 @@ export async function callGraph<T>(
       code = json.error?.code;
     } catch {
       // Non-JSON error body — throw with HTTP status instead
+      clearTimeout(timeout);
       throw new GraphApiError(message, code, response.status);
     }
+    clearTimeout(timeout);
     throw new GraphApiError(message, code, response.status);
   }
 
   if (!expectJson || response.status === 204) {
+    clearTimeout(timeout);
     return graphResult(undefined as T);
   }
 
-  return graphResult((await response.json()) as T);
+  const result = await response.json();
+  clearTimeout(timeout);
+  return graphResult(result as T);
 }
 
 function buildItemPath(reference?: DriveItemReference): string {

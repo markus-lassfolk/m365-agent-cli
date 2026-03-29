@@ -83,6 +83,7 @@ export const EWS_ENDPOINT = validateUrl(
   'EWS_ENDPOINT'
 );
 export const EWS_USERNAME = process.env.EWS_USERNAME || '';
+const EWS_TIMEOUT_MS = Number(process.env.EWS_TIMEOUT_MS) || 30_000; // 30s default
 
 export function soapEnvelope(body: string): string {
   return `<?xml version="1.0" encoding="utf-8"?>
@@ -101,18 +102,32 @@ export function soapEnvelope(body: string): string {
 
 export async function callEws(token: string, envelope: string, mailbox?: string): Promise<string> {
   const anchorMailbox = mailbox || EWS_USERNAME;
-  const response = await fetch(EWS_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'text/xml; charset=utf-8',
-      Accept: 'text/xml',
-      'X-AnchorMailbox': anchorMailbox
-    },
-    body: envelope
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), EWS_TIMEOUT_MS);
+
+  let response: Response;
+  try {
+    response = await fetch(EWS_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'text/xml; charset=utf-8',
+        Accept: 'text/xml',
+        'X-AnchorMailbox': anchorMailbox
+      },
+      body: envelope,
+      signal: controller.signal
+    });
+  } catch (err) {
+    clearTimeout(timeout);
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error(`EWS request timed out after ${EWS_TIMEOUT_MS / 1000}s`);
+    }
+    throw err;
+  }
 
   const xml = await response.text();
+  clearTimeout(timeout);
 
   if (!response.ok) {
     const soapError = extractTag(xml, 'faultstring') || extractTag(xml, 'MessageText');
