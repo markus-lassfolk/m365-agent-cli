@@ -30,6 +30,8 @@ export const updateEventCommand = new Command('update-event')
   )
   .option('--room <room>', 'Set/change meeting room (name or email)')
   .option('--location <text>', 'Set location text')
+  .option('--occurrence <index>', 'Update only the Nth occurrence of a recurring event')
+  .option('--instance <date>', 'Update only the occurrence on a specific date (YYYY-MM-DD)')
   .option('--teams', 'Make it a Teams meeting')
   .option('--no-teams', 'Remove Teams meeting')
   .option('--json', 'Output as JSON')
@@ -48,6 +50,8 @@ export const updateEventCommand = new Command('update-event')
         addAttendee: string[];
         room?: string;
         location?: string;
+        occurrence?: string;
+        instance?: string;
         teams?: boolean;
         json?: boolean;
         token?: string;
@@ -169,7 +173,44 @@ export const updateEventCommand = new Command('update-event')
 
       // Get the target event by ID
       const targetEvent = events.find((e) => e.Id === options.id);
-      if (!targetEvent) {
+      let occurrenceItemId: string | undefined;
+      let displayEvent = targetEvent;
+
+      if (options.occurrence || options.instance) {
+        // Find the specific occurrence
+        if (options.instance) {
+          const instanceDate = parseDay(options.instance);
+          instanceDate.setHours(0, 0, 0, 0);
+          const occEvent = events.find((e) => {
+            const eventDate = new Date(e.Start.DateTime);
+            eventDate.setHours(0, 0, 0, 0);
+            return eventDate.getTime() === instanceDate.getTime();
+          });
+          if (!occEvent) {
+            console.error(`No occurrence found on ${options.instance}. Try expanding the date range with --day.`);
+            process.exit(1);
+          }
+          occurrenceItemId = occEvent.Id;
+          displayEvent = occEvent;
+          console.log(`\nUpdating single occurrence of: ${occEvent.Subject}`);
+          console.log(
+            `  ${formatDate(occEvent.Start.DateTime)} ${formatTime(occEvent.Start.DateTime)} - ${formatTime(occEvent.End.DateTime)}`
+          );
+        } else if (options.occurrence) {
+          const idx = parseInt(options.occurrence, 10);
+          if (isNaN(idx) || idx < 1 || idx > events.length) {
+            console.error(`Invalid --occurrence index: ${options.occurrence}. Valid range: 1-${events.length}.`);
+            process.exit(1);
+          }
+          const occEvent = events[idx - 1];
+          occurrenceItemId = occEvent.Id;
+          displayEvent = occEvent;
+          console.log(`\nUpdating occurrence ${idx} of: ${occEvent.Subject}`);
+          console.log(
+            `  ${formatDate(occEvent.Start.DateTime)} ${formatTime(occEvent.Start.DateTime)} - ${formatTime(occEvent.End.DateTime)}`
+          );
+        }
+      } else if (!targetEvent) {
         console.error(`Invalid event id: ${options.id}`);
         process.exit(1);
       }
@@ -187,16 +228,16 @@ export const updateEventCommand = new Command('update-event')
 
       if (!hasUpdates) {
         // Show current event details
-        console.log(`\nEvent: ${targetEvent.Subject}`);
+        console.log(`\nEvent: ${displayEvent!.Subject}`);
         console.log(
-          `  When: ${formatDate(targetEvent.Start.DateTime)} ${formatTime(targetEvent.Start.DateTime)} - ${formatTime(targetEvent.End.DateTime)}`
+          `  When: ${formatDate(displayEvent!.Start.DateTime)} ${formatTime(displayEvent!.Start.DateTime)} - ${formatTime(displayEvent!.End.DateTime)}`
         );
-        if (targetEvent.Location?.DisplayName) {
-          console.log(`  Location: ${targetEvent.Location.DisplayName}`);
+        if (displayEvent!.Location?.DisplayName) {
+          console.log(`  Location: ${displayEvent!.Location.DisplayName}`);
         }
-        if (targetEvent.Attendees && targetEvent.Attendees.length > 0) {
+        if (displayEvent!.Attendees && displayEvent!.Attendees.length > 0) {
           console.log('  Attendees:');
-          for (const a of targetEvent.Attendees) {
+          for (const a of displayEvent!.Attendees) {
             const typeLabel = a.Type === 'Resource' ? ' (Room)' : '';
             console.log(`    - ${a.EmailAddress?.Address}${typeLabel}`);
           }
@@ -208,8 +249,9 @@ export const updateEventCommand = new Command('update-event')
       // Build update payload
       const updateOptions: Parameters<typeof updateEvent>[0] = {
         token: authResult.token!,
-        eventId: targetEvent.Id,
-        changeKey: targetEvent.ChangeKey,
+        eventId: targetEvent ? targetEvent.Id : displayEvent!.Id,
+        changeKey: displayEvent!.ChangeKey,
+        occurrenceItemId,
         mailbox: options.mailbox
       };
 
@@ -223,7 +265,7 @@ export const updateEventCommand = new Command('update-event')
 
       // Handle time changes
       if (options.start || options.end) {
-        const eventDate = new Date(targetEvent.Start.DateTime);
+        const eventDate = new Date(displayEvent!.Start.DateTime);
 
         if (options.start) {
           const newStart = parseTimeToDate(options.start, eventDate);
@@ -277,7 +319,7 @@ export const updateEventCommand = new Command('update-event')
       // Handle attendees (merge existing with new)
       if (options.addAttendee.length > 0 || roomEmail) {
         const existingAttendees: Array<{ email: string; name?: string; type: 'Required' | 'Optional' | 'Resource' }> = (
-          targetEvent.Attendees || []
+          displayEvent!.Attendees || []
         ).map((a) => ({
           email: a.EmailAddress?.Address || '',
           name: a.EmailAddress?.Name,
@@ -307,7 +349,7 @@ export const updateEventCommand = new Command('update-event')
         updateOptions.isOnlineMeeting = options.teams;
       }
 
-      console.log(`\nUpdating: ${targetEvent.Subject}`);
+      console.log(`\nUpdating: ${displayEvent!.Subject}`);
 
       const updateResult = await updateEvent(updateOptions);
 

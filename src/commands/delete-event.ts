@@ -21,6 +21,9 @@ export const deleteEventCommand = new Command('delete-event')
   .option('--search <text>', 'Search for events by title')
   .option('--message <text>', 'Cancellation message to send to attendees')
   .option('--force-delete', 'Delete without sending cancellation (even with attendees)')
+  .option('--occurrence <index>', 'Delete only the Nth occurrence of a recurring event')
+  .option('--instance <date>', 'Delete only the occurrence on a specific date (YYYY-MM-DD)')
+  .option('--scope <scope>', 'Scope: all (default), this (single occurrence), future (this and future)', 'all')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--mailbox <email>', 'Delete event in shared mailbox calendar')
@@ -33,6 +36,9 @@ export const deleteEventCommand = new Command('delete-event')
         search?: string;
         message?: string;
         forceDelete?: boolean;
+        occurrence?: string;
+        instance?: string;
+        scope: string;
         json?: boolean;
         token?: string;
         mailbox?: string;
@@ -146,31 +152,77 @@ export const deleteEventCommand = new Command('delete-event')
         process.exit(1);
       }
 
-      const targetEvent = events.find((e) => e.Id === options.id);
-      if (!targetEvent) {
+      // Determine scope and occurrence ID
+      const scope = options.scope as 'all' | 'this' | 'future';
+      let occurrenceItemId: string | undefined;
+      let targetEvent = events.find((e) => e.Id === options.id);
+
+      if ((options.occurrence || options.instance) && scope === 'this') {
+        // Find the occurrence by index or date
+        if (options.instance) {
+          // Find occurrence matching the specific date
+          const instanceDate = parseDay(options.instance);
+          instanceDate.setHours(0, 0, 0, 0);
+          targetEvent = events.find((e) => {
+            const eventDate = new Date(e.Start.DateTime);
+            eventDate.setHours(0, 0, 0, 0);
+            return eventDate.getTime() === instanceDate.getTime();
+          });
+          if (!targetEvent) {
+            console.error(`No occurrence found on ${options.instance}. Try expanding the date range with --day.`);
+            process.exit(1);
+          }
+          // For CalendarView items, the Id we get IS the occurrence ID
+          occurrenceItemId = targetEvent.Id;
+        } else if (options.occurrence) {
+          const idx = parseInt(options.occurrence, 10);
+          if (isNaN(idx) || idx < 1) {
+            console.error('--occurrence must be a positive integer');
+            process.exit(1);
+          }
+          // Events from CalendarView are already individual occurrences
+          if (idx > events.length) {
+            console.error(`Invalid occurrence index: ${idx}. Only ${events.length} occurrence(s) found in the date range.`);
+            process.exit(1);
+          }
+          const occEvent = events[idx - 1];
+          occurrenceItemId = occEvent.Id;
+          targetEvent = occEvent;
+        }
+        console.log(`\nDeleting single occurrence: ${targetEvent!.Subject}`);
+        console.log(
+          `  ${formatDate(targetEvent!.Start.DateTime)} ${formatTime(targetEvent!.Start.DateTime)} - ${formatTime(targetEvent!.End.DateTime)}`
+        );
+      } else if (!targetEvent) {
         console.error(`Invalid event id: ${options.id}`);
         process.exit(1);
+      } else {
+        // Full series delete
+        if (scope !== 'all') {
+          // future scope needs the occurrence ID too
+          console.log(`\nDeleting: ${targetEvent.Subject} (scope: ${scope})`);
+        } else {
+          console.log(`\nDeleting: ${targetEvent.Subject}`);
+        }
+        console.log(
+          `  ${formatDate(targetEvent.Start.DateTime)} ${formatTime(targetEvent.Start.DateTime)} - ${formatTime(targetEvent.End.DateTime)}`
+        );
       }
 
       // Check if event has attendees (other than organizer)
-      const attendees = targetEvent.Attendees?.filter((a) => a.EmailAddress?.Address && a.Type !== 'Resource') || [];
+      const attendees = targetEvent!.Attendees?.filter((a) => a.EmailAddress?.Address && a.Type !== 'Resource') || [];
       const hasAttendees = attendees.length > 0;
-
-      console.log(`\nDeleting: ${targetEvent.Subject}`);
-      console.log(
-        `  ${formatDate(targetEvent.Start.DateTime)} ${formatTime(targetEvent.Start.DateTime)} - ${formatTime(targetEvent.End.DateTime)}`
-      );
 
       let deleteResult: Awaited<ReturnType<typeof deleteEvent>>;
       let action: string;
 
-      if (hasAttendees && !options.forceDelete) {
+      if (hasAttendees && !options.forceDelete && scope === 'all') {
         // Use cancel to send cancellation notices
         console.log(`  Attendees: ${attendees.map((a) => a.EmailAddress?.Address).join(', ')}`);
         console.log(`  Sending cancellation notices...`);
         deleteResult = await cancelEvent({
           token: authResult.token!,
-          eventId: targetEvent.Id,
+          eventId: targetEvent!.Id,
           comment: options.message,
           mailbox: options.mailbox
         });
@@ -179,7 +231,9 @@ export const deleteEventCommand = new Command('delete-event')
         // Just delete without notification
         deleteResult = await deleteEvent({
           token: authResult.token!,
-          eventId: targetEvent.Id,
+          eventId: targetEvent!.Id,
+          occurrenceItemId,
+          scope,
           mailbox: options.mailbox
         });
         action = 'deleted';
@@ -200,7 +254,7 @@ export const deleteEventCommand = new Command('delete-event')
             {
               success: true,
               action,
-              event: targetEvent.Subject,
+              event: targetEvent!.Subject,
               attendeesNotified: hasAttendees && !options.forceDelete ? attendees.length : 0,
               ...(deleteResult.info ? { info: deleteResult.info } : {})
             },
