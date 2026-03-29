@@ -121,9 +121,9 @@ export const createEventCommand = new Command('create-event')
       }
 
       // Parse date and times
-      const baseDate = parseDay(options.day);
-      const start = parseTimeToDate(startTime, baseDate);
-      const end = parseTimeToDate(endTime, baseDate);
+      const baseDate = parseDay(options.day, { throwOnInvalid: true });
+      const start = parseTimeToDate(startTime, baseDate, { throwOnInvalid: true });
+      const end = parseTimeToDate(endTime, baseDate, { throwOnInvalid: true });
 
       // Parse attendees
       const attendees: Array<{ email: string; name?: string; type?: 'Required' | 'Optional' | 'Resource' }> =

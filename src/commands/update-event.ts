@@ -286,12 +286,12 @@ export const updateEventCommand = new Command('update-event')
         const eventDate = new Date(displayEvent!.Start.DateTime);
 
         if (options.start) {
-          const newStart = parseTimeToDate(options.start, eventDate);
+          const newStart = parseTimeToDate(options.start, eventDate, { throwOnInvalid: true });
           updateOptions.start = toUTCISOString(newStart);
         }
 
         if (options.end) {
-          const newEnd = parseTimeToDate(options.end, eventDate);
+          const newEnd = parseTimeToDate(options.end, eventDate, { throwOnInvalid: true });
           updateOptions.end = toUTCISOString(newEnd);
         }
       }

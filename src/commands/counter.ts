@@ -19,9 +19,9 @@ export const counterCommand = new Command('counter')
     }
 
     // Parse dates and times
-    const baseDate = parseDay(options.day);
-    const start = parseTimeToDate(startTime, baseDate);
-    const end = parseTimeToDate(endTime, baseDate);
+    const baseDate = parseDay(options.day, { throwOnInvalid: true });
+    const start = parseTimeToDate(startTime, baseDate, { throwOnInvalid: true });
+    const end = parseTimeToDate(endTime, baseDate, { throwOnInvalid: true });
 
     // The Graph API expects times with the time zone context. For simplicity, we can pass
     // the ISO 8601 string and UTC as the time zone.
