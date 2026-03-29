@@ -246,7 +246,11 @@ export async function listFiles(token: string, folder?: DriveItemReference): Pro
 }
 
 export async function searchFiles(token: string, query: string): Promise<GraphResponse<DriveItem[]>> {
-  return fetchAllPages<DriveItem>(token, `/me/drive/root/search(q='${encodeGraphSearchQuery(query)}')`, 'Failed to search files');
+  return fetchAllPages<DriveItem>(
+    token,
+    `/me/drive/root/search(q='${encodeGraphSearchQuery(query)}')`,
+    'Failed to search files'
+  );
 }
 
 export async function getFileMetadata(token: string, itemId: string): Promise<GraphResponse<DriveItem>> {
