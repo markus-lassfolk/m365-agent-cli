@@ -8,6 +8,7 @@ import {
   type Recurrence,
   type RecurrencePattern,
   type RecurrenceRange,
+  SENSITIVITY_MAP,
   searchRooms
 } from '../lib/ews-client.js';
 
@@ -32,7 +33,9 @@ export const createEventCommand = new Command('create-event')
   .option('--attendees <emails>', 'Comma-separated list of attendee emails')
   .option('--room <room>', 'Meeting room (use --list-rooms to see available)')
   .option('--teams', 'Create as Teams meeting')
+  .option('--category <name>', 'Category label (repeatable)', (v, acc) => [...acc, v], [] as string[])
   .option('--all-day', 'Create as an all-day event (no time slots)')
+  .option('--sensitivity <level>', 'Sensitivity: normal, personal, private, confidential')
   .option('--list-rooms', 'List available meeting rooms')
   .option('--find-room', 'Find an available room for the time slot')
   .option('--repeat <type>', 'Recurrence: daily, weekly, monthly, yearly')
@@ -56,6 +59,7 @@ export const createEventCommand = new Command('create-event')
         room?: string;
         teams?: boolean;
         allDay?: boolean;
+        sensitivity?: string;
         listRooms?: boolean;
         findRoom?: boolean;
         repeat?: string;
@@ -66,6 +70,7 @@ export const createEventCommand = new Command('create-event')
         json?: boolean;
         token?: string;
         mailbox?: string;
+        category?: string[];
       }
     ) => {
       const authResult = await resolveAuth({
@@ -337,6 +342,13 @@ export const createEventCommand = new Command('create-event')
         recurrence = { Pattern: pattern, Range: range };
       }
 
+      const sensitivity = options.sensitivity ? SENSITIVITY_MAP[options.sensitivity.toLowerCase()] : undefined;
+
+      if (options.sensitivity && !sensitivity) {
+        console.error(`Invalid sensitivity: ${options.sensitivity}`);
+        process.exit(1);
+      }
+
       // Create the event
       const result = await createEvent({
         token: authResult.token!,
@@ -348,9 +360,11 @@ export const createEventCommand = new Command('create-event')
         attendees: attendees.length > 0 ? attendees : undefined,
         isOnlineMeeting: options.teams,
         isAllDay: options.allDay,
+        sensitivity,
         recurrence,
         mailbox: options.mailbox,
-        timezone: options.timezone
+        timezone: options.timezone,
+        categories: options.category && options.category.length > 0 ? options.category : undefined
       });
 
       if (!result.ok || !result.data) {

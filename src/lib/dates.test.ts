@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { parseDay, parseTimeToDate, toUTCISOString } from './dates.js';
+import { parseDay, parseTimeToDate, toLocalUnzonedISOString, toUTCISOString } from './dates.js';
 
 describe('dates helpers', () => {
   it('parseTimeToDate handles HH:MM and am/pm inputs', () => {
@@ -9,6 +9,12 @@ describe('dates helpers', () => {
     expect(parseTimeToDate('13:45', base).getMinutes()).toBe(45);
     expect(parseTimeToDate('1pm', base).getHours()).toBe(13);
     expect(parseTimeToDate('12am', base).getHours()).toBe(0);
+  });
+
+  it('toLocalUnzonedISOString formats as local time without Z', () => {
+    const date = new Date(2026, 2, 27, 9, 5, 7); // local time
+    const result = toLocalUnzonedISOString(date);
+    expect(result).toBe('2026-03-27T09:05:07');
   });
 
   it('parseTimeToDate throws on invalid input when configured', () => {

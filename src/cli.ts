@@ -14,17 +14,21 @@ import { foldersCommand } from './commands/folders.js';
 import { forwardEventCommand } from './commands/forward-event.js';
 import { mailCommand } from './commands/mail.js';
 import { oofCommand } from './commands/oof.js';
+import { plannerCommand } from './commands/planner.js';
 import { respondCommand } from './commands/respond.js';
 import { roomsCommand } from './commands/rooms.js';
 import { rulesCommand } from './commands/rules.js';
 import { scheduleCommand } from './commands/schedule.js';
 import { sendCommand } from './commands/send.js';
 import { serveCommand } from './commands/serve.js';
+import { sharepointCommand } from './commands/sharepoint.js';
+import { sitePagesCommand } from './commands/site-pages.js';
 import { subscribeCommand } from './commands/subscribe.js';
 import { subscriptionsCommand } from './commands/subscriptions.js';
 import { suggestCommand } from './commands/suggest.js';
 import { todoCommand } from './commands/todo.js';
 import { updateEventCommand } from './commands/update-event.js';
+import { verifyTokenCommand } from './commands/verify-token.js';
 import { whoamiCommand } from './commands/whoami.js';
 
 const program = new Command();
@@ -32,6 +36,8 @@ const program = new Command();
 program.name('clippy').description('CLI for Microsoft 365/EWS').version('0.1.0');
 
 program.addCommand(whoamiCommand);
+program.addCommand(sitePagesCommand);
+program.addCommand(verifyTokenCommand);
 program.addCommand(autoReplyCommand);
 program.addCommand(calendarCommand);
 program.addCommand(findtimeCommand);
@@ -57,5 +63,9 @@ program.addCommand(oofCommand);
 program.addCommand(rulesCommand);
 program.addCommand(delegatesCommand);
 program.addCommand(todoCommand);
+
+program.addCommand(plannerCommand);
+
+program.addCommand(sharepointCommand);
 
 program.parse();

@@ -2,6 +2,7 @@ import { access, mkdir, writeFile } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
+import { parseDay, toLocalUnzonedISOString } from '../lib/dates.js';
 import {
   forwardEmail,
   getAttachment,
@@ -12,6 +13,7 @@ import {
   moveEmail,
   replyToEmail,
   replyToEmailDraft,
+  SENSITIVITY_MAP,
   updateEmail
 } from '../lib/ews-client.js';
 import { markdownToHtml } from '../lib/markdown.js';
@@ -54,8 +56,12 @@ export const mailCommand = new Command('mail')
   .option('--mark-read <id>', 'Mark email as read (by ID)')
   .option('--mark-unread <id>', 'Mark email as unread (by ID)')
   .option('--flag <id>', 'Flag email (by ID)')
+  .option('--start-date <date>', 'Start date for flag (YYYY-MM-DD)')
+  .option('--due <date>', 'Due date for flag (YYYY-MM-DD)')
   .option('--unflag <id>', 'Remove flag (by ID)')
   .option('--complete <id>', 'Mark flagged email as complete (by ID)')
+  .option('--sensitivity <id>', 'Set sensitivity on email by ID (use with --level)')
+  .option('--level <level>', 'Sensitivity level: normal, personal, private, confidential')
   .option('--move <id>', 'Move email to folder (use with --to)')
   .option('--to <folder>', 'Destination folder for move (inbox, archive, deleted, junk)')
   .option('--reply <id>', 'Reply to email by ID')
@@ -85,8 +91,12 @@ export const mailCommand = new Command('mail')
         markRead?: string;
         markUnread?: string;
         flag?: string;
+        startDate?: string;
+        due?: string;
         unflag?: string;
         complete?: string;
+        sensitivity?: string;
+        level?: string;
         move?: string;
         to?: string;
         reply?: string;
@@ -348,10 +358,33 @@ export const mailCommand = new Command('mail')
         const id = (options.flag || options.unflag || options.complete)?.trim();
         let flagStatus: 'NotFlagged' | 'Flagged' | 'Complete';
         let actionLabel: string;
+        let startDate: { DateTime: string; TimeZone: string } | undefined;
+        let dueDate: { DateTime: string; TimeZone: string } | undefined;
 
         if (options.flag) {
           flagStatus = 'Flagged';
           actionLabel = 'Flagged';
+
+          if (options.startDate) {
+            let parsedStartDate: Date;
+            try {
+              parsedStartDate = parseDay(options.startDate, { throwOnInvalid: true });
+            } catch (err) {
+              console.error(`Error: Invalid start date: ${err instanceof Error ? err.message : String(err)}`);
+              process.exit(1);
+            }
+            startDate = { DateTime: toLocalUnzonedISOString(parsedStartDate), TimeZone: 'UTC' };
+          }
+          if (options.due) {
+            let parsedDueDate: Date;
+            try {
+              parsedDueDate = parseDay(options.due, { throwOnInvalid: true });
+            } catch (err) {
+              console.error(`Error: Invalid due date: ${err instanceof Error ? err.message : String(err)}`);
+              process.exit(1);
+            }
+            dueDate = { DateTime: toLocalUnzonedISOString(parsedDueDate), TimeZone: 'UTC' };
+          }
         } else if (options.complete) {
           flagStatus = 'Complete';
           actionLabel = 'Marked complete';
@@ -365,7 +398,7 @@ export const mailCommand = new Command('mail')
           process.exit(1);
         }
         const result = await updateEmail(authResult.token!, id, {
-          Flag: { FlagStatus: flagStatus }
+          Flag: { FlagStatus: flagStatus, StartDate: startDate, DueDate: dueDate }
         });
 
         if (!result.ok) {
@@ -374,6 +407,38 @@ export const mailCommand = new Command('mail')
         }
 
         console.log(`\u2713 ${actionLabel}: ${id}`);
+        return;
+      }
+
+      // Handle sensitivity
+      if (options.sensitivity) {
+        const id = options.sensitivity.trim();
+
+        if (!options.level) {
+          console.error('Error: --sensitivity requires --level to be specified');
+          console.error('Example: clippy mail --sensitivity <id> --level personal');
+          console.error('Levels: normal, personal, private, confidential');
+          process.exit(1);
+        }
+
+        const sensitivity = SENSITIVITY_MAP[options.level.toLowerCase()];
+
+        if (!sensitivity) {
+          console.error(`Invalid sensitivity level: ${options.level}`);
+          console.error('Valid levels: normal, personal, private, confidential');
+          process.exit(1);
+        }
+
+        const result = await updateEmail(authResult.token!, id, {
+          Sensitivity: sensitivity
+        });
+
+        if (!result.ok) {
+          console.error(`Error: ${result.error?.message || 'Failed to update email sensitivity'}`);
+          process.exit(1);
+        }
+
+        console.log(`\u2713 Sensitivity set to ${sensitivity}: ${id}`);
         return;
       }
 

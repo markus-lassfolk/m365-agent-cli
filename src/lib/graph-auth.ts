@@ -21,6 +21,8 @@ const GRAPH_SCOPES = [
   'https://graph.microsoft.com/Files.ReadWrite.All offline_access User.Read',
   'https://graph.microsoft.com/Sites.ReadWrite.All offline_access User.Read',
   'https://graph.microsoft.com/.default offline_access',
+  'https://graph.microsoft.com/Tasks.ReadWrite offline_access User.Read',
+  'https://graph.microsoft.com/Group.ReadWrite.All offline_access User.Read',
   'https://graph.microsoft.com/Files.Read offline_access User.Read'
 ];
 

@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
 import { parseDay, parseTimeToDate, toLocalUnzonedISOString, toUTCISOString } from '../lib/dates.js';
-import { getCalendarEvents, getRooms, searchRooms, updateEvent } from '../lib/ews-client.js';
+import { getCalendarEvents, getRooms, SENSITIVITY_MAP, searchRooms, updateEvent } from '../lib/ews-client.js';
 
 function formatTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -47,6 +47,9 @@ export const updateEventCommand = new Command('update-event')
   .option('--no-teams', 'Remove Teams meeting')
   .option('--all-day', 'Mark as an all-day event')
   .option('--no-all-day', 'Remove all-day flag')
+  .option('--category <name>', 'Category label (repeatable)', (v, acc) => [...acc, v], [] as string[])
+  .option('--clear-categories', 'Clear all categories')
+  .option('--sensitivity <level>', 'Set sensitivity: normal, personal, private, confidential')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--mailbox <email>', 'Update event in shared mailbox calendar')
@@ -69,9 +72,12 @@ export const updateEventCommand = new Command('update-event')
         instance?: string;
         teams?: boolean;
         allDay?: boolean;
+        sensitivity?: string;
         json?: boolean;
         token?: string;
         mailbox?: string;
+        category?: string[];
+        clearCategories?: boolean;
       }
     ) => {
       const authResult = await resolveAuth({
@@ -260,7 +266,10 @@ export const updateEventCommand = new Command('update-event')
         options.location ||
         options.timezone ||
         options.teams !== undefined ||
-        options.allDay !== undefined;
+        options.allDay !== undefined ||
+        (options.category && options.category.length > 0) ||
+        options.clearCategories ||
+        !!options.sensitivity;
 
       if (!hasUpdates) {
         // Show current event details
@@ -288,7 +297,12 @@ export const updateEventCommand = new Command('update-event')
         eventId: targetEvent ? targetEvent.Id : displayEvent!.Id,
         changeKey: displayEvent!.ChangeKey,
         occurrenceItemId,
-        mailbox: options.mailbox
+        mailbox: options.mailbox,
+        categories: options.clearCategories
+          ? []
+          : options.category && options.category.length > 0
+            ? options.category
+            : undefined
       };
 
       if (options.title) {
@@ -346,6 +360,15 @@ export const updateEventCommand = new Command('update-event')
       // Handle all-day
       if (options.allDay !== undefined) {
         updateOptions.isAllDay = options.allDay;
+      }
+
+      if (options.sensitivity) {
+        const sensitivity = SENSITIVITY_MAP[options.sensitivity.toLowerCase()];
+        if (!sensitivity) {
+          console.error(`Invalid sensitivity: ${options.sensitivity}`);
+          process.exit(1);
+        }
+        updateOptions.sensitivity = sensitivity;
       }
 
       // Handle room

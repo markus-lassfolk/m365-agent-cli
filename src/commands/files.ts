@@ -7,9 +7,13 @@ import {
   type DriveItemReference,
   defaultDownloadPath,
   deleteFile,
+  downloadConvertedFile,
   downloadFile,
+  getFileAnalytics,
   getFileMetadata,
   listFiles,
+  listFileVersions,
+  restoreFileVersion,
   searchFiles,
   shareFile,
   uploadFile,
@@ -323,6 +327,68 @@ filesCommand
   );
 
 filesCommand
+  .command('versions <fileId>')
+  .description('List versions of a file')
+  .option('--json', 'Output as JSON')
+  .option('--token <token>', 'Use a specific Graph token')
+  .action(async (fileId: string, options: { json?: boolean; token?: string }) => {
+    const auth = await resolveGraphAuth({ token: options.token });
+    if (!auth.success) {
+      console.error(`Error: ${auth.error}`);
+      process.exit(1);
+    }
+
+    const result = await listFileVersions(auth.token!, fileId);
+    if (!result.ok || !result.data) {
+      console.error(`Error: ${result.error?.message || 'Failed to list versions'}`);
+      process.exit(1);
+    }
+
+    if (options.json) {
+      console.log(JSON.stringify({ versions: result.data }, null, 2));
+      return;
+    }
+
+    if (result.data.length === 0) {
+      console.log('No versions found.');
+      return;
+    }
+
+    for (const v of result.data) {
+      console.log(`VERSION  ${v.id}`);
+      if (v.lastModifiedDateTime) console.log(`      Modified: ${v.lastModifiedDateTime}`);
+      if (v.size !== undefined) console.log(`      Size:     ${formatBytes(v.size)}`);
+      if (v.lastModifiedBy?.user?.displayName) console.log(`      By:       ${v.lastModifiedBy.user.displayName}`);
+    }
+  });
+
+filesCommand
+  .command('restore <fileId> <versionId>')
+  .description('Restore a specific version of a file')
+  .option('--json', 'Output as JSON')
+  .option('--token <token>', 'Use a specific Graph token')
+  .action(async (fileId: string, versionId: string, options: { json?: boolean; token?: string }) => {
+    const auth = await resolveGraphAuth({ token: options.token });
+    if (!auth.success) {
+      console.error(`Error: ${auth.error}`);
+      process.exit(1);
+    }
+
+    const result = await restoreFileVersion(auth.token!, fileId, versionId);
+    if (!result.ok) {
+      console.error(`Error: ${result.error?.message || 'Restore failed'}`);
+      process.exit(1);
+    }
+
+    if (options.json) {
+      console.log(JSON.stringify({ success: true, fileId, versionId }, null, 2));
+      return;
+    }
+
+    console.log(`✓ Restored version ${versionId} of file ${fileId}`);
+  });
+
+filesCommand
   .command('checkin <fileId>')
   .description('Check in a previously checked-out Office document')
   .option('--comment <comment>', 'Optional check-in comment')
@@ -350,4 +416,73 @@ filesCommand
     console.log(`  File: ${result.data.item.name}`);
     console.log(`  File ID: ${result.data.item.id}`);
     if (result.data.comment) console.log(`  Comment: ${result.data.comment}`);
+  });
+
+filesCommand
+  .command('convert <fileId>')
+  .description('Download a file converted to a specific format (default: pdf)')
+  .option('--format <format>', 'Target format (e.g. pdf, html, glb)', 'pdf')
+  .option('--out <path>', 'Output path')
+  .option('--json', 'Output as JSON')
+  .option('--token <token>', 'Use a specific Graph token')
+  .action(async (fileId: string, options: { format: string; out?: string; json?: boolean; token?: string }) => {
+    const auth = await resolveGraphAuth({ token: options.token });
+    if (!auth.success) {
+      console.error(`Error: ${auth.error}`);
+      process.exit(1);
+    }
+
+    const result = await downloadConvertedFile(auth.token!, fileId, options.format, options.out);
+    if (!result.ok || !result.data) {
+      console.error(`Error: ${result.error?.message || 'Conversion download failed'}`);
+      process.exit(1);
+    }
+
+    if (options.json) {
+      console.log(JSON.stringify(result.data, null, 2));
+      return;
+    }
+
+    console.log(`✓ Converted file downloaded`);
+    console.log(`  Saved to: ${result.data.path}`);
+  });
+
+filesCommand
+  .command('analytics <fileId>')
+  .description('Get file analytics (access/action counts)')
+  .option('--json', 'Output as JSON')
+  .option('--token <token>', 'Use a specific Graph token')
+  .action(async (fileId: string, options: { json?: boolean; token?: string }) => {
+    const auth = await resolveGraphAuth({ token: options.token });
+    if (!auth.success) {
+      console.error(`Error: ${auth.error}`);
+      process.exit(1);
+    }
+
+    const result = await getFileAnalytics(auth.token!, fileId);
+    if (!result.ok || !result.data) {
+      console.error(`Error: ${result.error?.message || 'Failed to get file analytics'}`);
+      process.exit(1);
+    }
+
+    if (options.json) {
+      console.log(JSON.stringify(result.data, null, 2));
+      return;
+    }
+
+    console.log(`✓ Analytics for ${fileId}:`);
+    if (result.data.allTime?.access) {
+      console.log('  All Time:');
+      console.log(`    Actions: ${result.data.allTime.access.actionCount || 0}`);
+      console.log(`    Actors:  ${result.data.allTime.access.actorCount || 0}`);
+    }
+    if (result.data.lastSevenDays?.access) {
+      console.log('  Last 7 Days:');
+      console.log(`    Actions: ${result.data.lastSevenDays.access.actionCount || 0}`);
+      console.log(`    Actors:  ${result.data.lastSevenDays.access.actorCount || 0}`);
+    }
+
+    if (!result.data.allTime?.access && !result.data.lastSevenDays?.access) {
+      console.log('  No analytics data available.');
+    }
   });

@@ -52,6 +52,13 @@ export interface DriveItem {
   '@microsoft.graph.downloadUrl'?: string;
 }
 
+export interface DriveItemVersion {
+  id: string;
+  lastModifiedDateTime?: string;
+  size?: number;
+  lastModifiedBy?: { user?: { displayName?: string; email?: string } };
+}
+
 export interface DriveItemListResponse {
   value: DriveItem[];
 }
@@ -772,10 +779,181 @@ export function defaultDownloadPath(fileName: string): string {
   return resolve(homedir(), 'Downloads', basename(fileName));
 }
 
+export async function listFileVersions(token: string, itemId: string): Promise<GraphResponse<DriveItemVersion[]>> {
+  return fetchAllPages<DriveItemVersion>(
+    token,
+    `/me/drive/items/${encodeURIComponent(itemId)}/versions`,
+    'Failed to list versions'
+  );
+}
+
+export async function restoreFileVersion(
+  token: string,
+  itemId: string,
+  versionId: string
+): Promise<GraphResponse<void>> {
+  try {
+    return await callGraph<void>(
+      token,
+      `/me/drive/items/${encodeURIComponent(itemId)}/versions/${encodeURIComponent(versionId)}/restoreVersion`,
+      { method: 'POST' },
+      false
+    );
+  } catch (err) {
+    if (err instanceof GraphApiError) {
+      return graphError(err.message, err.code, err.status);
+    }
+    return graphError(err instanceof Error ? err.message : 'Failed to restore version');
+  }
+}
+
 export async function cleanupDownloadedFile(path: string): Promise<void> {
   try {
     await unlink(path);
   } catch {
     // Ignore cleanup failures
+  }
+}
+
+export interface FileAnalytics {
+  allTime?: {
+    access?: { actionCount?: number; actorCount?: number };
+  };
+  lastSevenDays?: {
+    access?: { actionCount?: number; actorCount?: number };
+  };
+}
+
+export async function getFileAnalytics(token: string, itemId: string): Promise<GraphResponse<FileAnalytics>> {
+  const [allTimeResult, lastSevenDaysResult] = await Promise.allSettled([
+    callGraph<FileAnalytics['allTime']>(token, `/me/drive/items/${encodeURIComponent(itemId)}/analytics/allTime`),
+    callGraph<FileAnalytics['lastSevenDays']>(
+      token,
+      `/me/drive/items/${encodeURIComponent(itemId)}/analytics/lastSevenDays`
+    )
+  ]);
+
+  const analytics: FileAnalytics = {};
+
+  if (allTimeResult.status === 'fulfilled' && allTimeResult.value.ok && allTimeResult.value.data) {
+    analytics.allTime = allTimeResult.value.data;
+  }
+
+  if (lastSevenDaysResult.status === 'fulfilled' && lastSevenDaysResult.value.ok && lastSevenDaysResult.value.data) {
+    analytics.lastSevenDays = lastSevenDaysResult.value.data;
+  }
+
+  if (allTimeResult.status === 'rejected' && lastSevenDaysResult.status === 'rejected') {
+    const error = allTimeResult.reason;
+    if (error instanceof GraphApiError) {
+      return graphError(error.message, error.code, error.status);
+    }
+    return graphError(error instanceof Error ? error.message : 'Failed to get file analytics');
+  }
+
+  return graphResult(analytics);
+}
+
+export async function downloadConvertedFile(
+  token: string,
+  itemId: string,
+  format: string = 'pdf',
+  outputPath?: string
+): Promise<GraphResponse<{ path: string }>> {
+  let tmpPath: string | undefined;
+  try {
+    const metadata = await getFileMetadata(token, itemId);
+    if (!metadata.ok || !metadata.data) {
+      return graphError(
+        metadata.error?.message || 'Failed to fetch file metadata',
+        metadata.error?.code,
+        metadata.error?.status
+      );
+    }
+
+    const item = metadata.data;
+    const originalName = item.name || itemId;
+    const newName = originalName.includes('.')
+      ? `${originalName.substring(0, originalName.lastIndexOf('.'))}.${format}`
+      : `${originalName}.${format}`;
+
+    const targetPath = resolve(outputPath || defaultDownloadPath(newName));
+    await mkdir(dirname(targetPath), { recursive: true });
+
+    const path = `/me/drive/items/${encodeURIComponent(itemId)}/content?format=${encodeURIComponent(format)}`;
+
+    const redirectResponse = await fetchGraphRaw(token, path, { redirect: 'manual' });
+
+    if (redirectResponse.status < 300 || redirectResponse.status >= 400) {
+      if (!redirectResponse.ok) {
+        return graphError(`Failed to convert file: HTTP ${redirectResponse.status}`);
+      }
+      return graphError('Expected a redirect for file conversion, but got a direct response.');
+    }
+
+    const location = redirectResponse.headers.get('location');
+    if (!location) {
+      return graphError('Missing redirect location for converted file');
+    }
+
+    let url: URL;
+    try {
+      url = new URL(location);
+    } catch {
+      return graphError('Redirect location is not a valid URL.');
+    }
+
+    if (url.protocol !== 'https:') {
+      return graphError('Redirect URL has unsupported scheme. Only HTTPS is permitted.');
+    }
+
+    const allowedDomains = [
+      'onedrive.live.com',
+      'sharepoint.com',
+      'sharepoint.us',
+      'sharepoint.cn',
+      'graph.microsoft.com',
+      'graph.microsoft.us',
+      'microsoftgraph.chinacloudapi.cn',
+      'files.1drv.com'
+    ];
+
+    const isAllowedHost = allowedDomains.some(
+      (domain) => url.hostname === domain || url.hostname.endsWith(`.${domain}`)
+    );
+
+    if (!isAllowedHost) {
+      return graphError(`Redirect URL hostname '${url.hostname}' is not in the allowlist.`);
+    }
+
+    const response = await fetch(url.toString(), { redirect: 'manual' });
+
+    if (response.status >= 300 && response.status < 400) {
+      return graphError('Download failed: further redirects are not permitted for security reasons');
+    }
+
+    if (!response.ok) {
+      return graphError(`Failed to download converted file: HTTP ${response.status}`);
+    }
+    if (!response.body) {
+      return graphError('Response body is empty');
+    }
+
+    const tmpFileName = `.${newName}.${randomBytes(8).toString('hex')}.tmp`;
+    tmpPath = resolve(dirname(targetPath), 'tmp', tmpFileName);
+    await mkdir(dirname(tmpPath), { recursive: true });
+
+    await streamWebToFile(response.body, tmpPath);
+    await rename(tmpPath, targetPath);
+
+    return graphResult({ path: targetPath });
+  } catch (err) {
+    if (tmpPath) {
+      await unlink(tmpPath).catch(() => {});
+    }
+    if (err instanceof GraphApiError) {
+      return graphError(err.message, err.code, err.status);
+    }
+    return graphError(err instanceof Error ? err.message : 'Failed to download converted file');
   }
 }

@@ -78,7 +78,7 @@ clippy create-event "Sprint" 09:00 11:00 --repeat weekly --every 2 --until 2026-
 clippy create-event "Team Standup" 09:00 09:30 --mailbox shared@co.com
 ```
 
-Options: `--day`, `--timezone`, `--description`, `--attendees`, `--room`, `--teams`, `--list-rooms`, `--find-room`, `--repeat` (daily|weekly|monthly|yearly), `--every`, `--days`, `--until`, `--count`, `--json`, `--token`, `--mailbox`
+Options: `--day`, `--timezone`, `--description`, `--attendees`, `--room`, `--teams`, `--list-rooms`, `--find-room`, `--repeat` (daily|weekly|monthly|yearly), `--every`, `--days`, `--until`, `--count`, `--json`, `--token`, `--mailbox`, `--category`, `--clear-categories`, `--sensitivity`, `--all-day`
 
 #### `clippy update-event [eventIndex]`
 Update a calendar event by index or stable ID.
@@ -95,7 +95,7 @@ clippy update-event --day tomorrow               # list events to pick from
 clippy update-event --id <eventId> --mailbox shared@co.com
 ```
 
-Options: `--id`, `--day`, `--timezone`, `--title`, `--description`, `--start`, `--end`, `--add-attendee`, `--room`, `--location`, `--teams`, `--no-teams`, `--json`, `--token`, `--mailbox`
+Options: `--id`, `--day`, `--timezone`, `--title`, `--description`, `--start`, `--end`, `--add-attendee`, `--room`, `--location`, `--teams`, `--no-teams`, `--json`, `--token`, `--mailbox`, `--category`, `--clear-categories`, `--sensitivity`, `--all-day`
 
 #### `clippy delete-event [eventIndex]`
 Delete/cancel a calendar event.
@@ -253,6 +253,13 @@ clippy files upload ./report.docx
 clippy files upload ./report.docx --folder <folderId>
 ```
 
+#### `clippy files upload-large <path>`
+Upload a file larger than 4MB using a chunked upload session.
+```
+clippy files upload-large ./big-video.mp4
+clippy files upload-large ./big-video.mp4 --folder <folderId>
+```
+
 #### `clippy files download <fileId>`
 ```
 clippy files download <fileId>
@@ -320,3 +327,10 @@ Options: `--json`, `--token`
 - Date and email input validation tightened
 - Token cache file permissions secured (owner-only read)
 - String `$pattern` replacement bug fixed (prevents injection via malformed patterns)
+
+#### `clippy verify-token`
+Verify your currently configured Graph API token's scopes and permissions. Useful for troubleshooting `403 Forbidden` errors.
+```
+clippy verify-token
+clippy verify-token --token <token> --json
+```
