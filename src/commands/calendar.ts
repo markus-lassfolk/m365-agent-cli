@@ -175,10 +175,14 @@ function displayEvent(event: CalendarEvent, verbose: boolean): void {
       console.log(`     🔄 Series: First: ${first}, Last: ${last}`);
     }
     if (event.ModifiedOccurrences && event.ModifiedOccurrences.length > 0) {
-      console.log(`     ✏️  Modified exceptions: ${event.ModifiedOccurrences.map(o => o.OriginalStart.substring(0, 10)).join(', ')}`);
+      console.log(
+        `     ✏️  Modified exceptions: ${event.ModifiedOccurrences.map((o) => o.OriginalStart.substring(0, 10)).join(', ')}`
+      );
     }
     if (event.DeletedOccurrences && event.DeletedOccurrences.length > 0) {
-      console.log(`     🗑️  Deleted exceptions: ${event.DeletedOccurrences.map(o => o.Start.substring(0, 10)).join(', ')}`);
+      console.log(
+        `     🗑️  Deleted exceptions: ${event.DeletedOccurrences.map((o) => o.Start.substring(0, 10)).join(', ')}`
+      );
     }
   }
 }
