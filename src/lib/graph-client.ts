@@ -790,35 +790,32 @@ export interface FileAnalytics {
 }
 
 export async function getFileAnalytics(token: string, itemId: string): Promise<GraphResponse<FileAnalytics>> {
-  try {
-    const [allTimeResult, lastSevenDaysResult] = await Promise.all([
-      callGraph<{ allTime?: FileAnalytics['allTime'] }>(
-        token,
-        `/me/drive/items/${encodeURIComponent(itemId)}/analytics/allTime`
-      ),
-      callGraph<{ lastSevenDays?: FileAnalytics['lastSevenDays'] }>(
-        token,
-        `/me/drive/items/${encodeURIComponent(itemId)}/analytics/lastSevenDays`
-      )
-    ]);
+  const [allTimeResult, lastSevenDaysResult] = await Promise.allSettled([
+    callGraph<{ allTime?: FileAnalytics['allTime'] }>(
+      token,
+      `/me/drive/items/${encodeURIComponent(itemId)}/analytics/allTime`
+    ),
+    callGraph<{ lastSevenDays?: FileAnalytics['lastSevenDays'] }>(
+      token,
+      `/me/drive/items/${encodeURIComponent(itemId)}/analytics/lastSevenDays`
+    )
+  ]);
 
-    const analytics: FileAnalytics = {};
+  const analytics: FileAnalytics = {};
 
-    if (allTimeResult.ok && allTimeResult.data?.allTime) {
-      analytics.allTime = allTimeResult.data.allTime;
-    }
-
-    if (lastSevenDaysResult.ok && lastSevenDaysResult.data?.lastSevenDays) {
-      analytics.lastSevenDays = lastSevenDaysResult.data.lastSevenDays;
-    }
-
-    return graphResult(analytics);
-  } catch (err) {
-    if (err instanceof GraphApiError) {
-      return graphError(err.message, err.code, err.status);
-    }
-    return graphError(err instanceof Error ? err.message : 'Failed to get file analytics');
+  if (allTimeResult.status === 'fulfilled' && allTimeResult.value.ok && allTimeResult.value.data?.allTime) {
+    analytics.allTime = allTimeResult.value.data.allTime;
   }
+
+  if (
+    lastSevenDaysResult.status === 'fulfilled' &&
+    lastSevenDaysResult.value.ok &&
+    lastSevenDaysResult.value.data?.lastSevenDays
+  ) {
+    analytics.lastSevenDays = lastSevenDaysResult.value.data.lastSevenDays;
+  }
+
+  return graphResult(analytics);
 }
 
 export async function downloadConvertedFile(
