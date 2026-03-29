@@ -122,6 +122,7 @@ import { findCommand } from '../commands/find.js';
 import { findtimeCommand } from '../commands/findtime.js';
 import { foldersCommand } from '../commands/folders.js';
 import { forwardEventCommand } from '../commands/forward-event.js';
+import { loginCommand } from '../commands/login.js';
 import { mailCommand } from '../commands/mail.js';
 import { oofCommand } from '../commands/oof.js';
 import { respondCommand } from '../commands/respond.js';
@@ -170,6 +171,7 @@ function makeProgram(): Command {
   p.addCommand(deleteEventCommand);
   p.addCommand(findCommand);
   p.addCommand(updateEventCommand);
+  p.addCommand(loginCommand);
   p.addCommand(mailCommand);
   p.addCommand(foldersCommand);
   p.addCommand(sendCommand);

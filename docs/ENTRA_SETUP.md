@@ -87,6 +87,6 @@ After completing the setup (either manually or automatically), you need to captu
 1. **`EWS_CLIENT_ID`**: If you used the automated setup scripts, this is already appended to your `.env` file. If you used the manual setup, go to the **Overview** page of your App Registration, copy the **Application (client) ID**, and add it to your `.env` file as `EWS_CLIENT_ID=<id>`.
 2. **Refresh Tokens**: To get your initial `GRAPH_REFRESH_TOKEN` and `EWS_REFRESH_TOKEN`, use the interactive login flow provided by the CLI. Run the `login` command:
    ```bash
-   m365-agent-cli login
+   clippy login
    ```
    It will prompt you to authenticate via the Device Code flow and will automatically save the refresh tokens into your `.env` file upon successful authentication.

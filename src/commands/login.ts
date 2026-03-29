@@ -39,7 +39,7 @@ export const loginCommand = new Command('login')
 
       // Save it to .env
       envContent += `\nEWS_CLIENT_ID=${clientId}\n`;
-      await writeFile(envPath, `${envContent.trim()}\n`, 'utf8');
+      await writeFile(envPath, `${envContent.trim()}\n`, { encoding: 'utf8', mode: 0o600 });
     }
 
     const tenant = getMicrosoftTenantPathSegment();
@@ -70,6 +70,7 @@ export const loginCommand = new Command('login')
 
     const deviceCode = deviceCodeJson.device_code;
     const interval = (deviceCodeJson.interval || 5) * 1000;
+    const expiresAt = Date.now() + (deviceCodeJson.expires_in || 900) * 1000;
 
     let authenticated = false;
     let refreshToken = '';
@@ -78,6 +79,11 @@ export const loginCommand = new Command('login')
     console.log('Waiting for authentication...');
 
     while (!authenticated) {
+      if (Date.now() > expiresAt) {
+        console.error('\nDevice code expired. Please run the command again.');
+        process.exit(1);
+      }
+
       await new Promise((resolve) => setTimeout(resolve, pollInterval));
 
       const tokenRes = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, {
@@ -123,13 +129,13 @@ export const loginCommand = new Command('login')
     if (/^GRAPH_REFRESH_TOKEN=.*$/m.test(envContent)) {
       envContent = envContent.replace(/^GRAPH_REFRESH_TOKEN=.*$/m, `GRAPH_REFRESH_TOKEN=${refreshToken}`);
     } else {
-      envContent += `GRAPH_REFRESH_TOKEN=${refreshToken}\n`;
+      envContent += `\nGRAPH_REFRESH_TOKEN=${refreshToken}\n`;
     }
 
     // Clean up multiple newlines if any
     envContent = envContent.replace(/\n{3,}/g, '\n\n');
 
-    await writeFile(envPath, `${envContent.trim()}\n`, 'utf8');
+    await writeFile(envPath, `${envContent.trim()}\n`, { encoding: 'utf8', mode: 0o600 });
 
     console.log('Saved EWS_REFRESH_TOKEN and GRAPH_REFRESH_TOKEN to .env file in the current directory.');
   });

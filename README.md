@@ -48,7 +48,7 @@ If you used the setup scripts from `docs/ENTRA_SETUP.md`, your `EWS_CLIENT_ID` i
 The easiest way to obtain your refresh tokens is to run the interactive login command:
 
 ```bash
-m365-agent-cli login
+clippy login
 ```
 
 This will initiate the Microsoft Device Code flow and automatically save `EWS_REFRESH_TOKEN` and `GRAPH_REFRESH_TOKEN` into your `.env` file upon successful authentication.
