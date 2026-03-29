@@ -76,7 +76,6 @@ export interface CheckinResult {
   comment?: string;
 }
 
-
 async function streamWebToFile(body: ReadableStream<Uint8Array>, filePath: string): Promise<number> {
   const stream = createWriteStream(filePath, { flags: 'w', mode: 0o600 });
   let bytesWritten = 0;
@@ -300,7 +299,9 @@ export async function uploadFile(
     const fileStats = await stat(absolutePath);
     if (!fileStats.isFile()) return graphError(`Not a file: ${absolutePath}`);
     if (fileStats.size > 250 * 1024 * 1024) {
-      return graphError('File exceeds 250MB upload limit. Split the file into smaller parts or use Microsoft SharePoint to upload large files directly.');
+      return graphError(
+        'File exceeds 250MB upload limit. Split the file into smaller parts or use Microsoft SharePoint to upload large files directly.'
+      );
     }
 
     const fileName = basename(absolutePath);
@@ -326,7 +327,6 @@ export async function uploadFile(
     return graphError(err instanceof Error ? err.message : 'Upload failed');
   }
 }
-
 
 export async function downloadFile(
   token: string,
