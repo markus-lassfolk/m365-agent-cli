@@ -1672,8 +1672,8 @@ export async function forwardEmail(
     <m:CreateItem MessageDisposition="SendAndSaveCopy">
       <m:Items>
         <t:ForwardItem>
-          <t:ToRecipients>${toXml}</t:ToRecipients>
           <t:ReferenceItemId Id="${xmlEscape(messageId)}" />
+          <t:ToRecipients>${toXml}</t:ToRecipients>
           ${comment ? `<t:NewBodyContent BodyType="Text">${xmlEscape(comment)}</t:NewBodyContent>` : ''}
         </t:ForwardItem>
       </m:Items>
@@ -2260,10 +2260,7 @@ export async function getScheduleViaOutlook(
 ): Promise<OwaResponse<ScheduleInfo[]>> {
   try {
     if (!timeZone) {
-      const { getMailboxSettings } = await import('./oof-client.js');
-      const mbx = await getMailboxSettings(token);
-      timeZone = mbx.data?.timeZone || 'UTC';
-      // SuggestionsViewOptions requires dates at midnight with no timezone offset
+      timeZone = 'UTC';
     }
 
     const suggestStartD = new Date(startDateTime);
@@ -2470,14 +2467,7 @@ export async function areRoomsFree(
 
   if (roomEmails.length === 0) return result;
 
-  let timeZone = 'UTC';
-  try {
-    const { getMailboxSettings } = await import('./oof-client.js');
-    const mbx = await getMailboxSettings(token);
-    timeZone = mbx.data?.timeZone || 'UTC';
-  } catch {
-    // Fall back to UTC if we can't get mailbox settings
-  }
+  const timeZone = 'UTC';
 
   const BATCH_SIZE = 100;
   const batches: string[][] = [];
