@@ -176,7 +176,7 @@ export interface CalendarEvent {
   FirstOccurrence?: { Start: { DateTime: string; TimeZone: string }; End: { DateTime: string; TimeZone: string } };
   LastOccurrence?: { Start: { DateTime: string; TimeZone: string }; End: { DateTime: string; TimeZone: string } };
   ModifiedOccurrences?: Array<{
-    OriginalItemId: string;
+    ItemId: string;
     Start: { DateTime: string; TimeZone: string };
     End: { DateTime: string; TimeZone: string };
   }>;
@@ -429,26 +429,22 @@ function parseCalendarItem(block: string, mailbox?: string): CalendarEvent {
   const firstOccBlock = extractSelfClosingOrBlock(block, 'FirstOccurrence');
   const firstOccStart = extractTag(firstOccBlock, 'Start');
   const firstOccEnd = extractTag(firstOccBlock, 'End');
-  const firstOccStartTz = extractAttribute(firstOccBlock, 'StartTimeZone', 'Id') || 'UTC';
-  const firstOccEndTz = extractAttribute(firstOccBlock, 'EndTimeZone', 'Id') || 'UTC';
   const FirstOccurrence =
     firstOccStart && firstOccEnd
       ? {
-          Start: { DateTime: firstOccStart, TimeZone: firstOccStartTz },
-          End: { DateTime: firstOccEnd, TimeZone: firstOccEndTz }
+          Start: { DateTime: firstOccStart, TimeZone: startTimeZone },
+          End: { DateTime: firstOccEnd, TimeZone: endTimeZone }
         }
       : undefined;
 
   const lastOccBlock = extractSelfClosingOrBlock(block, 'LastOccurrence');
   const lastOccStart = extractTag(lastOccBlock, 'Start');
   const lastOccEnd = extractTag(lastOccBlock, 'End');
-  const lastOccStartTz = extractAttribute(lastOccBlock, 'StartTimeZone', 'Id') || 'UTC';
-  const lastOccEndTz = extractAttribute(lastOccBlock, 'EndTimeZone', 'Id') || 'UTC';
   const LastOccurrence =
     lastOccStart && lastOccEnd
       ? {
-          Start: { DateTime: lastOccStart, TimeZone: lastOccStartTz },
-          End: { DateTime: lastOccEnd, TimeZone: lastOccEndTz }
+          Start: { DateTime: lastOccStart, TimeZone: startTimeZone },
+          End: { DateTime: lastOccEnd, TimeZone: endTimeZone }
         }
       : undefined;
 
@@ -459,13 +455,11 @@ function parseCalendarItem(block: string, mailbox?: string): CalendarEvent {
       ? modifiedOccBlocks.map((occ) => {
           const occStart = extractTag(occ, 'Start');
           const occEnd = extractTag(occ, 'End');
-          const occStartTz = extractAttribute(occ, 'StartTimeZone', 'Id') || 'UTC';
-          const occEndTz = extractAttribute(occ, 'EndTimeZone', 'Id') || 'UTC';
-          const occOrigId = extractAttribute(occ, 'ItemId', 'Id') || '';
+          const occItemId = extractAttribute(occ, 'ItemId', 'Id') || '';
           return {
-            OriginalItemId: occOrigId,
-            Start: { DateTime: occStart || '', TimeZone: occStartTz },
-            End: { DateTime: occEnd || '', TimeZone: occEndTz }
+            ItemId: occItemId,
+            Start: { DateTime: occStart || '', TimeZone: startTimeZone },
+            End: { DateTime: occEnd || '', TimeZone: endTimeZone }
           };
         })
       : undefined;
@@ -476,9 +470,8 @@ function parseCalendarItem(block: string, mailbox?: string): CalendarEvent {
     deletedOccBlocks.length > 0
       ? deletedOccBlocks.map((occ) => {
           const occStart = extractTag(occ, 'Start');
-          const occStartTz = extractAttribute(occ, 'StartTimeZone', 'Id') || 'UTC';
           return {
-            Start: { DateTime: occStart || '', TimeZone: occStartTz }
+            Start: { DateTime: occStart || '', TimeZone: startTimeZone }
           };
         })
       : undefined;
