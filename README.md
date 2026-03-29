@@ -433,9 +433,6 @@ clippy files upload ./report.docx
 # Upload to a specific folder
 clippy files upload ./report.docx --folder <folderId>
 
-# Create a large upload session (>250MB, <=4GB)
-clippy files upload-large ./large-video.mp4
-
 # Download a file
 clippy files download <fileId>
 clippy files download <fileId> --out ./local-copy.docx

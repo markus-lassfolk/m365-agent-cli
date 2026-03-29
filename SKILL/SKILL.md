@@ -253,11 +253,6 @@ clippy files upload ./report.docx
 clippy files upload ./report.docx --folder <folderId>
 ```
 
-#### `clippy files upload-large <path>`
-```
-clippy files upload-large ./large-video.mp4
-```
-
 #### `clippy files download <fileId>`
 ```
 clippy files download <fileId>
