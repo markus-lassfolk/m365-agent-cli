@@ -362,12 +362,22 @@ export const mailCommand = new Command('mail')
         if (options.flag) {
           flagStatus = 'Flagged';
           actionLabel = 'Flagged';
-          
+
           if (options.startDate) {
-            startDate = { DateTime: new Date(options.startDate).toISOString(), TimeZone: 'UTC' };
+            const parsedStartDate = new Date(options.startDate);
+            if (Number.isNaN(parsedStartDate.getTime())) {
+              console.error('Error: Invalid start date. Please provide a valid ISO 8601 date/time value.');
+              process.exit(1);
+            }
+            startDate = { DateTime: parsedStartDate.toISOString(), TimeZone: 'UTC' };
           }
           if (options.due) {
-            dueDate = { DateTime: new Date(options.due).toISOString(), TimeZone: 'UTC' };
+            const parsedDueDate = new Date(options.due);
+            if (Number.isNaN(parsedDueDate.getTime())) {
+              console.error('Error: Invalid due date. Please provide a valid ISO 8601 date/time value.');
+              process.exit(1);
+            }
+            dueDate = { DateTime: parsedDueDate.toISOString(), TimeZone: 'UTC' };
           }
         } else if (options.complete) {
           flagStatus = 'Complete';
@@ -404,7 +414,7 @@ export const mailCommand = new Command('mail')
           confidential: 'Confidential'
         };
         const sensitivity = levelMap[(options.level || 'normal').toLowerCase()];
-        
+
         if (!sensitivity) {
           console.error(`Invalid sensitivity level: ${options.level}`);
           process.exit(1);

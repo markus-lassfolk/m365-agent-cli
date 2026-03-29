@@ -1056,6 +1056,7 @@ export async function createEvent(options: CreateEventOptions): Promise<OwaRespo
       <m:Items>
         <t:CalendarItem>
           <t:Subject>${xmlEscape(subject)}</t:Subject>
+          ${options.sensitivity ? `<t:Sensitivity>${xmlEscape(options.sensitivity)}</t:Sensitivity>` : ''}
           ${body ? `<t:Body BodyType="Text">${xmlEscape(body)}</t:Body>` : ''}
           <t:Start>${xmlEscape(start)}</t:Start>
           <t:End>${xmlEscape(end)}</t:End>
@@ -1065,7 +1066,6 @@ export async function createEvent(options: CreateEventOptions): Promise<OwaRespo
           ${recurrence ? buildRecurrenceXml(recurrence) : ''}
           ${timezone ? `<t:StartTimeZone Id="${xmlEscape(timezone)}"/><t:EndTimeZone Id="${xmlEscape(timezone)}"/>` : ''}
           ${isOnlineMeeting ? '<t:IsOnlineMeeting>true</t:IsOnlineMeeting>' : ''}
-          ${options.sensitivity ? `<t:Sensitivity>${xmlEscape(options.sensitivity)}</t:Sensitivity>` : ''}
         </t:CalendarItem>
       </m:Items>
     </m:CreateItem>`);
@@ -1707,7 +1707,7 @@ export async function updateEmail(
   updates: {
     IsRead?: boolean;
     Sensitivity?: 'Normal' | 'Personal' | 'Private' | 'Confidential';
-    Flag?: { 
+    Flag?: {
       FlagStatus: 'NotFlagged' | 'Flagged' | 'Complete';
       StartDate?: { DateTime: string; TimeZone: string };
       DueDate?: { DateTime: string; TimeZone: string };
