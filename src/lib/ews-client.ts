@@ -833,13 +833,13 @@ export async function createEvent(options: CreateEventOptions): Promise<OwaRespo
           ${body ? `<t:Body BodyType="Text">${xmlEscape(body)}</t:Body>` : ''}
           <t:Start>${xmlEscape(start)}</t:Start>
           <t:End>${xmlEscape(end)}</t:End>
-          ${startTimeZone ? `<t:StartTimeZone Id="${xmlEscape(startTimeZone)}" />` : ''}
-          ${endTimeZone ? `<t:EndTimeZone Id="${xmlEscape(endTimeZone)}" />` : ''}
           ${isAllDay ? '<t:IsAllDayEvent>true</t:IsAllDayEvent>' : ''}
           ${location ? `<t:Location>${xmlEscape(location)}</t:Location>` : ''}
           ${attendeesXml}
-          ${isOnlineMeeting ? '<t:IsOnlineMeeting>true</t:IsOnlineMeeting>' : ''}
           ${recurrence ? buildRecurrenceXml(recurrence) : ''}
+          ${startTimeZone ? `<t:StartTimeZone Id="${xmlEscape(startTimeZone)}" />` : ''}
+          ${endTimeZone ? `<t:EndTimeZone Id="${xmlEscape(endTimeZone)}" />` : ''}
+          ${isOnlineMeeting ? '<t:IsOnlineMeeting>true</t:IsOnlineMeeting>' : ''}
         </t:CalendarItem>
       </m:Items>
     </m:CreateItem>`);
