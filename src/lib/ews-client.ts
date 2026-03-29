@@ -877,6 +877,8 @@ export async function updateEvent(options: UpdateEventOptions): Promise<OwaRespo
             )
             .join('')}</t:RequiredAttendees></t:CalendarItem></t:SetItemField>`
         );
+      } else {
+        updates.push(`<t:DeleteItemField><t:FieldURI FieldURI="calendar:RequiredAttendees" /></t:DeleteItemField>`);
       }
       if (optional.length > 0) {
         updates.push(
@@ -887,6 +889,8 @@ export async function updateEvent(options: UpdateEventOptions): Promise<OwaRespo
             )
             .join('')}</t:OptionalAttendees></t:CalendarItem></t:SetItemField>`
         );
+      } else {
+        updates.push(`<t:DeleteItemField><t:FieldURI FieldURI="calendar:OptionalAttendees" /></t:DeleteItemField>`);
       }
       if (resources.length > 0) {
         updates.push(
@@ -897,6 +901,8 @@ export async function updateEvent(options: UpdateEventOptions): Promise<OwaRespo
             )
             .join('')}</t:Resources></t:CalendarItem></t:SetItemField>`
         );
+      } else {
+        updates.push(`<t:DeleteItemField><t:FieldURI FieldURI="calendar:Resources" /></t:DeleteItemField>`);
       }
     }
 
