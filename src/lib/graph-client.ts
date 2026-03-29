@@ -419,7 +419,12 @@ export async function downloadFile(
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const response = await fetch(url.toString());
+      const response = await fetch(url.toString(), { redirect: 'manual' });
+
+      // Reject redirects to prevent SSRF bypass
+      if (response.status >= 300 && response.status < 400) {
+        return graphError('Download failed: redirects are not permitted for security reasons');
+      }
 
       if (!response.ok) {
         // Non-transient HTTP errors: don't retry
