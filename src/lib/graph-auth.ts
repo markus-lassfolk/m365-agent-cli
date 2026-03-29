@@ -41,8 +41,8 @@ async function saveCachedGraphToken(token: CachedGraphToken): Promise<void> {
       encoding: 'utf-8',
       mode: 0o600
     });
-  } catch {
-    // Ignore cache write failures
+  } catch (err) {
+    console.error('Failed to write Graph token cache:', err instanceof Error ? err.message : err);
   }
 }
 
