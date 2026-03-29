@@ -2194,6 +2194,12 @@ export async function areRoomsFree(
         continue;
       }
 
+      const responseCode = extractTag(fbr, 'ResponseCode');
+      if (responseCode && responseCode !== 'NoError') {
+        result.set(roomEmails[i], false);
+        continue;
+      }
+
       const calendarEvents = extractBlocks(fbr, 'CalendarEvent');
       if (calendarEvents.length === 0) {
         result.set(roomEmails[i], true);
