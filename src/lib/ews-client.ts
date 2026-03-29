@@ -1000,6 +1000,17 @@ export async function createEvent(options: CreateEventOptions): Promise<OwaRespo
   }
 }
 
+/**
+ * Updates an existing calendar event.
+ *
+ * NOTE regarding attendees: In EWS, `SetItemField` for `calendar:RequiredAttendees` (or Optional/Resource)
+ * replaces the *entire attendee list*. To add or remove an attendee, you must fetch the event,
+ * manipulate the attendees array locally, and pass the full list back here.
+ * This introduces a potential race condition: if an attendee is added/removed externally between the
+ * fetch and update steps, those changes will be overwritten.
+ * 
+ * Future improvement: provide explicit add/remove delta operations if needed.
+ */
 export async function updateEvent(options: UpdateEventOptions): Promise<OwaResponse<CreatedEvent>> {
   try {
     const { token, eventId, changeKey, subject, start, end, body, location, attendees, occurrenceItemId, mailbox } =
