@@ -186,7 +186,8 @@ export const updateEventCommand = new Command('update-event')
         options.addAttendee.length > 0 ||
         options.room ||
         options.location ||
-        options.teams !== undefined;
+        options.teams !== undefined ||
+        options.allDay !== undefined;
 
       if (!hasUpdates) {
         // Show current event details
