@@ -151,7 +151,6 @@ export const draftsCommand = new Command('drafts')
 
         // Add attachments if specified
         const workingDirectory = process.cwd();
-        let attachmentError = false;
         if (options.attach) {
           const filePaths = options.attach
             .split(',')
@@ -180,7 +179,7 @@ export const draftsCommand = new Command('drafts')
               } else {
                 console.error(`Failed to attach: ${filePath}`);
               }
-              attachmentError = true;
+              process.exit(1);
             }
           }
         }
@@ -194,9 +193,6 @@ export const draftsCommand = new Command('drafts')
           console.log();
         }
 
-        if (attachmentError) {
-          process.exit(1);
-        }
         return;
       }
 

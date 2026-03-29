@@ -293,7 +293,8 @@ export const mailCommand = new Command('mail')
           await writeFile(filePath, content);
 
           const sizeKB = Math.round(content.length / 1024);
-          console.log(`  \u2713 ${att.Name} (${sizeKB} KB)`);
+          const savedFileName = filePath.split('/').pop() || att.Name;
+          console.log(`  \u2713 ${savedFileName} (${sizeKB} KB)`);
         }
 
         console.log('\nDone.\n');
