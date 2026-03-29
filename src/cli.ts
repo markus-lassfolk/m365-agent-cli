@@ -27,13 +27,18 @@ import { todoCommand } from './commands/todo.js';
 import { sharepointCommand } from "./commands/sharepoint.js";
 import { updateEventCommand } from './commands/update-event.js';
 import { whoamiCommand } from './commands/whoami.js';
+
 import { plannerCommand } from './commands/planner.js';
+
+import { sitePagesCommand } from './commands/site-pages.js';
+
 
 const program = new Command();
 
 program.name('clippy').description('CLI for Microsoft 365/EWS').version('0.1.0');
 
 program.addCommand(whoamiCommand);
+program.addCommand(sitePagesCommand);
 program.addCommand(autoReplyCommand);
 program.addCommand(calendarCommand);
 program.addCommand(findtimeCommand);
