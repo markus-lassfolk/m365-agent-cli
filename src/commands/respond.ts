@@ -94,7 +94,7 @@ export const respondCommand = new Command('respond')
       // Fetch upcoming events
       const now = new Date();
       const futureDate = new Date(now);
-      futureDate.setDate(futureDate.getDate() + 30); // Look 30 days ahead
+      futureDate.setDate(futureDate.getDate() + 31); // Look 31 days ahead to avoid boundary misses
 
       const result = await getCalendarEvents(
         authResult.token!,
