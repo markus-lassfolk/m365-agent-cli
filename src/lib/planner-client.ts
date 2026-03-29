@@ -42,14 +42,8 @@ export async function listUserTasks(token: string): Promise<GraphResponse<Planne
 }
 
 export async function listUserPlans(token: string): Promise<GraphResponse<PlannerPlan[]>> {
-  // It's often easier to get all recent plans or tasks' plans, but let's just use /me/planner/plans if available,
-  // Actually, /me/planner/plans does not exist. It's /me/planner/recentPlans or we need to list groups and plans.
-  // wait, the prompt asks for "listing plans". Let's provide a function to list plans by group, or list all my tasks' plans.
-  // Another option is /me/planner/recentPlans (beta). But in v1.0, user's plans can be fetched via getting all tasks and extracting planIds, or via groups.
-  // Actually, wait, let's see if there is an endpoint for a user's plans.
   try {
     const result = await callGraph<{ value: PlannerPlan[] }>(token, '/me/planner/plans');
-    // If /me/planner/plans is not standard, let's fallback to returning an error or just let it try.
     if (!result.ok || !result.data) {
       return graphError(result.error?.message || 'Failed to list plans', result.error?.code, result.error?.status);
     }
@@ -62,7 +56,10 @@ export async function listUserPlans(token: string): Promise<GraphResponse<Planne
 
 export async function listGroupPlans(token: string, groupId: string): Promise<GraphResponse<PlannerPlan[]>> {
   try {
-    const result = await callGraph<{ value: PlannerPlan[] }>(token, `/groups/${groupId}/planner/plans`);
+    const result = await callGraph<{ value: PlannerPlan[] }>(
+      token,
+      `/groups/${encodeURIComponent(groupId)}/planner/plans`
+    );
     if (!result.ok || !result.data) {
       return graphError(
         result.error?.message || 'Failed to list group plans',
@@ -79,7 +76,10 @@ export async function listGroupPlans(token: string, groupId: string): Promise<Gr
 
 export async function listPlanBuckets(token: string, planId: string): Promise<GraphResponse<PlannerBucket[]>> {
   try {
-    const result = await callGraph<{ value: PlannerBucket[] }>(token, `/planner/plans/${planId}/buckets`);
+    const result = await callGraph<{ value: PlannerBucket[] }>(
+      token,
+      `/planner/plans/${encodeURIComponent(planId)}/buckets`
+    );
     if (!result.ok || !result.data) {
       return graphError(result.error?.message || 'Failed to list buckets', result.error?.code, result.error?.status);
     }
@@ -92,7 +92,10 @@ export async function listPlanBuckets(token: string, planId: string): Promise<Gr
 
 export async function listPlanTasks(token: string, planId: string): Promise<GraphResponse<PlannerTask[]>> {
   try {
-    const result = await callGraph<{ value: PlannerTask[] }>(token, `/planner/plans/${planId}/tasks`);
+    const result = await callGraph<{ value: PlannerTask[] }>(
+      token,
+      `/planner/plans/${encodeURIComponent(planId)}/tasks`
+    );
     if (!result.ok || !result.data) {
       return graphError(result.error?.message || 'Failed to list plan tasks', result.error?.code, result.error?.status);
     }
@@ -105,7 +108,7 @@ export async function listPlanTasks(token: string, planId: string): Promise<Grap
 
 export async function getTask(token: string, taskId: string): Promise<GraphResponse<PlannerTask>> {
   try {
-    const result = await callGraph<PlannerTask>(token, `/planner/tasks/${taskId}`);
+    const result = await callGraph<PlannerTask>(token, `/planner/tasks/${encodeURIComponent(taskId)}`);
     if (!result.ok || !result.data) {
       return graphError(result.error?.message || 'Failed to get task', result.error?.code, result.error?.status);
     }
@@ -154,7 +157,7 @@ export async function updateTask(
   }
 ): Promise<GraphResponse<void>> {
   try {
-    const result = await callGraph<void>(token, `/planner/tasks/${taskId}`, {
+    const result = await callGraph<void>(token, `/planner/tasks/${encodeURIComponent(taskId)}`, {
       method: 'PATCH',
       headers: {
         'If-Match': etag

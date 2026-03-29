@@ -184,7 +184,14 @@ plannerCommand
       const updates: any = {};
       if (opts.title !== undefined) updates.title = opts.title;
       if (opts.bucket !== undefined) updates.bucketId = opts.bucket;
-      if (opts.percent !== undefined) updates.percentComplete = parseInt(opts.percent, 10);
+      if (opts.percent !== undefined) {
+        const percentValue = parseInt(opts.percent, 10);
+        if (isNaN(percentValue) || percentValue < 0 || percentValue > 100) {
+          console.error(`Invalid percent value: ${opts.percent}. Must be a number between 0 and 100.`);
+          process.exit(1);
+        }
+        updates.percentComplete = percentValue;
+      }
       if (opts.assign) {
         // Planner API requires a specific structure for assignments.
         updates.assignments = {
@@ -203,9 +210,13 @@ plannerCommand
 
       // Since PATCH returns 204 No Content, get task again to show updated state
       const updatedTaskRes = await getTask(auth.token!, opts.id);
+      if (!updatedTaskRes.ok || !updatedTaskRes.data) {
+        console.error(`Error fetching updated task: ${updatedTaskRes.error?.message}`);
+        process.exit(1);
+      }
 
       if (opts.json) {
-        console.log(JSON.stringify(updatedTaskRes.data || { success: true }, null, 2));
+        console.log(JSON.stringify(updatedTaskRes.data, null, 2));
       } else {
         console.log(`Updated task: ${opts.id}`);
       }
