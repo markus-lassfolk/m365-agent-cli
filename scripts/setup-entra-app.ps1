@@ -63,8 +63,21 @@ try {
     Write-Host "Tenant ID: Common (since audience is AzureADandPersonalMicrosoftAccount)"
     Write-Host ""
     
-    Add-Content -Path ".env" -Value "EWS_CLIENT_ID=$($App.AppId)"
-    Write-Host "Appended EWS_CLIENT_ID to .env file in the current directory."
+    # Update or append EWS_CLIENT_ID to .env
+    if (Test-Path ".env") {
+        $envContent = Get-Content -Path ".env" -Raw
+        if ($envContent -match "^EWS_CLIENT_ID=.*$") {
+            $envContent = $envContent -replace "^EWS_CLIENT_ID=.*$", "EWS_CLIENT_ID=$($App.AppId)"
+            Set-Content -Path ".env" -Value $envContent.TrimEnd()
+            Write-Host "Updated EWS_CLIENT_ID in .env file in the current directory."
+        } else {
+            Add-Content -Path ".env" -Value "EWS_CLIENT_ID=$($App.AppId)"
+            Write-Host "Appended EWS_CLIENT_ID to .env file in the current directory."
+        }
+    } else {
+        Set-Content -Path ".env" -Value "EWS_CLIENT_ID=$($App.AppId)"
+        Write-Host "Created .env file with EWS_CLIENT_ID in the current directory."
+    }
 
     Write-Host ""
     Write-Host "Next steps:"

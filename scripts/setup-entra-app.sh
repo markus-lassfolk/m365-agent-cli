@@ -70,8 +70,14 @@ echo "Client ID (EWS_CLIENT_ID): $APP_ID"
 echo "Tenant ID: Common (since audience is AzureADandPersonalMicrosoftAccount)"
 echo ""
 
-echo "EWS_CLIENT_ID=$APP_ID" >> .env
-echo "Appended EWS_CLIENT_ID to .env file in the current directory."
+# Update or append EWS_CLIENT_ID to .env
+if [ -f .env ] && grep -q "^EWS_CLIENT_ID=" .env; then
+    sed -i.bak "s/^EWS_CLIENT_ID=.*/EWS_CLIENT_ID=$APP_ID/" .env && rm -f .env.bak
+    echo "Updated EWS_CLIENT_ID in .env file in the current directory."
+else
+    echo "EWS_CLIENT_ID=$APP_ID" >> .env
+    echo "Appended EWS_CLIENT_ID to .env file in the current directory."
+fi
 
 echo ""
 echo "Next steps:"

@@ -73,11 +73,12 @@ export const loginCommand = new Command('login')
 
     let authenticated = false;
     let refreshToken = '';
+    let pollInterval = interval;
 
     console.log('Waiting for authentication...');
 
     while (!authenticated) {
-      await new Promise((resolve) => setTimeout(resolve, interval));
+      await new Promise((resolve) => setTimeout(resolve, pollInterval));
 
       const tokenRes = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, {
         method: 'POST',
@@ -94,7 +95,11 @@ export const loginCommand = new Command('login')
       if (tokenRes.ok) {
         authenticated = true;
         refreshToken = tokenJson.refresh_token;
-      } else if (tokenJson.error !== 'authorization_pending') {
+      } else if (tokenJson.error === 'authorization_pending') {
+        // Continue polling
+      } else if (tokenJson.error === 'slow_down') {
+        pollInterval += 5000;
+      } else {
         console.error('\nAuthentication failed:', tokenJson.error_description || tokenJson.error);
         process.exit(1);
       }
