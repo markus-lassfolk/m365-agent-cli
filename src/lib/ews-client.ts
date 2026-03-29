@@ -2158,11 +2158,15 @@ export async function areRoomsFree(
         </t:DaylightTime>
       </t:TimeZone>
       <m:MailboxDataArray>
-        ${roomEmails.map((email) => `
+        ${roomEmails
+          .map(
+            (email) => `
         <t:MailboxData>
           <t:Email><t:Address>${xmlEscape(email)}</t:Address></t:Email>
           <t:AttendeeType>Required</t:AttendeeType>
-        </t:MailboxData>`).join('')}
+        </t:MailboxData>`
+          )
+          .join('')}
       </m:MailboxDataArray>
       <t:FreeBusyViewOptions>
         <t:TimeWindow>
@@ -2181,11 +2185,9 @@ export async function areRoomsFree(
     const reqStart = new Date(startDateTime).getTime();
     const reqEnd = new Date(endDateTime).getTime();
 
-    for (const resp of freeBusyResponses) {
-      const email =
-        extractTag(resp, 'Address') ||
-        resp.match(/<t:Address>([^<]*)<\/t:Address>/)?.[1] ||
-        '';
+    for (let i = 0; i < freeBusyResponses.length; i++) {
+      const resp = freeBusyResponses[i];
+      const email = roomEmails[i];
       const calendarEvents = extractBlocks(resp, 'CalendarEvent');
 
       let isFree = true;
