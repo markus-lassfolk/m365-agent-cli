@@ -2,9 +2,9 @@ import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
 import { parseDay, parseTimeToDate, toUTCISOString } from '../lib/dates.js';
 import {
+  areRoomsFree,
   createEvent,
   getRooms,
-  isRoomFree,
   type Recurrence,
   type RecurrencePattern,
   type RecurrenceRange,
@@ -141,10 +141,12 @@ export const createEventCommand = new Command('create-event')
         if (!roomsResult.ok || !roomsResult.data || roomsResult.data.length === 0) {
           console.error('Could not fetch room list.');
         } else {
-          for (const room of roomsResult.data) {
-            const free = await isRoomFree(authResult.token!, room.Address, start.toISOString(), end.toISOString());
+          // Batch check all rooms in a single EWS request
+          const roomEmails = roomsResult.data.map((r) => r.Address);
+          const freeMap = await areRoomsFree(authResult.token!, roomEmails, start.toISOString(), end.toISOString());
 
-            if (free) {
+          for (const room of roomsResult.data) {
+            if (freeMap.get(room.Address)) {
               roomEmail = room.Address;
               roomName = room.Name;
               console.log(`Found available room: ${room.Name}`);

@@ -307,7 +307,6 @@ export interface GetEmailsOptions {
   folder?: string;
   top?: number;
   skip?: number;
-  filter?: string;
   search?: string;
   select?: string[];
   orderBy?: string;
@@ -1296,7 +1295,7 @@ export async function respondToEvent(options: RespondToEventOptions): Promise<Ow
 
 export async function getEmails(options: GetEmailsOptions): Promise<OwaResponse<EmailListResponse>> {
   try {
-    const { token, folder = 'inbox', top = 10, skip = 0, filter, search, isRead, flagStatus } = options;
+    const { token, folder = 'inbox', top = 10, skip = 0, search, isRead, flagStatus } = options;
 
     // Build restriction for filters
     let restrictionXml = '';
@@ -1309,13 +1308,6 @@ export async function getEmails(options: GetEmailsOptions): Promise<OwaResponse<
           <t:FieldURI FieldURI="message:IsRead" />
           <t:FieldURIOrConstant><t:Constant Value="${isRead ? 'true' : 'false'}" /></t:FieldURIOrConstant>
         </t:IsEqualTo>`);
-      } else if (filter?.includes('IsRead eq false')) {
-        // Fallback for legacy filter string
-        restrictions.push(`
-        <t:IsEqualTo>
-          <t:FieldURI FieldURI="message:IsRead" />
-          <t:FieldURIOrConstant><t:Constant Value="false" /></t:FieldURIOrConstant>
-        </t:IsEqualTo>`);
       }
 
       if (flagStatus) {
@@ -1323,13 +1315,6 @@ export async function getEmails(options: GetEmailsOptions): Promise<OwaResponse<
         <t:IsEqualTo>
           <t:FieldURI FieldURI="item:Flag/FlagStatus" />
           <t:FieldURIOrConstant><t:Constant Value="${flagStatus}" /></t:FieldURIOrConstant>
-        </t:IsEqualTo>`);
-      } else if (filter?.includes('FlagStatus') && filter?.includes('Flagged')) {
-        // Fallback for legacy filter string
-        restrictions.push(`
-        <t:IsEqualTo>
-          <t:FieldURI FieldURI="item:Flag/FlagStatus" />
-          <t:FieldURIOrConstant><t:Constant Value="Flagged" /></t:FieldURIOrConstant>
         </t:IsEqualTo>`);
       }
 
@@ -2340,14 +2325,25 @@ export async function getMyFreeBusySlots(
   return ewsResult(slots);
 }
 
-export async function isRoomFree(
+export async function areRoomsFree(
   token: string,
-  roomEmail: string,
+  roomEmails: string[],
   startDateTime: string,
   endDateTime: string
-): Promise<boolean> {
-  try {
-    const envelope = soapEnvelope(`
+): Promise<Map<string, boolean>> {
+  const result = new Map<string, boolean>();
+
+  if (roomEmails.length === 0) return result;
+
+  const BATCH_SIZE = 100;
+  const batches: string[][] = [];
+  for (let i = 0; i < roomEmails.length; i += BATCH_SIZE) {
+    batches.push(roomEmails.slice(i, i + BATCH_SIZE));
+  }
+
+  for (const batch of batches) {
+    try {
+      const envelope = soapEnvelope(`
     <m:GetUserAvailabilityRequest>
       <t:TimeZone>
         <t:Bias>-60</t:Bias>
@@ -2367,10 +2363,15 @@ export async function isRoomFree(
         </t:DaylightTime>
       </t:TimeZone>
       <m:MailboxDataArray>
+        ${batch
+          .map(
+            (email) => `
         <t:MailboxData>
-          <t:Email><t:Address>${xmlEscape(roomEmail)}</t:Address></t:Email>
+          <t:Email><t:Address>${xmlEscape(email)}</t:Address></t:Email>
           <t:AttendeeType>Required</t:AttendeeType>
-        </t:MailboxData>
+        </t:MailboxData>`
+          )
+          .join('')}
       </m:MailboxDataArray>
       <t:FreeBusyViewOptions>
         <t:TimeWindow>
@@ -2382,33 +2383,74 @@ export async function isRoomFree(
       </t:FreeBusyViewOptions>
     </m:GetUserAvailabilityRequest>`);
 
-    const xml = await callEws(token, envelope);
-    const calendarEvents = extractBlocks(xml, 'CalendarEvent');
+      const response = await fetch(EWS_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'text/xml; charset=utf-8',
+          Accept: 'text/xml',
+          'X-AnchorMailbox': EWS_USERNAME
+        },
+        body: envelope
+      });
 
-    // If no calendar events in the window, room is free
-    if (calendarEvents.length === 0) return true;
+      const xml = await response.text();
 
-    // Check if any event overlaps with our requested time
-    const reqStart = new Date(startDateTime).getTime();
-    const reqEnd = new Date(endDateTime).getTime();
+      if (!response.ok) {
+        const soapError = extractTag(xml, 'faultstring') || extractTag(xml, 'MessageText');
+        throw new Error(`EWS HTTP ${response.status}${soapError ? `: ${soapError}` : ''}`);
+      }
 
-    for (const event of calendarEvents) {
-      const busyType = extractTag(event, 'BusyType');
-      if (busyType === 'Free') continue;
+      // Parse FreeBusyResponse blocks to correlate mailboxes with their events
+      const freeBusyResponses = extractBlocks(xml, 'FreeBusyResponse');
+      const reqStart = new Date(startDateTime).getTime();
+      const reqEnd = new Date(endDateTime).getTime();
 
-      const evStart = new Date(extractTag(event, 'StartTime') || '').getTime();
-      const evEnd = new Date(extractTag(event, 'EndTime') || '').getTime();
+      for (let i = 0; i < freeBusyResponses.length; i++) {
+        const resp = freeBusyResponses[i];
+        const email = batch[i];
 
-      // Check overlap
-      if (evStart < reqEnd && evEnd > reqStart) {
-        return false;
+        // Check for per-room errors (e.g., ErrorMailRecipientNotFound)
+        const responseClass = extractAttribute(resp, 'ResponseMessage', 'ResponseClass');
+        const responseCode = extractTag(resp, 'ResponseCode');
+        if (responseClass && responseClass !== 'Success') {
+          // Room errored - mark as not free (conservative)
+          result.set(email, false);
+          continue;
+        }
+        if (responseCode && responseCode !== 'NoError') {
+          // Room errored - mark as not free (conservative)
+          result.set(email, false);
+          continue;
+        }
+
+        const calendarEvents = extractBlocks(resp, 'CalendarEvent');
+
+        let isFree = true;
+        for (const event of calendarEvents) {
+          const busyType = extractTag(event, 'BusyType');
+          if (busyType === 'Free') continue;
+
+          const evStart = new Date(extractTag(event, 'StartTime') || '').getTime();
+          const evEnd = new Date(extractTag(event, 'EndTime') || '').getTime();
+
+          if (evStart < reqEnd && evEnd > reqStart) {
+            isFree = false;
+            break;
+          }
+        }
+
+        result.set(email, isFree);
+      }
+    } catch {
+      // On error, mark all rooms in this batch as not-free (conservative)
+      for (const email of batch) {
+        result.set(email, false);
       }
     }
-
-    return true;
-  } catch {
-    return false;
   }
+
+  return result;
 }
 
 export interface AutoReplyRule {
