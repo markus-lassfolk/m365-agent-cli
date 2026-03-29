@@ -638,7 +638,7 @@ export async function getCalendarEvent(
   mailbox?: string
 ): Promise<OwaResponse<CalendarEvent>> {
   try {
-    requireNonEmpty(eventId, 'eventId');
+    eventId = requireNonEmpty(eventId, 'eventId');
     const envelope = soapEnvelope(`
     <m:GetItem>
       <m:ItemShape>
@@ -969,8 +969,8 @@ export interface DeleteEventOptions {
 
 export async function deleteEvent(options: DeleteEventOptions): Promise<OwaResponse<void>> {
   try {
-    const { token, eventId, mailbox } = options;
-    requireNonEmpty(eventId, 'eventId');
+    let { token, eventId, mailbox } = options;
+    eventId = requireNonEmpty(eventId, 'eventId');
     const envelope = soapEnvelope(`
     <m:DeleteItem DeleteType="MoveToDeletedItems" SendMeetingCancellations="SendToNone">
       <m:ItemIds>
@@ -1150,7 +1150,7 @@ export async function getEmails(options: GetEmailsOptions): Promise<OwaResponse<
 
 export async function getEmail(token: string, messageId: string): Promise<OwaResponse<EmailMessage>> {
   try {
-    requireNonEmpty(messageId, 'messageId');
+    messageId = requireNonEmpty(messageId, 'messageId');
     const envelope = soapEnvelope(`
     <m:GetItem>
       <m:ItemShape>
@@ -1163,7 +1163,7 @@ export async function getEmail(token: string, messageId: string): Promise<OwaRes
           <t:FieldURI FieldURI="item:HasAttachments" />
           <t:FieldURI FieldURI="message:From" />
           <t:FieldURI FieldURI="message:ToRecipients" />
-          <t:FieldURI FieldURI="message:CcRecipients" />
+          <t:FieldURI FieldU="message:CcRecipients" />
           <t:FieldURI FieldURI="message:IsRead" />
           <t:FieldURI FieldURI="item:Flag" />
           <t:FieldURI FieldURI="item:Importance" />
@@ -1552,7 +1552,7 @@ async function sendItemById(token: string, itemId: string): Promise<void> {
 
 export async function sendDraftById(token: string, draftId: string): Promise<OwaResponse<void>> {
   try {
-    requireNonEmpty(draftId, 'draftId');
+    draftId = requireNonEmpty(draftId, 'draftId');
     await sendItemById(token, draftId);
     return { ok: true, status: 200 };
   } catch (err) {
@@ -1562,7 +1562,7 @@ export async function sendDraftById(token: string, draftId: string): Promise<Owa
 
 export async function deleteDraftById(token: string, draftId: string): Promise<OwaResponse<void>> {
   try {
-    requireNonEmpty(draftId, 'draftId');
+    draftId = requireNonEmpty(draftId, 'draftId');
     const envelope = soapEnvelope(`
     <m:DeleteItem DeleteType="HardDelete">
       <m:ItemIds>
@@ -1887,9 +1887,7 @@ export async function getRooms(token: string, roomListAddress?: string): Promise
       return ewsResult([]);
     }
 
-    const results = await Promise.all(
-      listsResult.data.map(list => getRooms(token, list.Address))
-    );
+    const results = await Promise.all(listsResult.data.map((list) => getRooms(token, list.Address)));
 
     const allRooms: Room[] = [];
     for (const roomsResult of results) {
