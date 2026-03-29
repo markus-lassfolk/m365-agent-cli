@@ -1,8 +1,8 @@
-import { randomBytes } from 'node:crypto';
-import { createReadStream, createWriteStream } from 'node:fs';
-import { mkdir, rename, stat, unlink } from 'node:fs/promises';
-import { homedir } from 'node:os';
 import { basename, dirname, resolve } from 'node:path';
+import { createReadStream, createWriteStream } from 'node:fs';
+import { mkdir, stat, unlink, rename } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { randomBytes } from 'node:crypto';
 import { GRAPH_BASE_URL } from './graph-constants.js';
 
 export { GRAPH_BASE_URL };
@@ -111,6 +111,9 @@ async function streamWebToFile(body: ReadableStream<Uint8Array>, filePath: strin
     return bytesWritten;
   } catch (err) {
     stream.destroy();
+    try {
+      await unlink(filePath);
+    } catch {}
     throw err;
   }
 }
@@ -236,6 +239,16 @@ function buildItemPath(reference?: DriveItemReference): string {
   return `${drivePrefix}/items/${encodeURIComponent(reference.id)}`;
 }
 
+/**
+ * Encode a query string for Graph Drive search.
+ *
+ * encodeURIComponent encodes most characters, but Graph's search(q='...') URL parameter
+ * uses single-quoted strings in the URL path. Apostrophes, parentheses, and exclamation marks
+ * must therefore also be re-encoded to prevent query syntax injection or truncation.
+ *
+ * @param query - Raw search query string
+ * @returns Percent-encoded query safe for use in Graph search URLs
+ */
 function encodeGraphSearchQuery(query: string): string {
   return encodeURIComponent(query).replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
 }

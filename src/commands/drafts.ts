@@ -1,8 +1,8 @@
-import { readFile, stat } from 'node:fs/promises';
-import { basename } from 'node:path';
+import { readFile } from 'node:fs/promises';
 import { Command } from 'commander';
 import { lookup } from 'mime-types';
 import { resolveAuth } from '../lib/auth.js';
+import { AttachmentPathError, validateAttachmentPath } from '../lib/attachments.js';
 import {
   addAttachmentToDraft,
   createDraft,
@@ -50,6 +50,7 @@ export const draftsCommand = new Command('drafts')
   .option('--html', 'Treat body as HTML')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Use a specific authentication identity (default: default)')
   .action(
     async (options: {
       limit: string;
@@ -67,9 +68,11 @@ export const draftsCommand = new Command('drafts')
       html?: boolean;
       json?: boolean;
       token?: string;
+      identity?: string;
     }) => {
       const authResult = await resolveAuth({
-        token: options.token
+        token: options.token,
+        identity: options.identity
       });
 
       if (!authResult.success) {
@@ -147,6 +150,7 @@ export const draftsCommand = new Command('drafts')
         }
 
         // Add attachments if specified
+        const workingDirectory = process.cwd();
         if (options.attach) {
           const filePaths = options.attach
             .split(',')
@@ -154,28 +158,28 @@ export const draftsCommand = new Command('drafts')
             .filter(Boolean);
           for (const filePath of filePaths) {
             try {
-              const fileStat = await stat(filePath);
-              if (fileStat.size > 25 * 1024 * 1024) {
-                console.error(`File too large (>25MB): ${filePath}`);
-                process.exit(1);
-              }
-              const content = await readFile(filePath);
-              const fileName = basename(filePath);
-              const contentType = lookup(filePath) || 'application/octet-stream';
+              const validated = await validateAttachmentPath(filePath, workingDirectory);
+              const content = await readFile(validated.absolutePath);
+              const contentType = lookup(validated.fileName) || 'application/octet-stream';
 
               const attachResult = await addAttachmentToDraft(authResult.token!, result.data.Id, {
-                name: fileName,
+                name: validated.fileName,
                 contentType,
                 contentBytes: content.toString('base64')
               });
 
               if (!attachResult.ok) {
-                console.error(`Failed to attach ${fileName}: ${attachResult.error?.message}`);
+                console.error(`Failed to attach ${validated.fileName}: ${attachResult.error?.message}`);
               } else if (!options.json) {
-                console.log(`  Attached: ${fileName}`);
+                console.log(`  Attached: ${validated.fileName}`);
               }
-            } catch (_err) {
-              console.error(`Failed to read: ${filePath}`);
+            } catch (err) {
+              if (err instanceof AttachmentPathError) {
+                console.error(`Invalid attachment path: ${filePath}: ${err.message}`);
+              } else {
+                console.error(`Failed to attach: ${filePath}`);
+              }
+              process.exit(1);
             }
           }
         }
@@ -188,6 +192,7 @@ export const draftsCommand = new Command('drafts')
           if (toList) console.log(`  To: ${toList.join(', ')}`);
           console.log();
         }
+
         return;
       }
 
@@ -263,6 +268,7 @@ export const draftsCommand = new Command('drafts')
         }
 
         // Add attachments if specified
+        const workingDirectory = process.cwd();
         if (options.attach) {
           const filePaths = options.attach
             .split(',')
@@ -270,21 +276,26 @@ export const draftsCommand = new Command('drafts')
             .filter(Boolean);
           for (const filePath of filePaths) {
             try {
-              const content = await readFile(filePath);
-              const fileName = basename(filePath);
-              const contentType = lookup(filePath) || 'application/octet-stream';
+              const validated = await validateAttachmentPath(filePath, workingDirectory);
+              const content = await readFile(validated.absolutePath);
+              const contentType = lookup(validated.fileName) || 'application/octet-stream';
 
               await addAttachmentToDraft(authResult.token!, id, {
-                name: fileName,
+                name: validated.fileName,
                 contentType,
                 contentBytes: content.toString('base64')
               });
 
               if (!options.json) {
-                console.log(`  Attached: ${fileName}`);
+                console.log(`  Attached: ${validated.fileName}`);
               }
-            } catch {
-              console.error(`Failed to attach: ${filePath}`);
+            } catch (err) {
+              if (err instanceof AttachmentPathError) {
+                console.error(`Invalid attachment path: ${filePath}: ${err.message}`);
+              } else {
+                console.error(`Failed to attach: ${filePath}`);
+              }
+              process.exit(1);
             }
           }
         }
@@ -310,6 +321,10 @@ export const draftsCommand = new Command('drafts')
       // Handle delete
       if (options.delete) {
         const id = options.delete.trim();
+        if (!id) {
+          console.error('Error: --delete requires a draft ID');
+          process.exit(1);
+        }
         const result = await deleteDraftById(authResult.token!, id);
 
         if (!result.ok) {

@@ -19,6 +19,7 @@ export const sendCommand = new Command('send')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--mailbox <email>', 'Send from shared mailbox (Send As)')
+  .option('--identity <name>', 'Use a specific authentication identity (default: default)')
   .action(
     async (options: {
       to: string;
@@ -32,9 +33,11 @@ export const sendCommand = new Command('send')
       json?: boolean;
       token?: string;
       mailbox?: string;
+      identity?: string;
     }) => {
       const authResult = await resolveAuth({
-        token: options.token
+        token: options.token,
+        identity: options.identity
       });
 
       if (!authResult.success) {

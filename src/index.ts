@@ -64,6 +64,7 @@ export {
   getEmail,
   getEmails,
   getFreeBusy,
+  getMyFreeBusySlots,
   getMailFolders,
   getOwaUserInfo,
   getRoomLists,

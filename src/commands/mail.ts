@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { access, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
@@ -68,6 +68,7 @@ export const mailCommand = new Command('mail')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--mailbox <email>', 'Shared mailbox for reply/forward (routes via X-AnchorMailbox)')
+  .option('--identity <name>', 'Use a specific authentication identity (default: default)')
   .action(
     async (
       folder: string,
@@ -97,10 +98,12 @@ export const mailCommand = new Command('mail')
         token?: string;
         draft?: boolean;
         mailbox?: string;
+        identity?: string;
       }
     ) => {
       const authResult = await resolveAuth({
-        token: options.token
+        token: options.token,
+        identity: options.identity
       });
 
       if (!authResult.success) {
@@ -151,22 +154,14 @@ export const mailCommand = new Command('mail')
       const page = parseInt(options.page, 10) || 1;
       const skip = (page - 1) * limit;
 
-      // Build filter
-      const filters: string[] = [];
-      if (options.unread) {
-        filters.push('IsRead eq false');
-      }
-      if (options.flagged) {
-        filters.push("Flag/FlagStatus eq 'Flagged'");
-      }
-
       const result = await getEmails({
         token: authResult.token!,
         folder: apiFolder,
         top: limit,
         skip,
-        filter: filters.length > 0 ? filters.join(' and ') : undefined,
-        search: options.search
+        search: options.search,
+        isRead: options.unread ? false : undefined,
+        flagStatus: options.flagged ? 'Flagged' : undefined
       });
 
       if (!result.ok || !result.data) {
@@ -279,12 +274,27 @@ export const mailCommand = new Command('mail')
             continue;
           }
 
-          const filePath = join(options.output, att.Name);
+          let filePath = join(options.output, att.Name);
+          const ext = att.Name.includes('.') ? '.' + att.Name.split('.').pop() : '';
+          const baseName = ext ? att.Name.slice(0, -ext.length) : att.Name;
+          let counter = 1;
+          while (true) {
+            try {
+              await access(filePath);
+              // File exists — try a suffixed name
+              filePath = join(options.output, ext ? `${baseName} (${counter})${ext}` : `${att.Name} (${counter})`);
+              counter++;
+            } catch {
+              // File doesn't exist, safe to write
+              break;
+            }
+          }
           const content = Buffer.from(fullAtt.data.ContentBytes, 'base64');
           await writeFile(filePath, content);
 
           const sizeKB = Math.round(content.length / 1024);
-          console.log(`  \u2713 ${att.Name} (${sizeKB} KB)`);
+          const savedFileName = filePath.split('/').pop() || att.Name;
+          console.log(`  \u2713 ${savedFileName} (${sizeKB} KB)`);
         }
 
         console.log('\nDone.\n');
@@ -409,6 +419,11 @@ export const mailCommand = new Command('mail')
       if (options.reply || options.replyAll) {
         const id = (options.reply || options.replyAll)?.trim();
 
+        if (!id) {
+          console.error('Error: --reply/--reply-all requires a message ID');
+          process.exit(1);
+        }
+
         if (!options.message) {
           console.error('Please provide reply text with --message');
           console.error('Example: clippy mail --reply <id> --message "Thanks for your email!"');
@@ -426,10 +441,6 @@ export const mailCommand = new Command('mail')
         }
 
         if (options.draft) {
-          if (!id) {
-            console.error('Error: --reply/--reply-all requires a message ID');
-            process.exit(1);
-          }
           const result = await replyToEmailDraft(authResult.token!, id, message, isReplyAll, isHtml, options.mailbox);
 
           if (!result.ok || !result.data) {
@@ -442,10 +453,6 @@ export const mailCommand = new Command('mail')
           return;
         }
 
-        if (!id) {
-          console.error('Error: --reply/--reply-all requires a message ID');
-          process.exit(1);
-        }
         const result = await replyToEmail(authResult.token!, id, message, isReplyAll, isHtml, options.mailbox);
 
         if (!result.ok) {
