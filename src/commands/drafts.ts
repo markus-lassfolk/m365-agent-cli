@@ -1,7 +1,6 @@
 import { readFile, stat } from 'node:fs/promises';
 import { basename } from 'node:path';
 import { Command } from 'commander';
-import { lookup } from 'mime-types';
 import { resolveAuth } from '../lib/auth.js';
 import {
   addAttachmentToDraft,
@@ -13,6 +12,7 @@ import {
   updateDraft
 } from '../lib/ews-client.js';
 import { markdownToHtml } from '../lib/markdown.js';
+import { lookupMimeType } from '../lib/mime-type.js';
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
@@ -161,7 +161,7 @@ export const draftsCommand = new Command('drafts')
               }
               const content = await readFile(filePath);
               const fileName = basename(filePath);
-              const contentType = lookup(filePath) || 'application/octet-stream';
+              const contentType = lookupMimeType(filePath);
 
               const attachResult = await addAttachmentToDraft(authResult.token!, result.data.Id, {
                 name: fileName,
@@ -272,7 +272,7 @@ export const draftsCommand = new Command('drafts')
             try {
               const content = await readFile(filePath);
               const fileName = basename(filePath);
-              const contentType = lookup(filePath) || 'application/octet-stream';
+              const contentType = lookupMimeType(filePath);
 
               await addAttachmentToDraft(authResult.token!, id, {
                 name: fileName,
