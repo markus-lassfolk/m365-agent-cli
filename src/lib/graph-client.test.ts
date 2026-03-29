@@ -90,7 +90,7 @@ describe('uploadLargeFile chunking', () => {
 
       const result = await uploadLargeFile('token', tmpFile);
 
-      if(!result.ok) throw new Error(JSON.stringify(result));
+      if (!result.ok) throw new Error(JSON.stringify(result));
       expect(result.data?.driveItem?.id).toBe('item-123');
       expect(fetchCalls.length).toBeGreaterThanOrEqual(3);
 
