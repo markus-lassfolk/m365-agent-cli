@@ -283,11 +283,13 @@ export const mailCommand = new Command('mail')
           const ext = att.Name.includes('.') ? '.' + att.Name.split('.').pop() : '';
           const baseName = ext ? att.Name.slice(0, -ext.length) : att.Name;
           let counter = 1;
+          let savedFileName = att.Name;
           while (true) {
             try {
               await access(filePath);
               // File exists — try a suffixed name
-              filePath = join(options.output, ext ? `${baseName} (${counter})${ext}` : `${att.Name} (${counter})`);
+              savedFileName = ext ? `${baseName} (${counter})${ext}` : `${att.Name} (${counter})`;
+              filePath = join(options.output, savedFileName);
               counter++;
             } catch {
               // File doesn't exist, safe to write
@@ -298,7 +300,7 @@ export const mailCommand = new Command('mail')
           await writeFile(filePath, content);
 
           const sizeKB = Math.round(content.length / 1024);
-          console.log(`  \u2713 ${att.Name} (${sizeKB} KB)`);
+          console.log(`  \u2713 ${savedFileName} (${sizeKB} KB)`);
         }
 
         console.log('\nDone.\n');
