@@ -82,19 +82,20 @@ function requireNonEmpty(value: string, fieldName: string): string {
  * This dynamically computes the bias based on the current system timezone and date.
  */
 function getLocalTimezoneBias(): number {
+  const year = new Date().getFullYear();
   // Create a date at the start of the year to get the standard (non-DST) offset
-  const jan = new Date(Date.now());
-  const janOffset = -jan.getTimezoneOffset();
+  const jan = new Date(year, 0, 1);
+  const janOffset = jan.getTimezoneOffset();
 
   // Create a date in mid-year (July) to check for DST offset
-  const jul = new Date(Date.now());
-  const julOffset = -jul.getTimezoneOffset();
+  const jul = new Date(year, 6, 1);
+  const julOffset = jul.getTimezoneOffset();
 
-  // Return the minimum (most negative) offset, which is the standard time bias
+  // Return the maximum (most positive) offset, which is the standard time bias
   // For CET/CEST: janOffset = -60, julOffset = -120 → return -60 (standard time)
   // For UTC: both are 0 → return 0
   // For EST/EDT: janOffset = 300 (UTC-5), julOffset = 240 (UTC-4) → return 300 (standard time)
-  return Math.min(janOffset, julOffset);
+  return Math.max(janOffset, julOffset);
 }
 
 /**
