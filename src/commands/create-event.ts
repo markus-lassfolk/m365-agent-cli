@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
-import { parseDay, parseTimeToDate, toUTCISOString, toNaiveISOString } from '../lib/dates.js';
+import { parseDay, parseTimeToDate, toNaiveISOString, toUTCISOString } from '../lib/dates.js';
 import {
   createEvent,
   getRooms,
