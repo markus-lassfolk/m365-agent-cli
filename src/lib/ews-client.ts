@@ -179,7 +179,6 @@ export interface CalendarEvent {
     OriginalItemId: string;
     Start: { DateTime: string; TimeZone: string };
     End: { DateTime: string; TimeZone: string };
-    Subject?: string;
   }>;
   DeletedOccurrences?: Array<{ Start: { DateTime: string; TimeZone: string } }>;
 }
@@ -466,8 +465,7 @@ function parseCalendarItem(block: string, mailbox?: string): CalendarEvent {
           return {
             OriginalItemId: occOrigId,
             Start: { DateTime: occStart || '', TimeZone: occStartTz },
-            End: { DateTime: occEnd || '', TimeZone: occEndTz },
-            Subject: extractTag(occ, 'Subject')
+            End: { DateTime: occEnd || '', TimeZone: occEndTz }
           };
         })
       : undefined;
@@ -851,7 +849,21 @@ function buildRecurrenceXml(recurrence: Recurrence): string {
 
 export async function createEvent(options: CreateEventOptions): Promise<OwaResponse<CreatedEvent>> {
   try {
-    const { token, subject, start, end, body, location, attendees, isOnlineMeeting, recurrence, isAllDay, startTimeZone, endTimeZone, mailbox } = options;
+    const {
+      token,
+      subject,
+      start,
+      end,
+      body,
+      location,
+      attendees,
+      isOnlineMeeting,
+      recurrence,
+      isAllDay,
+      startTimeZone,
+      endTimeZone,
+      mailbox
+    } = options;
 
     let attendeesXml = '';
     if (attendees && attendees.length > 0) {
@@ -929,7 +941,21 @@ export async function createEvent(options: CreateEventOptions): Promise<OwaRespo
 
 export async function updateEvent(options: UpdateEventOptions): Promise<OwaResponse<CreatedEvent>> {
   try {
-    const { token, eventId, changeKey, subject, start, end, body, location, attendees, isAllDay, startTimeZone, endTimeZone, mailbox } = options;
+    const {
+      token,
+      eventId,
+      changeKey,
+      subject,
+      start,
+      end,
+      body,
+      location,
+      attendees,
+      isAllDay,
+      startTimeZone,
+      endTimeZone,
+      mailbox
+    } = options;
 
     const updates: string[] = [];
 
