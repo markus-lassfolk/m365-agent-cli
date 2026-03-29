@@ -32,6 +32,12 @@ export const updateEventCommand = new Command('update-event')
     (val, arr: string[]) => [...arr, val],
     []
   )
+  .option(
+    '--remove-attendee <email>',
+    'Remove an attendee by email (can be used multiple times)',
+    (val, arr: string[]) => [...arr, val],
+    []
+  )
   .option('--room <room>', 'Set/change meeting room (name or email)')
   .option('--location <text>', 'Set location text')
   .option('--occurrence <index>', 'Update only the Nth occurrence of a recurring event')
@@ -52,6 +58,7 @@ export const updateEventCommand = new Command('update-event')
         start?: string;
         end?: string;
         addAttendee: string[];
+        removeAttendee: string[];
         room?: string;
         location?: string;
         occurrence?: string;
@@ -232,6 +239,7 @@ export const updateEventCommand = new Command('update-event')
         options.start ||
         options.end ||
         options.addAttendee.length > 0 ||
+        options.removeAttendee.length > 0 ||
         options.room ||
         options.location ||
         options.teams !== undefined;
@@ -327,7 +335,10 @@ export const updateEventCommand = new Command('update-event')
       }
 
       // Handle attendees (merge existing with new)
-      if (options.addAttendee.length > 0 || roomEmail) {
+      // NOTE: updateEvent replaces the entire attendee list via EWS SetItemField.
+      // Concurrent edits (e.g., removing an attendee via OWA between fetch and update)
+      // can be overwritten. This is a known EWS limitation.
+      if (options.addAttendee.length > 0 || options.removeAttendee.length > 0 || roomEmail) {
         const existingAttendees: Array<{ email: string; name?: string; type: 'Required' | 'Optional' | 'Resource' }> = (
           displayEvent!.Attendees || []
         ).map((a) => ({
@@ -335,6 +346,12 @@ export const updateEventCommand = new Command('update-event')
           name: a.EmailAddress?.Name,
           type: a.Type as 'Required' | 'Optional' | 'Resource'
         }));
+
+        // Remove attendees specified via --remove-attendee
+        for (const email of options.removeAttendee) {
+          const idx = existingAttendees.findIndex((a) => a.email.toLowerCase() === email.toLowerCase());
+          if (idx !== -1) existingAttendees.splice(idx, 1);
+        }
 
         // Add new attendees
         for (const email of options.addAttendee) {
