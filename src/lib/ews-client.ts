@@ -863,7 +863,9 @@ export async function updateEvent(options: UpdateEventOptions): Promise<OwaRespo
         `<t:SetItemField><t:FieldURI FieldURI="calendar:Location" /><t:CalendarItem><t:Location>${xmlEscape(location)}</t:Location></t:CalendarItem></t:SetItemField>`
       );
     }
+    let hasAttendeeUpdates = false;
     if (attendees !== undefined) {
+      hasAttendeeUpdates = true;
       const required = attendees.filter((a) => (a.type || 'Required') !== 'Optional' && a.type !== 'Resource');
       const optional = attendees.filter((a) => a.type === 'Optional');
       const resources = attendees.filter((a) => a.type === 'Resource');
@@ -910,7 +912,7 @@ export async function updateEvent(options: UpdateEventOptions): Promise<OwaRespo
       return { ok: false, status: 400, error: { code: 'NO_UPDATES', message: 'No fields to update' } };
     }
 
-    const sendUpdates = attendees && attendees.length > 0 ? 'SendToAllAndSaveCopy' : 'SendToNone';
+    const sendUpdates = hasAttendeeUpdates ? 'SendToAllAndSaveCopy' : 'SendToNone';
 
     const buildEnvelope = (conflictResolution: 'AutoResolve' | 'AlwaysOverwrite', includeChangeKey: boolean): string =>
       soapEnvelope(`
