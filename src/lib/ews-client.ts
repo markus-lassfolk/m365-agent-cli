@@ -2360,8 +2360,8 @@ export async function getScheduleViaOutlook(
     for (const schedule of schedules) {
       schedule.scheduleItems = freeSlots.map((slot) => ({
         status: 'Free',
-        start: { dateTime: slot.start, timeZone: 'W. Europe Standard Time' },
-        end: { dateTime: slot.end, timeZone: 'W. Europe Standard Time' }
+        start: { dateTime: slot.start, timeZone: 'UTC' },
+        end: { dateTime: slot.end, timeZone: 'UTC' }
       }));
     }
 
