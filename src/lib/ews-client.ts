@@ -1142,6 +1142,8 @@ export async function deleteEvent(options: DeleteEventOptions): Promise<OwaRespo
   try {
     const { token, eventId, occurrenceItemId, scope = 'all', mailbox, forceDelete, comment } = options;
 
+    let fallbackInfo: string | undefined;
+
     // If a comment is provided for occurrence delete, use CancelCalendarItem instead
     if (comment && !forceDelete && (scope === 'this' || scope === 'future')) {
       const targetId = occurrenceItemId || eventId;
@@ -1159,6 +1161,7 @@ export async function deleteEvent(options: DeleteEventOptions): Promise<OwaRespo
         return { ok: true, status: 200 };
       } catch {
         // Fallback to DeleteItem if CancelCalendarItem fails
+        fallbackInfo = 'Custom cancellation message could not be sent; event deleted with generic notification';
       }
     }
 
@@ -1180,7 +1183,7 @@ export async function deleteEvent(options: DeleteEventOptions): Promise<OwaRespo
       </m:ItemIds>
     </m:DeleteItem>`);
     await callEws(token, envelope, mailbox);
-    return { ok: true, status: 200 };
+    return { ok: true, status: 200, ...(fallbackInfo ? { info: fallbackInfo } : {}) };
   } catch (err) {
     return ewsError(err);
   }
