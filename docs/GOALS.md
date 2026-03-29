@@ -117,7 +117,7 @@ All security issues from the Consultant review are prerequisite to any feature w
 |----------|-------|------|
 | P0 | #40 — download URL validation | Token exfiltration |
 | P0 | #69 — EWS_ENDPOINT/GRAPH_BASE_URL redirect | Token exfiltration |
-| P0 | #46 — createLargeUploadSession is a no-op | UX fraud |
+| P0 | #46 — createLargeUploadSession is a no-op — ✅ FIXED (removed) | UX fraud |
 | P1 | #54 — drafts path traversal bypass | Path traversal |
 | P1 | #62 — getFreeBusy returns wrong data | Wrong decisions |
 | P1 | #66 — streamWebToFile partial file leak | Disk pollution |

@@ -2,7 +2,6 @@ import { Command } from 'commander';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
 import {
   checkinFile,
-  createLargeUploadSession,
   createOfficeCollaborationLink,
   type DriveItem,
   type DriveItemReference,
@@ -155,35 +154,6 @@ filesCommand
     console.log(`✓ Uploaded: ${result.data.name}`);
     console.log(`  ID: ${result.data.id}`);
     if (result.data.webUrl) console.log(`  URL: ${result.data.webUrl}`);
-  });
-
-filesCommand
-  .command('upload-large <path>')
-  .description('Create a large-upload session for files up to 4GB')
-  .option('--folder <id>', 'Target folder item ID')
-  .option('--json', 'Output as JSON')
-  .option('--token <token>', 'Use a specific Graph token')
-  .action(async (path: string, options: { folder?: string; json?: boolean; token?: string }) => {
-    const auth = await resolveGraphAuth({ token: options.token });
-    if (!auth.success) {
-      console.error(`Error: ${auth.error}`);
-      process.exit(1);
-    }
-
-    const result = await createLargeUploadSession(auth.token!, path, parseFolderRef(options.folder));
-    if (!result.ok || !result.data) {
-      console.error(`Error: ${result.error?.message || 'Failed to create upload session'}`);
-      process.exit(1);
-    }
-
-    if (options.json) {
-      console.log(JSON.stringify(result.data, null, 2));
-      return;
-    }
-
-    console.log('✓ Large upload session created');
-    console.log(`  Upload URL: ${result.data.uploadUrl}`);
-    if (result.data.expirationDateTime) console.log(`  Expires: ${result.data.expirationDateTime}`);
   });
 
 filesCommand
