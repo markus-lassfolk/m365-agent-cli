@@ -412,10 +412,8 @@ function parseCalendarItem(block: string, mailbox?: string): CalendarEvent {
   );
 
   // Extract timezone info (EWS may return StartTimeZone/EndTimeZone or a TimeZone block)
-  const startTimeZone =
-    extractAttribute(block, 'StartTimeZone', 'Id') || extractTag(block, 'TimeZoneId') || 'UTC';
-  const endTimeZone =
-    extractAttribute(block, 'EndTimeZone', 'Id') || extractTag(block, 'TimeZoneId') || 'UTC';
+  const startTimeZone = extractAttribute(block, 'StartTimeZone', 'Id') || extractTag(block, 'TimeZoneId') || 'UTC';
+  const endTimeZone = extractAttribute(block, 'EndTimeZone', 'Id') || extractTag(block, 'TimeZoneId') || 'UTC';
 
   return {
     Id: id,
@@ -767,7 +765,8 @@ function buildRecurrenceXml(recurrence: Recurrence): string {
 
 export async function createEvent(options: CreateEventOptions): Promise<OwaResponse<CreatedEvent>> {
   try {
-    const { token, subject, start, end, body, location, attendees, isOnlineMeeting, recurrence, mailbox, isAllDay } = options;
+    const { token, subject, start, end, body, location, attendees, isOnlineMeeting, recurrence, mailbox, isAllDay } =
+      options;
 
     let attendeesXml = '';
     if (attendees && attendees.length > 0) {
