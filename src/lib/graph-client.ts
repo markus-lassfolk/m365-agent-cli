@@ -791,7 +791,28 @@ export interface FileAnalytics {
 
 export async function getFileAnalytics(token: string, itemId: string): Promise<GraphResponse<FileAnalytics>> {
   try {
-    return await callGraph<FileAnalytics>(token, `/me/drive/items/${encodeURIComponent(itemId)}/analytics`);
+    const [allTimeResult, lastSevenDaysResult] = await Promise.all([
+      callGraph<{ allTime?: FileAnalytics['allTime'] }>(
+        token,
+        `/me/drive/items/${encodeURIComponent(itemId)}/analytics/allTime`
+      ),
+      callGraph<{ lastSevenDays?: FileAnalytics['lastSevenDays'] }>(
+        token,
+        `/me/drive/items/${encodeURIComponent(itemId)}/analytics/lastSevenDays`
+      )
+    ]);
+
+    const analytics: FileAnalytics = {};
+
+    if (allTimeResult.ok && allTimeResult.data?.allTime) {
+      analytics.allTime = allTimeResult.data.allTime;
+    }
+
+    if (lastSevenDaysResult.ok && lastSevenDaysResult.data?.lastSevenDays) {
+      analytics.lastSevenDays = lastSevenDaysResult.data.lastSevenDays;
+    }
+
+    return graphResult(analytics);
   } catch (err) {
     if (err instanceof GraphApiError) {
       return graphError(err.message, err.code, err.status);
@@ -806,15 +827,20 @@ export async function downloadConvertedFile(
   format: string = 'pdf',
   outputPath?: string
 ): Promise<GraphResponse<{ path: string }>> {
+  let tmpPath: string | undefined;
   try {
     const metadata = await getFileMetadata(token, itemId);
     if (!metadata.ok || !metadata.data) {
-      return graphError(metadata.error?.message || 'Failed to fetch file metadata', metadata.error?.code, metadata.error?.status);
+      return graphError(
+        metadata.error?.message || 'Failed to fetch file metadata',
+        metadata.error?.code,
+        metadata.error?.status
+      );
     }
 
     const item = metadata.data;
     const originalName = item.name || itemId;
-    const newName = originalName.includes('.') 
+    const newName = originalName.includes('.')
       ? originalName.substring(0, originalName.lastIndexOf('.')) + `.${format}`
       : `${originalName}.${format}`;
 
@@ -822,9 +848,9 @@ export async function downloadConvertedFile(
     await mkdir(dirname(targetPath), { recursive: true });
 
     const path = `/me/drive/items/${encodeURIComponent(itemId)}/content?format=${encodeURIComponent(format)}`;
-    
+
     const response = await fetchGraphRaw(token, path, { redirect: 'follow' });
-    
+
     if (!response.ok) {
       return graphError(`Failed to download converted file: HTTP ${response.status}`);
     }
@@ -833,7 +859,7 @@ export async function downloadConvertedFile(
     }
 
     const tmpFileName = `.${newName}.${randomBytes(8).toString('hex')}.tmp`;
-    const tmpPath = resolve(dirname(targetPath), 'tmp', tmpFileName);
+    tmpPath = resolve(dirname(targetPath), 'tmp', tmpFileName);
     await mkdir(dirname(tmpPath), { recursive: true });
 
     await streamWebToFile(response.body, tmpPath);
@@ -841,6 +867,9 @@ export async function downloadConvertedFile(
 
     return graphResult({ path: targetPath });
   } catch (err) {
+    if (tmpPath) {
+      await unlink(tmpPath).catch(() => {});
+    }
     if (err instanceof GraphApiError) {
       return graphError(err.message, err.code, err.status);
     }

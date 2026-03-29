@@ -417,7 +417,7 @@ filesCommand
       console.log(`    Actions: ${result.data.lastSevenDays.access.actionCount || 0}`);
       console.log(`    Actors:  ${result.data.lastSevenDays.access.actorCount || 0}`);
     }
-    
+
     if (!result.data.allTime && !result.data.lastSevenDays) {
       console.log('  No analytics data available.');
     }
