@@ -43,48 +43,49 @@ export const loginCommand = new Command('login')
     }
 
     const tenant = getMicrosoftTenantPathSegment();
-    const scope =
-      'offline_access https://outlook.office365.com/EWS.AccessAsUser.All User.Read Calendars.ReadWrite Mail.ReadWrite Files.ReadWrite.All Sites.ReadWrite.All Tasks.ReadWrite Group.ReadWrite.All';
 
-    console.log('\nInitiating Device Code flow...');
+    // Perform first device code flow for EWS
+    const ewsScope = 'offline_access https://outlook.office365.com/EWS.AccessAsUser.All';
 
-    const deviceCodeRes = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/devicecode`, {
+    console.log('\nInitiating Device Code flow for EWS...');
+
+    const ewsDeviceCodeRes = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/devicecode`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         client_id: clientId,
-        scope
+        scope: ewsScope
       }).toString()
     });
 
-    const deviceCodeJson = await deviceCodeRes.json();
+    const ewsDeviceCodeJson = await ewsDeviceCodeRes.json();
 
-    if (!deviceCodeRes.ok) {
-      console.error('Failed to initiate device code flow:', deviceCodeJson);
+    if (!ewsDeviceCodeRes.ok) {
+      console.error('Failed to initiate EWS device code flow:', ewsDeviceCodeJson);
       process.exit(1);
     }
 
     console.log('\n=========================================================');
-    console.log(deviceCodeJson.message);
+    console.log(ewsDeviceCodeJson.message);
     console.log('=========================================================\n');
 
-    const deviceCode = deviceCodeJson.device_code;
-    const interval = (deviceCodeJson.interval || 5) * 1000;
-    const expiresAt = Date.now() + (deviceCodeJson.expires_in || 900) * 1000;
+    let ewsDeviceCode = ewsDeviceCodeJson.device_code;
+    let ewsInterval = (ewsDeviceCodeJson.interval || 5) * 1000;
+    let ewsExpiresAt = Date.now() + (ewsDeviceCodeJson.expires_in || 900) * 1000;
 
-    let authenticated = false;
-    let refreshToken = '';
-    let pollInterval = interval;
+    let ewsAuthenticated = false;
+    let ewsRefreshToken = '';
+    let ewsPollInterval = ewsInterval;
 
-    console.log('Waiting for authentication...');
+    console.log('Waiting for EWS authentication...');
 
-    while (!authenticated) {
-      if (Date.now() > expiresAt) {
-        console.error('\nDevice code expired. Please run the command again.');
+    while (!ewsAuthenticated) {
+      if (Date.now() > ewsExpiresAt) {
+        console.error('\nEWS device code expired. Please run the command again.');
         process.exit(1);
       }
 
-      await new Promise((resolve) => setTimeout(resolve, pollInterval));
+      await new Promise((resolve) => setTimeout(resolve, ewsPollInterval));
 
       const tokenRes = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, {
         method: 'POST',
@@ -92,30 +93,105 @@ export const loginCommand = new Command('login')
         body: new URLSearchParams({
           grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
           client_id: clientId,
-          device_code: deviceCode
+          device_code: ewsDeviceCode
         }).toString()
       });
 
       const tokenJson = await tokenRes.json();
 
       if (tokenRes.ok) {
-        authenticated = true;
-        refreshToken = tokenJson.refresh_token;
-        if (!refreshToken) {
-          console.error('\nFailed to obtain refresh token. Ensure the offline_access scope is granted.');
+        ewsAuthenticated = true;
+        ewsRefreshToken = tokenJson.refresh_token;
+        if (!ewsRefreshToken) {
+          console.error('\nFailed to obtain EWS refresh token. Ensure the offline_access scope is granted.');
           process.exit(1);
         }
       } else if (tokenJson.error === 'authorization_pending') {
         // Continue polling
       } else if (tokenJson.error === 'slow_down') {
-        pollInterval += 5000;
+        ewsPollInterval += 5000;
       } else {
-        console.error('\nAuthentication failed:', tokenJson.error_description || tokenJson.error);
+        console.error('\nEWS authentication failed:', tokenJson.error_description || tokenJson.error);
         process.exit(1);
       }
     }
 
-    console.log('\nAuthentication successful!');
+    console.log('\nEWS authentication successful!');
+
+    // Perform second device code flow for Graph
+    const graphScope =
+      'offline_access User.Read Calendars.ReadWrite Mail.ReadWrite Files.ReadWrite.All Sites.ReadWrite.All Tasks.ReadWrite Group.ReadWrite.All';
+
+    console.log('\nInitiating Device Code flow for Microsoft Graph...');
+
+    const graphDeviceCodeRes = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/devicecode`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: clientId,
+        scope: graphScope
+      }).toString()
+    });
+
+    const graphDeviceCodeJson = await graphDeviceCodeRes.json();
+
+    if (!graphDeviceCodeRes.ok) {
+      console.error('Failed to initiate Graph device code flow:', graphDeviceCodeJson);
+      process.exit(1);
+    }
+
+    console.log('\n=========================================================');
+    console.log(graphDeviceCodeJson.message);
+    console.log('=========================================================\n');
+
+    let graphDeviceCode = graphDeviceCodeJson.device_code;
+    let graphInterval = (graphDeviceCodeJson.interval || 5) * 1000;
+    let graphExpiresAt = Date.now() + (graphDeviceCodeJson.expires_in || 900) * 1000;
+
+    let graphAuthenticated = false;
+    let graphRefreshToken = '';
+    let graphPollInterval = graphInterval;
+
+    console.log('Waiting for Graph authentication...');
+
+    while (!graphAuthenticated) {
+      if (Date.now() > graphExpiresAt) {
+        console.error('\nGraph device code expired. Please run the command again.');
+        process.exit(1);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, graphPollInterval));
+
+      const tokenRes = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+          client_id: clientId,
+          device_code: graphDeviceCode
+        }).toString()
+      });
+
+      const tokenJson = await tokenRes.json();
+
+      if (tokenRes.ok) {
+        graphAuthenticated = true;
+        graphRefreshToken = tokenJson.refresh_token;
+        if (!graphRefreshToken) {
+          console.error('\nFailed to obtain Graph refresh token. Ensure the offline_access scope is granted.');
+          process.exit(1);
+        }
+      } else if (tokenJson.error === 'authorization_pending') {
+        // Continue polling
+      } else if (tokenJson.error === 'slow_down') {
+        graphPollInterval += 5000;
+      } else {
+        console.error('\nGraph authentication failed:', tokenJson.error_description || tokenJson.error);
+        process.exit(1);
+      }
+    }
+
+    console.log('\nGraph authentication successful!');
 
     // Read the current .env content to update/append the refresh tokens
     if (existsSync(envPath)) {
@@ -124,16 +200,16 @@ export const loginCommand = new Command('login')
 
     // Update or append EWS_REFRESH_TOKEN
     if (/^EWS_REFRESH_TOKEN=.*$/m.test(envContent)) {
-      envContent = envContent.replace(/^EWS_REFRESH_TOKEN=.*$/m, `EWS_REFRESH_TOKEN=${refreshToken}`);
+      envContent = envContent.replace(/^EWS_REFRESH_TOKEN=.*$/m, `EWS_REFRESH_TOKEN=${ewsRefreshToken}`);
     } else {
-      envContent += `\nEWS_REFRESH_TOKEN=${refreshToken}\n`;
+      envContent += `\nEWS_REFRESH_TOKEN=${ewsRefreshToken}\n`;
     }
 
     // Update or append GRAPH_REFRESH_TOKEN
     if (/^GRAPH_REFRESH_TOKEN=.*$/m.test(envContent)) {
-      envContent = envContent.replace(/^GRAPH_REFRESH_TOKEN=.*$/m, `GRAPH_REFRESH_TOKEN=${refreshToken}`);
+      envContent = envContent.replace(/^GRAPH_REFRESH_TOKEN=.*$/m, `GRAPH_REFRESH_TOKEN=${graphRefreshToken}`);
     } else {
-      envContent += `\nGRAPH_REFRESH_TOKEN=${refreshToken}\n`;
+      envContent += `\nGRAPH_REFRESH_TOKEN=${graphRefreshToken}\n`;
     }
 
     // Clean up multiple newlines if any
