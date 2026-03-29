@@ -936,7 +936,8 @@ function buildRecurrenceXml(recurrence: Recurrence): string {
 
 export async function createEvent(options: CreateEventOptions): Promise<OwaResponse<CreatedEvent>> {
   try {
-    const { token, subject, start, end, body, location, attendees, isOnlineMeeting, recurrence, isAllDay, mailbox } = options;
+    const { token, subject, start, end, body, location, attendees, isOnlineMeeting, recurrence, isAllDay, mailbox } =
+      options;
 
     let attendeesXml = '';
     if (attendees && attendees.length > 0) {

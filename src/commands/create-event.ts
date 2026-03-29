@@ -24,8 +24,8 @@ function formatDate(dateStr: string): string {
 export const createEventCommand = new Command('create-event')
   .description('Create a new calendar event')
   .argument('<title>', 'Event title/subject')
-  .argument('<start>', 'Start time (e.g., 13:00, 1pm)')
-  .argument('<end>', 'End time (e.g., 14:00, 2pm)')
+  .argument('[start]', 'Start time (e.g., 13:00, 1pm) - not needed for all-day events')
+  .argument('[end]', 'End time (e.g., 14:00, 2pm) - not needed for all-day events')
   .option('--day <day>', 'Day for the event (today, tomorrow, monday-sunday, YYYY-MM-DD)', 'today')
   .option('--description <text>', 'Event description/body')
   .option('--attendees <emails>', 'Comma-separated list of attendee emails')
@@ -45,8 +45,8 @@ export const createEventCommand = new Command('create-event')
   .action(
     async (
       title: string,
-      startTime: string,
-      endTime: string,
+      startTime: string | undefined,
+      endTime: string | undefined,
       options: {
         day: string;
         description?: string;
@@ -122,10 +122,32 @@ export const createEventCommand = new Command('create-event')
         return;
       }
 
+      // Validate start/end times for non-all-day events
+      if (!options.allDay && (!startTime || !endTime)) {
+        if (options.json) {
+          console.log(JSON.stringify({ error: 'Start and end times are required for non-all-day events' }, null, 2));
+        } else {
+          console.error('Error: Start and end times are required for non-all-day events');
+        }
+        process.exit(1);
+      }
+
       // Parse date and times
       const baseDate = parseDay(options.day);
-      const start = parseTimeToDate(startTime, baseDate);
-      const end = parseTimeToDate(endTime, baseDate);
+      let start: Date;
+      let end: Date;
+
+      if (options.allDay) {
+        // For all-day events, use midnight boundaries regardless of provided times
+        start = new Date(baseDate);
+        start.setHours(0, 0, 0, 0);
+        end = new Date(baseDate);
+        end.setHours(23, 59, 59, 999);
+      } else {
+        // For regular events, parse the provided times
+        start = parseTimeToDate(startTime!, baseDate);
+        end = parseTimeToDate(endTime!, baseDate);
+      }
 
       // Parse attendees
       const attendees: Array<{ email: string; name?: string; type?: 'Required' | 'Optional' | 'Resource' }> =
