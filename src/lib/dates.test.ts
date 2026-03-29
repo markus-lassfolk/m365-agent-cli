@@ -16,16 +16,22 @@ describe('dates helpers', () => {
     const opts = { throwOnInvalid: true };
 
     // Format errors
-    expect(() => parseTimeToDate('not-a-time', base, opts)).toThrow('Invalid time format: "not-a-time" — expected HH:MM, H:MM, or H(am|pm)');
-    
+    expect(() => parseTimeToDate('not-a-time', base, opts)).toThrow(
+      'Invalid time format: "not-a-time" — expected HH:MM, H:MM, or H(am|pm)'
+    );
+
     // Value bounds
-    expect(() => parseTimeToDate('25:00', base, opts)).toThrow('Invalid time: "25:00" — hours must be 0–23 and minutes 0–59');
-    expect(() => parseTimeToDate('9:60', base, opts)).toThrow('Invalid time: "9:60" — hours must be 0–23 and minutes 0–59');
-    
+    expect(() => parseTimeToDate('25:00', base, opts)).toThrow(
+      'Invalid time: "25:00" — hours must be 0–23 and minutes 0–59'
+    );
+    expect(() => parseTimeToDate('9:60', base, opts)).toThrow(
+      'Invalid time: "9:60" — hours must be 0–23 and minutes 0–59'
+    );
+
     // AM/PM bounds
     expect(() => parseTimeToDate('13pm', base, opts)).toThrow('Invalid time: "13pm" — 12-hour values must be 1–12');
     expect(() => parseTimeToDate('0am', base, opts)).toThrow('Invalid time: "0am" — 12-hour values must be 1–12');
-    
+
     // 24-hour hour-only bounds
     expect(() => parseTimeToDate('24', base, opts)).toThrow('Invalid time: "24" — 24-hour values must be 0–23');
   });

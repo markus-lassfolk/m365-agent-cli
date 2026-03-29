@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
-import { parseDay, parseTimeToDate, toUTCISOString, toLocalUnzonedISOString } from '../lib/dates.js';
+import { parseDay, parseTimeToDate, toLocalUnzonedISOString, toUTCISOString } from '../lib/dates.js';
 import { getCalendarEvents, getRooms, searchRooms, updateEvent } from '../lib/ews-client.js';
 
 function formatTime(dateStr: string): string {

@@ -102,7 +102,6 @@ export {
   checkinFile,
   checkoutFile,
   cleanupDownloadedFile,
-  uploadLargeFile,
   createOfficeCollaborationLink,
   defaultDownloadPath,
   deleteFile,
@@ -111,7 +110,8 @@ export {
   listFiles,
   searchFiles,
   shareFile,
-  uploadFile
+  uploadFile,
+  uploadLargeFile
 } from './lib/graph-client.js';
 export type {
   Group,

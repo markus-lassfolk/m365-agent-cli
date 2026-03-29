@@ -2,7 +2,6 @@ import { Command } from 'commander';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
 import {
   checkinFile,
-  uploadLargeFile,
   createOfficeCollaborationLink,
   type DriveItem,
   type DriveItemReference,
@@ -13,7 +12,8 @@ import {
   listFiles,
   searchFiles,
   shareFile,
-  uploadFile
+  uploadFile,
+  uploadLargeFile
 } from '../lib/graph-client.js';
 
 function parseFolderRef(folder?: string): DriveItemReference | undefined {

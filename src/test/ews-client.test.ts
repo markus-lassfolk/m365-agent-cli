@@ -123,7 +123,8 @@ describe('ews-client safety and conflict behavior', () => {
 
   it('parses TimeZone correctly from CalendarItem StartTimeZone and EndTimeZone', async () => {
     globalThis.fetch = mock(async () => {
-      return new Response(`<?xml version="1.0" encoding="utf-8"?>
+      return new Response(
+        `<?xml version="1.0" encoding="utf-8"?>
 <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages" xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types">
   <soap:Body>
     <m:GetItemResponse>
@@ -147,7 +148,9 @@ describe('ews-client safety and conflict behavior', () => {
       </m:ResponseMessages>
     </m:GetItemResponse>
   </soap:Body>
-</soap:Envelope>`, { status: 200 });
+</soap:Envelope>`,
+        { status: 200 }
+      );
     }) as unknown as typeof fetch;
 
     const { getCalendarEvent } = await import('../lib/ews-client.js');

@@ -526,7 +526,8 @@ function parseCalendarItem(block: string, mailbox?: string): CalendarEvent {
   const changeKey = extractAttribute(block, 'ItemId', 'ChangeKey');
   const subject = extractTag(block, 'Subject');
   const start = extractTag(block, 'Start');
-  const startTz = extractAttribute(block, 'StartTimeZone', 'Id') || extractAttribute(block, 'StartTimeZone', 'Name') || 'UTC';
+  const startTz =
+    extractAttribute(block, 'StartTimeZone', 'Id') || extractAttribute(block, 'StartTimeZone', 'Name') || 'UTC';
   const end = extractTag(block, 'End');
   const endTz = extractAttribute(block, 'EndTimeZone', 'Id') || extractAttribute(block, 'EndTimeZone', 'Name') || 'UTC';
   const location = extractTag(block, 'Location');
@@ -989,8 +990,20 @@ function buildRecurrenceXml(recurrence: Recurrence): string {
 
 export async function createEvent(options: CreateEventOptions): Promise<OwaResponse<CreatedEvent>> {
   try {
-    const { token, subject, start, end, body, location, attendees, isOnlineMeeting, recurrence, isAllDay, mailbox, timezone } =
-      options;
+    const {
+      token,
+      subject,
+      start,
+      end,
+      body,
+      location,
+      attendees,
+      isOnlineMeeting,
+      recurrence,
+      isAllDay,
+      mailbox,
+      timezone
+    } = options;
 
     let attendeesXml = '';
     if (attendees && attendees.length > 0) {
@@ -2247,17 +2260,11 @@ export async function getScheduleViaOutlook(
 ): Promise<OwaResponse<ScheduleInfo[]>> {
   try {
     if (!timeZone) {
-      try {
-        const { getMailboxSettings } = await import('./oof-client.js');
-        const mbx = await getMailboxSettings(token);
-        timeZone = mbx.data?.timeZone || 'UTC';
-      } catch {
-        // Fall back to UTC if we can't get mailbox settings
-        timeZone = 'UTC';
-      }
+      const { getMailboxSettings } = await import('./oof-client.js');
+      const mbx = await getMailboxSettings(token);
+      timeZone = mbx.data?.timeZone || 'UTC';
+      // SuggestionsViewOptions requires dates at midnight with no timezone offset
     }
-
-    // SuggestionsViewOptions requires dates at midnight with no timezone offset
 
     const suggestStartD = new Date(startDateTime);
     suggestStartD.setHours(0, 0, 0, 0);
@@ -2279,7 +2286,8 @@ export async function getScheduleViaOutlook(
       )
       .join('');
 
-    const envelope = soapEnvelope(`
+    const envelope = soapEnvelope(
+      `
     <m:GetUserAvailabilityRequest>
       <m:MailboxDataArray>
         ${mailboxDataXml}
@@ -2303,8 +2311,8 @@ export async function getScheduleViaOutlook(
         </t:DetailedSuggestionsWindow>
       </t:SuggestionsViewOptions>
     </m:GetUserAvailabilityRequest>`,
-    `<t:TimeZoneContext><t:TimeZoneDefinition Id="${xmlEscape(timeZone)}"/></t:TimeZoneContext>`
-  );
+      `<t:TimeZoneContext><t:TimeZoneDefinition Id="${xmlEscape(timeZone)}"/></t:TimeZoneContext>`
+    );
 
     const xml = await callEws(token, envelope);
 
@@ -2335,8 +2343,8 @@ export async function getScheduleViaOutlook(
     for (const schedule of schedules) {
       schedule.scheduleItems = freeSlots.map((slot) => ({
         status: 'Free',
-        start: { dateTime: slot.start, timeZone: timeZone! },
-        end: { dateTime: slot.end, timeZone: timeZone! }
+        start: { dateTime: slot.start, timeZone: 'W. Europe Standard Time' },
+        end: { dateTime: slot.end, timeZone: 'W. Europe Standard Time' }
       }));
     }
 
@@ -2364,8 +2372,8 @@ export async function getScheduleViaOutlook(
             if (evStart < reqEnd && evEnd > reqStart) {
               items.push({
                 status: busyType === 'Free' ? 'Free' : busyType === 'Tentative' ? 'Tentative' : 'Busy',
-                start: { dateTime: new Date(evStart).toISOString(), timeZone: timeZone! },
-                end: { dateTime: new Date(evEnd).toISOString(), timeZone: timeZone! }
+                start: { dateTime: new Date(evStart).toISOString(), timeZone: 'UTC' },
+                end: { dateTime: new Date(evEnd).toISOString(), timeZone: 'UTC' }
               });
             }
           }
@@ -2462,7 +2470,8 @@ export async function areRoomsFree(
 
   for (const batch of batches) {
     try {
-      const envelope = soapEnvelope(`
+      const envelope = soapEnvelope(
+        `
     <m:GetUserAvailabilityRequest>
       <m:MailboxDataArray>
         ${batch
@@ -2484,9 +2493,40 @@ export async function areRoomsFree(
         <t:RequestedView>FreeBusy</t:RequestedView>
       </t:FreeBusyViewOptions>
     </m:GetUserAvailabilityRequest>`,
-    `<t:TimeZoneContext><t:TimeZoneDefinition Id="${xmlEscape(timeZone)}"/></t:TimeZoneContext>`);
+        `<t:TimeZoneContext><t:TimeZoneDefinition Id="${xmlEscape(timeZone)}"/></t:TimeZoneContext>`
+      );
 
-      const xml = await callEws(token, envelope);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), EWS_TIMEOUT_MS);
+
+      let response: Response;
+      let xml: string;
+      try {
+        response = await fetch(EWS_ENDPOINT, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'text/xml; charset=utf-8',
+            Accept: 'text/xml',
+            'X-AnchorMailbox': EWS_USERNAME
+          },
+          body: envelope,
+          signal: controller.signal
+        });
+        xml = await response.text();
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') {
+          throw new Error(`EWS request timed out after ${EWS_TIMEOUT_MS / 1000}s`);
+        }
+        throw err;
+      } finally {
+        clearTimeout(timeout);
+      }
+
+      if (!response.ok) {
+        const soapError = extractTag(xml, 'faultstring') || extractTag(xml, 'MessageText');
+        throw new Error(`EWS HTTP ${response.status}${soapError ? `: ${soapError}` : ''}`);
+      }
 
       // Parse FreeBusyResponse blocks to correlate mailboxes with their events
       const freeBusyResponses = extractBlocks(xml, 'FreeBusyResponse');
