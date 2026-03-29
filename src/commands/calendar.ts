@@ -167,6 +167,23 @@ function displayEvent(event: CalendarEvent, verbose: boolean): void {
       const preview = event.BodyPreview.substring(0, 80).replace(/\n/g, ' ');
       console.log(`     📝 ${preview}${event.BodyPreview.length > 80 ? '...' : ''}`);
     }
+
+    // Show recurrence series info if available
+    if (event.FirstOccurrence || event.LastOccurrence) {
+      const first = event.FirstOccurrence ? event.FirstOccurrence.Start.substring(0, 10) : 'unknown';
+      const last = event.LastOccurrence ? event.LastOccurrence.Start.substring(0, 10) : 'unknown';
+      console.log(`     🔄 Series: First: ${first}, Last: ${last}`);
+    }
+    if (event.ModifiedOccurrences && event.ModifiedOccurrences.length > 0) {
+      console.log(
+        `     ✏️  Modified exceptions: ${event.ModifiedOccurrences.map((o) => o.OriginalStart.substring(0, 10)).join(', ')}`
+      );
+    }
+    if (event.DeletedOccurrences && event.DeletedOccurrences.length > 0) {
+      console.log(
+        `     🗑️  Deleted exceptions: ${event.DeletedOccurrences.map((o) => o.Start.substring(0, 10)).join(', ')}`
+      );
+    }
   }
 }
 

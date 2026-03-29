@@ -252,6 +252,8 @@ export interface CalendarEvent {
   RecurrenceDescription?: string;
   FirstOccurrence?: { Start: string; End: string; Id?: string };
   LastOccurrence?: { Start: string; End: string; Id?: string };
+  ModifiedOccurrences?: Array<{ ItemId: string; Start: string; End: string; OriginalStart: string }>;
+  DeletedOccurrences?: Array<{ Start: string }>;
 }
 
 export interface RecurrencePattern {
@@ -438,6 +440,8 @@ function parseRecurrenceFromBlock(block: string): {
   description?: string;
   firstOccurrence?: { Start: string; End: string; Id?: string };
   lastOccurrence?: { Start: string; End: string; Id?: string };
+  modifiedOccurrences?: Array<{ ItemId: string; Start: string; End: string; OriginalStart: string }>;
+  deletedOccurrences?: Array<{ Start: string }>;
 } {
   // Check if this item has any recurrence info
   const recurrenceBlock = extractSelfClosingOrBlock(block, 'Recurrence');
@@ -657,7 +661,9 @@ function parseCalendarItem(block: string, mailbox?: string): CalendarEvent {
       recurrenceInfo.lastOccurrence !== undefined,
     RecurrenceDescription: recurrenceInfo.description,
     FirstOccurrence: recurrenceInfo.firstOccurrence,
-    LastOccurrence: recurrenceInfo.lastOccurrence
+    LastOccurrence: recurrenceInfo.lastOccurrence,
+    ModifiedOccurrences: recurrenceInfo.modifiedOccurrences,
+    DeletedOccurrences: recurrenceInfo.deletedOccurrences
   };
 }
 
@@ -843,6 +849,8 @@ export async function getCalendarEvents(
           <t:FieldURI FieldURI="calendar:Recurrence" />
           <t:FieldURI FieldURI="calendar:FirstOccurrence" />
           <t:FieldURI FieldURI="calendar:LastOccurrence" />
+          <t:FieldURI FieldURI="calendar:ModifiedOccurrences" />
+          <t:FieldURI FieldURI="calendar:DeletedOccurrences" />
           <t:FieldURI FieldURI="calendar:StartTimeZone" />
           <t:FieldURI FieldURI="calendar:EndTimeZone" />
         </t:AdditionalProperties>
@@ -890,6 +898,8 @@ export async function getCalendarEvent(
           <t:FieldURI FieldURI="calendar:Recurrence" />
           <t:FieldURI FieldURI="calendar:FirstOccurrence" />
           <t:FieldURI FieldURI="calendar:LastOccurrence" />
+          <t:FieldURI FieldURI="calendar:ModifiedOccurrences" />
+          <t:FieldURI FieldURI="calendar:DeletedOccurrences" />
           <t:FieldURI FieldURI="calendar:StartTimeZone" />
           <t:FieldURI FieldURI="calendar:EndTimeZone" />
         </t:AdditionalProperties>
