@@ -2,7 +2,7 @@ import { access, mkdir, writeFile } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
-import { parseDay } from '../lib/dates.js';
+import { parseDay, toLocalUnzonedISOString } from '../lib/dates.js';
 import {
   forwardEmail,
   getAttachment,
@@ -373,7 +373,7 @@ export const mailCommand = new Command('mail')
               console.error(`Error: Invalid start date: ${err instanceof Error ? err.message : String(err)}`);
               process.exit(1);
             }
-            startDate = { DateTime: parsedStartDate.toISOString(), TimeZone: 'UTC' };
+            startDate = { DateTime: toLocalUnzonedISOString(parsedStartDate), TimeZone: 'UTC' };
           }
           if (options.due) {
             let parsedDueDate: Date;
@@ -383,7 +383,7 @@ export const mailCommand = new Command('mail')
               console.error(`Error: Invalid due date: ${err instanceof Error ? err.message : String(err)}`);
               process.exit(1);
             }
-            dueDate = { DateTime: parsedDueDate.toISOString(), TimeZone: 'UTC' };
+            dueDate = { DateTime: toLocalUnzonedISOString(parsedDueDate), TimeZone: 'UTC' };
           }
         } else if (options.complete) {
           flagStatus = 'Complete';
