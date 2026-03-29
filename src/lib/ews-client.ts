@@ -92,7 +92,12 @@ export function soapEnvelope(body: string): string {
 </soap:Envelope>`;
 }
 
-export async function callEws(token: string, envelope: string, mailbox?: string): Promise<string> {
+export async function callEws(
+  token: string,
+  envelope: string,
+  mailbox?: string,
+  skipResponseCodeCheck?: boolean
+): Promise<string> {
   const anchorMailbox = mailbox || EWS_USERNAME;
   const response = await fetch(EWS_ENDPOINT, {
     method: 'POST',
@@ -112,8 +117,7 @@ export async function callEws(token: string, envelope: string, mailbox?: string)
     throw new Error(`EWS HTTP ${response.status}${soapError ? `: ${soapError}` : ''}`);
   }
 
-  const isGetUserAvailability = xml.includes('GetUserAvailabilityResponse');
-  if (!isGetUserAvailability) {
+  if (!skipResponseCodeCheck) {
     const responseCode = extractTag(xml, 'ResponseCode');
     if (responseCode && responseCode !== 'NoError') {
       const messageText = extractTag(xml, 'MessageText');
@@ -2072,7 +2076,17 @@ export async function areRoomsFree(
   const result = new Map<string, boolean>();
   if (roomEmails.length === 0) return result;
 
-  const envelope = soapEnvelope(`
+  const chunkSize = 100;
+  const chunks: string[][] = [];
+  for (let i = 0; i < roomEmails.length; i += chunkSize) {
+    chunks.push(roomEmails.slice(i, i + chunkSize));
+  }
+
+  const reqStart = new Date(startDateTime).getTime();
+  const reqEnd = new Date(endDateTime).getTime();
+
+  for (const chunk of chunks) {
+    const envelope = soapEnvelope(`
   <m:GetUserAvailabilityRequest>
     <t:TimeZone>
       <t:Bias>-60</t:Bias>
@@ -2092,7 +2106,7 @@ export async function areRoomsFree(
       </t:DaylightTime>
     </t:TimeZone>
     <m:MailboxDataArray>
-      ${roomEmails
+      ${chunk
         .map(
           (email) => `
       <t:MailboxData>
@@ -2112,51 +2126,56 @@ export async function areRoomsFree(
     </t:FreeBusyViewOptions>
   </m:GetUserAvailabilityRequest>`);
 
-  try {
-    const xml = await callEws(token, envelope);
-    const freeBusyResponses = extractBlocks(xml, 'FreeBusyResponse');
+    try {
+      const xml = await callEws(token, envelope, undefined, true);
+      const freeBusyResponses = extractBlocks(xml, 'FreeBusyResponse');
 
-    const reqStart = new Date(startDateTime).getTime();
-    const reqEnd = new Date(endDateTime).getTime();
+      for (let i = 0; i < chunk.length; i++) {
+        const fbr = freeBusyResponses[i];
+        if (!fbr) {
+          result.set(chunk[i], false);
+          continue;
+        }
 
-    for (let i = 0; i < roomEmails.length; i++) {
-      const fbr = freeBusyResponses[i];
-      if (!fbr) {
-        result.set(roomEmails[i], false);
-        continue;
+        const responseMessage = extractSelfClosingOrBlock(fbr, 'ResponseMessage');
+        const responseClass = extractAttribute(responseMessage, 'ResponseMessage', 'ResponseClass');
+        const responseCode = extractTag(responseMessage, 'ResponseCode');
+
+        if (responseClass === 'Error' || (responseCode && responseCode !== 'NoError')) {
+          result.set(chunk[i], false);
+          continue;
+        }
+
+        const calendarEvents = extractBlocks(fbr, 'CalendarEvent');
+        if (calendarEvents.length === 0) {
+          result.set(chunk[i], true);
+          continue;
+        }
+
+        let isFree = true;
+        for (const event of calendarEvents) {
+          const busyType = extractTag(event, 'BusyType');
+          if (busyType === 'Free') continue;
+          const evStart = new Date(extractTag(event, 'StartTime') || '').getTime();
+          const evEnd = new Date(extractTag(event, 'EndTime') || '').getTime();
+          if (evStart < reqEnd && evEnd > reqStart) {
+            isFree = false;
+            break;
+          }
+        }
+        result.set(chunk[i], isFree);
       }
-
-      const responseMessage = extractSelfClosingOrBlock(fbr, 'ResponseMessage');
-      const responseClass = extractAttribute(responseMessage, 'ResponseMessage', 'ResponseClass');
-      const responseCode = extractTag(responseMessage, 'ResponseCode');
-
-      if (responseClass === 'Error' || (responseCode && responseCode !== 'NoError')) {
-        result.set(roomEmails[i], false);
-        continue;
-      }
-
-      const calendarEvents = extractBlocks(fbr, 'CalendarEvent');
-      if (calendarEvents.length === 0) {
-        result.set(roomEmails[i], true);
-        continue;
-      }
-
-      let isFree = true;
-      for (const event of calendarEvents) {
-        const busyType = extractTag(event, 'BusyType');
-        if (busyType === 'Free') continue;
-        const evStart = new Date(extractTag(event, 'StartTime') || '').getTime();
-        const evEnd = new Date(extractTag(event, 'EndTime') || '').getTime();
-        if (evStart < reqEnd && evEnd > reqStart) {
-          isFree = false;
-          break;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      if (errorMessage.includes('ErrorResponseCodeNotProvided')) {
+        for (const email of chunk) {
+          result.set(email, false);
+        }
+      } else {
+        for (const email of chunk) {
+          result.set(email, false);
         }
       }
-      result.set(roomEmails[i], isFree);
-    }
-  } catch {
-    for (const email of roomEmails) {
-      result.set(email, false);
     }
   }
 
