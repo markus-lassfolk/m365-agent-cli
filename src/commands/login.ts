@@ -1,4 +1,5 @@
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline/promises';
@@ -61,49 +62,43 @@ async function performDeviceCodeFlow(clientId: string, tenant: string, scope: st
     if (tokenRes.ok) {
       authenticated = true;
       refreshToken = tokenJson.refresh_token;
-        // Extract username from access token
+      // Extract username from access token
 
-        try {
+      try {
+        const parts = tokenJson.access_token.split('.');
 
-          const parts = tokenJson.access_token.split(".");
+        if (parts.length === 3) {
+          const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
 
-          if (parts.length === 3) {
+          const username = payload.upn || payload.email;
 
-            const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
+          if (username) {
+            let envContent = '';
 
-            const username = payload.upn || payload.email;
+            const configDir = join(homedir(), '.config', 'm365-agent-cli');
+            if (!existsSync(configDir)) {
+              mkdirSync(configDir, { recursive: true });
+            }
+            const envPath = join(configDir, '.env');
 
-            if (username) {
-
-              let envContent = "";
-
-              const envPath = join(process.cwd(), ".env");
-
-              if (existsSync(envPath)) {
-
-                envContent = await readFile(envPath, "utf8");
-
-              }
-
-              if (/^EWS_USERNAME=.*$/m.test(envContent)) {
-
-                envContent = envContent.replace(/^EWS_USERNAME=.*$/m, () => `EWS_USERNAME=${username}`);
-
-              } else {
-
-                envContent += `\nEWS_USERNAME=${username}\n`;
-
-              }
-
-              await writeFile(envPath, `${envContent.trim()}\n`, { encoding: "utf8", mode: 0o600 });
-
-              console.log(`Saved EWS_USERNAME (${username}) to .env file`);
-
+            if (existsSync(envPath)) {
+              envContent = await readFile(envPath, 'utf8');
             }
 
-          }
+            if (/^EWS_USERNAME=.*$/m.test(envContent)) {
+              envContent = envContent.replace(/^EWS_USERNAME=.*$/m, () => `EWS_USERNAME=${username}`);
+            } else {
+              envContent += `\nEWS_USERNAME=${username}\n`;
+            }
 
-        } catch (_e) { /* ignore parse errors */ }
+            await writeFile(envPath, `${envContent.trim()}\n`, { encoding: 'utf8', mode: 0o600 });
+
+            console.log(`Saved EWS_USERNAME (${username}) to ~/.config/m365-agent-cli/.env file`);
+          }
+        }
+      } catch (_e) {
+        /* ignore parse errors */
+      }
       if (!refreshToken) {
         console.error(`\nFailed to obtain ${label} refresh token. Ensure the offline_access scope is granted.`);
         process.exit(1);
@@ -129,7 +124,11 @@ export const loginCommand = new Command('login')
     let clientId = process.env.EWS_CLIENT_ID;
 
     // Read existing .env if present
-    const envPath = join(process.cwd(), '.env');
+    const configDir = join(homedir(), '.config', 'm365-agent-cli');
+    if (!existsSync(configDir)) {
+      mkdirSync(configDir, { recursive: true });
+    }
+    const envPath = join(configDir, '.env');
     let envContent = '';
     if (existsSync(envPath)) {
       envContent = await readFile(envPath, 'utf8');
@@ -189,5 +188,5 @@ export const loginCommand = new Command('login')
     envContent = envContent.replace(/\n{3,}/g, '\n\n');
     await writeFile(envPath, `${envContent.trim()}\n`, { encoding: 'utf8', mode: 0o600 });
 
-    console.log('Saved GRAPH_REFRESH_TOKEN and EWS_REFRESH_TOKEN to .env file in the current directory.');
+    console.log('Saved GRAPH_REFRESH_TOKEN and EWS_REFRESH_TOKEN to ~/.config/m365-agent-cli/.env file.');
   });

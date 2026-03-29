@@ -63,20 +63,26 @@ try {
     Write-Host "Tenant ID: Common (since audience is AzureADandPersonalMicrosoftAccount)"
     Write-Host ""
     
+$ConfigDir = Join-Path -Path $env:USERPROFILE -ChildPath ".config\m365-agent-cli"
+    if (-not (Test-Path -Path $ConfigDir)) {
+        New-Item -ItemType Directory -Force -Path $ConfigDir | Out-Null
+    }
+    $ConfigEnv = Join-Path -Path $ConfigDir -ChildPath ".env"
+
     # Update or append EWS_CLIENT_ID to .env
-    if (Test-Path ".env") {
-        $envContent = Get-Content -Path ".env" -Raw
+    if (Test-Path $ConfigEnv) {
+        $envContent = Get-Content -Path $ConfigEnv -Raw
         if ($envContent -match "(?m)^EWS_CLIENT_ID=.*$") {
             $envContent = $envContent -replace "(?m)^EWS_CLIENT_ID=.*$", "EWS_CLIENT_ID=$($App.AppId)"
-            Set-Content -Path ".env" -Value $envContent.TrimEnd()
-            Write-Host "Updated EWS_CLIENT_ID in .env file in the current directory."
+            Set-Content -Path $ConfigEnv -Value $envContent.TrimEnd()
+            Write-Host "Updated EWS_CLIENT_ID in $ConfigEnv."
         } else {
-            Add-Content -Path ".env" -Value "EWS_CLIENT_ID=$($App.AppId)"
-            Write-Host "Appended EWS_CLIENT_ID to .env file in the current directory."
+            Add-Content -Path $ConfigEnv -Value "EWS_CLIENT_ID=$($App.AppId)"
+            Write-Host "Appended EWS_CLIENT_ID to $ConfigEnv."
         }
     } else {
-        Set-Content -Path ".env" -Value "EWS_CLIENT_ID=$($App.AppId)"
-        Write-Host "Created .env file with EWS_CLIENT_ID in the current directory."
+        Set-Content -Path $ConfigEnv -Value "EWS_CLIENT_ID=$($App.AppId)"
+        Write-Host "Created .env file with EWS_CLIENT_ID in $ConfigEnv."
     }
 
     Write-Host ""

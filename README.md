@@ -43,7 +43,7 @@ m365-agent-cli uses OAuth2 with a refresh token to authenticate against Microsof
 
 ### Setup
 
-If you used the setup scripts from `docs/ENTRA_SETUP.md`, your `EWS_CLIENT_ID` is already appended to a `.env` file in the current directory. 
+If you used the setup scripts from `docs/ENTRA_SETUP.md`, your `EWS_CLIENT_ID` is already appended to a `~/.config/m365-agent-cli/.env` file . 
 
 The easiest way to obtain your refresh tokens is to run the interactive login command:
 
@@ -51,9 +51,9 @@ The easiest way to obtain your refresh tokens is to run the interactive login co
 clippy login
 ```
 
-This will initiate the Microsoft Device Code flow and automatically save `EWS_REFRESH_TOKEN` and `GRAPH_REFRESH_TOKEN` into your `.env` file upon successful authentication.
+This will initiate the Microsoft Device Code flow and automatically save `EWS_REFRESH_TOKEN` and `GRAPH_REFRESH_TOKEN` into your `~/.config/m365-agent-cli/.env` file upon successful authentication.
 
-Alternatively, you can manually create a `.env` file in the project root (or set environment variables):
+Alternatively, you can manually create a `~/.config/m365-agent-cli/.env` file in the project root (or set environment variables):
 
 ```bash
 EWS_CLIENT_ID=your-azure-app-client-id
@@ -126,7 +126,7 @@ You can enable Read-Only mode in two ways:
    # Error: Command blocked. The CLI is running in read-only mode.
    ```
 
-2. **Environment Variable**: Set `READ_ONLY_MODE=true` in your environment or `.env` file.
+2. **Environment Variable**: Set `READ_ONLY_MODE=true` in your environment or `~/.config/m365-agent-cli/.env` file.
    ```bash
    export READ_ONLY_MODE=true
    m365-agent-cli planner update-task <taskId> --title "New"
