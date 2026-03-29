@@ -1070,12 +1070,16 @@ export async function getEmails(options: GetEmailsOptions): Promise<OwaResponse<
     let restrictionXml = '';
     if (filter && !search) {
       // Whitelist: only allow these tokens (escaped values are not user-controlled in mail.ts)
-      const KNOWN_FILTER_TOKENS = ["IsRead eq false", "FlagStatus", "Flagged"];
+      const KNOWN_FILTER_TOKENS = ['IsRead eq false', 'Flag/FlagStatus', 'FlagStatus', 'Flagged', 'and'];
       const unrecognised = [...filter.matchAll(/\b[\w/]+(?: eq [\'\"]?\w+[\'\"]?)?\b/g)]
         .map((m) => m[0])
         .filter((tok) => !KNOWN_FILTER_TOKENS.some((k) => tok.startsWith(k) || k.startsWith(tok)));
       if (unrecognised.length > 0) {
-        return ewsError(new Error(`Unrecognised filter tokens: ${unrecognised.join(', ')}. Allowed: IsRead eq false, FlagStatus+Flagged.`));
+        return ewsError(
+          new Error(
+            `Unrecognised filter tokens: ${unrecognised.join(', ')}. Allowed: IsRead eq false, FlagStatus+Flagged.`
+          )
+        );
       }
 
       const restrictions: string[] = [];
