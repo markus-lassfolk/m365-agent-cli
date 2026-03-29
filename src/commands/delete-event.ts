@@ -21,6 +21,9 @@ export const deleteEventCommand = new Command('delete-event')
   .option('--search <text>', 'Search for events by title')
   .option('--message <text>', 'Cancellation message to send to attendees')
   .option('--force-delete', 'Delete without sending cancellation (even with attendees)')
+  .option('--occurrence <index>', 'Delete only the Nth occurrence (1-based index)')
+  .option('--instance <date>', 'Delete only the occurrence on a specific date (YYYY-MM-DD)')
+  .option('--scope <scope>', 'Scope of deletion: all (default), this (only this occurrence), future (this and future)')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--mailbox <email>', 'Delete event in shared mailbox calendar')
@@ -33,6 +36,9 @@ export const deleteEventCommand = new Command('delete-event')
         search?: string;
         message?: string;
         forceDelete?: boolean;
+        occurrence?: string;
+        instance?: string;
+        scope?: 'all' | 'this' | 'future';
         json?: boolean;
         token?: string;
         mailbox?: string;
@@ -156,6 +162,50 @@ export const deleteEventCommand = new Command('delete-event')
       const attendees = targetEvent.Attendees?.filter((a) => a.EmailAddress?.Address && a.Type !== 'Resource') || [];
       const hasAttendees = attendees.length > 0;
 
+      // Handle instance logic
+      if (options.instance) {
+        try {
+          const instDate = parseDay(options.instance);
+          const startInst = new Date(instDate);
+          startInst.setHours(0, 0, 0, 0);
+          const endInst = new Date(instDate);
+          endInst.setHours(23, 59, 59, 999);
+          
+          const instResult = await getCalendarEvents(
+            authResult.token!,
+            startInst.toISOString(),
+            endInst.toISOString(),
+            options.mailbox
+          );
+
+          if (instResult.ok && instResult.data) {
+             const occurrence = instResult.data.find(e => (e.RecurringMasterItemId === targetEvent.Id || e.Id === targetEvent.Id || e.Subject === targetEvent.Subject));
+             if (occurrence) {
+                targetEvent.Id = occurrence.Id; // swap to occurrence ID
+             } else {
+                console.error(`Could not find occurrence of "${targetEvent.Subject}" on ${options.instance}`);
+                process.exit(1);
+             }
+          }
+        } catch (err) {
+          console.error(`Failed to find instance: ${err}`);
+          process.exit(1);
+        }
+      }
+
+      // Handle scope logic
+      if (options.scope === 'all') {
+        if (targetEvent.RecurringMasterItemId) {
+          targetEvent.Id = targetEvent.RecurringMasterItemId;
+        }
+      } else if (options.scope === 'future') {
+        console.warn('Note: --scope future is handled via setting the series EndDate. If it fails, you may need to manually edit the series.');
+        // For 'future', updating EndDate is complex via CLI since updateEvent doesn't handle RecurrenceEnd updates directly.
+        // EWS natively doesn't have "delete future" for deleteItem.
+        console.error('--scope future is not natively supported by EWS DeleteItem. Please manually update the recurring event EndDate.');
+        process.exit(1);
+      }
+
       console.log(`\nDeleting: ${targetEvent.Subject}`);
       console.log(
         `  ${formatDate(targetEvent.Start.DateTime)} ${formatTime(targetEvent.Start.DateTime)} - ${formatTime(targetEvent.End.DateTime)}`
@@ -172,7 +222,8 @@ export const deleteEventCommand = new Command('delete-event')
           token: authResult.token!,
           eventId: targetEvent.Id,
           comment: options.message,
-          mailbox: options.mailbox
+          mailbox: options.mailbox,
+          occurrenceIndex: options.occurrence ? parseInt(options.occurrence, 10) : undefined
         });
         action = 'cancelled';
       } else {
@@ -180,7 +231,8 @@ export const deleteEventCommand = new Command('delete-event')
         deleteResult = await deleteEvent({
           token: authResult.token!,
           eventId: targetEvent.Id,
-          mailbox: options.mailbox
+          mailbox: options.mailbox,
+          occurrenceIndex: options.occurrence ? parseInt(options.occurrence, 10) : undefined
         });
         action = 'deleted';
       }

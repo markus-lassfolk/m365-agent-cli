@@ -166,6 +166,7 @@ export interface CalendarEvent {
   IsAllDay?: boolean;
   IsCancelled?: boolean;
   IsOrganizer?: boolean;
+  CalendarItemType?: string;
   BodyPreview?: string;
   Categories?: string[];
   ShowAs?: string;
@@ -173,6 +174,7 @@ export interface CalendarEvent {
   IsOnlineMeeting?: boolean;
   OnlineMeetingUrl?: string;
   WebLink?: string;
+  RecurringMasterItemId?: string;
 }
 
 export interface RecurrencePattern {
@@ -215,6 +217,7 @@ export interface CreatedEvent {
   Start: { DateTime: string; TimeZone: string };
   End: { DateTime: string; TimeZone: string };
   WebLink?: string;
+  RecurringMasterItemId?: string;
   OnlineMeetingUrl?: string;
 }
 
@@ -354,7 +357,11 @@ function parseCalendarItem(block: string, mailbox?: string): CalendarEvent {
   const location = extractTag(block, 'Location');
   const isAllDay = extractTag(block, 'IsAllDayEvent').toLowerCase() === 'true';
   const isCancelled = extractTag(block, 'IsCancelled').toLowerCase() === 'true';
+  const calendarItemType = extractTag(block, 'CalendarItemType') || 'Single';
   const bodyPreview = extractTag(block, 'TextBody') || extractTag(block, 'Body');
+
+  const recurringMasterBlock = extractSelfClosingOrBlock(block, 'RecurringMasterItemId');
+  const recurringMasterItemId = recurringMasterBlock ? extractAttribute(recurringMasterBlock, 'RecurringMasterItemId', 'OccurrenceId') || extractAttribute(recurringMasterBlock, 'RecurringMasterItemId', 'Id') || extractAttribute(block, 'RecurringMasterItemId', 'Id') : undefined;
   const importance = extractTag(block, 'Importance') || 'Normal';
   const showAs = extractTag(block, 'LegacyFreeBusyStatus') || 'Busy';
 
@@ -421,10 +428,12 @@ function parseCalendarItem(block: string, mailbox?: string): CalendarEvent {
     IsAllDay: isAllDay,
     IsCancelled: isCancelled,
     IsOrganizer: isOrganizer,
+    CalendarItemType: calendarItemType,
     BodyPreview: bodyPreview ? bodyPreview.substring(0, 200).replace(/\s+/g, ' ').trim() : undefined,
     Categories: categories.length > 0 ? categories : undefined,
     ShowAs: showAs,
-    Importance: importance
+    Importance: importance,
+    RecurringMasterItemId: recurringMasterItemId
   };
 }
 
@@ -604,6 +613,8 @@ export async function getCalendarEvents(
           <t:FieldURI FieldURI="calendar:IsAllDayEvent" />
           <t:FieldURI FieldURI="calendar:IsCancelled" />
           <t:FieldURI FieldURI="calendar:MyResponseType" />
+          <t:FieldURI FieldURI="calendar:CalendarItemType" />
+          <t:FieldURI FieldURI="calendar:RecurringMasterItemId" />
           <t:FieldURI FieldURI="calendar:LegacyFreeBusyStatus" />
           <t:FieldURI FieldURI="item:Importance" />
           <t:FieldURI FieldURI="item:TextBody" />
@@ -645,6 +656,8 @@ export async function getCalendarEvent(
           <t:FieldURI FieldURI="calendar:IsAllDayEvent" />
           <t:FieldURI FieldURI="calendar:IsCancelled" />
           <t:FieldURI FieldURI="calendar:MyResponseType" />
+          <t:FieldURI FieldURI="calendar:CalendarItemType" />
+          <t:FieldURI FieldURI="calendar:RecurringMasterItemId" />
           <t:FieldURI FieldURI="calendar:LegacyFreeBusyStatus" />
           <t:FieldURI FieldURI="item:Importance" />
           <t:FieldURI FieldURI="item:TextBody" />
@@ -957,15 +970,20 @@ export interface DeleteEventOptions {
   token: string;
   eventId: string;
   mailbox?: string;
+  occurrenceIndex?: number;
 }
 
 export async function deleteEvent(options: DeleteEventOptions): Promise<OwaResponse<void>> {
   try {
-    const { token, eventId, mailbox } = options;
+    const { token, eventId, mailbox, occurrenceIndex } = options;
+    const itemIdXml = occurrenceIndex !== undefined
+      ? `<t:OccurrenceItemId RecurringMasterId="${xmlEscape(eventId)}" InstanceIndex="${occurrenceIndex}" />`
+      : `<t:ItemId Id="${xmlEscape(eventId)}" />`;
+
     const envelope = soapEnvelope(`
     <m:DeleteItem DeleteType="MoveToDeletedItems" SendMeetingCancellations="SendToNone">
       <m:ItemIds>
-        <t:ItemId Id="${xmlEscape(eventId)}" />
+        ${itemIdXml}
       </m:ItemIds>
     </m:DeleteItem>`);
     await callEws(token, envelope, mailbox);
@@ -980,10 +998,19 @@ export interface CancelEventOptions {
   eventId: string;
   comment?: string;
   mailbox?: string;
+  occurrenceIndex?: number;
 }
 
 export async function cancelEvent(options: CancelEventOptions): Promise<OwaResponse<void>> {
-  const { token, eventId, comment, mailbox } = options;
+  const { token, eventId, comment, mailbox, occurrenceIndex } = options;
+
+  const itemIdXml = occurrenceIndex !== undefined
+    ? `<t:OccurrenceItemId RecurringMasterId="${xmlEscape(eventId)}" InstanceIndex="${occurrenceIndex}" />`
+    : `<t:ItemId Id="${xmlEscape(eventId)}" />`;
+
+  const referenceItemIdXml = occurrenceIndex !== undefined
+    ? `<t:OccurrenceItemId RecurringMasterId="${xmlEscape(eventId)}" InstanceIndex="${occurrenceIndex}" />`
+    : `<t:ReferenceItemId Id="${xmlEscape(eventId)}" />`;
 
   // Primary: CancelCalendarItem
   try {
@@ -991,7 +1018,7 @@ export async function cancelEvent(options: CancelEventOptions): Promise<OwaRespo
     <m:CreateItem MessageDisposition="SendAndSaveCopy">
       <m:Items>
         <t:CancelCalendarItem>
-          <t:ReferenceItemId Id="${xmlEscape(eventId)}" />
+          ${referenceItemIdXml}
           ${comment ? `<t:NewBodyContent BodyType="Text">${xmlEscape(comment)}</t:NewBodyContent>` : ''}
         </t:CancelCalendarItem>
       </m:Items>
@@ -1004,7 +1031,7 @@ export async function cancelEvent(options: CancelEventOptions): Promise<OwaRespo
       const envelope = soapEnvelope(`
       <m:DeleteItem DeleteType="MoveToDeletedItems" SendMeetingCancellations="SendToAllAndSaveCopy">
         <m:ItemIds>
-          <t:ItemId Id="${xmlEscape(eventId)}" />
+          ${itemIdXml}
         </m:ItemIds>
       </m:DeleteItem>`);
       await callEws(token, envelope, mailbox);
