@@ -11,6 +11,9 @@ cd clippy
 
 # Install dependencies
 bun install
+# Install OpenClaw Skills (optional, gives your AI agent superpowers)
+cp -r skills/* ~/.openclaw/workspace/skills/
+
 
 # Run directly
 bun run src/cli.ts <command>
