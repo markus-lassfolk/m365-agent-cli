@@ -1163,7 +1163,7 @@ export async function getEmail(token: string, messageId: string): Promise<OwaRes
           <t:FieldURI FieldURI="item:HasAttachments" />
           <t:FieldURI FieldURI="message:From" />
           <t:FieldURI FieldURI="message:ToRecipients" />
-          <t:FieldURI FieldU="message:CcRecipients" />
+          <t:FieldURI FieldURI="message:CcRecipients" />
           <t:FieldURI FieldURI="message:IsRead" />
           <t:FieldURI FieldURI="item:Flag" />
           <t:FieldURI FieldURI="item:Importance" />
