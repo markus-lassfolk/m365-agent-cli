@@ -572,6 +572,8 @@ function parseCalendarItem(block: string, mailbox?: string): CalendarEvent {
   const subject = extractTag(block, 'Subject');
   const start = extractTag(block, 'Start');
   const end = extractTag(block, 'End');
+  const startTimeZone = extractAttribute(block, 'StartTimeZone', 'Id') || 'UTC';
+  const endTimeZone = extractAttribute(block, 'EndTimeZone', 'Id') || 'UTC';
   const location = extractTag(block, 'Location');
   const isAllDay = extractTag(block, 'IsAllDayEvent').toLowerCase() === 'true';
   const isCancelled = extractTag(block, 'IsCancelled').toLowerCase() === 'true';
@@ -637,8 +639,8 @@ function parseCalendarItem(block: string, mailbox?: string): CalendarEvent {
     Id: id,
     ChangeKey: changeKey,
     Subject: subject,
-    Start: { DateTime: start, TimeZone: 'UTC' },
-    End: { DateTime: end, TimeZone: 'UTC' },
+    Start: { DateTime: start, TimeZone: startTimeZone },
+    End: { DateTime: end, TimeZone: endTimeZone },
     Location: location ? { DisplayName: location } : undefined,
     Organizer: { EmailAddress: { Name: organizerName, Address: organizerEmail } },
     Attendees: attendees.length > 0 ? attendees : undefined,
@@ -841,6 +843,8 @@ export async function getCalendarEvents(
           <t:FieldURI FieldURI="calendar:Recurrence" />
           <t:FieldURI FieldURI="calendar:FirstOccurrence" />
           <t:FieldURI FieldURI="calendar:LastOccurrence" />
+          <t:FieldURI FieldURI="calendar:StartTimeZone" />
+          <t:FieldURI FieldURI="calendar:EndTimeZone" />
         </t:AdditionalProperties>
       </m:ItemShape>
       <m:CalendarView StartDate="${xmlEscape(startDateTime)}" EndDate="${xmlEscape(endDateTime)}" />
@@ -886,6 +890,8 @@ export async function getCalendarEvent(
           <t:FieldURI FieldURI="calendar:Recurrence" />
           <t:FieldURI FieldURI="calendar:FirstOccurrence" />
           <t:FieldURI FieldURI="calendar:LastOccurrence" />
+          <t:FieldURI FieldURI="calendar:StartTimeZone" />
+          <t:FieldURI FieldURI="calendar:EndTimeZone" />
         </t:AdditionalProperties>
       </m:ItemShape>
       <m:ItemIds>

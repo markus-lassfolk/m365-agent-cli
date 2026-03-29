@@ -1,7 +1,5 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { Command } from 'commander';
-import { stat } from 'fs/promises';
-import { lookupMimeType } from '../lib/mime-type.js';
 import { AttachmentPathError, validateAttachmentPath } from '../lib/attachments.js';
 import { resolveAuth } from '../lib/auth.js';
 import {
@@ -14,6 +12,7 @@ import {
   updateDraft
 } from '../lib/ews-client.js';
 import { markdownToHtml } from '../lib/markdown.js';
+import { lookupMimeType } from '../lib/mime-type.js';
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
