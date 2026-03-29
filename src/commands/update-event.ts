@@ -53,7 +53,6 @@ export const updateEventCommand = new Command('update-event')
         location?: string;
         teams?: boolean;
         allDay?: boolean;
-        noAllDay?: boolean;
         timezone?: string;
         json?: boolean;
         token?: string;
