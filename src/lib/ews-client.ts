@@ -74,6 +74,58 @@ function requireNonEmpty(value: string, fieldName: string): string {
   return value.trim();
 }
 
+/**
+ * Derives the local timezone bias (in minutes) from the user's system timezone.
+ * The EWS TimeZone Bias is the offset from UTC in minutes, where negative = west of UTC.
+ *
+ * For W. Europe Standard Time (CET/CEST, UTC+1/+2), the bias would be -60 (standard) or -120 (daylight).
+ * This dynamically computes the bias based on the current system timezone and date.
+ */
+function getLocalTimezoneBias(): number {
+  const year = new Date().getFullYear();
+  // Create a date at the start of the year to get the standard (non-DST) offset
+  const jan = new Date(year, 0, 1);
+  const janOffset = jan.getTimezoneOffset();
+
+  // Create a date in mid-year (July) to check for DST offset
+  const jul = new Date(year, 6, 1);
+  const julOffset = jul.getTimezoneOffset();
+
+  // Return the maximum (most positive) offset, which is the standard time bias
+  // For CET/CEST: janOffset = -60, julOffset = -120 → return -60 (standard time)
+  // For UTC: both are 0 → return 0
+  // For EST/EDT: janOffset = 300 (UTC-5), julOffset = 240 (UTC-4) → return 300 (standard time)
+  return Math.max(janOffset, julOffset);
+}
+
+/**
+ * Builds a SOAP TimeZone element with dynamic bias based on the user's system timezone.
+ * The StandardTime and DaylightTime biases are relative to the base Bias.
+ */
+function buildTimeZoneXml(): string {
+  const bias = getLocalTimezoneBias();
+  const dstBias = bias - 60; // DST is typically 60 minutes ahead of standard time
+
+  return `
+    <t:TimeZone>
+      <t:Bias>${bias}</t:Bias>
+      <t:StandardTime>
+        <t:Bias>0</t:Bias>
+        <t:Time>03:00:00</t:Time>
+        <t:DayOrder>5</t:DayOrder>
+        <t:Month>10</t:Month>
+        <t:DayOfWeek>Sunday</t:DayOfWeek>
+      </t:StandardTime>
+      <t:DaylightTime>
+        <t:Bias>${dstBias - bias}</t:Bias>
+        <t:Time>02:00:00</t:Time>
+        <t:DayOrder>5</t:DayOrder>
+        <t:Month>3</t:Month>
+        <t:DayOfWeek>Sunday</t:DayOfWeek>
+      </t:DaylightTime>
+    </t:TimeZone>`;
+}
+
 // ─── SOAP Core ───
 
 import { validateUrl } from './url-validation';
@@ -2201,23 +2253,7 @@ export async function getScheduleViaOutlook(
 
     const envelope = soapEnvelope(`
     <m:GetUserAvailabilityRequest>
-      <t:TimeZone>
-        <t:Bias>-60</t:Bias>
-        <t:StandardTime>
-          <t:Bias>0</t:Bias>
-          <t:Time>03:00:00</t:Time>
-          <t:DayOrder>5</t:DayOrder>
-          <t:Month>10</t:Month>
-          <t:DayOfWeek>Sunday</t:DayOfWeek>
-        </t:StandardTime>
-        <t:DaylightTime>
-          <t:Bias>-60</t:Bias>
-          <t:Time>02:00:00</t:Time>
-          <t:DayOrder>5</t:DayOrder>
-          <t:Month>3</t:Month>
-          <t:DayOfWeek>Sunday</t:DayOfWeek>
-        </t:DaylightTime>
-      </t:TimeZone>
+      ${buildTimeZoneXml()}
       <m:MailboxDataArray>
         ${mailboxDataXml}
       </m:MailboxDataArray>
@@ -2276,15 +2312,37 @@ export async function getScheduleViaOutlook(
     }
 
     if (freeSlots.length === 0) {
-      for (const schedule of schedules) {
-        schedule.scheduleItems = [
-          {
-            status: 'Busy',
-            start: { dateTime: startDateTime, timeZone: 'W. Europe Standard Time' },
-            end: { dateTime: endDateTime, timeZone: 'W. Europe Standard Time' },
-            subject: 'No available times'
+      // Fall back to FreeBusyView data from the response XML instead of creating fake "Busy" entries
+      const freeBusyResponses = extractBlocks(xml, 'FreeBusyResponse');
+      const reqStart = new Date(startDateTime).getTime();
+      const reqEnd = new Date(endDateTime).getTime();
+
+      for (let i = 0; i < freeBusyResponses.length && i < schedules.length; i++) {
+        const resp = freeBusyResponses[i];
+        const schedule = schedules[i];
+        const calendarEvents = extractBlocks(resp, 'CalendarEvent');
+        const items: ScheduleInfo['scheduleItems'] = [];
+
+        for (const event of calendarEvents) {
+          const busyType = extractTag(event, 'BusyType');
+          const startTime = extractTag(event, 'StartTime');
+          const endTime = extractTag(event, 'EndTime');
+
+          if (startTime && endTime) {
+            const evStart = new Date(startTime).getTime();
+            const evEnd = new Date(endTime).getTime();
+            // Only include events that overlap with the requested window
+            if (evStart < reqEnd && evEnd > reqStart) {
+              items.push({
+                status: busyType === 'Free' ? 'Free' : busyType === 'Tentative' ? 'Tentative' : 'Busy',
+                start: { dateTime: new Date(evStart).toISOString(), timeZone: 'UTC' },
+                end: { dateTime: new Date(evEnd).toISOString(), timeZone: 'UTC' }
+              });
+            }
           }
-        ];
+        }
+
+        schedule.scheduleItems = items;
       }
     }
 
@@ -2368,23 +2426,7 @@ export async function areRoomsFree(
     try {
       const envelope = soapEnvelope(`
     <m:GetUserAvailabilityRequest>
-      <t:TimeZone>
-        <t:Bias>-60</t:Bias>
-        <t:StandardTime>
-          <t:Bias>0</t:Bias>
-          <t:Time>03:00:00</t:Time>
-          <t:DayOrder>5</t:DayOrder>
-          <t:Month>10</t:Month>
-          <t:DayOfWeek>Sunday</t:DayOfWeek>
-        </t:StandardTime>
-        <t:DaylightTime>
-          <t:Bias>-60</t:Bias>
-          <t:Time>02:00:00</t:Time>
-          <t:DayOrder>5</t:DayOrder>
-          <t:Month>3</t:Month>
-          <t:DayOfWeek>Sunday</t:DayOfWeek>
-        </t:DaylightTime>
-      </t:TimeZone>
+      ${buildTimeZoneXml()}
       <m:MailboxDataArray>
         ${batch
           .map(
