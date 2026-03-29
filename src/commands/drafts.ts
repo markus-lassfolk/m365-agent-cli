@@ -283,6 +283,11 @@ export const draftsCommand = new Command('drafts')
           for (const filePath of filePaths) {
             try {
               const validated = await validateAttachmentPath(filePath, workingDirectory);
+              const fileStat = await stat(validated.absolutePath);
+              if (fileStat.size > 25 * 1024 * 1024) {
+                console.error(`File too large (>25MB): ${validated.absolutePath}`);
+                process.exit(1);
+              }
               const content = await readFile(validated.absolutePath);
               const contentType = lookupMimeType(validated.fileName) || 'application/octet-stream';
 
