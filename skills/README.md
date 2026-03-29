@@ -7,10 +7,10 @@ These skills teach the AI *how* to use the `clippy` CLI and *how* to behave when
 ## Included Skills
 
 ### 1. `clippy` (The Technical Manual)
-Located in `skills/clippy/SKILL.md`, this is the strict technical documentation for the CLI. It teaches the AI agent the exact syntax, flags, and endpoints required to interact with Microsoft 365 (e.g., `mail`, `calendar`, `files`, `planner`, `sharepoint`). The AI reads this to know how to execute actions on your behalf without hallucinating commands.
+Located in `./clippy/SKILL.md`, this is the strict technical documentation for the CLI. It teaches the AI agent the exact syntax, flags, and endpoints required to interact with Microsoft 365 (e.g., `mail`, `calendar`, `files`, `planner`, `sharepoint`). The AI reads this to know how to execute actions on your behalf without hallucinating commands.
 
 ### 2. `personal-assistant` (The Behavioral Playbook)
-Located in `skills/personal-assistant/SKILL.md`, this is the behavioral framework for an Executive Assistant. Rather than just giving the AI tools, this gives it a **proactive persona**.
+Located in `./personal-assistant/SKILL.md`, this is the behavioral framework for an Executive Assistant. Rather than just giving the AI tools, this gives it a **proactive persona**.
 
 #### The PA Persona (High-Level)
 When an agent loads this skill, it adopts the mindset of a Chief of Staff:

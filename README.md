@@ -17,6 +17,8 @@ You can run this PA setup in two distinct ways:
 
 ---
 
+## Installation
+
 
 ```bash
 # Clone the repository
@@ -82,6 +84,8 @@ clippy verify-token
 
 ---
 
+## Installation
+
 ## Global Options
 
 All commands support these global options:
@@ -92,6 +96,8 @@ All commands support these global options:
 ```
 
 ---
+
+## Installation
 
 ## Calendar Commands
 
@@ -262,6 +268,8 @@ clippy findtime nextweek alice@company.com --solo
 ```
 
 ---
+
+## Installation
 
 ## Email Commands
 
@@ -439,6 +447,8 @@ clippy folders --delete "Old Folder"
 
 ---
 
+## Installation
+
 ## OneDrive / Office Online Commands
 
 ### List, Search, and Inspect Files
@@ -526,7 +536,11 @@ Legacy Office formats such as `.doc`, `.xls`, and `.ppt` must be converted first
 
 ---
 
+## Installation
+
 ---
+
+## Installation
 
 ## Microsoft Planner Commands
 
@@ -550,6 +564,8 @@ clippy planner update-task <taskId> --title "Updated Task" --percent 50 --assign
 ```
 
 ---
+
+## Installation
 
 ## SharePoint Commands
 
@@ -586,6 +602,8 @@ clippy pages publish <siteId> <pageId>
 ```
 
 ---
+
+## Installation
 ## People & Room Search
 
 ```bash
@@ -600,6 +618,8 @@ clippy find "smith" --people
 ```
 
 ---
+
+## Installation
 
 ## Examples
 
@@ -661,6 +681,8 @@ clippy mail --reply 1 --message "Done!" --mailbox shared@company.com
 
 ---
 
+## Installation
+
 ## Recent Security Hardening
 
 Recent commits have strengthened input validation and API security:
@@ -671,6 +693,8 @@ Recent commits have strengthened input validation and API security:
 - **String pattern replacement** bug fixed (prevents regex injection via malformed `$pattern`)
 
 ---
+
+## Installation
 
 ## Requirements
 
