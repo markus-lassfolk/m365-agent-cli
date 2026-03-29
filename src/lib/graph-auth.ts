@@ -106,14 +106,32 @@ export async function resolveGraphAuth(options?: { token?: string }): Promise<Gr
 
   try {
     const clientId = process.env.EWS_CLIENT_ID;
-    const envRefreshToken = process.env.GRAPH_REFRESH_TOKEN || process.env.EWS_REFRESH_TOKEN;
+    const graphRefreshToken = process.env.GRAPH_REFRESH_TOKEN;
 
-    if (!clientId || !envRefreshToken) {
+    if (!clientId) {
       return {
         success: false,
-        error: 'Missing EWS_CLIENT_ID and/or GRAPH_REFRESH_TOKEN (or EWS_REFRESH_TOKEN) in environment.'
+        error: 'Missing EWS_CLIENT_ID in environment. Check your .env file or Azure app registration.'
       };
     }
+
+    if (!graphRefreshToken) {
+      if (process.env.EWS_REFRESH_TOKEN) {
+        console.warn(
+          '[graph-auth] EWS_REFRESH_TOKEN is set but GRAPH_REFRESH_TOKEN is not. ' +
+            'EWS tokens cannot be used for Microsoft Graph operations — they have different OAuth scopes. ' +
+            'Please set GRAPH_REFRESH_TOKEN to your Graph API refresh token.'
+        );
+      }
+      return {
+        success: false,
+        error:
+          'Missing GRAPH_REFRESH_TOKEN in environment. ' +
+          'Note: EWS_REFRESH_TOKEN cannot be used for Graph operations — Graph requires its own token with Graph scopes.'
+      };
+    }
+
+    const envRefreshToken = graphRefreshToken;
 
     const tenant = getMicrosoftTenantPathSegment();
 
@@ -148,7 +166,7 @@ export async function resolveGraphAuth(options?: { token?: string }): Promise<Gr
 
     return {
       success: false,
-      error: 'Graph token refresh failed. You may need to update GRAPH_REFRESH_TOKEN (or EWS_REFRESH_TOKEN) in .env.'
+      error: 'Graph token refresh failed. You may need to update GRAPH_REFRESH_TOKEN in .env.'
     };
   } catch (err) {
     return {
