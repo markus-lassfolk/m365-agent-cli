@@ -180,6 +180,11 @@ export interface CalendarEvent {
   IsOnlineMeeting?: boolean;
   OnlineMeetingUrl?: string;
   WebLink?: string;
+  // Recurrence info
+  IsRecurring?: boolean;
+  RecurrenceDescription?: string;
+  FirstOccurrence?: { Start: string; End: string; Id?: string };
+  LastOccurrence?: { Start: string; End: string; Id?: string };
 }
 
 export interface RecurrencePattern {
@@ -236,6 +241,8 @@ export interface UpdateEventOptions {
   location?: string;
   attendees?: Array<{ email: string; name?: string; type?: 'Required' | 'Optional' | 'Resource' }>;
   isOnlineMeeting?: boolean;
+  /** Use OccurrenceItemId for a specific occurrence, ItemId for the series master */
+  occurrenceItemId?: string;
   mailbox?: string;
 }
 
@@ -304,6 +311,8 @@ export interface GetEmailsOptions {
   search?: string;
   select?: string[];
   orderBy?: string;
+  isRead?: boolean;
+  flagStatus?: 'Flagged' | 'NotFlagged' | 'Complete';
 }
 
 export interface Attachment {
@@ -351,6 +360,143 @@ export interface RespondToEventOptions {
 }
 
 // ─── Parsing Helpers ───
+
+/**
+ * Parse recurrence description from a CalendarItem XML block.
+ * Returns a human-readable string like "Weekly, every Monday until 2026-06-30"
+ * and also extracts FirstOccurrence/LastOccurrence when present.
+ */
+function parseRecurrenceFromBlock(block: string): {
+  description?: string;
+  firstOccurrence?: { Start: string; End: string; Id?: string };
+  lastOccurrence?: { Start: string; End: string; Id?: string };
+} {
+  // Check if this item has any recurrence info
+  const recurrenceBlock = extractSelfClosingOrBlock(block, 'Recurrence');
+  if (!recurrenceBlock) {
+    // Also check for FirstOccurrence/LastOccurrence on series master items
+    const firstOccBlock = extractSelfClosingOrBlock(block, 'FirstOccurrence');
+    const lastOccBlock = extractSelfClosingOrBlock(block, 'LastOccurrence');
+    if (firstOccBlock || lastOccBlock) {
+      const firstOccurrence = firstOccBlock
+        ? {
+            Start: extractTag(firstOccBlock, 'Start') || '',
+            End: extractTag(firstOccBlock, 'End') || '',
+            Id: extractAttribute(firstOccBlock, 'ItemId', 'Id')
+          }
+        : undefined;
+      const lastOccurrence = lastOccBlock
+        ? {
+            Start: extractTag(lastOccBlock, 'Start') || '',
+            End: extractTag(lastOccBlock, 'End') || '',
+            Id: extractAttribute(lastOccBlock, 'ItemId', 'Id')
+          }
+        : undefined;
+      return { firstOccurrence, lastOccurrence };
+    }
+    return {};
+  }
+
+  const parts: string[] = [];
+
+  // Determine pattern type
+  const interval = extractTag(recurrenceBlock, 'Interval') || '1';
+  const dayOfMonth = extractTag(recurrenceBlock, 'DayOfMonth');
+  const month = extractTag(recurrenceBlock, 'Month');
+  const daysOfWeek = extractTag(recurrenceBlock, 'DaysOfWeek');
+  const dayOfWeekIndex = extractTag(recurrenceBlock, 'DayOfWeekIndex');
+
+  const monthNames = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December'
+  ];
+  const dayIndexNames: Record<string, string> = {
+    First: '1st',
+    Second: '2nd',
+    Third: '3rd',
+    Fourth: '4th',
+    Last: 'last'
+  };
+
+  if (recurrenceBlock.includes('DailyRecurrence')) {
+    parts.push(parseInt(interval, 10) === 1 ? 'Daily' : `Every ${interval} days`);
+  } else if (recurrenceBlock.includes('WeeklyRecurrence')) {
+    const days = daysOfWeek ? daysOfWeek.split(' ').filter(Boolean) : [];
+    const dayList = days.length > 0 ? days.join(', ') : 'week';
+    parts.push(parseInt(interval, 10) === 1 ? `Weekly on ${dayList}` : `Every ${interval} weeks on ${dayList}`);
+  } else if (recurrenceBlock.includes('AbsoluteMonthlyRecurrence')) {
+    parts.push(
+      parseInt(interval, 10) === 1
+        ? `Monthly on day ${dayOfMonth || 1}`
+        : `Every ${interval} months on day ${dayOfMonth || 1}`
+    );
+  } else if (recurrenceBlock.includes('RelativeMonthlyRecurrence')) {
+    const idx = dayIndexNames[dayOfWeekIndex || 'First'] || '1st';
+    const days = daysOfWeek ? daysOfWeek.split(' ').filter(Boolean).join(', ') : 'day';
+    parts.push(
+      parseInt(interval, 10) === 1 ? `Monthly on the ${idx} ${days}` : `Every ${interval} months on the ${idx} ${days}`
+    );
+  } else if (recurrenceBlock.includes('AbsoluteYearlyRecurrence')) {
+    const monthName = month ? monthNames[parseInt(month, 10) - 1] || month : 'the specified month';
+    parts.push(`Yearly on ${monthName} ${dayOfMonth || 1}`);
+  } else if (recurrenceBlock.includes('RelativeYearlyRecurrence')) {
+    const idx = dayIndexNames[dayOfWeekIndex || 'First'] || '1st';
+    const monthName = month ? monthNames[parseInt(month, 10) - 1] || month : 'the specified month';
+    const days = daysOfWeek ? daysOfWeek.split(' ').filter(Boolean).join(', ') : 'day';
+    parts.push(`Yearly on the ${idx} ${days} of ${monthName}`);
+  }
+
+  // Determine range
+  if (recurrenceBlock.includes('EndDateRecurrence')) {
+    const startDate = extractTag(recurrenceBlock, 'StartDate');
+    const endDate = extractTag(recurrenceBlock, 'EndDate');
+    if (endDate) {
+      const endStr = endDate.split('T')[0];
+      parts.push(`until ${endStr}`);
+    } else if (startDate) {
+      parts.push(`starting ${startDate.split('T')[0]}`);
+    }
+  } else if (recurrenceBlock.includes('NumberedRecurrence')) {
+    const num = extractTag(recurrenceBlock, 'NumberOfOccurrences');
+    parts.push(`for ${num || '10'} occurrences`);
+  } else if (recurrenceBlock.includes('NoEndRecurrence')) {
+    parts.push('(no end date)');
+  }
+
+  // Extract first/last occurrence bounds
+  const firstOccBlock = extractSelfClosingOrBlock(block, 'FirstOccurrence');
+  const lastOccBlock = extractSelfClosingOrBlock(block, 'LastOccurrence');
+  const firstOccurrence = firstOccBlock
+    ? {
+        Start: extractTag(firstOccBlock, 'Start') || '',
+        End: extractTag(firstOccBlock, 'End') || '',
+        Id: extractAttribute(firstOccBlock, 'ItemId', 'Id')
+      }
+    : undefined;
+  const lastOccurrence = lastOccBlock
+    ? {
+        Start: extractTag(lastOccBlock, 'Start') || '',
+        End: extractTag(lastOccBlock, 'End') || '',
+        Id: extractAttribute(lastOccBlock, 'ItemId', 'Id')
+      }
+    : undefined;
+
+  return {
+    description: parts.length > 0 ? parts.join(' ') : undefined,
+    firstOccurrence,
+    lastOccurrence
+  };
+}
 
 function parseCalendarItem(block: string, mailbox?: string): CalendarEvent {
   const id = extractAttribute(block, 'ItemId', 'Id');
@@ -416,6 +562,9 @@ function parseCalendarItem(block: string, mailbox?: string): CalendarEvent {
     (b) => extractTag(b, 'String') || xmlDecode(b.replace(/<[^>]+>/g, ''))
   );
 
+  // Recurrence info
+  const recurrenceInfo = parseRecurrenceFromBlock(block);
+
   return {
     Id: id,
     ChangeKey: changeKey,
@@ -431,7 +580,14 @@ function parseCalendarItem(block: string, mailbox?: string): CalendarEvent {
     BodyPreview: bodyPreview ? bodyPreview.substring(0, 200).replace(/\s+/g, ' ').trim() : undefined,
     Categories: categories.length > 0 ? categories : undefined,
     ShowAs: showAs,
-    Importance: importance
+    Importance: importance,
+    IsRecurring:
+      recurrenceInfo.description !== undefined ||
+      recurrenceInfo.firstOccurrence !== undefined ||
+      recurrenceInfo.lastOccurrence !== undefined,
+    RecurrenceDescription: recurrenceInfo.description,
+    FirstOccurrence: recurrenceInfo.firstOccurrence,
+    LastOccurrence: recurrenceInfo.lastOccurrence
   };
 }
 
@@ -614,6 +770,9 @@ export async function getCalendarEvents(
           <t:FieldURI FieldURI="calendar:LegacyFreeBusyStatus" />
           <t:FieldURI FieldURI="item:Importance" />
           <t:FieldURI FieldURI="item:TextBody" />
+          <t:FieldURI FieldURI="calendar:Recurrence" />
+          <t:FieldURI FieldURI="calendar:FirstOccurrence" />
+          <t:FieldURI FieldURI="calendar:LastOccurrence" />
         </t:AdditionalProperties>
       </m:ItemShape>
       <m:CalendarView StartDate="${xmlEscape(startDateTime)}" EndDate="${xmlEscape(endDateTime)}" />
@@ -656,6 +815,9 @@ export async function getCalendarEvent(
           <t:FieldURI FieldURI="calendar:LegacyFreeBusyStatus" />
           <t:FieldURI FieldURI="item:Importance" />
           <t:FieldURI FieldURI="item:TextBody" />
+          <t:FieldURI FieldURI="calendar:Recurrence" />
+          <t:FieldURI FieldURI="calendar:FirstOccurrence" />
+          <t:FieldURI FieldURI="calendar:LastOccurrence" />
         </t:AdditionalProperties>
       </m:ItemShape>
       <m:ItemIds>
@@ -731,6 +893,12 @@ function buildRecurrenceXml(recurrence: Recurrence): string {
       break;
     case 'AbsoluteYearly':
       patternXml = `<t:AbsoluteYearlyRecurrence><t:DayOfMonth>${p.DayOfMonth || 1}</t:DayOfMonth><t:Month>${['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][(p.Month || 1) - 1]}</t:Month></t:AbsoluteYearlyRecurrence>`;
+      break;
+    case 'RelativeMonthly':
+      patternXml = `<t:RelativeMonthlyRecurrence><t:Interval>${p.Interval}</t:Interval><t:DaysOfWeek>${(p.DaysOfWeek || []).map((d) => xmlEscape(d)).join(' ')}</t:DaysOfWeek><t:DayOfWeekIndex>${p.Index || 'First'}</t:DayOfWeekIndex></t:RelativeMonthlyRecurrence>`;
+      break;
+    case 'RelativeYearly':
+      patternXml = `<t:RelativeYearlyRecurrence><t:DaysOfWeek>${(p.DaysOfWeek || []).map((d) => xmlEscape(d)).join(' ')}</t:DaysOfWeek><t:DayOfWeekIndex>${p.Index || 'First'}</t:DayOfWeekIndex><t:Month>${['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][(p.Month || 1) - 1]}</t:Month></t:RelativeYearlyRecurrence>`;
       break;
     default:
       if (!validTypes.includes(p.Type)) {
@@ -840,9 +1008,21 @@ export async function createEvent(options: CreateEventOptions): Promise<OwaRespo
   }
 }
 
+/**
+ * Updates an existing calendar event.
+ *
+ * NOTE regarding attendees: In EWS, `SetItemField` for `calendar:RequiredAttendees` (or Optional/Resource)
+ * replaces the *entire attendee list*. To add or remove an attendee, you must fetch the event,
+ * manipulate the attendees array locally, and pass the full list back here.
+ * This introduces a potential race condition: if an attendee is added/removed externally between the
+ * fetch and update steps, those changes will be overwritten.
+ *
+ * Future improvement: provide explicit add/remove delta operations if needed.
+ */
 export async function updateEvent(options: UpdateEventOptions): Promise<OwaResponse<CreatedEvent>> {
   try {
-    const { token, eventId, changeKey, subject, start, end, body, location, attendees, mailbox } = options;
+    const { token, eventId, changeKey, subject, start, end, body, location, attendees, occurrenceItemId, mailbox } =
+      options;
 
     const updates: string[] = [];
 
@@ -914,26 +1094,30 @@ export async function updateEvent(options: UpdateEventOptions): Promise<OwaRespo
 
     const sendUpdates = attendees && attendees.length > 0 ? 'SendToAllAndSaveCopy' : 'SendToNone';
 
-    const buildEnvelope = (conflictResolution: 'AutoResolve' | 'AlwaysOverwrite', includeChangeKey: boolean): string =>
-      soapEnvelope(`
+    const buildEnvelope = (
+      conflictResolution: 'AutoResolve' | 'AlwaysOverwrite',
+      includeChangeKey: boolean
+    ): string => {
+      const itemIdXml = occurrenceItemId
+        ? `<t:ItemId Id="${xmlEscape(occurrenceItemId)}"${includeChangeKey && changeKey ? ` ChangeKey="${xmlEscape(changeKey)}"` : ''} />`
+        : `<t:ItemId Id="${xmlEscape(eventId)}"${includeChangeKey && changeKey ? ` ChangeKey="${xmlEscape(changeKey)}"` : ''} />`;
+
+      return soapEnvelope(`
     <m:UpdateItem ConflictResolution="${conflictResolution}" SendMeetingInvitationsOrCancellations="${sendUpdates}">
       <m:ItemChanges>
         <t:ItemChange>
-          <t:ItemId Id="${xmlEscape(eventId)}"${includeChangeKey && changeKey ? ` ChangeKey="${xmlEscape(changeKey)}"` : ''} />
+          ${itemIdXml}
           <t:Updates>
             ${updates.join('\n')}
           </t:Updates>
         </t:ItemChange>
       </m:ItemChanges>
     </m:UpdateItem>`);
+    };
 
     let xml: string;
     try {
-      xml = await callEws(
-        token,
-        buildEnvelope(changeKey ? 'AutoResolve' : 'AlwaysOverwrite', Boolean(changeKey)),
-        mailbox
-      );
+      xml = await callEws(token, buildEnvelope(changeKey ? 'AutoResolve' : 'AlwaysOverwrite', true), mailbox);
     } catch (err) {
       const message = err instanceof Error ? err.message : '';
       const isConflict =
@@ -964,17 +1148,56 @@ export async function updateEvent(options: UpdateEventOptions): Promise<OwaRespo
 export interface DeleteEventOptions {
   token: string;
   eventId: string;
+  /** Use OccurrenceItemId for a specific occurrence, ItemId for the series master */
+  occurrenceItemId?: string;
+  /** Scope: 'all' (default), 'this' (single occurrence), 'future' (this and all future) */
+  scope?: 'all' | 'this' | 'future';
   mailbox?: string;
+  /** If true, delete without sending cancellation notices even if there are attendees */
+  forceDelete?: boolean;
+  /** Cancellation message to send to attendees (only supported for single occurrence deletes) */
+  comment?: string;
 }
 
 export async function deleteEvent(options: DeleteEventOptions): Promise<OwaResponse<void>> {
   try {
-    let { token, eventId, mailbox } = options;
-    eventId = requireNonEmpty(eventId, 'eventId');
+    const { token, eventId, occurrenceItemId, scope = 'all', mailbox, forceDelete, comment } = options;
+    requireNonEmpty(eventId, 'eventId');
+
+    // If a comment is provided for occurrence delete, use CancelCalendarItem instead
+    if (comment && !forceDelete && (scope === 'this' || scope === 'future')) {
+      const targetId = occurrenceItemId || eventId;
+      const cancelEnvelope = soapEnvelope(`
+    <m:CreateItem MessageDisposition="SendAndSaveCopy">
+      <m:Items>
+        <t:CancelCalendarItem>
+          <t:ReferenceItemId Id="${xmlEscape(targetId)}" />
+          <t:NewBodyContent BodyType="Text">${xmlEscape(comment)}</t:NewBodyContent>
+        </t:CancelCalendarItem>
+      </m:Items>
+    </m:CreateItem>`);
+      try {
+        await callEws(token, cancelEnvelope, mailbox);
+        return { ok: true, status: 200 };
+      } catch {
+        // Fallback to DeleteItem if CancelCalendarItem fails
+      }
+    }
+
+    // Determine send mode based on scope and forceDelete flag
+    let sendCancellations = 'SendToNone';
+    if (!forceDelete && (scope === 'this' || scope === 'future')) {
+      sendCancellations = 'SendToAllAndSaveCopy';
+    }
+
+    // Use ItemId for both series and occurrences (CalendarView returns ItemId for occurrences)
+    const itemIdXml = occurrenceItemId
+      ? `<t:ItemId Id="${xmlEscape(occurrenceItemId)}" />`
+      : `<t:ItemId Id="${xmlEscape(eventId)}" />`;
     const envelope = soapEnvelope(`
-    <m:DeleteItem DeleteType="MoveToDeletedItems" SendMeetingCancellations="SendToNone">
+    <m:DeleteItem DeleteType="MoveToDeletedItems" SendMeetingCancellations="${sendCancellations}">
       <m:ItemIds>
-        <t:ItemId Id="${xmlEscape(eventId)}" />
+        ${itemIdXml}
       </m:ItemIds>
     </m:DeleteItem>`);
     await callEws(token, envelope, mailbox);
@@ -1073,21 +1296,36 @@ export async function respondToEvent(options: RespondToEventOptions): Promise<Ow
 
 export async function getEmails(options: GetEmailsOptions): Promise<OwaResponse<EmailListResponse>> {
   try {
-    const { token, folder = 'inbox', top = 10, skip = 0, filter, search } = options;
+    const { token, folder = 'inbox', top = 10, skip = 0, filter, search, isRead, flagStatus } = options;
 
     // Build restriction for filters
     let restrictionXml = '';
-    if (filter && !search) {
+    if (!search) {
       const restrictions: string[] = [];
 
-      if (filter.includes('IsRead eq false')) {
+      if (isRead !== undefined) {
+        restrictions.push(`
+        <t:IsEqualTo>
+          <t:FieldURI FieldURI="message:IsRead" />
+          <t:FieldURIOrConstant><t:Constant Value="${isRead ? 'true' : 'false'}" /></t:FieldURIOrConstant>
+        </t:IsEqualTo>`);
+      } else if (filter?.includes('IsRead eq false')) {
+        // Fallback for legacy filter string
         restrictions.push(`
         <t:IsEqualTo>
           <t:FieldURI FieldURI="message:IsRead" />
           <t:FieldURIOrConstant><t:Constant Value="false" /></t:FieldURIOrConstant>
         </t:IsEqualTo>`);
       }
-      if (filter.includes('FlagStatus') && filter.includes('Flagged')) {
+
+      if (flagStatus) {
+        restrictions.push(`
+        <t:IsEqualTo>
+          <t:FieldURI FieldURI="item:Flag/FlagStatus" />
+          <t:FieldURIOrConstant><t:Constant Value="${flagStatus}" /></t:FieldURIOrConstant>
+        </t:IsEqualTo>`);
+      } else if (filter?.includes('FlagStatus') && filter?.includes('Flagged')) {
+        // Fallback for legacy filter string
         restrictions.push(`
         <t:IsEqualTo>
           <t:FieldURI FieldURI="item:Flag/FlagStatus" />
@@ -2048,7 +2286,36 @@ export async function getScheduleViaOutlook(
   }
 }
 
+/**
+ * Returns the authenticated user's own calendar events as free/busy slots.
+ *
+ * NOTE: This does NOT return free/busy information for arbitrary email addresses —
+ * it only returns the OAuth-token-owner's own calendar. For actual cross-user
+ * free/busy lookups, use GetUserAvailabilityRequest (cf. isRoomFree).
+ *
+ * @deprecated Use getMyFreeBusySlots() for clarity, or implement GetUserAvailabilityRequest
+ *             for true free/busy of arbitrary email addresses.
+ */
 export async function getFreeBusy(
+  token: string,
+  startDateTime: string,
+  endDateTime: string
+): Promise<OwaResponse<FreeBusySlot[]>> {
+  return getMyFreeBusySlots(token, startDateTime, endDateTime);
+}
+
+/**
+ * Returns the authenticated user's own calendar events as free/busy slots.
+ *
+ * This function queries the authenticated user's calendar and maps each non-cancelled
+ * event to a FreeBusySlot. It does NOT perform actual free/busy queries for arbitrary
+ * email addresses — that requires GetUserAvailabilityRequest.
+ *
+ * @param token - OAuth2 access token
+ * @param startDateTime - Start of the time window (ISO 8601)
+ * @param endDateTime - End of the time window (ISO 8601)
+ */
+export async function getMyFreeBusySlots(
   token: string,
   startDateTime: string,
   endDateTime: string

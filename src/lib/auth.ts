@@ -118,6 +118,14 @@ export async function resolveAuth(options?: { token?: string; identity?: string 
 
     const identity = options?.identity || 'default';
 
+    // Validate identity to prevent path traversal
+    if (!/^[a-zA-Z0-9_-]+$/.test(identity)) {
+      return {
+        success: false,
+        error: 'Invalid identity name. Only alphanumeric characters, hyphens, and underscores are allowed.'
+      };
+    }
+
     const tenant = getMicrosoftTenantPathSegment();
 
     // Check cached token
