@@ -234,7 +234,8 @@ export const updateEventCommand = new Command('update-event')
 
         if (options.start) {
           const newStart = parseTimeToDate(options.start, eventDate);
-          updateOptions.start = options.timezone || options.allDay ? toNaiveISOString(newStart) : toUTCISOString(newStart);
+          updateOptions.start =
+            options.timezone || options.allDay ? toNaiveISOString(newStart) : toUTCISOString(newStart);
         }
 
         if (options.end) {
