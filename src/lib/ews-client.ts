@@ -207,6 +207,8 @@ export interface CreateEventOptions {
   isOnlineMeeting?: boolean;
   recurrence?: Recurrence;
   isAllDay?: boolean;
+  startTimeZone?: string;
+  endTimeZone?: string;
   mailbox?: string;
 }
 
@@ -231,6 +233,8 @@ export interface UpdateEventOptions {
   attendees?: Array<{ email: string; name?: string; type?: 'Required' | 'Optional' | 'Resource' }>;
   isOnlineMeeting?: boolean;
   isAllDay?: boolean;
+  startTimeZone?: string;
+  endTimeZone?: string;
   mailbox?: string;
 }
 
@@ -353,6 +357,8 @@ function parseCalendarItem(block: string, mailbox?: string): CalendarEvent {
   const subject = extractTag(block, 'Subject');
   const start = extractTag(block, 'Start');
   const end = extractTag(block, 'End');
+  const startTimeZone = extractTag(block, 'StartTimeZone') || 'UTC';
+  const endTimeZone = extractTag(block, 'EndTimeZone') || 'UTC';
   const location = extractTag(block, 'Location');
   const isAllDay = extractTag(block, 'IsAllDayEvent').toLowerCase() === 'true';
   const isCancelled = extractTag(block, 'IsCancelled').toLowerCase() === 'true';
@@ -415,8 +421,8 @@ function parseCalendarItem(block: string, mailbox?: string): CalendarEvent {
     Id: id,
     ChangeKey: changeKey,
     Subject: subject,
-    Start: { DateTime: start, TimeZone: 'UTC' },
-    End: { DateTime: end, TimeZone: 'UTC' },
+    Start: { DateTime: start, TimeZone: startTimeZone },
+    End: { DateTime: end, TimeZone: endTimeZone },
     Location: location ? { DisplayName: location } : undefined,
     Organizer: { EmailAddress: { Name: organizerName, Address: organizerEmail } },
     Attendees: attendees.length > 0 ? attendees : undefined,
@@ -609,6 +615,8 @@ export async function getCalendarEvents(
           <t:FieldURI FieldURI="calendar:LegacyFreeBusyStatus" />
           <t:FieldURI FieldURI="item:Importance" />
           <t:FieldURI FieldURI="item:TextBody" />
+          <t:FieldURI FieldURI="calendar:StartTimeZone" />
+          <t:FieldURI FieldURI="calendar:EndTimeZone" />
         </t:AdditionalProperties>
       </m:ItemShape>
       <m:CalendarView StartDate="${xmlEscape(startDateTime)}" EndDate="${xmlEscape(endDateTime)}" />
@@ -650,6 +658,8 @@ export async function getCalendarEvent(
           <t:FieldURI FieldURI="calendar:LegacyFreeBusyStatus" />
           <t:FieldURI FieldURI="item:Importance" />
           <t:FieldURI FieldURI="item:TextBody" />
+          <t:FieldURI FieldURI="calendar:StartTimeZone" />
+          <t:FieldURI FieldURI="calendar:EndTimeZone" />
         </t:AdditionalProperties>
       </m:ItemShape>
       <m:ItemIds>
@@ -761,7 +771,7 @@ function buildRecurrenceXml(recurrence: Recurrence): string {
 
 export async function createEvent(options: CreateEventOptions): Promise<OwaResponse<CreatedEvent>> {
   try {
-    const { token, subject, start, end, body, location, attendees, isOnlineMeeting, recurrence, isAllDay, mailbox } = options;
+    const { token, subject, start, end, body, location, attendees, isOnlineMeeting, recurrence, isAllDay, startTimeZone, endTimeZone, mailbox } = options;
 
     let attendeesXml = '';
     if (attendees && attendees.length > 0) {
@@ -809,6 +819,8 @@ export async function createEvent(options: CreateEventOptions): Promise<OwaRespo
           ${body ? `<t:Body BodyType="Text">${xmlEscape(body)}</t:Body>` : ''}
           <t:Start>${xmlEscape(start)}</t:Start>
           <t:End>${xmlEscape(end)}</t:End>
+          ${startTimeZone ? `<t:StartTimeZone>${xmlEscape(startTimeZone)}</t:StartTimeZone>` : ''}
+          ${endTimeZone ? `<t:EndTimeZone>${xmlEscape(endTimeZone)}</t:EndTimeZone>` : ''}
           ${isAllDay ? '<t:IsAllDayEvent>true</t:IsAllDayEvent>' : ''}
           ${location ? `<t:Location>${xmlEscape(location)}</t:Location>` : ''}
           ${attendeesXml}
@@ -825,8 +837,8 @@ export async function createEvent(options: CreateEventOptions): Promise<OwaRespo
     return ewsResult({
       Id: id,
       Subject: subject,
-      Start: { DateTime: start, TimeZone: 'UTC' },
-      End: { DateTime: end, TimeZone: 'UTC' },
+      Start: { DateTime: start, TimeZone: startTimeZone || 'UTC' },
+      End: { DateTime: end, TimeZone: endTimeZone || 'UTC' },
       WebLink: undefined,
       OnlineMeetingUrl: undefined
     });
@@ -837,7 +849,7 @@ export async function createEvent(options: CreateEventOptions): Promise<OwaRespo
 
 export async function updateEvent(options: UpdateEventOptions): Promise<OwaResponse<CreatedEvent>> {
   try {
-    const { token, eventId, changeKey, subject, start, end, body, location, attendees, isAllDay, mailbox } = options;
+    const { token, eventId, changeKey, subject, start, end, body, location, attendees, isAllDay, startTimeZone, endTimeZone, mailbox } = options;
 
     const updates: string[] = [];
 
@@ -859,6 +871,16 @@ export async function updateEvent(options: UpdateEventOptions): Promise<OwaRespo
     if (end !== undefined) {
       updates.push(
         `<t:SetItemField><t:FieldURI FieldURI="calendar:End" /><t:CalendarItem><t:End>${xmlEscape(end)}</t:End></t:CalendarItem></t:SetItemField>`
+      );
+    }
+    if (startTimeZone !== undefined) {
+      updates.push(
+        `<t:SetItemField><t:FieldURI FieldURI="calendar:StartTimeZone" /><t:CalendarItem><t:StartTimeZone>${xmlEscape(startTimeZone)}</t:StartTimeZone></t:CalendarItem></t:SetItemField>`
+      );
+    }
+    if (endTimeZone !== undefined) {
+      updates.push(
+        `<t:SetItemField><t:FieldURI FieldURI="calendar:EndTimeZone" /><t:CalendarItem><t:EndTimeZone>${xmlEscape(endTimeZone)}</t:EndTimeZone></t:CalendarItem></t:SetItemField>`
       );
     }
     if (location !== undefined) {
@@ -953,8 +975,8 @@ export async function updateEvent(options: UpdateEventOptions): Promise<OwaRespo
     return ewsResult({
       Id: newId,
       Subject: subject || '',
-      Start: { DateTime: start || '', TimeZone: 'UTC' },
-      End: { DateTime: end || '', TimeZone: 'UTC' }
+      Start: { DateTime: start || '', TimeZone: startTimeZone || 'UTC' },
+      End: { DateTime: end || '', TimeZone: endTimeZone || 'UTC' }
     });
   } catch (err) {
     return ewsError(err);

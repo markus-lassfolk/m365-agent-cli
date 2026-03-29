@@ -34,6 +34,7 @@ export const updateEventCommand = new Command('update-event')
   .option('--no-teams', 'Remove Teams meeting')
   .option('--all-day', 'Mark as an all-day event')
   .option('--no-all-day', 'Remove all-day flag')
+  .option('--timezone <tz>', 'Timezone for the event (e.g., "W. Europe Standard Time", "UTC")')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--mailbox <email>', 'Update event in shared mailbox calendar')
@@ -53,6 +54,7 @@ export const updateEventCommand = new Command('update-event')
         teams?: boolean;
         allDay?: boolean;
         noAllDay?: boolean;
+        timezone?: string;
         json?: boolean;
         token?: string;
         mailbox?: string;
@@ -248,6 +250,12 @@ export const updateEventCommand = new Command('update-event')
       // Handle all-day
       if (options.allDay !== undefined) {
         updateOptions.isAllDay = options.allDay;
+      }
+
+      // Handle timezone
+      if (options.timezone !== undefined) {
+        updateOptions.startTimeZone = options.timezone;
+        updateOptions.endTimeZone = options.timezone;
       }
 
       // Handle room
