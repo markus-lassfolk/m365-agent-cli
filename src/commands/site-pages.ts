@@ -29,16 +29,16 @@ sitePagesCommand
     }
 
     if (options.json) {
-      console.log(JSON.stringify(result.data.value, null, 2));
+      console.log(JSON.stringify(result.data, null, 2));
       return;
     }
 
-    if (!result.data.value || result.data.value.length === 0) {
+    if (!result.data || result.data.length === 0) {
       console.log('No pages found.');
       return;
     }
 
-    for (const page of result.data.value) {
+    for (const page of result.data) {
       const state = page.publishingState
         ? `${page.publishingState.level} (v${page.publishingState.versionId})`
         : 'Unknown';

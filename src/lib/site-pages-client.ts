@@ -13,16 +13,8 @@ export interface SitePage {
   [key: string]: any;
 }
 
-export async function listSitePages(token: string, siteId: string): Promise<GraphResponse<{ value: SitePage[] }>> {
-  const result = await fetchAllPages<SitePage>(
-    token,
-    `/sites/${siteId}/pages/microsoft.graph.sitePage`,
-    'Failed to list site pages'
-  );
-  if (!result.ok) {
-    return { ok: false, error: result.error };
-  }
-  return { ok: true, data: { value: result.data || [] } };
+export async function listSitePages(token: string, siteId: string): Promise<GraphResponse<SitePage[]>> {
+  return fetchAllPages<SitePage>(token, `/sites/${siteId}/pages/microsoft.graph.sitePage`, 'Failed to list site pages');
 }
 
 export async function getSitePage(token: string, siteId: string, pageId: string): Promise<GraphResponse<SitePage>> {
