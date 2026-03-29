@@ -1887,9 +1887,7 @@ export async function getRooms(token: string, roomListAddress?: string): Promise
       return ewsResult([]);
     }
 
-    const results = await Promise.all(
-      listsResult.data.map(list => getRooms(token, list.Address))
-    );
+    const results = await Promise.all(listsResult.data.map((list) => getRooms(token, list.Address)));
 
     const allRooms: Room[] = [];
     for (const roomsResult of results) {
