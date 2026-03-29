@@ -6,9 +6,11 @@ export const whoamiCommand = new Command('whoami')
   .description('Show authenticated user information')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
-  .action(async (options: { json?: boolean; token?: string }) => {
+  .option('--identity <name>', 'Use a specific authentication identity (default: default)')
+  .action(async (options: { json?: boolean; token?: string; identity?: string }) => {
     const authResult = await resolveAuth({
-      token: options.token
+      token: options.token,
+      identity: options.identity
     });
 
     if (!authResult.success) {
@@ -43,6 +45,7 @@ export const whoamiCommand = new Command('whoami')
     }
 
     const { displayName, email } = userInfo.data;
+    const identity = options.identity || 'default';
 
     if (options.json) {
       console.log(
@@ -50,6 +53,7 @@ export const whoamiCommand = new Command('whoami')
           {
             displayName,
             email,
+            identity,
             authenticated: true
           },
           null,
@@ -58,6 +62,7 @@ export const whoamiCommand = new Command('whoami')
       );
     } else {
       console.log('\u2713 Authenticated');
+      console.log(`  Identity: ${identity}`);
       console.log(`  Name: ${displayName}`);
       console.log(`  Email: ${email}`);
     }

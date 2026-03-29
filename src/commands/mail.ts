@@ -68,6 +68,7 @@ export const mailCommand = new Command('mail')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--mailbox <email>', 'Shared mailbox for reply/forward (routes via X-AnchorMailbox)')
+  .option('--identity <name>', 'Use a specific authentication identity (default: default)')
   .action(
     async (
       folder: string,
@@ -97,10 +98,12 @@ export const mailCommand = new Command('mail')
         token?: string;
         draft?: boolean;
         mailbox?: string;
+        identity?: string;
       }
     ) => {
       const authResult = await resolveAuth({
-        token: options.token
+        token: options.token,
+        identity: options.identity
       });
 
       if (!authResult.success) {
