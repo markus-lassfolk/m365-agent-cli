@@ -2246,10 +2246,15 @@ export async function getScheduleViaOutlook(
   timeZone?: string
 ): Promise<OwaResponse<ScheduleInfo[]>> {
   try {
-if (!timeZone) {
-      const { getMailboxSettings } = await import('./oof-client.js');
-      const mbx = await getMailboxSettings(token);
-      timeZone = mbx.data?.timeZone || 'UTC';
+    if (!timeZone) {
+      try {
+        const { getMailboxSettings } = await import('./oof-client.js');
+        const mbx = await getMailboxSettings(token);
+        timeZone = mbx.data?.timeZone || 'UTC';
+      } catch {
+        // Fall back to UTC if we can't get mailbox settings
+        timeZone = 'UTC';
+      }
     // SuggestionsViewOptions requires dates at midnight with no timezone offset
     }
 
