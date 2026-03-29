@@ -359,6 +359,11 @@ export async function createLargeUploadSession(
 
     // Step 2: Upload the file in chunks
     const fileSize = fileStats.size;
+
+    if (fileSize === 0) {
+      return graphError('Cannot upload zero-byte files using large upload session. Use simple upload instead.');
+    }
+
     const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB chunks
     const fileHandle = await open(absolutePath, 'r');
 
@@ -395,6 +400,10 @@ export async function createLargeUploadSession(
         }
 
         offset += bytesRead;
+
+        if (offset < fileSize) {
+          await lastSuccessfulResponse.text().catch(() => {});
+        }
       }
 
       // Step 3: Parse the final response — Graph returns the complete driveItem on success
