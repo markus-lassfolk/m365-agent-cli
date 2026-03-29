@@ -1,4 +1,4 @@
-import { callGraph, type GraphResponse, graphResult, graphError } from './graph-client.js';
+import { callGraph, GraphApiError, type GraphResponse, graphResult, graphError } from './graph-client.js';
 
 export interface SharePointList {
   id: string;
@@ -19,13 +19,36 @@ export interface SharePointListItem {
 }
 
 export async function getLists(token: string, siteId: string): Promise<GraphResponse<SharePointList[]>> {
-  const res = await callGraph<{ value: SharePointList[] }>(token, `/sites/${siteId}/lists`);
+  let res: GraphResponse<{ value: SharePointList[] }>;
+  try {
+    res = await callGraph<{ value: SharePointList[] }>(token, `/sites/${siteId}/lists`);
+  } catch (err) {
+    if (err instanceof GraphApiError) {
+      return graphError(err.message, err.code, err.status);
+    }
+    return graphError(err instanceof Error ? err.message : 'Failed to get lists');
+  }
   if (!res.ok || !res.data) return res as any;
   return graphResult(res.data.value);
 }
 
-export async function getListItems(token: string, siteId: string, listId: string): Promise<GraphResponse<SharePointListItem[]>> {
-  const res = await callGraph<{ value: SharePointListItem[] }>(token, `/sites/${siteId}/lists/${listId}/items?expand=fields`);
+export async function getListItems(
+  token: string,
+  siteId: string,
+  listId: string
+): Promise<GraphResponse<SharePointListItem[]>> {
+  let res: GraphResponse<{ value: SharePointListItem[] }>;
+  try {
+    res = await callGraph<{ value: SharePointListItem[] }>(
+      token,
+      `/sites/${siteId}/lists/${listId}/items?$expand=fields`
+    );
+  } catch (err) {
+    if (err instanceof GraphApiError) {
+      return graphError(err.message, err.code, err.status);
+    }
+    return graphError(err instanceof Error ? err.message : 'Failed to get list items');
+  }
   if (!res.ok || !res.data) return res as any;
   return graphResult(res.data.value);
 }
@@ -36,13 +59,20 @@ export async function createListItem(
   listId: string,
   fields: Record<string, any>
 ): Promise<GraphResponse<SharePointListItem>> {
-  return await callGraph<SharePointListItem>(token, `/sites/${siteId}/lists/${listId}/items`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ fields })
-  });
+  try {
+    return await callGraph<SharePointListItem>(token, `/sites/${siteId}/lists/${listId}/items`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ fields })
+    });
+  } catch (err) {
+    if (err instanceof GraphApiError) {
+      return graphError(err.message, err.code, err.status);
+    }
+    return graphError(err instanceof Error ? err.message : 'Failed to create list item');
+  }
 }
 
 export async function updateListItem(
@@ -52,11 +82,18 @@ export async function updateListItem(
   itemId: string,
   fields: Record<string, any>
 ): Promise<GraphResponse<SharePointListItem>> {
-  return await callGraph<SharePointListItem>(token, `/sites/${siteId}/lists/${listId}/items/${itemId}/fields`, {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(fields)
-  });
+  try {
+    return await callGraph<SharePointListItem>(token, `/sites/${siteId}/lists/${listId}/items/${itemId}/fields`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(fields)
+    });
+  } catch (err) {
+    if (err instanceof GraphApiError) {
+      return graphError(err.message, err.code, err.status);
+    }
+    return graphError(err instanceof Error ? err.message : 'Failed to update list item');
+  }
 }
