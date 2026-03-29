@@ -117,6 +117,9 @@ clippy create-event "Project Review" 14:00 15:00 \
   --teams \
   --room "Conference Room A"
 
+# Specify a timezone explicitly
+clippy create-event "Global Sync" 09:00 10:00 --timezone "Pacific Standard Time"
+
 # Find an available room automatically
 clippy create-event "Workshop" 10:00 12:00 --find-room
 
@@ -433,8 +436,9 @@ clippy files upload ./report.docx
 # Upload to a specific folder
 clippy files upload ./report.docx --folder <folderId>
 
-# Create a large upload session (>250MB, <=4GB)
-clippy files upload-large ./large-video.mp4
+# Upload a large file (>250MB, up to 4GB via chunked upload)
+clippy files upload-large ./video.mp4
+clippy files upload-large ./backup.zip --folder <folderId>
 
 # Download a file
 clippy files download <fileId>

@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
-import { mkdir, rename, stat, unlink } from 'node:fs/promises';
+import { mkdir, open, rename, stat, unlink } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, dirname, resolve } from 'node:path';
 import { Readable } from 'node:stream';
@@ -74,11 +74,6 @@ export interface CheckinResult {
   item: DriveItem;
   checkedIn: boolean;
   comment?: string;
-}
-
-export interface UploadLargeResult {
-  uploadUrl: string;
-  expirationDateTime?: string;
 }
 
 async function streamWebToFile(body: ReadableStream<Uint8Array>, filePath: string): Promise<number> {
@@ -294,6 +289,12 @@ export async function getFileMetadata(token: string, itemId: string): Promise<Gr
   }
 }
 
+export interface UploadLargeResult {
+  uploadUrl: string;
+  expirationDateTime?: string;
+  driveItem?: DriveItem;
+}
+
 export async function uploadFile(
   token: string,
   localPath: string,
@@ -331,39 +332,159 @@ export async function uploadFile(
   }
 }
 
-export async function createLargeUploadSession(
+export async function uploadLargeFile(
   token: string,
   localPath: string,
   folder?: DriveItemReference
 ): Promise<GraphResponse<UploadLargeResult>> {
   try {
     const absolutePath = resolve(localPath);
-    const fileStats = await stat(absolutePath);
-    if (!fileStats.isFile()) return graphError(`Not a file: ${absolutePath}`);
-    if (fileStats.size > 4 * 1024 * 1024 * 1024) {
-      return graphError('File exceeds 4GB large upload limit.');
+    let fileHandle: any;
+    try {
+      fileHandle = await open(absolutePath, 'r');
+    } catch (err: any) {
+      return graphError(`Failed to open file: ${err.message}`);
     }
 
-    const fileName = basename(absolutePath);
-    const folderPath = folder?.id ? `${buildItemPath(folder)}:/` : '/me/drive/root:/';
     try {
-      const result = await callGraph<UploadLargeResult>(
-        token,
-        `${folderPath}${encodeURIComponent(fileName)}:/createUploadSession`,
-        {
-          method: 'POST',
-          body: JSON.stringify({ item: { '@microsoft.graph.conflictBehavior': 'replace', name: fileName } })
-        }
-      );
-      return result;
-    } catch (err) {
-      if (err instanceof GraphApiError) {
-        return graphError(err.message, err.code, err.status);
+      const fileStats = await fileHandle.stat();
+      if (!fileStats.isFile()) return graphError(`Not a file: ${absolutePath}`);
+      if (fileStats.size > 4 * 1024 * 1024 * 1024) {
+        return graphError('File exceeds 4GB large upload limit.');
       }
-      return graphError(err instanceof Error ? err.message : 'Failed to create upload session');
+
+      const fileName = basename(absolutePath);
+      const folderPath = folder?.id ? `${buildItemPath(folder)}:/` : '/me/drive/root:/';
+
+      // Step 1: Create the upload session
+      let sessionResult: GraphResponse<UploadLargeResult>;
+      try {
+        sessionResult = await callGraph<UploadLargeResult>(
+          token,
+          `${folderPath}${encodeURIComponent(fileName)}:/createUploadSession`,
+          {
+            method: 'POST',
+            body: JSON.stringify({ item: { '@microsoft.graph.conflictBehavior': 'replace', name: fileName } })
+          }
+        );
+      } catch (err) {
+        if (err instanceof GraphApiError) {
+          return graphError(err.message, err.code, err.status);
+        }
+        return graphError(err instanceof Error ? err.message : 'Failed to create upload session');
+      }
+
+      if (!sessionResult.ok || !sessionResult.data) {
+        return sessionResult;
+      }
+
+      const { uploadUrl, expirationDateTime } = sessionResult.data;
+
+      // Step 2: Upload the file in chunks
+      const fileSize = fileStats.size;
+
+      if (fileSize === 0) {
+        return graphError('Cannot upload zero-byte files using large upload session. Use simple upload instead.');
+      }
+
+      const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB chunks
+      const chunkBuffer = new Uint8Array(CHUNK_SIZE);
+
+      let offset = 0;
+      let lastSuccessfulResponse: Response | null = null;
+
+      while (offset < fileSize) {
+        const chunkLength = Math.min(CHUNK_SIZE, fileSize - offset);
+        const { bytesRead } = await fileHandle.read(chunkBuffer, 0, chunkLength, offset);
+
+        if (bytesRead === 0) break;
+
+        const endOffset = offset + bytesRead - 1;
+        const contentRange = `bytes ${offset}-${endOffset}/${fileSize}`;
+        const chunkData = chunkBuffer.subarray(0, bytesRead);
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), GRAPH_TIMEOUT_MS);
+
+        try {
+          lastSuccessfulResponse = await fetch(uploadUrl, {
+            method: 'PUT',
+            headers: {
+              'Content-Length': String(bytesRead),
+              'Content-Range': contentRange
+            },
+            body: chunkData,
+            signal: controller.signal,
+            redirect: 'manual'
+          });
+        } catch (err: any) {
+          if (err && err.name === 'AbortError') {
+            return graphError(
+              `Chunk upload timed out after ${GRAPH_TIMEOUT_MS} ms at offset ${offset}`,
+              'RequestTimeout',
+              408
+            );
+          }
+          throw err;
+        } finally {
+          clearTimeout(timeoutId);
+        }
+
+        if (!lastSuccessfulResponse.ok) {
+          const errorBody = await lastSuccessfulResponse.text().catch(() => '');
+          return graphError(
+            `Chunk upload failed at offset ${offset} (HTTP ${lastSuccessfulResponse.status}): ${errorBody}`,
+            String(lastSuccessfulResponse.status),
+            lastSuccessfulResponse.status
+          );
+        }
+
+        offset += bytesRead;
+
+        if (offset < fileSize) {
+          await lastSuccessfulResponse.text().catch(() => {});
+        }
+      }
+
+      if (offset !== fileSize) {
+        return graphError(`Upload stopped early. Expected to upload ${fileSize} bytes but uploaded ${offset}`);
+      }
+
+      // Step 3: Parse the final response
+      if (lastSuccessfulResponse) {
+        const status = lastSuccessfulResponse.status;
+        if (status === 200 || status === 201) {
+          let body: unknown;
+          try {
+            body = await lastSuccessfulResponse.json();
+          } catch {
+            return graphError('Upload completed but failed to parse final response');
+          }
+
+          const maybeDriveItem = body as Partial<DriveItem> | null;
+          if (
+            maybeDriveItem &&
+            typeof maybeDriveItem === 'object' &&
+            typeof maybeDriveItem.id === 'string' &&
+            typeof maybeDriveItem.name === 'string'
+          ) {
+            const driveItem = maybeDriveItem as DriveItem;
+            return {
+              ok: true,
+              data: { uploadUrl, expirationDateTime, driveItem }
+            };
+          }
+
+          return graphError('Upload completed but final response did not contain drive item metadata');
+        }
+      }
+
+      return graphError('Upload completed but final response was not valid');
+    } finally {
+      await fileHandle.close();
     }
   } catch (err) {
-    return graphError(err instanceof Error ? err.message : 'Failed to create upload session');
+    return graphError(err instanceof Error ? err.message : 'Upload failed');
   }
 }
 

@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
-import { parseDay, parseTimeToDate, toUTCISOString } from '../lib/dates.js';
+import { parseDay, parseTimeToDate, toLocalUnzonedISOString, toUTCISOString } from '../lib/dates.js';
 import { getCalendarEvents, getRooms, searchRooms, updateEvent } from '../lib/ews-client.js';
 
 function formatTime(dateStr: string): string {
@@ -40,6 +40,7 @@ export const updateEventCommand = new Command('update-event')
   )
   .option('--room <room>', 'Set/change meeting room (name or email)')
   .option('--location <text>', 'Set location text')
+  .option('--timezone <timezone>', 'Timezone for the event (e.g., "Pacific Standard Time")')
   .option('--occurrence <index>', 'Update only the Nth occurrence of a recurring event')
   .option('--instance <date>', 'Update only the occurrence on a specific date (YYYY-MM-DD)')
   .option('--teams', 'Make it a Teams meeting')
@@ -55,6 +56,7 @@ export const updateEventCommand = new Command('update-event')
       options: {
         id?: string;
         day: string;
+        timezone?: string;
         title?: string;
         description?: string;
         start?: string;
@@ -193,7 +195,18 @@ export const updateEventCommand = new Command('update-event')
       if (options.occurrence || options.instance) {
         // Find the specific occurrence, ensuring it matches the provided event ID
         if (options.instance) {
-          const instanceDate = parseDay(options.instance);
+          let instanceDate: Date;
+          try {
+            instanceDate = parseDay(options.instance, { throwOnInvalid: true });
+          } catch (err) {
+            const message = err instanceof Error ? err.message : 'Invalid instance date';
+            if (options.json) {
+              console.log(JSON.stringify({ error: message }, null, 2));
+            } else {
+              console.error(`Error: ${message}`);
+            }
+            process.exit(1);
+          }
           instanceDate.setHours(0, 0, 0, 0);
           const occEvent = events.find((e) => {
             const eventDate = new Date(e.Start.DateTime);
@@ -245,6 +258,7 @@ export const updateEventCommand = new Command('update-event')
         options.removeAttendee.length > 0 ||
         options.room ||
         options.location ||
+        options.timezone ||
         options.teams !== undefined ||
         options.allDay !== undefined;
 
@@ -281,6 +295,10 @@ export const updateEventCommand = new Command('update-event')
         updateOptions.subject = options.title;
       }
 
+      if (options.timezone) {
+        updateOptions.timezone = options.timezone;
+      }
+
       if (options.description) {
         updateOptions.body = options.description;
       }
@@ -290,13 +308,33 @@ export const updateEventCommand = new Command('update-event')
         const eventDate = new Date(displayEvent!.Start.DateTime);
 
         if (options.start) {
-          const newStart = parseTimeToDate(options.start, eventDate);
-          updateOptions.start = toUTCISOString(newStart);
+          try {
+            const newStart = parseTimeToDate(options.start, eventDate, { throwOnInvalid: true });
+            updateOptions.start = options.timezone ? toLocalUnzonedISOString(newStart) : toUTCISOString(newStart);
+          } catch (err) {
+            const message = err instanceof Error ? err.message : 'Invalid start time';
+            if (options.json) {
+              console.log(JSON.stringify({ error: message }, null, 2));
+            } else {
+              console.error(`Error: ${message}`);
+            }
+            process.exit(1);
+          }
         }
 
         if (options.end) {
-          const newEnd = parseTimeToDate(options.end, eventDate);
-          updateOptions.end = toUTCISOString(newEnd);
+          try {
+            const newEnd = parseTimeToDate(options.end, eventDate, { throwOnInvalid: true });
+            updateOptions.end = options.timezone ? toLocalUnzonedISOString(newEnd) : toUTCISOString(newEnd);
+          } catch (err) {
+            const message = err instanceof Error ? err.message : 'Invalid end time';
+            if (options.json) {
+              console.log(JSON.stringify({ error: message }, null, 2));
+            } else {
+              console.error(`Error: ${message}`);
+            }
+            process.exit(1);
+          }
         }
       }
 

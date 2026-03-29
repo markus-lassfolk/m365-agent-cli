@@ -6,25 +6,56 @@ export interface ParseDayOptions {
   throwOnInvalid?: boolean;
 }
 
-export function parseTimeToDate(timeStr: string, baseDate: Date = new Date()): Date {
+export interface ParseTimeToDateOptions {
+  throwOnInvalid?: boolean;
+}
+
+export function parseTimeToDate(
+  timeStr: string,
+  baseDate: Date = new Date(),
+  options: ParseTimeToDateOptions = {}
+): Date {
+  const { throwOnInvalid = false } = options;
   const result = new Date(baseDate);
 
   const timeMatch = timeStr.match(/^(\d{1,2}):(\d{2})$/);
   if (timeMatch) {
-    result.setHours(parseInt(timeMatch[1], 10), parseInt(timeMatch[2], 10), 0, 0);
+    const hours = parseInt(timeMatch[1], 10);
+    const minutes = parseInt(timeMatch[2], 10);
+    if (throwOnInvalid && (hours < 0 || hours > 23 || minutes < 0 || minutes > 59)) {
+      throw new Error(`Invalid time: "${timeStr}" — hours must be 0–23 and minutes 0–59`);
+    }
+    result.setHours(hours, minutes, 0, 0);
     return result;
   }
 
   const hourMatch = timeStr.match(/^(\d{1,2})(am|pm)?$/i);
   if (hourMatch) {
-    let hour = parseInt(hourMatch[1], 10);
+    const rawHour = parseInt(hourMatch[1], 10);
     const isPM = hourMatch[2]?.toLowerCase() === 'pm';
-    if (isPM && hour < 12) hour += 12;
-    if (!isPM && hour === 12) hour = 0;
+    if (throwOnInvalid) {
+      if (hourMatch[2]) {
+        if (rawHour < 1 || rawHour > 12) {
+          throw new Error(`Invalid time: "${timeStr}" — 12-hour values must be 1–12`);
+        }
+      } else {
+        if (rawHour < 0 || rawHour > 23) {
+          throw new Error(`Invalid time: "${timeStr}" — 24-hour values must be 0–23`);
+        }
+      }
+    }
+    let hour = rawHour;
+    if (hourMatch[2]) {
+      if (isPM && rawHour < 12) hour += 12;
+      if (!isPM && rawHour === 12) hour = 0;
+    }
     result.setHours(hour, 0, 0, 0);
     return result;
   }
 
+  if (throwOnInvalid) {
+    throw new Error(`Invalid time format: "${timeStr}" — expected HH:MM, H:MM, or H(am|pm)`);
+  }
   return result;
 }
 
@@ -93,4 +124,14 @@ export function parseDay(day: string, options: ParseDayOptions = {}): Date {
   }
 
   return parsed;
+}
+
+export function toLocalUnzonedISOString(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
 }

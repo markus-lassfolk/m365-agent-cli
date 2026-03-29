@@ -120,4 +120,44 @@ describe('ews-client safety and conflict behavior', () => {
     expect(result.error?.code).toBe('EWS_ERROR');
     expect(result.error?.message).toContain('Failed to resolve OWA user info');
   });
+
+  it('parses TimeZone correctly from CalendarItem StartTimeZone and EndTimeZone', async () => {
+    globalThis.fetch = mock(async () => {
+      return new Response(
+        `<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages" xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types">
+  <soap:Body>
+    <m:GetItemResponse>
+      <m:ResponseMessages>
+        <m:GetItemResponseMessage ResponseClass="Success">
+          <m:ResponseCode>NoError</m:ResponseCode>
+          <m:Items>
+            <t:CalendarItem>
+              <t:ItemId Id="event-id" ChangeKey="ck" />
+              <t:Subject>Timezone Test Event</t:Subject>
+              <t:Start>2026-03-30T10:00:00Z</t:Start>
+              <t:End>2026-03-30T11:00:00Z</t:End>
+              <t:StartTimeZone Id="Pacific Standard Time" />
+              <t:EndTimeZone Id="Pacific Standard Time" />
+              <t:IsAllDayEvent>false</t:IsAllDayEvent>
+              <t:IsCancelled>false</t:IsCancelled>
+              <t:Organizer><t:Mailbox><t:Name>Bob</t:Name><t:EmailAddress>bob@example.com</t:EmailAddress></t:Mailbox></t:Organizer>
+            </t:CalendarItem>
+          </m:Items>
+        </m:GetItemResponseMessage>
+      </m:ResponseMessages>
+    </m:GetItemResponse>
+  </soap:Body>
+</soap:Envelope>`,
+        { status: 200 }
+      );
+    }) as unknown as typeof fetch;
+
+    const { getCalendarEvent } = await import('../lib/ews-client.js');
+    const result = await getCalendarEvent('token', 'event-id');
+
+    expect(result.ok).toBe(true);
+    expect(result.data?.Start.TimeZone).toBe('Pacific Standard Time');
+    expect(result.data?.End.TimeZone).toBe('Pacific Standard Time');
+  });
 });

@@ -78,7 +78,7 @@ clippy create-event "Sprint" 09:00 11:00 --repeat weekly --every 2 --until 2026-
 clippy create-event "Team Standup" 09:00 09:30 --mailbox shared@co.com
 ```
 
-Options: `--day`, `--description`, `--attendees`, `--room`, `--teams`, `--list-rooms`, `--find-room`, `--repeat` (daily|weekly|monthly|yearly), `--every`, `--days`, `--until`, `--count`, `--json`, `--token`, `--mailbox`
+Options: `--day`, `--timezone`, `--description`, `--attendees`, `--room`, `--teams`, `--list-rooms`, `--find-room`, `--repeat` (daily|weekly|monthly|yearly), `--every`, `--days`, `--until`, `--count`, `--json`, `--token`, `--mailbox`
 
 #### `clippy update-event [eventIndex]`
 Update a calendar event by index or stable ID.
@@ -95,7 +95,7 @@ clippy update-event --day tomorrow               # list events to pick from
 clippy update-event --id <eventId> --mailbox shared@co.com
 ```
 
-Options: `--id`, `--day`, `--title`, `--description`, `--start`, `--end`, `--add-attendee`, `--room`, `--location`, `--teams`, `--no-teams`, `--json`, `--token`, `--mailbox`
+Options: `--id`, `--day`, `--timezone`, `--title`, `--description`, `--start`, `--end`, `--add-attendee`, `--room`, `--location`, `--teams`, `--no-teams`, `--json`, `--token`, `--mailbox`
 
 #### `clippy delete-event [eventIndex]`
 Delete/cancel a calendar event.
@@ -251,11 +251,6 @@ clippy files meta <fileId>
 ```
 clippy files upload ./report.docx
 clippy files upload ./report.docx --folder <folderId>
-```
-
-#### `clippy files upload-large <path>`
-```
-clippy files upload-large ./large-video.mp4
 ```
 
 #### `clippy files download <fileId>`

@@ -1,3 +1,4 @@
+import { isIP } from 'node:net';
 /**
  * Validates a URL is safe for use as an API endpoint.
  * Blocks SSRF vectors: non-HTTPS protocols, localhost, link-local, and internal IPs.
@@ -26,8 +27,6 @@ export function validateUrl(urlString: string, name: string): string {
   }
 
   // Block bare IPv4 addresses — reject all IP literals to prevent internal network access
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { isIP } = require('node:net');
   if (isIP(hostname)) {
     throw new Error(`${name} must not be an IP address (use hostname): "${urlString}"`);
   }
