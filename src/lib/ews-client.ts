@@ -1054,8 +1054,8 @@ export async function createEvent(options: CreateEventOptions): Promise<OwaRespo
           ${isAllDay ? '<t:IsAllDayEvent>true</t:IsAllDayEvent>' : ''}
           ${location ? `<t:Location>${xmlEscape(location)}</t:Location>` : ''}
           ${attendeesXml}
-          ${recurrence ? buildRecurrenceXml(recurrence) : ''}
           ${timezone ? `<t:StartTimeZone Id="${xmlEscape(timezone)}"/><t:EndTimeZone Id="${xmlEscape(timezone)}"/>` : ''}
+          ${recurrence ? buildRecurrenceXml(recurrence) : ''}
           ${isOnlineMeeting ? '<t:IsOnlineMeeting>true</t:IsOnlineMeeting>' : ''}
         </t:CalendarItem>
       </m:Items>
