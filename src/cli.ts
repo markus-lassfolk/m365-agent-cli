@@ -1,5 +1,7 @@
 #!/usr/bin/env bun
+import './lib/global-env.js';
 import { Command } from 'commander';
+
 import { autoReplyCommand } from './commands/auto-reply.js';
 import { calendarCommand } from './commands/calendar.js';
 import { counterCommand } from './commands/counter.js';

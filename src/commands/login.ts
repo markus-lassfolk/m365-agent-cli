@@ -1,5 +1,6 @@
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { Command } from 'commander';
@@ -61,49 +62,44 @@ async function performDeviceCodeFlow(clientId: string, tenant: string, scope: st
     if (tokenRes.ok) {
       authenticated = true;
       refreshToken = tokenJson.refresh_token;
-        // Extract username from access token
+      // Extract username from access token
 
-        try {
+      try {
+        const parts = tokenJson.access_token.split('.');
 
-          const parts = tokenJson.access_token.split(".");
+        if (parts.length === 3) {
+          const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
 
-          if (parts.length === 3) {
+          const rawUsername = payload.upn || payload.email;
+          const username = rawUsername ? rawUsername.replace(/[\r\n]/g, '') : undefined;
 
-            const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
+          if (username) {
+            let envContent = '';
 
-            const username = payload.upn || payload.email;
+            const configDir = join(homedir(), '.config', 'm365-agent-cli');
+            mkdirSync(configDir, { recursive: true, mode: 0o700 });
+            const envPath = join(configDir, '.env');
 
-            if (username) {
-
-              let envContent = "";
-
-              const envPath = join(process.cwd(), ".env");
-
-              if (existsSync(envPath)) {
-
-                envContent = await readFile(envPath, "utf8");
-
-              }
-
-              if (/^EWS_USERNAME=.*$/m.test(envContent)) {
-
-                envContent = envContent.replace(/^EWS_USERNAME=.*$/m, () => `EWS_USERNAME=${username}`);
-
-              } else {
-
-                envContent += `\nEWS_USERNAME=${username}\n`;
-
-              }
-
-              await writeFile(envPath, `${envContent.trim()}\n`, { encoding: "utf8", mode: 0o600 });
-
-              console.log(`Saved EWS_USERNAME (${username}) to .env file`);
-
+            try {
+              envContent = await readFile(envPath, 'utf8');
+            } catch (err: any) {
+              if (err.code !== 'ENOENT') throw err;
             }
 
-          }
+            if (/^EWS_USERNAME=.*$/m.test(envContent)) {
+              envContent = envContent.replace(/^EWS_USERNAME=.*$/m, () => `EWS_USERNAME=${username}`);
+            } else {
+              envContent += `\nEWS_USERNAME=${username}\n`;
+            }
 
-        } catch (_e) { /* ignore parse errors */ }
+            await writeFile(envPath, `${envContent.trim()}\n`, { encoding: 'utf8', mode: 0o600 });
+
+            console.log(`Saved EWS_USERNAME (${username}) to ${envPath}`);
+          }
+        }
+      } catch (_e) {
+        /* ignore parse errors */
+      }
       if (!refreshToken) {
         console.error(`\nFailed to obtain ${label} refresh token. Ensure the offline_access scope is granted.`);
         process.exit(1);
@@ -129,7 +125,9 @@ export const loginCommand = new Command('login')
     let clientId = process.env.EWS_CLIENT_ID;
 
     // Read existing .env if present
-    const envPath = join(process.cwd(), '.env');
+    const configDir = join(homedir(), '.config', 'm365-agent-cli');
+    mkdirSync(configDir, { recursive: true, mode: 0o700 });
+    const envPath = join(configDir, '.env');
     let envContent = '';
     if (existsSync(envPath)) {
       envContent = await readFile(envPath, 'utf8');
@@ -165,11 +163,14 @@ export const loginCommand = new Command('login')
     // Use a single Graph Device Code flow to obtain a multi-resource refresh token
     const graphScope =
       'offline_access User.Read Calendars.ReadWrite Mail.ReadWrite Files.ReadWrite.All Sites.ReadWrite.All Tasks.ReadWrite Group.ReadWrite.All';
-    const refreshToken = await performDeviceCodeFlow(clientId, tenant, graphScope, 'Microsoft 365');
+    const rawToken = await performDeviceCodeFlow(clientId, tenant, graphScope, 'Microsoft 365');
+    const refreshToken = rawToken.replace(/[\r\n]/g, '');
 
     // Save tokens immediately
-    if (existsSync(envPath)) {
+    try {
       envContent = await readFile(envPath, 'utf8');
+    } catch (err: any) {
+      if (err.code !== 'ENOENT') throw err;
     }
 
     // Update or append EWS_REFRESH_TOKEN
@@ -189,5 +190,5 @@ export const loginCommand = new Command('login')
     envContent = envContent.replace(/\n{3,}/g, '\n\n');
     await writeFile(envPath, `${envContent.trim()}\n`, { encoding: 'utf8', mode: 0o600 });
 
-    console.log('Saved GRAPH_REFRESH_TOKEN and EWS_REFRESH_TOKEN to .env file in the current directory.');
+    console.log(`Saved GRAPH_REFRESH_TOKEN and EWS_REFRESH_TOKEN to ${envPath}`);
   });

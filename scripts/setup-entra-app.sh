@@ -70,13 +70,17 @@ echo "Client ID (EWS_CLIENT_ID): $APP_ID"
 echo "Tenant ID: Common (since audience is AzureADandPersonalMicrosoftAccount)"
 echo ""
 
+CONFIG_DIR="$HOME/.config/m365-agent-cli"
+mkdir -p "$CONFIG_DIR"
+CONFIG_ENV="$CONFIG_DIR/.env"
+
 # Update or append EWS_CLIENT_ID to .env
-if [ -f .env ] && grep -q "^EWS_CLIENT_ID=" .env; then
-    sed -i.bak "s/^EWS_CLIENT_ID=.*/EWS_CLIENT_ID=$APP_ID/" .env && rm -f .env.bak
-    echo "Updated EWS_CLIENT_ID in .env file in the current directory."
+if [ -f "$CONFIG_ENV" ] && grep -q "^EWS_CLIENT_ID=" "$CONFIG_ENV"; then
+    sed -i.bak "s/^EWS_CLIENT_ID=.*/EWS_CLIENT_ID=$APP_ID/" "$CONFIG_ENV" && rm -f "$CONFIG_ENV.bak"
+    echo "Updated EWS_CLIENT_ID in $CONFIG_ENV."
 else
-    echo "EWS_CLIENT_ID=$APP_ID" >> .env
-    echo "Appended EWS_CLIENT_ID to .env file in the current directory."
+    echo "EWS_CLIENT_ID=$APP_ID" >> "$CONFIG_ENV"
+    echo "Appended EWS_CLIENT_ID to $CONFIG_ENV."
 fi
 
 echo ""
