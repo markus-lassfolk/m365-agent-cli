@@ -1,8 +1,8 @@
-import { Command } from 'commander';
-import { createInterface } from 'node:readline/promises';
+import { existsSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { existsSync } from 'node:fs';
+import { createInterface } from 'node:readline/promises';
+import { Command } from 'commander';
 import { getMicrosoftTenantPathSegment } from '../lib/jwt-utils.js';
 
 export const loginCommand = new Command('login')
