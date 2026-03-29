@@ -305,9 +305,7 @@ export async function uploadFile(
     const fileStats = await stat(absolutePath);
     if (!fileStats.isFile()) return graphError(`Not a file: ${absolutePath}`);
     if (fileStats.size > 250 * 1024 * 1024) {
-      return graphError(
-        'File exceeds 250MB upload limit. Split the file into smaller parts or use Microsoft SharePoint to upload large files directly.'
-      );
+      return graphError('File exceeds 250MB simple upload limit. Use upload-large instead.');
     }
 
     const fileName = basename(absolutePath);

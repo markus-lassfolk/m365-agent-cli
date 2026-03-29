@@ -1,1 +1,35 @@
-[{"body":"## Problem\n\n`clippy calendar` (and all event commands) discards timezone information from Exchange, and provides no way to specify a timezone when creating or updating events.\n\n### Data loss on read\n\nIn `parseCalendarItem()` (`src/lib/ews-client.ts`), the `TimeZone` field of `Start` and `End` is hardcoded to `'UTC'`:\n\n```typescript\nStart: { DateTime: start, TimeZone: 'UTC' },\nEnd: { DateTime: end, TimeZone: 'UTC' },\n```\n\nThe actual timezone sent by EWS (e.g., `\"W. Europe Standard Time\"`) is discarded. This means users cannot see that an event is in a specific timezone — it's always shown as UTC.\n\n### No timezone on create/update\n\n`createEvent()` and `updateEvent()` have no timezone option. The `--day` and time arguments are parsed into a JS `Date`, then converted via `toLocalISOString()`. There is no `--timezone` flag. This means:\n- Events are created with whatever timezone `toLocalISOString()` produces (typically server local time or UTC)\n- Users in non-UTC timezones cannot reliably create events at specific local times\n- Recurring events in a specific timezone (e.g., \"every Monday at 9am Pacific\") cannot be expressed\n\n### Hardcoded bias in availability API\n\n`getScheduleViaOutlook()` and `isRoomFree()` hardcode `TimeZone` bias as `-60` (CET), which is wrong for users not in that timezone.\n\n## EWS API support\n\nEWS fully supports timezones:\n- `Start` and `End` can include `TimeZoneContext` or per-item timezone info\n- The `TimeZoneDefinition` type allows creating named timezone references\n- `CreateItem` supports `<t:TimeZone>` child element to set the event's timezone\n\n## Fix\n\n1. Store the actual `TimeZone` from EWS in `CalendarEvent.Start.TimeZone` and `CalendarEvent.End.TimeZone` (parse it from the response, don't hardcode)\n2. Add a `--timezone` option to `create-event` and `update-event` (e.g., `--timezone \"Pacific Standard Time\"`)\n3. Pass the timezone to EWS in `CreateItem` / `UpdateItem` via the appropriate element\n4. Fix `getScheduleViaOutlook()` to use the user's actual timezone rather than a hardcoded CET bias\n","createdAt":"2026-03-28T03:46:48Z","labels":[{"id":"LA_kwDORyZTac8AAAACdA5-GA","name":"enhancement","description":"New feature or request","color":"a2eeef"},{"id":"LA_kwDORyZTac8AAAACdBCmnw","name":"enriched","description":"","color":"ededed"},{"id":"LA_kwDORyZTac8AAAACdFvm-g","name":"Queue:Low","description":"Low priority — enhancements, tech debt, nice-to-haves","color":"88cc00"},{"id":"LA_kwDORyZTac8AAAACdLzoqw","name":"implemented","description":"Implemented by agent","color":"0e8a16"},{"id":"LA_kwDORyZTac8AAAACdM7TnQ","name":"maeve-claim-1774767967-2","description":"Assigned to Forge agent 2 for issue resolution","color":"0052CC"}],"number":78,"title":"Timezone information lost and no timezone option for event creation"}]
+[
+  {
+    "body": "## Problem\n\n`clippy calendar` (and all event commands) discards timezone information from Exchange, and provides no way to specify a timezone when creating or updating events.\n\n### Data loss on read\n\nIn `parseCalendarItem()` (`src/lib/ews-client.ts`), the `TimeZone` field of `Start` and `End` is hardcoded to `'UTC'`:\n\n```typescript\nStart: { DateTime: start, TimeZone: 'UTC' },\nEnd: { DateTime: end, TimeZone: 'UTC' },\n```\n\nThe actual timezone sent by EWS (e.g., `\"W. Europe Standard Time\"`) is discarded. This means users cannot see that an event is in a specific timezone — it's always shown as UTC.\n\n### No timezone on create/update\n\n`createEvent()` and `updateEvent()` have no timezone option. The `--day` and time arguments are parsed into a JS `Date`, then converted via `toLocalISOString()`. There is no `--timezone` flag. This means:\n- Events are created with whatever timezone `toLocalISOString()` produces (typically server local time or UTC)\n- Users in non-UTC timezones cannot reliably create events at specific local times\n- Recurring events in a specific timezone (e.g., \"every Monday at 9am Pacific\") cannot be expressed\n\n### Hardcoded bias in availability API\n\n`getScheduleViaOutlook()` and `isRoomFree()` hardcode `TimeZone` bias as `-60` (CET), which is wrong for users not in that timezone.\n\n## EWS API support\n\nEWS fully supports timezones:\n- `Start` and `End` can include `TimeZoneContext` or per-item timezone info\n- The `TimeZoneDefinition` type allows creating named timezone references\n- `CreateItem` supports `<t:TimeZone>` child element to set the event's timezone\n\n## Fix\n\n1. Store the actual `TimeZone` from EWS in `CalendarEvent.Start.TimeZone` and `CalendarEvent.End.TimeZone` (parse it from the response, don't hardcode)\n2. Add a `--timezone` option to `create-event` and `update-event` (e.g., `--timezone \"Pacific Standard Time\"`)\n3. Pass the timezone to EWS in `CreateItem` / `UpdateItem` via the appropriate element\n4. Fix `getScheduleViaOutlook()` to use the user's actual timezone rather than a hardcoded CET bias\n",
+    "createdAt": "2026-03-28T03:46:48Z",
+    "labels": [
+      {
+        "id": "LA_kwDORyZTac8AAAACdA5-GA",
+        "name": "enhancement",
+        "description": "New feature or request",
+        "color": "a2eeef"
+      },
+      { "id": "LA_kwDORyZTac8AAAACdBCmnw", "name": "enriched", "description": "", "color": "ededed" },
+      {
+        "id": "LA_kwDORyZTac8AAAACdFvm-g",
+        "name": "Queue:Low",
+        "description": "Low priority — enhancements, tech debt, nice-to-haves",
+        "color": "88cc00"
+      },
+      {
+        "id": "LA_kwDORyZTac8AAAACdLzoqw",
+        "name": "implemented",
+        "description": "Implemented by agent",
+        "color": "0e8a16"
+      },
+      {
+        "id": "LA_kwDORyZTac8AAAACdM7TnQ",
+        "name": "maeve-claim-1774767967-2",
+        "description": "Assigned to Forge agent 2 for issue resolution",
+        "color": "0052CC"
+      }
+    ],
+    "number": 78,
+    "title": "Timezone information lost and no timezone option for event creation"
+  }
+]
