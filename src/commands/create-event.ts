@@ -138,13 +138,19 @@ export const createEventCommand = new Command('create-event')
         }
         // For all-day events without times, use midnight to midnight
         startTime = startTime || '00:00';
-        endTime = endTime || '23:59';
+        endTime = endTime || '00:00';
       }
 
       // Parse date and times
       const baseDate = parseDay(options.day);
       const start = parseTimeToDate(startTime, baseDate);
-      const end = parseTimeToDate(endTime, baseDate);
+      let end = parseTimeToDate(endTime, baseDate);
+
+      // For all-day events, end time should be midnight of the next day
+      if (options.allDay && endTime === '00:00') {
+        end = new Date(end);
+        end.setDate(end.getDate() + 1);
+      }
 
       // Parse attendees
       const attendees: Array<{ email: string; name?: string; type?: 'Required' | 'Optional' | 'Resource' }> =
