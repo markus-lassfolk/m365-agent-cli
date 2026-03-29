@@ -59,8 +59,8 @@ export const mailCommand = new Command('mail')
   .option('--due <date>', 'Due date for flag (YYYY-MM-DD)')
   .option('--unflag <id>', 'Remove flag (by ID)')
   .option('--complete <id>', 'Mark flagged email as complete (by ID)')
-  .option('--sensitivity <id>', 'Set sensitivity on email (normal, personal, private, confidential) by ID')
-  .option('--level <level>', 'Sensitivity level (normal, personal, private, confidential)', 'normal')
+  .option('--sensitivity <id>', 'Set sensitivity on email by ID (use with --level)')
+  .option('--level <level>', 'Sensitivity level: normal, personal, private, confidential')
   .option('--move <id>', 'Move email to folder (use with --to)')
   .option('--to <folder>', 'Destination folder for move (inbox, archive, deleted, junk)')
   .option('--reply <id>', 'Reply to email by ID')
@@ -408,10 +408,19 @@ export const mailCommand = new Command('mail')
       // Handle sensitivity
       if (options.sensitivity) {
         const id = options.sensitivity.trim();
-        const sensitivity = SENSITIVITY_MAP[(options.level || 'normal').toLowerCase()];
+
+        if (!options.level) {
+          console.error('Error: --sensitivity requires --level to be specified');
+          console.error('Example: clippy mail --sensitivity <id> --level personal');
+          console.error('Levels: normal, personal, private, confidential');
+          process.exit(1);
+        }
+
+        const sensitivity = SENSITIVITY_MAP[options.level.toLowerCase()];
 
         if (!sensitivity) {
           console.error(`Invalid sensitivity level: ${options.level}`);
+          console.error('Valid levels: normal, personal, private, confidential');
           process.exit(1);
         }
 
