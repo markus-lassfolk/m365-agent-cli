@@ -47,6 +47,16 @@ export const updateEventCommand = new Command('update-event')
   .option('--no-teams', 'Remove Teams meeting')
   .option('--all-day', 'Mark as an all-day event')
   .option('--no-all-day', 'Remove all-day flag')
+  .option(
+    '--category <name>',
+    'Category label (repeatable)',
+    (v, acc) => {
+      acc.push(v);
+      return acc;
+    },
+    [] as string[]
+  )
+  .option('--clear-categories', 'Clear all categories')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--mailbox <email>', 'Update event in shared mailbox calendar')
@@ -72,6 +82,8 @@ export const updateEventCommand = new Command('update-event')
         json?: boolean;
         token?: string;
         mailbox?: string;
+        category?: string[];
+        clearCategories?: boolean;
       }
     ) => {
       const authResult = await resolveAuth({
@@ -288,7 +300,12 @@ export const updateEventCommand = new Command('update-event')
         eventId: targetEvent ? targetEvent.Id : displayEvent!.Id,
         changeKey: displayEvent!.ChangeKey,
         occurrenceItemId,
-        mailbox: options.mailbox
+        mailbox: options.mailbox,
+        categories: options.clearCategories
+          ? []
+          : options.category && options.category.length > 0
+            ? options.category
+            : undefined
       };
 
       if (options.title) {

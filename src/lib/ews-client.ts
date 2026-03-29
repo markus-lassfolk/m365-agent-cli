@@ -239,6 +239,7 @@ export interface CreateEventOptions {
   recurrence?: Recurrence;
   isAllDay?: boolean;
   mailbox?: string;
+  categories?: string[];
 }
 
 export interface CreatedEvent {
@@ -266,6 +267,7 @@ export interface UpdateEventOptions {
   occurrenceItemId?: string;
   isAllDay?: boolean;
   mailbox?: string;
+  categories?: string[];
 }
 
 export interface ScheduleInfo {
@@ -1002,7 +1004,8 @@ export async function createEvent(options: CreateEventOptions): Promise<OwaRespo
       recurrence,
       isAllDay,
       mailbox,
-      timezone
+      timezone,
+      categories
     } = options;
 
     let attendeesXml = '';
@@ -1057,6 +1060,7 @@ export async function createEvent(options: CreateEventOptions): Promise<OwaRespo
           ${recurrence ? buildRecurrenceXml(recurrence) : ''}
           ${timezone ? `<t:StartTimeZone Id="${xmlEscape(timezone)}"/><t:EndTimeZone Id="${xmlEscape(timezone)}"/>` : ''}
           ${isOnlineMeeting ? '<t:IsOnlineMeeting>true</t:IsOnlineMeeting>' : ''}
+          ${categories && categories.length > 0 ? `<t:Categories>${categories.map((c) => `<t:String>\${xmlEscape(c)}</t:String>`).join('')}</t:Categories>` : ''}
         </t:CalendarItem>
       </m:Items>
     </m:CreateItem>`);
@@ -1104,7 +1108,8 @@ export async function updateEvent(options: UpdateEventOptions): Promise<OwaRespo
       occurrenceItemId,
       timezone,
       isAllDay,
-      mailbox
+      mailbox,
+      categories
     } = options;
 
     const updates: string[] = [];
@@ -1145,6 +1150,16 @@ export async function updateEvent(options: UpdateEventOptions): Promise<OwaRespo
         `<t:SetItemField><t:FieldURI FieldURI="calendar:IsAllDayEvent" /><t:CalendarItem><t:IsAllDayEvent>${isAllDay}</t:IsAllDayEvent></t:CalendarItem></t:SetItemField>`
       );
     }
+    if (categories !== undefined) {
+      if (categories.length > 0) {
+        updates.push(
+          `<t:SetItemField><t:FieldURI FieldURI="item:Categories" /><t:CalendarItem><t:Categories>${categories.map((c) => `<t:String>${xmlEscape(c)}</t:String>`).join('')}</t:Categories></t:CalendarItem></t:SetItemField>`
+        );
+      } else {
+        updates.push(`<t:DeleteItemField><t:FieldURI FieldURI="item:Categories" /></t:DeleteItemField>`);
+      }
+    }
+
     let hasAttendeeUpdates = false;
     if (attendees !== undefined) {
       hasAttendeeUpdates = true;
@@ -1521,6 +1536,7 @@ export async function sendEmail(
     bodyType?: 'Text' | 'HTML';
     attachments?: EmailAttachment[];
     mailbox?: string;
+    categories?: string[];
   }
 ): Promise<OwaResponse<void>> {
   try {
@@ -1566,6 +1582,7 @@ export async function sendEmail(
             <t:Subject>${xmlEscape(options.subject)}</t:Subject>
             <t:Body BodyType="${bodyType}">${xmlEscape(options.body)}</t:Body>
             <t:ToRecipients>${toXml}</t:ToRecipients>
+            ${options.categories && options.categories.length > 0 ? `<t:Categories>${options.categories.map((c) => `<t:String>\${xmlEscape(c)}</t:String>`).join('')}</t:Categories>` : ''}
             ${ccXml}
             ${bccXml}
             ${fromXml}
@@ -1582,7 +1599,8 @@ export async function sendEmail(
       cc: options.cc,
       subject: options.subject,
       body: options.body,
-      bodyType
+      bodyType,
+      categories: options.categories
     });
     if (!draftResult.ok || !draftResult.data) return draftResult as OwaResponse<void>;
 
@@ -1767,6 +1785,7 @@ export async function createDraft(
     subject?: string;
     body?: string;
     bodyType?: 'Text' | 'HTML';
+    categories?: string[];
   }
 ): Promise<OwaResponse<{ Id: string }>> {
   try {
@@ -1792,6 +1811,7 @@ export async function createDraft(
         <t:Message>
           ${options.subject ? `<t:Subject>${xmlEscape(options.subject)}</t:Subject>` : ''}
           ${options.body ? `<t:Body BodyType="${bodyType}">${xmlEscape(options.body)}</t:Body>` : ''}
+          ${options.categories && options.categories.length > 0 ? `<t:Categories>${options.categories.map((c) => `<t:String>\${xmlEscape(c)}</t:String>`).join('')}</t:Categories>` : ''}
           ${toXml}
           ${ccXml}
         </t:Message>

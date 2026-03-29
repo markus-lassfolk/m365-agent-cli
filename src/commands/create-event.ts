@@ -32,6 +32,15 @@ export const createEventCommand = new Command('create-event')
   .option('--attendees <emails>', 'Comma-separated list of attendee emails')
   .option('--room <room>', 'Meeting room (use --list-rooms to see available)')
   .option('--teams', 'Create as Teams meeting')
+  .option(
+    '--category <name>',
+    'Category label (repeatable)',
+    (v, acc) => {
+      acc.push(v);
+      return acc;
+    },
+    [] as string[]
+  )
   .option('--all-day', 'Create as an all-day event (no time slots)')
   .option('--list-rooms', 'List available meeting rooms')
   .option('--find-room', 'Find an available room for the time slot')
@@ -66,6 +75,7 @@ export const createEventCommand = new Command('create-event')
         json?: boolean;
         token?: string;
         mailbox?: string;
+        category?: string[];
       }
     ) => {
       const authResult = await resolveAuth({
@@ -350,7 +360,8 @@ export const createEventCommand = new Command('create-event')
         isAllDay: options.allDay,
         recurrence,
         mailbox: options.mailbox,
-        timezone: options.timezone
+        timezone: options.timezone,
+        categories: options.category && options.category.length > 0 ? options.category : undefined
       });
 
       if (!result.ok || !result.data) {
