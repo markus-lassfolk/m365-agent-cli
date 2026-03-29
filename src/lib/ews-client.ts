@@ -284,6 +284,48 @@ export interface EmailMessage {
   Flag?: { FlagStatus?: 'NotFlagged' | 'Flagged' | 'Complete' };
 }
 
+/**
+ * Structured email filter — replaces fragile includes()-based string parsing.
+ * All fields are optional; undefined fields are omitted from the restriction.
+ */
+export interface EmailFilter {
+  /** Show only unread (true) or read (false) emails. Omit for no restriction. */
+  isRead?: boolean;
+  /** Show only emails with this flag status. */
+  flagStatus?: 'NotFlagged' | 'Flagged' | 'Complete';
+  /** Show only emails with this importance level. */
+  importance?: 'Low' | 'Normal' | 'High';
+}
+
+function buildRestrictionXml(filter: EmailFilter): string {
+  const restrictions: string[] = [];
+
+  if (filter.isRead !== undefined) {
+    restrictions.push(`<t:IsEqualTo>
+      <t:FieldURI FieldURI="message:IsRead"/>
+      <t:FieldURIOrConstant><t:Constant Value="${filter.isRead ? 'false' : 'true'}"/></t:FieldURIOrConstant>
+    </t:IsEqualTo>`);
+  }
+
+  if (filter.flagStatus !== undefined) {
+    restrictions.push(`<t:IsEqualTo>
+      <t:FieldURI FieldURI="item:Flag/FlagStatus"/>
+      <t:FieldURIOrConstant><t:Constant Value="${filter.flagStatus}"/></t:FieldURIOrConstant>
+    </t:IsEqualTo>`);
+  }
+
+  if (filter.importance !== undefined) {
+    restrictions.push(`<t:IsEqualTo>
+      <t:FieldURI FieldURI="item:Importance"/>
+      <t:FieldURIOrConstant><t:Constant Value="${filter.importance}"/></t:FieldURIOrConstant>
+    </t:IsEqualTo>`);
+  }
+
+  if (restrictions.length === 0) return '';
+  if (restrictions.length === 1) return `<m:Restriction>${restrictions[0]}</m:Restriction>`;
+  return `<m:Restriction><t:And>${restrictions.join('')}</t:And></m:Restriction>`;
+}
+
 export interface EmailListResponse {
   value: EmailMessage[];
 }
@@ -293,7 +335,10 @@ export interface GetEmailsOptions {
   folder?: string;
   top?: number;
   skip?: number;
+  /** Legacy raw-string filter (deprecated — prefer filterOptions). */
   filter?: string;
+  /** Structured filter using a proper builder — use this instead of filter. */
+  filterOptions?: EmailFilter;
   search?: string;
   select?: string[];
   orderBy?: string;
@@ -1064,32 +1109,37 @@ export async function respondToEvent(options: RespondToEventOptions): Promise<Ow
 
 export async function getEmails(options: GetEmailsOptions): Promise<OwaResponse<EmailListResponse>> {
   try {
-    const { token, folder = 'inbox', top = 10, skip = 0, filter, search } = options;
+    const { token, folder = 'inbox', top = 10, skip = 0, filter, filterOptions, search } = options;
 
-    // Build restriction for filters
+    // Build restriction XML — structured filterOptions takes precedence over legacy string filter
     let restrictionXml = '';
-    if (filter && !search) {
-      const restrictions: string[] = [];
+    if (!search) {
+      if (filterOptions) {
+        restrictionXml = buildRestrictionXml(filterOptions);
+      } else if (filter) {
+        // Legacy: parse raw string filter using includes() — kept for backward compatibility
+        const restrictions: string[] = [];
 
-      if (filter.includes('IsRead eq false')) {
-        restrictions.push(`
+        if (filter.includes('IsRead eq false')) {
+          restrictions.push(`
         <t:IsEqualTo>
           <t:FieldURI FieldURI="message:IsRead" />
           <t:FieldURIOrConstant><t:Constant Value="false" /></t:FieldURIOrConstant>
         </t:IsEqualTo>`);
-      }
-      if (filter.includes('FlagStatus') && filter.includes('Flagged')) {
-        restrictions.push(`
+        }
+        if (filter.includes('FlagStatus') && filter.includes('Flagged')) {
+          restrictions.push(`
         <t:IsEqualTo>
           <t:FieldURI FieldURI="item:Flag/FlagStatus" />
           <t:FieldURIOrConstant><t:Constant Value="Flagged" /></t:FieldURIOrConstant>
         </t:IsEqualTo>`);
-      }
+        }
 
-      if (restrictions.length === 1) {
-        restrictionXml = `<m:Restriction>${restrictions[0]}</m:Restriction>`;
-      } else if (restrictions.length > 1) {
-        restrictionXml = `<m:Restriction><t:And>${restrictions.join('')}</t:And></m:Restriction>`;
+        if (restrictions.length === 1) {
+          restrictionXml = `<m:Restriction>${restrictions[0]}</m:Restriction>`;
+        } else if (restrictions.length > 1) {
+          restrictionXml = `<m:Restriction><t:And>${restrictions.join('')}</t:And></m:Restriction>`;
+        }
       }
     }
 
