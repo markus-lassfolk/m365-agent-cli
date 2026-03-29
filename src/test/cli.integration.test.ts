@@ -1,5 +1,5 @@
 /**
- * Command-level integration tests for the clippy CLI.
+ * Command-level integration tests for the m365-agent-cli CLI.
  *
  * Network calls are mocked via globalThis.fetch interception.
  * Each command handler is called directly to test the full CLI path including
@@ -161,7 +161,7 @@ import { Command } from 'commander';
 
 function makeProgram(): Command {
   const p = new Command();
-  p.name('clippy').version('0.1.0').addCommand(whoamiCommand);
+  p.name('m365-agent-cli').version('0.1.0').addCommand(whoamiCommand);
   p.addCommand(autoReplyCommand);
   p.addCommand(calendarCommand);
   p.addCommand(findtimeCommand);
@@ -216,8 +216,8 @@ function tokenizeArgs(args: string): string[] {
   return result;
 }
 
-async function runClippy(args: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-  // Set up mocks INSIDE runClippy so each call is independent
+async function runM365AgentCli(args: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  // Set up mocks INSIDE runM365AgentCli so each call is independent
   let capturedStdout = '';
   let capturedStderr = '';
   let capturedExitCode: number | undefined;
@@ -266,14 +266,14 @@ async function runClippy(args: string): Promise<{ stdout: string; stderr: string
 
 describe('whoami', () => {
   test('default output shows user info', async () => {
-    const result = await runClippy('whoami --token test-token-12345');
+    const result = await runM365AgentCli('whoami --token test-token-12345');
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain('Authenticated');
     expect(result.stdout).toContain('test@example.com');
   });
 
   test('--json outputs valid JSON with user info', async () => {
-    const result = await runClippy('whoami --json --token test-token-12345');
+    const result = await runM365AgentCli('whoami --json --token test-token-12345');
     expect(result.exitCode).toBe(0);
     expect(isValidJson(result.stdout.trim())).toBe(true);
     const data = JSON.parse(result.stdout.trim());
@@ -282,14 +282,14 @@ describe('whoami', () => {
   });
 
   test('--token bypasses auth resolution', async () => {
-    const result = await runClippy('whoami --token test-token-12345');
+    const result = await runM365AgentCli('whoami --token test-token-12345');
     expect(result.exitCode).toBe(0);
     // With a valid token, should show user info
     expect(result.stdout).toContain('test@example.com');
   });
 
   test('--help shows help text', async () => {
-    const result = await runClippy('whoami --help');
+    const result = await runM365AgentCli('whoami --help');
     expect(result.exitCode).toBe(0);
     //     // (skip) expect(result.stdout).toContain('--json');
     //     // (skip) expect(result.stdout).toContain('--token');
@@ -300,24 +300,24 @@ describe('whoami', () => {
 
 describe('calendar', () => {
   test('today shows events', async () => {
-    const result = await runClippy('calendar today --token test-token-12345');
+    const result = await runM365AgentCli('calendar today --token test-token-12345');
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain('Calendar');
     expect(result.stdout).toContain('Team Standup');
   });
 
   test('tomorrow works', async () => {
-    const result = await runClippy('calendar tomorrow --token test-token-12345');
+    const result = await runM365AgentCli('calendar tomorrow --token test-token-12345');
     expect(result.exitCode).toBe(0);
   });
 
   test('week works', async () => {
-    const result = await runClippy('calendar week --token test-token-12345');
+    const result = await runM365AgentCli('calendar week --token test-token-12345');
     expect(result.exitCode).toBe(0);
   });
 
   test('--json outputs valid JSON', async () => {
-    const result = await runClippy('calendar today --json --token test-token-12345');
+    const result = await runM365AgentCli('calendar today --json --token test-token-12345');
     expect(result.exitCode).toBe(0);
     expect(isValidJson(result.stdout.trim())).toBe(true);
     const data = JSON.parse(result.stdout.trim());
@@ -326,20 +326,20 @@ describe('calendar', () => {
   });
 
   test('--verbose shows extra details', async () => {
-    const result = await runClippy('calendar today --verbose --token test-token-12345');
+    const result = await runM365AgentCli('calendar today --verbose --token test-token-12345');
     expect(result.exitCode).toBe(0);
     // exitCode check only (state-safe)
   });
 
   test('--help shows help text', async () => {
-    const result = await runClippy('calendar --help');
+    const result = await runM365AgentCli('calendar --help');
     expect(result.exitCode).toBe(0);
     //     // (skip) expect(result.stdout).toContain('--json');
     //     // (skip) expect(result.stdout).toContain('--verbose');
   });
 
   test('invalid date shows an error (not a crash)', async () => {
-    const result = await runClippy('calendar not-a-valid-date --token test-token-12345');
+    const result = await runM365AgentCli('calendar not-a-valid-date --token test-token-12345');
     // Either exit 0 with no events or exit 1 with error - not a raw JS crash
     if (result.exitCode !== 0) {
       expect(isUsefulError(result.stderr + result.stdout)).toBe(true);
@@ -351,24 +351,24 @@ describe('calendar', () => {
 
 describe('findtime', () => {
   test('with attendees shows available slots', async () => {
-    const result = await runClippy('findtime nextweek user@example.com --token test-token-12345');
+    const result = await runM365AgentCli('findtime nextweek user@example.com --token test-token-12345');
     expect(result.exitCode).toBe(0);
     // Should contain available time info
     expect(result.stdout + result.stderr).toMatch(/available|No available|🗓️/i);
   });
 
   test('--duration sets meeting length', async () => {
-    const result = await runClippy('findtime nextweek user@example.com --duration 60 --token test-token-12345');
+    const result = await runM365AgentCli('findtime nextweek user@example.com --duration 60 --token test-token-12345');
     expect(result.exitCode).toBe(0);
   });
 
   test('--solo excludes current user', async () => {
-    const result = await runClippy('findtime nextweek user@example.com --solo --token test-token-12345');
+    const result = await runM365AgentCli('findtime nextweek user@example.com --solo --token test-token-12345');
     expect(result.exitCode).toBe(0);
   });
 
   test('--json outputs valid JSON', async () => {
-    const result = await runClippy('findtime nextweek user@example.com --json --token test-token-12345');
+    const result = await runM365AgentCli('findtime nextweek user@example.com --json --token test-token-12345');
     expect(result.exitCode).toBe(0);
     expect(isValidJson(result.stdout.trim())).toBe(true);
     const data = JSON.parse(result.stdout.trim());
@@ -377,20 +377,20 @@ describe('findtime', () => {
   });
 
   test('--help shows help text', async () => {
-    const result = await runClippy('findtime --help');
+    const result = await runM365AgentCli('findtime --help');
     expect(result.exitCode).toBe(0);
     //     // (skip) expect(result.stdout).toContain('--duration');
     //     // (skip) expect(result.stdout).toContain('--solo');
   });
 
   test('no attendees shows error', async () => {
-    const result = await runClippy('findtime nextweek --token test-token-12345');
+    const result = await runM365AgentCli('findtime nextweek --token test-token-12345');
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr + result.stdout).toContain('email');
   });
 
   test('invalid email shows error', async () => {
-    const result = await runClippy('findtime nextweek not-an-email --token test-token-12345');
+    const result = await runM365AgentCli('findtime nextweek not-an-email --token test-token-12345');
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr).toContain('Invalid attendee email');
   });
@@ -400,13 +400,13 @@ describe('findtime', () => {
 
 describe('respond', () => {
   test('list shows pending invitations', async () => {
-    const result = await runClippy('respond list --token test-token-12345');
+    const result = await runM365AgentCli('respond list --token test-token-12345');
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toMatch(/invitation|Invited|pending|Respond/i);
   });
 
   test('list --json outputs valid JSON', async () => {
-    const result = await runClippy('respond list --json --token test-token-12345');
+    const result = await runM365AgentCli('respond list --json --token test-token-12345');
     expect(result.exitCode).toBe(0);
     expect(isValidJson(result.stdout.trim())).toBe(true);
     const data = JSON.parse(result.stdout.trim());
@@ -414,24 +414,24 @@ describe('respond', () => {
   });
 
   test('accept without --id shows error', async () => {
-    const result = await runClippy('respond accept --token test-token-12345');
+    const result = await runM365AgentCli('respond accept --token test-token-12345');
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr + result.stdout).toContain('--id');
   });
 
   test('accept with invalid --id shows error', async () => {
-    const result = await runClippy('respond accept --id invalid-id-xyz --token test-token-12345');
+    const result = await runM365AgentCli('respond accept --id invalid-id-xyz --token test-token-12345');
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr + result.stdout).toMatch(/invalid|not found/i);
   });
 
   test('decline with invalid --id shows error', async () => {
-    const result = await runClippy('respond decline --id invalid-id-xyz --token test-token-12345');
+    const result = await runM365AgentCli('respond decline --id invalid-id-xyz --token test-token-12345');
     expect(result.exitCode).not.toBe(0);
   });
 
   test('--help shows help text', async () => {
-    const result = await runClippy('respond --help');
+    const result = await runM365AgentCli('respond --help');
     expect(result.exitCode).toBe(0);
     //     // (skip) expect(result.stdout).toContain('accept');
     //     // (skip) expect(result.stdout).toContain('decline');
@@ -443,14 +443,16 @@ describe('respond', () => {
 
 describe('create-event', () => {
   test('basic event creation succeeds', async () => {
-    const result = await runClippy('create-event "Test Meeting" 10:00 11:00 --day today --token test-token-12345');
+    const result = await runM365AgentCli(
+      'create-event "Test Meeting" 10:00 11:00 --day today --token test-token-12345'
+    );
     expect(result.exitCode).toBe(0);
     expect(result.stdout + result.stderr).not.toMatch(/Error:|error:/i);
     expect(result.stdout + result.stderr).toMatch(/created|Event/i);
   });
 
   test('--json outputs valid JSON', async () => {
-    const result = await runClippy(
+    const result = await runM365AgentCli(
       'create-event "Test Meeting" 10:00 11:00 --day today --json --token test-token-12345'
     );
     expect(result.exitCode).toBe(0);
@@ -462,26 +464,26 @@ describe('create-event', () => {
   });
 
   test('--attendees works', async () => {
-    const result = await runClippy(
+    const result = await runM365AgentCli(
       'create-event "Meeting" 10:00 11:00 --attendees user@example.com --token test-token-12345'
     );
     expect(result.exitCode).toBe(0);
   });
 
   test('--teams creates Teams meeting', async () => {
-    const result = await runClippy('create-event "Teams Meeting" 10:00 11:00 --teams --token test-token-12345');
+    const result = await runM365AgentCli('create-event "Teams Meeting" 10:00 11:00 --teams --token test-token-12345');
     expect(result.exitCode).toBe(0);
   });
 
   test('--day accepts YYYY-MM-DD', async () => {
-    const result = await runClippy(
+    const result = await runM365AgentCli(
       'create-event "Dated Meeting" 10:00 11:00 --day 2026-03-30 --token test-token-12345'
     );
     expect(result.exitCode).toBe(0);
   });
 
   test('--help shows help text', async () => {
-    const result = await runClippy('create-event --help');
+    const result = await runM365AgentCli('create-event --help');
     expect(result.exitCode).toBe(0);
     //     // (skip) expect(result.stdout).toContain('--attendees');
     //     // (skip) expect(result.stdout).toContain('--teams');
@@ -493,25 +495,25 @@ describe('create-event', () => {
 
 describe('delete-event', () => {
   test('without --id lists events', async () => {
-    const result = await runClippy('delete-event --token test-token-12345');
+    const result = await runM365AgentCli('delete-event --token test-token-12345');
     // Lists events for today - may succeed or show empty
     expect([0, 1].includes(result.exitCode)).toBe(true);
   });
 
   test('--id with invalid id shows error', async () => {
-    const result = await runClippy('delete-event --id invalid-id-abc --token test-token-12345');
+    const result = await runM365AgentCli('delete-event --id invalid-id-abc --token test-token-12345');
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr + result.stdout).toMatch(/invalid|not found/i);
   });
 
   // NOTE: this test has state leakage in full suite; verified passing in isolation
   test.skip('--json in list mode shows events [SKIP: state leakage]', async () => {
-    const result = await runClippy('delete-event --json --token test-token-12345');
+    const result = await runM365AgentCli('delete-event --json --token test-token-12345');
     expect(result.exitCode).toBe(0);
   });
 
   test('--help shows help text', async () => {
-    const result = await runClippy('delete-event --help');
+    const result = await runM365AgentCli('delete-event --help');
     expect(result.exitCode).toBe(0);
     //     // (skip) expect(result.stdout).toContain('--search');
     //     // (skip) expect(result.stdout).toContain('--id');
@@ -522,23 +524,23 @@ describe('delete-event', () => {
 
 describe('find', () => {
   test('with query shows people results', async () => {
-    const result = await runClippy('find john --token test-token-12345');
+    const result = await runM365AgentCli('find john --token test-token-12345');
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain('john');
   });
 
   test('--people filters to people only', async () => {
-    const result = await runClippy('find john --people --token test-token-12345');
+    const result = await runM365AgentCli('find john --people --token test-token-12345');
     expect(result.exitCode).toBe(0);
   });
 
   test('--groups filters to groups only', async () => {
-    const result = await runClippy('find conference --groups --token test-token-12345');
+    const result = await runM365AgentCli('find conference --groups --token test-token-12345');
     expect(result.exitCode).toBe(0);
   });
 
   test('--json outputs valid JSON', async () => {
-    const result = await runClippy('find john --json --token test-token-12345');
+    const result = await runM365AgentCli('find john --json --token test-token-12345');
     expect(result.exitCode).toBe(0);
     expect(isValidJson(result.stdout.trim())).toBe(true);
     const data = JSON.parse(result.stdout.trim());
@@ -547,7 +549,7 @@ describe('find', () => {
   });
 
   test('--help shows help text', async () => {
-    const result = await runClippy('find --help');
+    const result = await runM365AgentCli('find --help');
     expect(result.exitCode).toBe(0);
     //     // (skip) expect(result.stdout).toContain('--people');
     //     // (skip) expect(result.stdout).toContain('--groups');
@@ -558,25 +560,25 @@ describe('find', () => {
 
 describe('update-event', () => {
   test('--id with invalid id shows error', async () => {
-    const result = await runClippy('update-event --id invalid-id-xyz --token test-token-12345');
+    const result = await runM365AgentCli('update-event --id invalid-id-xyz --token test-token-12345');
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr + result.stdout).toMatch(/invalid|not found/i);
   });
 
   test('--day with invalid date shows error', async () => {
-    const result = await runClippy('update-event --day not-a-date --token test-token-12345');
+    const result = await runM365AgentCli('update-event --day not-a-date --token test-token-12345');
     expect(result.exitCode).not.toBe(0);
     expect(isUsefulError(result.stderr + result.stdout)).toBe(true);
   });
 
   // NOTE: this test has state leakage in full suite; verified passing in isolation
   test.skip('--json in list mode shows events [SKIP: state leakage]', async () => {
-    const result = await runClippy('update-event --json --token test-token-12345');
+    const result = await runM365AgentCli('update-event --json --token test-token-12345');
     expect(result.exitCode).toBe(0);
   });
 
   test('--help shows help text', async () => {
-    const result = await runClippy('update-event --help');
+    const result = await runM365AgentCli('update-event --help');
     expect(result.exitCode).toBe(0);
     //     // (skip) expect(result.stdout).toContain('--id');
     //     // (skip) expect(result.stdout).toContain('--title');
@@ -588,38 +590,38 @@ describe('update-event', () => {
 
 describe('mail', () => {
   test('inbox shows emails', async () => {
-    const result = await runClippy('mail inbox --token test-token-12345');
+    const result = await runM365AgentCli('mail inbox --token test-token-12345');
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toMatch(/Inbox|email|From|email/i);
   });
 
   test('sent folder works', async () => {
-    const result = await runClippy('mail sent --token test-token-12345');
+    const result = await runM365AgentCli('mail sent --token test-token-12345');
     expect(result.exitCode).toBe(0);
   });
 
   test('drafts folder works', async () => {
-    const result = await runClippy('mail drafts --token test-token-12345');
+    const result = await runM365AgentCli('mail drafts --token test-token-12345');
     expect(result.exitCode).toBe(0);
   });
 
   test('--unread filters to unread', async () => {
-    const result = await runClippy('mail inbox --unread --token test-token-12345');
+    const result = await runM365AgentCli('mail inbox --unread --token test-token-12345');
     expect(result.exitCode).toBe(0);
   });
 
   test('--flagged filters to flagged', async () => {
-    const result = await runClippy('mail inbox --flagged --token test-token-12345');
+    const result = await runM365AgentCli('mail inbox --flagged --token test-token-12345');
     expect(result.exitCode).toBe(0);
   });
 
   test('-s search works', async () => {
-    const result = await runClippy('mail inbox -s "test" --token test-token-12345');
+    const result = await runM365AgentCli('mail inbox -s "test" --token test-token-12345');
     expect(result.exitCode).toBe(0);
   });
 
   test('--json outputs valid JSON', async () => {
-    const result = await runClippy('mail inbox --json --token test-token-12345');
+    const result = await runM365AgentCli('mail inbox --json --token test-token-12345');
     expect(result.exitCode).toBe(0);
     expect(isValidJson(result.stdout.trim())).toBe(true);
     const data = JSON.parse(result.stdout.trim());
@@ -628,7 +630,7 @@ describe('mail', () => {
   });
 
   test('--help shows help text', async () => {
-    const result = await runClippy('mail --help');
+    const result = await runM365AgentCli('mail --help');
     expect(result.exitCode).toBe(0);
     //     // (skip) expect(result.stdout).toContain('--unread');
     //     // (skip) expect(result.stdout).toContain('--flagged');
@@ -636,7 +638,7 @@ describe('mail', () => {
   });
 
   test('--limit controls number of results', async () => {
-    const result = await runClippy('mail inbox --limit 5 --token test-token-12345');
+    const result = await runM365AgentCli('mail inbox --limit 5 --token test-token-12345');
     expect(result.exitCode).toBe(0);
   });
 });
@@ -645,13 +647,13 @@ describe('mail', () => {
 
 describe('folders', () => {
   test('list shows folders', async () => {
-    const result = await runClippy('folders --token test-token-12345');
+    const result = await runM365AgentCli('folders --token test-token-12345');
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toMatch(/Folder|folder/i);
   });
 
   test('--json outputs valid JSON', async () => {
-    const result = await runClippy('folders --json --token test-token-12345');
+    const result = await runM365AgentCli('folders --json --token test-token-12345');
     expect(result.exitCode).toBe(0);
     expect(isValidJson(result.stdout.trim())).toBe(true);
     const data = JSON.parse(result.stdout.trim());
@@ -660,24 +662,24 @@ describe('folders', () => {
   });
 
   test('--create creates a folder', async () => {
-    const result = await runClippy('folders --create "Test Folder Integration" --token test-token-12345');
+    const result = await runM365AgentCli('folders --create "Test Folder Integration" --token test-token-12345');
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toMatch(/created|Created|Test Folder/i);
   });
 
   test('--rename requires --to', async () => {
-    const result = await runClippy('folders --rename "Old Name" --token test-token-12345');
+    const result = await runM365AgentCli('folders --rename "Old Name" --token test-token-12345');
     expect(result.exitCode).toBe(0);
     // exitCode checked
   });
 
   test('--delete works', async () => {
-    const result = await runClippy('folders --delete "My Custom Folder" --token test-token-12345');
+    const result = await runM365AgentCli('folders --delete "My Custom Folder" --token test-token-12345');
     expect(result.exitCode).toBe(0);
   });
 
   test('--help shows help text', async () => {
-    const result = await runClippy('folders --help');
+    const result = await runM365AgentCli('folders --help');
     expect(result.exitCode).toBe(0);
     //     // (skip) expect(result.stdout).toContain('--create');
     //     // (skip) expect(result.stdout).toContain('--rename');
@@ -689,20 +691,22 @@ describe('folders', () => {
 
 describe('send', () => {
   test('--to and --subject succeeds', async () => {
-    const result = await runClippy('send --to recipient@example.com --subject "Test Subject" --token test-token-12345');
+    const result = await runM365AgentCli(
+      'send --to recipient@example.com --subject "Test Subject" --token test-token-12345'
+    );
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toMatch(/sent|Sent/i);
   });
 
   test('--body sends with body', async () => {
-    const result = await runClippy(
+    const result = await runM365AgentCli(
       'send --to recipient@example.com --subject "Test" --body "Hello World" --token test-token-12345'
     );
     expect(result.exitCode).toBe(0);
   });
 
   test('--json outputs valid JSON', async () => {
-    const result = await runClippy(
+    const result = await runM365AgentCli(
       'send --to recipient@example.com --subject "JSON Test" --json --token test-token-12345'
     );
     expect(result.exitCode).toBe(0);
@@ -712,21 +716,21 @@ describe('send', () => {
   });
 
   test('--markdown processes markdown', async () => {
-    const result = await runClippy(
+    const result = await runM365AgentCli(
       'send --to recipient@example.com --subject "MD Test" --body "**bold**" --markdown --token test-token-12345'
     );
     expect(result.exitCode).toBe(0);
   });
 
   test('--cc and --bcc work', async () => {
-    const result = await runClippy(
+    const result = await runM365AgentCli(
       'send --to recipient@example.com --subject "CC Test" --cc cc@example.com --bcc bcc@example.com --token test-token-12345'
     );
     expect(result.exitCode).toBe(0);
   });
 
   test('--help shows help text', async () => {
-    const result = await runClippy('send --help');
+    const result = await runM365AgentCli('send --help');
     expect(result.exitCode).toBe(0);
     //     // (skip) expect(result.stdout).toContain('--to');
     //     // (skip) expect(result.stdout).toContain('--subject');
@@ -739,13 +743,13 @@ describe('send', () => {
 
 describe('drafts', () => {
   test('list shows drafts', async () => {
-    const result = await runClippy('drafts --token test-token-12345');
+    const result = await runM365AgentCli('drafts --token test-token-12345');
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toMatch(/draft|Draft/i);
   });
 
   test('--json outputs valid JSON', async () => {
-    const result = await runClippy('drafts --json --token test-token-12345');
+    const result = await runM365AgentCli('drafts --json --token test-token-12345');
     expect(result.exitCode).toBe(0);
     expect(isValidJson(result.stdout.trim())).toBe(true);
     const data = JSON.parse(result.stdout.trim());
@@ -753,7 +757,7 @@ describe('drafts', () => {
   });
 
   test('--create creates a draft', async () => {
-    const result = await runClippy(
+    const result = await runM365AgentCli(
       'drafts --create --to recipient@example.com --subject "Draft Test" --token test-token-12345'
     );
     expect(result.exitCode).toBe(0);
@@ -761,17 +765,17 @@ describe('drafts', () => {
   });
 
   test('--send with invalid id shows error', async () => {
-    const result = await runClippy('drafts --send invalid-draft-id-xyz --token test-token-12345');
+    const result = await runM365AgentCli('drafts --send invalid-draft-id-xyz --token test-token-12345');
     expect(result.exitCode).toBe(0); // mock always succeeds;
   });
 
   test('--delete with invalid id shows error', async () => {
-    const result = await runClippy('drafts --delete invalid-draft-id-xyz --token test-token-12345');
+    const result = await runM365AgentCli('drafts --delete invalid-draft-id-xyz --token test-token-12345');
     expect(result.exitCode).toBe(0); // mock always succeeds;
   });
 
   test('--help shows help text', async () => {
-    const result = await runClippy('drafts --help');
+    const result = await runM365AgentCli('drafts --help');
     expect(result.exitCode).toBe(0);
     //     // (skip) expect(result.stdout).toContain('--create');
     //     // (skip) expect(result.stdout).toContain('--send');
@@ -779,7 +783,7 @@ describe('drafts', () => {
   });
 
   test('--markdown with --create works', async () => {
-    const result = await runClippy(
+    const result = await runM365AgentCli(
       'drafts --create --to test@example.com --subject "MD Draft" --body "**bold**" --markdown --token test-token-12345'
     );
     expect(result.exitCode).toBe(0);
@@ -791,12 +795,12 @@ describe('drafts', () => {
 describe('files', () => {
   describe('files list', () => {
     test('lists files', async () => {
-      const result = await runClippy('files list --token test-token-12345');
+      const result = await runM365AgentCli('files list --token test-token-12345');
       expect(result.exitCode).toBe(0);
     });
 
     test('--json outputs valid JSON', async () => {
-      const result = await runClippy('files list --json --token test-token-12345');
+      const result = await runM365AgentCli('files list --json --token test-token-12345');
       expect(result.exitCode).toBe(0);
       expect(isValidJson(result.stdout.trim())).toBe(true);
       const data = JSON.parse(result.stdout.trim());
@@ -804,19 +808,19 @@ describe('files', () => {
     });
 
     test('--help shows help', async () => {
-      const result = await runClippy('files list --help');
+      const result = await runM365AgentCli('files list --help');
       expect(result.exitCode).toBe(0);
     });
   });
 
   describe('files search', () => {
     test('searches files', async () => {
-      const result = await runClippy('files search "report" --token test-token-12345');
+      const result = await runM365AgentCli('files search "report" --token test-token-12345');
       expect(result.exitCode).toBe(0);
     });
 
     test('--json outputs valid JSON', async () => {
-      const result = await runClippy('files search "report" --json --token test-token-12345');
+      const result = await runM365AgentCli('files search "report" --json --token test-token-12345');
       expect(result.exitCode).toBe(0);
       expect(isValidJson(result.stdout.trim())).toBe(true);
     });
@@ -824,12 +828,12 @@ describe('files', () => {
 
   describe('files meta', () => {
     test('gets file metadata', async () => {
-      const result = await runClippy('files meta drive-item-1 --token test-token-12345');
+      const result = await runM365AgentCli('files meta drive-item-1 --token test-token-12345');
       expect(result.exitCode).toBe(0);
     });
 
     test('--json outputs valid JSON', async () => {
-      const result = await runClippy('files meta drive-item-1 --json --token test-token-12345');
+      const result = await runM365AgentCli('files meta drive-item-1 --json --token test-token-12345');
       expect(result.exitCode).toBe(0);
       expect(isValidJson(result.stdout.trim())).toBe(true);
     });
@@ -837,29 +841,31 @@ describe('files', () => {
 
   describe('files share', () => {
     test('creates sharing link', async () => {
-      const result = await runClippy('files share drive-item-1 --token test-token-12345');
+      const result = await runM365AgentCli('files share drive-item-1 --token test-token-12345');
       expect(result.exitCode).toBe(0);
       expect(result.stdout + result.stderr).toMatch(/share|Share|URL|✓|Link/i);
     });
 
     test('--type and --scope work', async () => {
-      const result = await runClippy('files share drive-item-1 --type edit --scope anonymous --token test-token-12345');
+      const result = await runM365AgentCli(
+        'files share drive-item-1 --type edit --scope anonymous --token test-token-12345'
+      );
       expect(result.exitCode).toBe(0);
     });
 
     test('--collab works', async () => {
-      const result = await runClippy('files share drive-item-1 --collab --token test-token-12345');
+      const result = await runM365AgentCli('files share drive-item-1 --collab --token test-token-12345');
       expect(result.exitCode).toBe(0);
     });
 
     test('--lock without --collab shows error', async () => {
-      const result = await runClippy('files share drive-item-1 --lock --token test-token-12345');
+      const result = await runM365AgentCli('files share drive-item-1 --lock --token test-token-12345');
       expect(result.exitCode).toBe(0); // exitCode check;
       // stderr checked
     });
 
     test('--json outputs valid JSON', async () => {
-      const result = await runClippy('files share drive-item-1 --json --token test-token-12345');
+      const result = await runM365AgentCli('files share drive-item-1 --json --token test-token-12345');
       expect(result.exitCode).toBe(0);
       expect(isValidJson(result.stdout.trim())).toBe(true);
     });
@@ -867,18 +873,20 @@ describe('files', () => {
 
   describe('files checkin', () => {
     test('checks in file', async () => {
-      const result = await runClippy('files checkin drive-item-1 --token test-token-12345');
+      const result = await runM365AgentCli('files checkin drive-item-1 --token test-token-12345');
       expect(result.exitCode).toBe(0);
       expect(result.stdout + result.stderr).toMatch(/checkin|check.in|✓|File/i);
     });
 
     test('--comment works', async () => {
-      const result = await runClippy('files checkin drive-item-1 --comment "Done editing" --token test-token-12345');
+      const result = await runM365AgentCli(
+        'files checkin drive-item-1 --comment "Done editing" --token test-token-12345'
+      );
       expect(result.exitCode).toBe(0);
     });
 
     test('--json outputs valid JSON', async () => {
-      const result = await runClippy('files checkin drive-item-1 --json --token test-token-12345');
+      const result = await runM365AgentCli('files checkin drive-item-1 --json --token test-token-12345');
       expect(result.exitCode).toBe(0);
       expect(isValidJson(result.stdout.trim())).toBe(true);
     });
@@ -886,13 +894,13 @@ describe('files', () => {
 
   describe('files delete', () => {
     test('deletes file', async () => {
-      const result = await runClippy('files delete drive-item-1 --token test-token-12345');
+      const result = await runM365AgentCli('files delete drive-item-1 --token test-token-12345');
       expect(result.exitCode).toBe(0);
       expect(result.stdout + result.stderr).toMatch(/delet|Delet|✓|Deleted/i);
     });
 
     test('--json outputs valid JSON', async () => {
-      const result = await runClippy('files delete drive-item-1 --json --token test-token-12345');
+      const result = await runM365AgentCli('files delete drive-item-1 --json --token test-token-12345');
       expect(result.exitCode).toBe(0);
       expect(isValidJson(result.stdout.trim())).toBe(true);
       const data = JSON.parse(result.stdout.trim());
@@ -901,7 +909,7 @@ describe('files', () => {
   });
 
   test('--help shows files help', async () => {
-    const result = await runClippy('files --help');
+    const result = await runM365AgentCli('files --help');
     expect(result.exitCode).toBe(0);
     //     expect(result.stdout).toContain('list');
     //     expect(result.stdout).toContain('search');
@@ -914,20 +922,20 @@ describe('files', () => {
 
 describe('error handling', () => {
   test('unknown command shows error', async () => {
-    const result = await runClippy('nonexistent-command-xyz --token test-token-12345');
+    const result = await runM365AgentCli('nonexistent-command-xyz --token test-token-12345');
     expect(result.exitCode).not.toBe(0);
   });
 
   test('--json flag produces valid JSON on error', async () => {
     // With a bad day, calendar should return either success or error JSON
-    const result = await runClippy('calendar invalid-date-xyz --json --token test-token-12345');
+    const result = await runM365AgentCli('calendar invalid-date-xyz --json --token test-token-12345');
     if (result.exitCode !== 0) {
       expect(isValidJson(result.stdout.trim())).toBe(true);
     }
   });
 
   test('error messages do not leak internals', async () => {
-    const result = await runClippy('update-event --day invalid-date-xyz --id bad-id --token test-token-12345');
+    const result = await runM365AgentCli('update-event --day invalid-date-xyz --id bad-id --token test-token-12345');
     // Error output should not contain JS internals
     expect(isUsefulError(result.stderr + result.stdout)).toBe(true);
   });
@@ -937,13 +945,13 @@ describe('error handling', () => {
 
 describe('global options', () => {
   test('--version works', async () => {
-    const result = await runClippy('--version');
+    const result = await runM365AgentCli('--version');
     expect(result.exitCode).toBe(0);
     // stdout not captured (Commander prints before mock)
   });
 
   test('--help works at top level', async () => {
-    const result = await runClippy('--help');
+    const result = await runM365AgentCli('--help');
     expect(result.exitCode).toBe(0);
     //     expect(result.stdout).toContain('whoami');
     //     expect(result.stdout).toContain('calendar');

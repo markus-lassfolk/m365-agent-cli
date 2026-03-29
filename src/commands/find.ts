@@ -30,7 +30,7 @@ export const findCommand = new Command('find')
           console.log(JSON.stringify({ error: authResult.error }, null, 2));
         } else {
           console.error(`Error: ${authResult.error}`);
-          console.error('\nCheck your .env file or run clippy auth.');
+          console.error('\nCheck your .env file or run m365-agent-cli auth.');
         }
         process.exit(1);
       }

@@ -41,7 +41,7 @@ Both scripts will output your **Client ID** (`EWS_CLIENT_ID`) upon success. Proc
 ### 1. Create the App Registration
 1. Go to the [Microsoft Entra admin center](https://entra.microsoft.com/).
 2. Navigate to **Applications** > **App registrations** > **New registration**.
-3. Name your application (e.g., "Clippy").
+3. Name your application (e.g., "m365-agent-cli").
 4. For **Supported account types**, choose **Accounts in any organizational directory and personal Microsoft accounts** (or the scope that fits your use case).
 5. Leave the Redirect URI blank for now and click **Register**.
 

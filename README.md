@@ -39,7 +39,7 @@ m365-agent-cli <command>
 > **Need help setting up the Azure AD App?** Follow our [Automated Entra ID App Setup Guide](docs/ENTRA_SETUP.md) for bash and PowerShell scripts that configure the exact permissions you need in seconds.
 
 
-Clippy uses OAuth2 with a refresh token to authenticate against Microsoft 365. You need an Azure AD app registration.
+m365-agent-cli uses OAuth2 with a refresh token to authenticate against Microsoft 365. You need an Azure AD app registration.
 
 ### Setup
 
@@ -65,7 +65,7 @@ Or pass `--mailbox` per-command (see examples below).
 
 ### How It Works
 
-1. Clippy uses the refresh token to obtain a short-lived access token via Microsoft's OAuth2 endpoint
+1. m365-agent-cli uses the refresh token to obtain a short-lived access token via Microsoft's OAuth2 endpoint
 2. Access tokens are cached in `~/.config/m365-agent-cli/token-cache.json` and refreshed automatically when expired
 3. Microsoft may rotate the refresh token on each use — the latest one is cached automatically
 
@@ -493,7 +493,7 @@ m365-agent-cli files share <fileId> --type edit --scope anonymous
 
 ### Collaborative Editing via Office Online
 
-Microsoft Graph cannot join or control a live Office Online editing session. What Clippy can do is prepare the handoff properly:
+Microsoft Graph cannot join or control a live Office Online editing session. What m365-agent-cli can do is prepare the handoff properly:
 
 1. Find the document in OneDrive
 2. Create an organization-scoped edit link (or anonymous)
@@ -519,9 +519,9 @@ m365-agent-cli files checkin <fileId> --comment "Updated Q1 numbers"
 Legacy Office formats such as `.doc`, `.xls`, and `.ppt` must be converted first.
 
 **Important clarification:**
-- Clippy does **not** participate in the real-time editing session
+- m365-agent-cli does **not** participate in the real-time editing session
 - Office Online handles the actual co-authoring once the user opens the returned URL
-- Clippy handles the file lifecycle around that workflow
+- m365-agent-cli handles the file lifecycle around that workflow
 
 ---
 

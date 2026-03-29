@@ -185,10 +185,10 @@ export const updateEventCommand = new Command('update-event')
 
         console.log(`\n${'\u2500'.repeat(60)}`);
         console.log('\nTo update an event:');
-        console.log('  clippy update-event <number> --title "New Title"');
-        console.log('  clippy update-event <number> --add-attendee user@example.com');
-        console.log('  clippy update-event <number> --room "Taxi"');
-        console.log('  clippy update-event <number> --start 14:00 --end 15:00');
+        console.log('  m365-agent-cli update-event <number> --title "New Title"');
+        console.log('  m365-agent-cli update-event <number> --add-attendee user@example.com');
+        console.log('  m365-agent-cli update-event <number> --room "Taxi"');
+        console.log('  m365-agent-cli update-event <number> --start 14:00 --end 15:00');
         console.log('');
         return;
       }

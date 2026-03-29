@@ -193,9 +193,9 @@ export const respondCommand = new Command('respond')
 
         console.log(`\n${'\u2500'.repeat(60)}`);
         console.log('\nTo respond, use:');
-        console.log('  clippy respond accept --id <eventId>');
-        console.log('  clippy respond decline --id <eventId>');
-        console.log('  clippy respond tentative --id <eventId>');
+        console.log('  m365-agent-cli respond accept --id <eventId>');
+        console.log('  m365-agent-cli respond decline --id <eventId>');
+        console.log('  m365-agent-cli respond tentative --id <eventId>');
         console.log('');
         return;
       }
@@ -209,7 +209,7 @@ export const respondCommand = new Command('respond')
 
       if (!options.id) {
         console.error('Please specify the event id with --id.');
-        console.error('Run `clippy respond list` to see pending invitations and IDs.');
+        console.error('Run `m365-agent-cli respond list` to see pending invitations and IDs.');
         process.exit(1);
       }
 
@@ -229,7 +229,8 @@ export const respondCommand = new Command('respond')
           console.log(
             JSON.stringify(
               {
-                error: "You are the organizer of this meeting. Use 'clippy update-event' instead to modify the meeting."
+                error:
+                  "You are the organizer of this meeting. Use 'm365-agent-cli update-event' instead to modify the meeting."
               },
               null,
               2
@@ -237,7 +238,7 @@ export const respondCommand = new Command('respond')
           );
         } else {
           console.error(
-            "You are the organizer of this meeting. Use 'clippy update-event' instead to modify the meeting."
+            "You are the organizer of this meeting. Use 'm365-agent-cli update-event' instead to modify the meeting."
           );
         }
         process.exit(1);

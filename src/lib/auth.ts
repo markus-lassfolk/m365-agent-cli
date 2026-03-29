@@ -20,7 +20,7 @@ interface CachedToken {
 // The cache path is anchored to a fixed, local per-user directory under homedir();
 // network values (token contents) are written only as file data, never used to select
 // an arbitrary write location.
-const TOKEN_CACHE_FILE_TEMPLATE = join(homedir(), '.config', 'clippy', 'token-cache-{identity}.json');
+const TOKEN_CACHE_FILE_TEMPLATE = join(homedir(), '.config', 'm365-agent-cli', 'token-cache-{identity}.json');
 
 async function loadCachedToken(identity: string): Promise<CachedToken | null> {
   try {
@@ -34,7 +34,7 @@ async function loadCachedToken(identity: string): Promise<CachedToken | null> {
 
 async function saveCachedToken(identity: string, token: CachedToken): Promise<void> {
   try {
-    const dir = join(homedir(), '.config', 'clippy');
+    const dir = join(homedir(), '.config', 'm365-agent-cli');
     await mkdir(dir, { recursive: true, mode: 0o700 });
     const TOKEN_CACHE_FILE = TOKEN_CACHE_FILE_TEMPLATE.replace('{identity}', identity);
     await writeFile(TOKEN_CACHE_FILE, JSON.stringify(token, null, 2), {
