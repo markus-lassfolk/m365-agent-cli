@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
 import { parseDay, parseTimeToDate, toLocalUnzonedISOString, toUTCISOString } from '../lib/dates.js';
 import { getCalendarEvents, getRooms, SENSITIVITY_MAP, searchRooms, updateEvent } from '../lib/ews-client.js';
+import { checkReadOnly } from '../lib/utils.js';
 
 function formatTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -78,8 +79,10 @@ export const updateEventCommand = new Command('update-event')
         mailbox?: string;
         category?: string[];
         clearCategories?: boolean;
-      }
+      },
+      cmd: any
     ) => {
+      checkReadOnly(cmd);
       const authResult = await resolveAuth({
         token: options.token
       });

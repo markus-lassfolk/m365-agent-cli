@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
 import { createListItem, getListItems, getLists, updateListItem } from '../lib/sharepoint-client.js';
+import { checkReadOnly } from '../lib/utils.js';
 
 export const sharepointCommand = new Command('sharepoint').description('Manage Microsoft SharePoint Lists').alias('sp');
 
@@ -82,36 +83,39 @@ sharepointCommand
   .requiredOption('--fields <json>', 'JSON string of fields to set (e.g. \'{"Title": "My Item"}\')')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
-  .action(async (opts: { siteId: string; listId: string; fields: string; json?: boolean; token?: string }) => {
-    const auth = await resolveGraphAuth({ token: opts.token });
-    if (!auth.success || !auth.token) {
-      console.error(`Auth error: ${auth.error || 'Unknown error'}`);
-      process.exit(1);
+  .action(
+    async (opts: { siteId: string; listId: string; fields: string; json?: boolean; token?: string }, cmd: any) => {
+      checkReadOnly(cmd);
+      const auth = await resolveGraphAuth({ token: opts.token });
+      if (!auth.success || !auth.token) {
+        console.error(`Auth error: ${auth.error || 'Unknown error'}`);
+        process.exit(1);
+      }
+      let parsedFields: Record<string, any>;
+      try {
+        parsedFields = JSON.parse(opts.fields);
+      } catch (err: any) {
+        console.error(`Error parsing fields JSON: ${err.message}`);
+        process.exit(1);
+      }
+      if (typeof parsedFields !== 'object' || parsedFields === null || Array.isArray(parsedFields)) {
+        console.error(
+          'Error: --fields JSON must be an object (e.g. "{"Title": "New Title"}"), not an array or primitive.'
+        );
+        process.exit(1);
+      }
+      const res = await createListItem(auth.token, opts.siteId, opts.listId, parsedFields);
+      if (!res.ok) {
+        console.error(`Error creating list item: ${res.error?.message || 'Unknown error'}`);
+        process.exit(1);
+      }
+      if (opts.json) {
+        console.log(JSON.stringify(res.data, null, 2));
+        return;
+      }
+      console.log(`Successfully created item ${res.data?.id}`);
     }
-    let parsedFields: Record<string, any>;
-    try {
-      parsedFields = JSON.parse(opts.fields);
-    } catch (err: any) {
-      console.error(`Error parsing fields JSON: ${err.message}`);
-      process.exit(1);
-    }
-    if (typeof parsedFields !== 'object' || parsedFields === null || Array.isArray(parsedFields)) {
-      console.error(
-        'Error: --fields JSON must be an object (e.g. "{"Title": "New Title"}"), not an array or primitive.'
-      );
-      process.exit(1);
-    }
-    const res = await createListItem(auth.token, opts.siteId, opts.listId, parsedFields);
-    if (!res.ok) {
-      console.error(`Error creating list item: ${res.error?.message || 'Unknown error'}`);
-      process.exit(1);
-    }
-    if (opts.json) {
-      console.log(JSON.stringify(res.data, null, 2));
-      return;
-    }
-    console.log(`Successfully created item ${res.data?.id}`);
-  });
+  );
 
 sharepointCommand
   .command('update-item')
@@ -123,14 +127,18 @@ sharepointCommand
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .action(
-    async (opts: {
-      siteId: string;
-      listId: string;
-      itemId: string;
-      fields: string;
-      json?: boolean;
-      token?: string;
-    }) => {
+    async (
+      opts: {
+        siteId: string;
+        listId: string;
+        itemId: string;
+        fields: string;
+        json?: boolean;
+        token?: string;
+      },
+      cmd: any
+    ) => {
+      checkReadOnly(cmd);
       const auth = await resolveGraphAuth({ token: opts.token });
       if (!auth.success || !auth.token) {
         console.error(`Auth error: ${auth.error || 'Unknown error'}`);

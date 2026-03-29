@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
 import { parseDay } from '../lib/dates.js';
 import { cancelEvent, deleteEvent, getCalendarEvents } from '../lib/ews-client.js';
+import { checkReadOnly } from '../lib/utils.js';
 
 function formatTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -46,8 +47,10 @@ export const deleteEventCommand = new Command('delete-event')
         json?: boolean;
         token?: string;
         mailbox?: string;
-      }
+      },
+      cmd: any
     ) => {
+      checkReadOnly(cmd);
       const authResult = await resolveAuth({
         token: options.token
       });

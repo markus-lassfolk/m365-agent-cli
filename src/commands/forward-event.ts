@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
 import { forwardEvent } from '../lib/graph-event.js';
+import { checkReadOnly } from '../lib/utils.js';
 
 export const forwardEventCommand = new Command('forward-event')
   .description('Forward a calendar event to additional recipients')
@@ -9,7 +10,8 @@ export const forwardEventCommand = new Command('forward-event')
   .argument('<recipients...>', 'Email addresses to forward the event to')
   .option('--comment <text>', 'Optional comment to include in the forwarded invitation')
   .option('--token <token>', 'Use a specific token')
-  .action(async (eventId: string, recipients: string[], options: { comment?: string; token?: string }) => {
+  .action(async (eventId: string, recipients: string[], options: { comment?: string; token?: string }, cmd: any) => {
+    checkReadOnly(cmd);
     const authResult = await resolveGraphAuth({ token: options.token });
     if (!authResult.success) {
       console.error(`Error: ${authResult.error}`);

@@ -35,6 +35,8 @@ const program = new Command();
 
 program.name('clippy').description('CLI for Microsoft 365/EWS').version('0.1.0');
 
+program.option('--read-only', 'Run in read-only mode, blocking any mutating operations');
+
 program.addCommand(whoamiCommand);
 program.addCommand(sitePagesCommand);
 program.addCommand(verifyTokenCommand);

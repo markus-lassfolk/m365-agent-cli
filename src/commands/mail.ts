@@ -17,6 +17,7 @@ import {
   updateEmail
 } from '../lib/ews-client.js';
 import { markdownToHtml } from '../lib/markdown.js';
+import { checkReadOnly } from '../lib/utils.js';
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
@@ -110,8 +111,12 @@ export const mailCommand = new Command('mail')
         draft?: boolean;
         mailbox?: string;
         identity?: string;
-      }
+      },
+      cmd: any
     ) => {
+      if (options.flag || options.reply || options.move) {
+        checkReadOnly(cmd);
+      }
       const authResult = await resolveAuth({
         token: options.token,
         identity: options.identity

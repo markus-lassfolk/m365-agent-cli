@@ -7,6 +7,7 @@ import {
   type ResponseType,
   respondToEvent
 } from '../lib/ews-client.js';
+import { checkReadOnly } from '../lib/utils.js';
 
 function formatTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -59,8 +60,10 @@ export const respondCommand = new Command('respond')
         json?: boolean;
         token?: string;
         mailbox?: string;
-      }
+      },
+      cmd: any
     ) => {
+      checkReadOnly(cmd);
       const authResult = await resolveAuth({
         token: options.token
       });

@@ -13,6 +13,7 @@ import {
 } from '../lib/ews-client.js';
 import { markdownToHtml } from '../lib/markdown.js';
 import { lookupMimeType } from '../lib/mime-type.js';
+import { checkReadOnly } from '../lib/utils.js';
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
@@ -52,24 +53,30 @@ export const draftsCommand = new Command('drafts')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Use a specific authentication identity (default: default)')
   .action(
-    async (options: {
-      limit: string;
-      read?: string;
-      create?: boolean;
-      edit?: string;
-      send?: string;
-      delete?: string;
-      to?: string;
-      cc?: string;
-      subject?: string;
-      body?: string;
-      attach?: string;
-      markdown?: boolean;
-      html?: boolean;
-      json?: boolean;
-      token?: string;
-      identity?: string;
-    }) => {
+    async (
+      options: {
+        limit: string;
+        read?: string;
+        create?: boolean;
+        edit?: string;
+        send?: string;
+        delete?: string;
+        to?: string;
+        cc?: string;
+        subject?: string;
+        body?: string;
+        attach?: string;
+        markdown?: boolean;
+        html?: boolean;
+        json?: boolean;
+        token?: string;
+        identity?: string;
+      },
+      cmd: any
+    ) => {
+      if (options.send || options.delete) {
+        checkReadOnly(cmd);
+      }
       const authResult = await resolveAuth({
         token: options.token,
         identity: options.identity

@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { parseDay, parseTimeToDate } from '../lib/dates.js';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
 import { proposeNewTime } from '../lib/graph-event.js';
+import { checkReadOnly } from '../lib/utils.js';
 
 export const counterCommand = new Command('counter')
   .description('Propose a new time for a calendar event')
@@ -16,8 +17,10 @@ export const counterCommand = new Command('counter')
       eventId: string,
       startTime: string,
       endTime: string,
-      options: { day: string; token?: string; json?: boolean }
+      options: { day: string; token?: string; json?: boolean },
+      cmd: any
     ) => {
+      checkReadOnly(cmd);
       const authResult = await resolveGraphAuth({ token: options.token });
       if (!authResult.success) {
         console.error(`Error: ${authResult.error}`);

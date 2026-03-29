@@ -11,6 +11,7 @@ import {
   SENSITIVITY_MAP,
   searchRooms
 } from '../lib/ews-client.js';
+import { checkReadOnly } from '../lib/utils.js';
 
 function formatTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -71,8 +72,10 @@ export const createEventCommand = new Command('create-event')
         token?: string;
         mailbox?: string;
         category?: string[];
-      }
+      },
+      cmd: any
     ) => {
+      checkReadOnly(cmd);
       const authResult = await resolveAuth({
         token: options.token
       });

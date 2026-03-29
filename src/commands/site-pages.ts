@@ -7,6 +7,7 @@ import {
   type SitePage,
   updateSitePage
 } from '../lib/site-pages-client.js';
+import { checkReadOnly } from '../lib/utils.js';
 
 export const sitePagesCommand = new Command('pages').description('Manage SharePoint Site Pages');
 
@@ -89,8 +90,10 @@ sitePagesCommand
     async (
       siteId: string,
       pageId: string,
-      options: { title?: string; name?: string; json?: boolean; token?: string }
+      options: { title?: string; name?: string; json?: boolean; token?: string },
+      cmd: any
     ) => {
+      checkReadOnly(cmd);
       const auth = await resolveGraphAuth({ token: options.token });
       if (!auth.success) {
         console.error(`Error: ${auth.error}`);
@@ -126,7 +129,8 @@ sitePagesCommand
   .description('Publish a site page')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
-  .action(async (siteId: string, pageId: string, options: { json?: boolean; token?: string }) => {
+  .action(async (siteId: string, pageId: string, options: { json?: boolean; token?: string }, cmd: any) => {
+    checkReadOnly(cmd);
     const auth = await resolveGraphAuth({ token: options.token });
     if (!auth.success) {
       console.error(`Error: ${auth.error}`);

@@ -19,6 +19,7 @@ import {
   uploadFile,
   uploadLargeFile
 } from '../lib/graph-client.js';
+import { checkReadOnly } from '../lib/utils.js';
 
 function parseFolderRef(folder?: string): DriveItemReference | undefined {
   if (!folder) return undefined;
@@ -138,7 +139,8 @@ filesCommand
   .option('--folder <id>', 'Target folder item ID')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
-  .action(async (path: string, options: { folder?: string; json?: boolean; token?: string }) => {
+  .action(async (path: string, options: { folder?: string; json?: boolean; token?: string }, cmd: any) => {
+    checkReadOnly(cmd);
     const auth = await resolveGraphAuth({ token: options.token });
     if (!auth.success) {
       console.error(`Error: ${auth.error}`);
@@ -367,7 +369,8 @@ filesCommand
   .description('Restore a specific version of a file')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
-  .action(async (fileId: string, versionId: string, options: { json?: boolean; token?: string }) => {
+  .action(async (fileId: string, versionId: string, options: { json?: boolean; token?: string }, cmd: any) => {
+    checkReadOnly(cmd);
     const auth = await resolveGraphAuth({ token: options.token });
     if (!auth.success) {
       console.error(`Error: ${auth.error}`);

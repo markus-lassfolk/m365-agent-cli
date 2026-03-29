@@ -10,6 +10,7 @@ import {
   listUserTasks,
   updateTask
 } from '../lib/planner-client.js';
+import { checkReadOnly } from '../lib/utils.js';
 
 export const plannerCommand = new Command('planner').description('Manage Microsoft Planner tasks and plans');
 
@@ -125,7 +126,8 @@ plannerCommand
   .option('-b, --bucket <bucketId>', 'Bucket ID')
   .option('--json', 'Output JSON')
   .option('--token <token>', 'Use a specific token')
-  .action(async (opts: { plan: string; title: string; bucket?: string; json?: boolean; token?: string }) => {
+  .action(async (opts: { plan: string; title: string; bucket?: string; json?: boolean; token?: string }, cmd: any) => {
+    checkReadOnly(cmd);
     const auth = await resolveGraphAuth({ token: opts.token });
     if (!auth.success) {
       console.error(`Auth error: ${auth.error}`);
@@ -154,15 +156,19 @@ plannerCommand
   .option('--json', 'Output JSON')
   .option('--token <token>', 'Use a specific token')
   .action(
-    async (opts: {
-      id: string;
-      title?: string;
-      bucket?: string;
-      percent?: string;
-      assign?: string;
-      json?: boolean;
-      token?: string;
-    }) => {
+    async (
+      opts: {
+        id: string;
+        title?: string;
+        bucket?: string;
+        percent?: string;
+        assign?: string;
+        json?: boolean;
+        token?: string;
+      },
+      cmd: any
+    ) => {
+      checkReadOnly(cmd);
       const auth = await resolveGraphAuth({ token: opts.token });
       if (!auth.success) {
         console.error(`Auth error: ${auth.error}`);

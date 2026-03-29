@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
 import { getAutoReplyRule, setAutoReplyRule } from '../lib/ews-client.js';
+import { checkReadOnly } from '../lib/utils.js';
 
 export const autoReplyCommand = new Command('auto-reply')
   .description('Manage server-side out-of-office (OOF) auto-reply templates via EWS Inbox Rules')
@@ -12,7 +13,8 @@ export const autoReplyCommand = new Command('auto-reply')
   .option('--mailbox <email>', 'Target mailbox (if different from authenticated user)')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific EWS token')
-  .action(async (options) => {
+  .action(async (options, cmd: any) => {
+    checkReadOnly(cmd);
     try {
       const auth = await resolveAuth({ token: options.token });
       if (!auth.success || !auth.token) {
