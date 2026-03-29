@@ -1024,7 +1024,20 @@ export async function createEvent(options: CreateEventOptions): Promise<OwaRespo
  */
 export async function updateEvent(options: UpdateEventOptions): Promise<OwaResponse<CreatedEvent>> {
   try {
-    const { token, eventId, changeKey, subject, start, end, body, location, attendees, occurrenceItemId, isAllDay, mailbox } = options;
+    const {
+      token,
+      eventId,
+      changeKey,
+      subject,
+      start,
+      end,
+      body,
+      location,
+      attendees,
+      occurrenceItemId,
+      isAllDay,
+      mailbox
+    } = options;
 
     const updates: string[] = [];
 
