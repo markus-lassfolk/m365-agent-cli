@@ -216,7 +216,8 @@ export async function callGraph<T>(
       message = json.error?.message || message;
       code = json.error?.code;
     } catch {
-      // Ignore JSON parse failures for error responses
+      // Non-JSON error body — throw with HTTP status instead
+      throw new GraphApiError(message, code, response.status);
     }
     throw new GraphApiError(message, code, response.status);
   }
@@ -241,38 +242,11 @@ function encodeGraphSearchQuery(query: string): string {
 
 export async function listFiles(token: string, folder?: DriveItemReference): Promise<GraphResponse<DriveItem[]>> {
   const basePath = buildItemPath(folder);
-  let result: GraphResponse<DriveItemListResponse>;
-  try {
-    result = await callGraph<DriveItemListResponse>(token, `${basePath}/children`);
-  } catch (err) {
-    if (err instanceof GraphApiError) {
-      return graphError(err.message, err.code, err.status);
-    }
-    return graphError(err instanceof Error ? err.message : 'Failed to list files');
-  }
-  if (!result.ok || !result.data) {
-    return graphError(result.error?.message || 'Failed to list files', result.error?.code, result.error?.status);
-  }
-  return graphResult(result.data.value || []);
+  return fetchAllPages<DriveItem>(token, `${basePath}/children`, 'Failed to list files');
 }
 
 export async function searchFiles(token: string, query: string): Promise<GraphResponse<DriveItem[]>> {
-  let result: GraphResponse<DriveItemListResponse>;
-  try {
-    result = await callGraph<DriveItemListResponse>(
-      token,
-      `/me/drive/root/search(q='${encodeGraphSearchQuery(query)}')`
-    );
-  } catch (err) {
-    if (err instanceof GraphApiError) {
-      return graphError(err.message, err.code, err.status);
-    }
-    return graphError(err instanceof Error ? err.message : 'Failed to search files');
-  }
-  if (!result.ok || !result.data) {
-    return graphError(result.error?.message || 'Failed to search files', result.error?.code, result.error?.status);
-  }
-  return graphResult(result.data.value || []);
+  return fetchAllPages<DriveItem>(token, `/me/drive/root/search(q='${encodeGraphSearchQuery(query)}')`, 'Failed to search files');
 }
 
 export async function getFileMetadata(token: string, itemId: string): Promise<GraphResponse<DriveItem>> {
