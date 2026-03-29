@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { readFile, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { Command } from 'commander';
@@ -70,19 +70,20 @@ async function performDeviceCodeFlow(clientId: string, tenant: string, scope: st
         if (parts.length === 3) {
           const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
 
-          const username = payload.upn || payload.email;
+          const rawUsername = payload.upn || payload.email;
+          const username = rawUsername ? rawUsername.replace(/[\r\n]/g, '') : undefined;
 
           if (username) {
             let envContent = '';
 
             const configDir = join(homedir(), '.config', 'm365-agent-cli');
-            if (!existsSync(configDir)) {
-              mkdirSync(configDir, { recursive: true });
-            }
+            mkdirSync(configDir, { recursive: true });
             const envPath = join(configDir, '.env');
 
-            if (existsSync(envPath)) {
+            try {
               envContent = await readFile(envPath, 'utf8');
+            } catch (err: any) {
+              if (err.code !== 'ENOENT') throw err;
             }
 
             if (/^EWS_USERNAME=.*$/m.test(envContent)) {
@@ -125,9 +126,7 @@ export const loginCommand = new Command('login')
 
     // Read existing .env if present
     const configDir = join(homedir(), '.config', 'm365-agent-cli');
-    if (!existsSync(configDir)) {
-      mkdirSync(configDir, { recursive: true });
-    }
+    mkdirSync(configDir, { recursive: true });
     const envPath = join(configDir, '.env');
     let envContent = '';
     if (existsSync(envPath)) {
@@ -164,11 +163,14 @@ export const loginCommand = new Command('login')
     // Use a single Graph Device Code flow to obtain a multi-resource refresh token
     const graphScope =
       'offline_access User.Read Calendars.ReadWrite Mail.ReadWrite Files.ReadWrite.All Sites.ReadWrite.All Tasks.ReadWrite Group.ReadWrite.All';
-    const refreshToken = await performDeviceCodeFlow(clientId, tenant, graphScope, 'Microsoft 365');
+    const rawToken = await performDeviceCodeFlow(clientId, tenant, graphScope, 'Microsoft 365');
+    const refreshToken = rawToken.replace(/[\r\n]/g, '');
 
     // Save tokens immediately
-    if (existsSync(envPath)) {
+    try {
       envContent = await readFile(envPath, 'utf8');
+    } catch (err: any) {
+      if (err.code !== 'ENOENT') throw err;
     }
 
     // Update or append EWS_REFRESH_TOKEN
