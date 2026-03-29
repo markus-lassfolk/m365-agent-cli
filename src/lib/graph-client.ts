@@ -826,11 +826,8 @@ export interface FileAnalytics {
 
 export async function getFileAnalytics(token: string, itemId: string): Promise<GraphResponse<FileAnalytics>> {
   const [allTimeResult, lastSevenDaysResult] = await Promise.allSettled([
-    callGraph<{ allTime?: FileAnalytics['allTime'] }>(
-      token,
-      `/me/drive/items/${encodeURIComponent(itemId)}/analytics/allTime`
-    ),
-    callGraph<{ lastSevenDays?: FileAnalytics['lastSevenDays'] }>(
+    callGraph<FileAnalytics['allTime']>(token, `/me/drive/items/${encodeURIComponent(itemId)}/analytics/allTime`),
+    callGraph<FileAnalytics['lastSevenDays']>(
       token,
       `/me/drive/items/${encodeURIComponent(itemId)}/analytics/lastSevenDays`
     )
@@ -838,16 +835,12 @@ export async function getFileAnalytics(token: string, itemId: string): Promise<G
 
   const analytics: FileAnalytics = {};
 
-  if (allTimeResult.status === 'fulfilled' && allTimeResult.value.ok && allTimeResult.value.data?.allTime) {
-    analytics.allTime = allTimeResult.value.data.allTime;
+  if (allTimeResult.status === 'fulfilled' && allTimeResult.value.ok && allTimeResult.value.data) {
+    analytics.allTime = allTimeResult.value.data;
   }
 
-  if (
-    lastSevenDaysResult.status === 'fulfilled' &&
-    lastSevenDaysResult.value.ok &&
-    lastSevenDaysResult.value.data?.lastSevenDays
-  ) {
-    analytics.lastSevenDays = lastSevenDaysResult.value.data.lastSevenDays;
+  if (lastSevenDaysResult.status === 'fulfilled' && lastSevenDaysResult.value.ok && lastSevenDaysResult.value.data) {
+    analytics.lastSevenDays = lastSevenDaysResult.value.data;
   }
 
   if (allTimeResult.status === 'rejected' && lastSevenDaysResult.status === 'rejected') {
@@ -910,9 +903,27 @@ export async function downloadConvertedFile(
       return graphError('Redirect location is not a valid URL.');
     }
 
-    const graphBaseOrigin = new URL(GRAPH_BASE_URL).origin;
-    if (url.origin !== graphBaseOrigin) {
-      return graphError(`Redirect origin '${url.origin}' does not match expected '${graphBaseOrigin}'.`);
+    if (url.protocol !== 'https:') {
+      return graphError('Redirect URL has unsupported scheme. Only HTTPS is permitted.');
+    }
+
+    const allowedDomains = [
+      'onedrive.live.com',
+      'sharepoint.com',
+      'sharepoint.us',
+      'sharepoint.cn',
+      'graph.microsoft.com',
+      'graph.microsoft.us',
+      'microsoftgraph.chinacloudapi.cn',
+      'files.1drv.com'
+    ];
+
+    const isAllowedHost = allowedDomains.some(
+      (domain) => url.hostname === domain || url.hostname.endsWith(`.${domain}`)
+    );
+
+    if (!isAllowedHost) {
+      return graphError(`Redirect URL hostname '${url.hostname}' is not in the allowlist.`);
     }
 
     const response = await fetch(url.toString(), { redirect: 'manual' });
