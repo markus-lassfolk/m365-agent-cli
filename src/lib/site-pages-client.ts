@@ -1,4 +1,4 @@
-import { callGraph, fetchAllPages, GraphApiError, GraphResponse, graphError } from './graph-client.js';
+import { callGraph, fetchAllPages, GraphApiError, type GraphResponse, graphError } from './graph-client.js';
 
 export interface SitePage {
   id: string;

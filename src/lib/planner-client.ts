@@ -1,10 +1,10 @@
 import {
   callGraph,
   fetchAllPages,
+  GraphApiError,
   type GraphResponse,
-  graphResult,
   graphError,
-  GraphApiError
+  graphResult
 } from './graph-client.js';
 
 export interface PlannerPlan {
@@ -128,7 +128,7 @@ export async function updateTask(
     if (!result.ok) {
       return graphError(result.error?.message || 'Failed to update task', result.error?.code, result.error?.status);
     }
-    return graphResult(undefined as void);
+    return graphResult(undefined as undefined);
   } catch (err) {
     if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
     return graphError(err instanceof Error ? err.message : 'Failed to update task');

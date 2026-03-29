@@ -881,7 +881,7 @@ export async function downloadConvertedFile(
     const item = metadata.data;
     const originalName = item.name || itemId;
     const newName = originalName.includes('.')
-      ? originalName.substring(0, originalName.lastIndexOf('.')) + `.${format}`
+      ? `${originalName.substring(0, originalName.lastIndexOf('.'))}.${format}`
       : `${originalName}.${format}`;
 
     const targetPath = resolve(outputPath || defaultDownloadPath(newName));

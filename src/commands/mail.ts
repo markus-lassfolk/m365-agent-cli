@@ -12,8 +12,8 @@ import {
   moveEmail,
   replyToEmail,
   replyToEmailDraft,
-  updateEmail,
-  SENSITIVITY_MAP
+  SENSITIVITY_MAP,
+  updateEmail
 } from '../lib/ews-client.js';
 import { markdownToHtml } from '../lib/markdown.js';
 

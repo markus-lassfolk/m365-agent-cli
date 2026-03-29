@@ -1,13 +1,13 @@
 import { Command } from 'commander';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
 import {
-  listUserTasks,
-  listUserPlans,
+  createTask,
+  getTask,
   listGroupPlans,
   listPlanBuckets,
   listPlanTasks,
-  getTask,
-  createTask,
+  listUserPlans,
+  listUserTasks,
   updateTask
 } from '../lib/planner-client.js';
 
@@ -186,7 +186,7 @@ plannerCommand
       if (opts.bucket !== undefined) updates.bucketId = opts.bucket;
       if (opts.percent !== undefined) {
         const percentValue = parseInt(opts.percent, 10);
-        if (isNaN(percentValue) || percentValue < 0 || percentValue > 100) {
+        if (Number.isNaN(percentValue) || percentValue < 0 || percentValue > 100) {
           console.error(`Invalid percent value: ${opts.percent}. Must be a number between 0 and 100.`);
           process.exit(1);
         }

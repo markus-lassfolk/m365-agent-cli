@@ -8,8 +8,8 @@ import {
   type Recurrence,
   type RecurrencePattern,
   type RecurrenceRange,
-  searchRooms,
-  SENSITIVITY_MAP
+  SENSITIVITY_MAP,
+  searchRooms
 } from '../lib/ews-client.js';
 
 function formatTime(dateStr: string): string {

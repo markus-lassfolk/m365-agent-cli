@@ -7,18 +7,17 @@ import {
   type DriveItemReference,
   defaultDownloadPath,
   deleteFile,
-  downloadFile,
   downloadConvertedFile,
+  downloadFile,
   getFileAnalytics,
   getFileMetadata,
   listFiles,
+  listFileVersions,
+  restoreFileVersion,
   searchFiles,
   shareFile,
   uploadFile,
-  uploadLargeFile,
-  listFileVersions,
-  restoreFileVersion,
-  type DriveItemVersion
+  uploadLargeFile
 } from '../lib/graph-client.js';
 
 function parseFolderRef(folder?: string): DriveItemReference | undefined {

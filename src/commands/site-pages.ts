@@ -1,11 +1,11 @@
 import { Command } from 'commander';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
 import {
-  listSitePages,
   getSitePage,
-  updateSitePage,
+  listSitePages,
   publishSitePage,
-  type SitePage
+  type SitePage,
+  updateSitePage
 } from '../lib/site-pages-client.js';
 
 export const sitePagesCommand = new Command('pages').description('Manage SharePoint Site Pages');

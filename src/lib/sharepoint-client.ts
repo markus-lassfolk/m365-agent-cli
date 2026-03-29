@@ -3,8 +3,8 @@ import {
   fetchAllPages,
   GraphApiError,
   type GraphResponse,
-  graphResult,
-  graphError
+  graphError,
+  graphResult
 } from './graph-client.js';
 
 export interface SharePointList {
