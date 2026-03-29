@@ -117,6 +117,9 @@ clippy create-event "Project Review" 14:00 15:00 \
   --teams \
   --room "Conference Room A"
 
+# Specify a timezone explicitly
+clippy create-event "Global Sync" 09:00 10:00 --timezone "Pacific Standard Time"
+
 # Find an available room automatically
 clippy create-event "Workshop" 10:00 12:00 --find-room
 

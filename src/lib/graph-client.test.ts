@@ -49,10 +49,10 @@ describe('uploadLargeFile chunking', () => {
     await writeFile(tmpFile, buffer);
 
     const originalFetch = globalThis.fetch;
-    const fetchCalls = [];
+    const fetchCalls: any[] = [];
 
     try {
-      globalThis.fetch = (async (input, init) => {
+      globalThis.fetch = ((async (input: any, init?: any) => {
         const url = typeof input === 'string' ? input : input.toString();
         
         // 1. Create session POST
@@ -65,8 +65,8 @@ describe('uploadLargeFile chunking', () => {
 
         // 2. Chunk PUTs
         if (init?.method === 'PUT') {
-          fetchCalls.push({ url, range: init.headers['Content-Range'], bodySize: init.body.length });
-          const range = init.headers['Content-Range'];
+          fetchCalls.push({ url, range: ((init.headers as any)?.['Content-Range']), bodySize: ((init.body as any)?.length) });
+          const range = ((init.headers as any)?.['Content-Range']);
           if (range.startsWith('bytes 20971520-26214399')) { // Last chunk 10MB*2 to 25MB
             return new Response(JSON.stringify({ id: 'item-123', name: 'test.tmp' }), {
               status: 201, headers: { 'content-type': 'application/json' }
@@ -76,7 +76,7 @@ describe('uploadLargeFile chunking', () => {
         }
         
         return new Response('{}', { status: 200 });
-      });
+      }) as any);
 
       const result = await uploadLargeFile('token', tmpFile);
 

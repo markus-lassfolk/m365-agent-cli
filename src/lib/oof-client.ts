@@ -17,10 +17,12 @@ export interface AutomaticRepliesSetting {
 
 export interface MailboxSettings {
   automaticRepliesSetting?: AutomaticRepliesSetting;
+  timeZone?: string;
 }
 
 export interface GetMailboxSettingsResponse {
   automaticRepliesSetting?: AutomaticRepliesSetting;
+  timeZone?: string;
 }
 
 export async function getMailboxSettings(token: string): Promise<{

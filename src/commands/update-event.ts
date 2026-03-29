@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
-import { parseDay, parseTimeToDate, toUTCISOString } from '../lib/dates.js';
+import { parseDay, parseTimeToDate, toUTCISOString, toLocalUnzonedISOString } from '../lib/dates.js';
 import { getCalendarEvents, getRooms, searchRooms, updateEvent } from '../lib/ews-client.js';
 
 function formatTime(dateStr: string): string {
@@ -55,6 +55,7 @@ export const updateEventCommand = new Command('update-event')
       options: {
         id?: string;
         day: string;
+        timezone?: string;
         title?: string;
         description?: string;
         start?: string;
@@ -290,6 +291,7 @@ export const updateEventCommand = new Command('update-event')
 
       if (options.title) {
         updateOptions.subject = options.title;
+        if (options.timezone) updateOptions.timezone = options.timezone;
       }
 
       if (options.description) {
@@ -303,7 +305,7 @@ export const updateEventCommand = new Command('update-event')
         if (options.start) {
           try {
             const newStart = parseTimeToDate(options.start, eventDate, { throwOnInvalid: true });
-            updateOptions.start = toUTCISOString(newStart);
+            updateOptions.start = options.timezone ? toLocalUnzonedISOString(newStart) : toUTCISOString(newStart);
           } catch (err) {
             const message = err instanceof Error ? err.message : 'Invalid start time';
             if (options.json) {
@@ -318,7 +320,7 @@ export const updateEventCommand = new Command('update-event')
         if (options.end) {
           try {
             const newEnd = parseTimeToDate(options.end, eventDate, { throwOnInvalid: true });
-            updateOptions.end = toUTCISOString(newEnd);
+            updateOptions.end = options.timezone ? toLocalUnzonedISOString(newEnd) : toUTCISOString(newEnd);
           } catch (err) {
             const message = err instanceof Error ? err.message : 'Invalid end time';
             if (options.json) {

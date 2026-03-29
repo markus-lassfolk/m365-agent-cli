@@ -74,58 +74,6 @@ function requireNonEmpty(value: string, fieldName: string): string {
   return value.trim();
 }
 
-/**
- * Derives the local timezone bias (in minutes) from the user's system timezone.
- * The EWS TimeZone Bias is the offset from UTC in minutes, where negative = west of UTC.
- *
- * For W. Europe Standard Time (CET/CEST, UTC+1/+2), the bias would be -60 (standard) or -120 (daylight).
- * This dynamically computes the bias based on the current system timezone and date.
- */
-function getLocalTimezoneBias(): number {
-  const year = new Date().getFullYear();
-  // Create a date at the start of the year to get the standard (non-DST) offset
-  const jan = new Date(year, 0, 1);
-  const janOffset = jan.getTimezoneOffset();
-
-  // Create a date in mid-year (July) to check for DST offset
-  const jul = new Date(year, 6, 1);
-  const julOffset = jul.getTimezoneOffset();
-
-  // Return the maximum (most positive) offset, which is the standard time bias
-  // For CET/CEST: janOffset = -60, julOffset = -120 → return -60 (standard time)
-  // For UTC: both are 0 → return 0
-  // For EST/EDT: janOffset = 300 (UTC-5), julOffset = 240 (UTC-4) → return 300 (standard time)
-  return Math.max(janOffset, julOffset);
-}
-
-/**
- * Builds a SOAP TimeZone element with dynamic bias based on the user's system timezone.
- * The StandardTime and DaylightTime biases are relative to the base Bias.
- */
-function buildTimeZoneXml(): string {
-  const bias = getLocalTimezoneBias();
-  const dstBias = bias - 60; // DST is typically 60 minutes ahead of standard time
-
-  return `
-    <t:TimeZone>
-      <t:Bias>${bias}</t:Bias>
-      <t:StandardTime>
-        <t:Bias>0</t:Bias>
-        <t:Time>03:00:00</t:Time>
-        <t:DayOrder>5</t:DayOrder>
-        <t:Month>10</t:Month>
-        <t:DayOfWeek>Sunday</t:DayOfWeek>
-      </t:StandardTime>
-      <t:DaylightTime>
-        <t:Bias>${dstBias - bias}</t:Bias>
-        <t:Time>02:00:00</t:Time>
-        <t:DayOrder>5</t:DayOrder>
-        <t:Month>3</t:Month>
-        <t:DayOfWeek>Sunday</t:DayOfWeek>
-      </t:DaylightTime>
-    </t:TimeZone>`;
-}
-
 // ─── SOAP Core ───
 
 import { validateUrl } from './url-validation';
@@ -137,7 +85,7 @@ export const EWS_ENDPOINT = validateUrl(
 export const EWS_USERNAME = process.env.EWS_USERNAME || '';
 const EWS_TIMEOUT_MS = Number(process.env.EWS_TIMEOUT_MS) || 30_000; // 30s default
 
-export function soapEnvelope(body: string): string {
+export function soapEnvelope(body: string, header?: string): string {
   return `<?xml version="1.0" encoding="utf-8"?>
 <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages"
@@ -145,6 +93,7 @@ export function soapEnvelope(body: string): string {
                xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
   <soap:Header>
     <t:RequestServerVersion Version="Exchange2016" />
+    ${header || ''}
   </soap:Header>
   <soap:Body>
     ${body}
@@ -278,6 +227,7 @@ export interface Recurrence {
 }
 
 export interface CreateEventOptions {
+  timezone?: string;
   token: string;
   subject: string;
   start: string;
@@ -301,6 +251,7 @@ export interface CreatedEvent {
 }
 
 export interface UpdateEventOptions {
+  timezone?: string;
   token: string;
   eventId: string;
   changeKey?: string;
@@ -573,7 +524,9 @@ function parseCalendarItem(block: string, mailbox?: string): CalendarEvent {
   const changeKey = extractAttribute(block, 'ItemId', 'ChangeKey');
   const subject = extractTag(block, 'Subject');
   const start = extractTag(block, 'Start');
+  const startTz = extractAttribute(block, 'StartTimeZone', 'Id') || extractAttribute(block, 'StartTimeZone', 'Name') || 'UTC';
   const end = extractTag(block, 'End');
+  const endTz = extractAttribute(block, 'EndTimeZone', 'Id') || extractAttribute(block, 'EndTimeZone', 'Name') || 'UTC';
   const location = extractTag(block, 'Location');
   const isAllDay = extractTag(block, 'IsAllDayEvent').toLowerCase() === 'true';
   const isCancelled = extractTag(block, 'IsCancelled').toLowerCase() === 'true';
@@ -658,8 +611,8 @@ function parseCalendarItem(block: string, mailbox?: string): CalendarEvent {
     Id: id,
     ChangeKey: changeKey,
     Subject: subject,
-    Start: { DateTime: start, TimeZone: 'UTC' },
-    End: { DateTime: end, TimeZone: 'UTC' },
+    Start: { DateTime: start, TimeZone: startTz },
+    End: { DateTime: end, TimeZone: endTz },
     Location: location ? { DisplayName: location } : undefined,
     Organizer: { EmailAddress: { Name: organizerName, Address: organizerEmail } },
     Attendees: attendees.length > 0 ? attendees : undefined,
@@ -1030,7 +983,7 @@ function buildRecurrenceXml(recurrence: Recurrence): string {
 
 export async function createEvent(options: CreateEventOptions): Promise<OwaResponse<CreatedEvent>> {
   try {
-    const { token, subject, start, end, body, location, attendees, isOnlineMeeting, recurrence, isAllDay, mailbox } =
+    const { token, subject, start, end, body, location, attendees, isOnlineMeeting, recurrence, isAllDay, mailbox, timezone } =
       options;
 
     let attendeesXml = '';
@@ -1079,6 +1032,7 @@ export async function createEvent(options: CreateEventOptions): Promise<OwaRespo
           ${body ? `<t:Body BodyType="Text">${xmlEscape(body)}</t:Body>` : ''}
           <t:Start>${xmlEscape(start)}</t:Start>
           <t:End>${xmlEscape(end)}</t:End>
+          ${timezone ? `<t:StartTimeZone Id="${xmlEscape(timezone)}"/><t:EndTimeZone Id="${xmlEscape(timezone)}"/>` : ''}
           ${isAllDay ? '<t:IsAllDayEvent>true</t:IsAllDayEvent>' : ''}
           ${location ? `<t:Location>${xmlEscape(location)}</t:Location>` : ''}
           ${attendeesXml}
@@ -1095,8 +1049,8 @@ export async function createEvent(options: CreateEventOptions): Promise<OwaRespo
     return ewsResult({
       Id: id,
       Subject: subject,
-      Start: { DateTime: start, TimeZone: 'UTC' },
-      End: { DateTime: end, TimeZone: 'UTC' },
+      Start: { DateTime: start, TimeZone: timezone || 'UTC' },
+      End: { DateTime: end, TimeZone: timezone || 'UTC' },
       WebLink: undefined,
       OnlineMeetingUrl: undefined
     });
@@ -1129,6 +1083,7 @@ export async function updateEvent(options: UpdateEventOptions): Promise<OwaRespo
       location,
       attendees,
       occurrenceItemId,
+      timezone,
       isAllDay,
       mailbox
     } = options;
@@ -1150,9 +1105,16 @@ export async function updateEvent(options: UpdateEventOptions): Promise<OwaRespo
         `<t:SetItemField><t:FieldURI FieldURI="calendar:Start" /><t:CalendarItem><t:Start>${xmlEscape(start)}</t:Start></t:CalendarItem></t:SetItemField>`
       );
     }
+    if (timezone !== undefined) {
+      updates.push(
+        `<t:SetItemField><t:FieldURI FieldURI="calendar:StartTimeZone" /><t:CalendarItem><t:StartTimeZone Id="${xmlEscape(timezone)}"/></t:CalendarItem></t:SetItemField>`,
+        `<t:SetItemField><t:FieldURI FieldURI="calendar:EndTimeZone" /><t:CalendarItem><t:EndTimeZone Id="${xmlEscape(timezone)}"/></t:CalendarItem></t:SetItemField>`
+      );
+    }
     if (end !== undefined) {
       updates.push(
-        `<t:SetItemField><t:FieldURI FieldURI="calendar:End" /><t:CalendarItem><t:End>${xmlEscape(end)}</t:End></t:CalendarItem></t:SetItemField>`
+        `<t:SetItemField><t:FieldURI FieldURI="calendar:End" /><t:CalendarItem><t:End>${xmlEscape(end)}</t:End>
+          ${timezone ? `<t:StartTimeZone Id="${xmlEscape(timezone)}"/><t:EndTimeZone Id="${xmlEscape(timezone)}"/>` : ''}</t:CalendarItem></t:SetItemField>`
       );
     }
     if (location !== undefined) {
@@ -1259,8 +1221,8 @@ export async function updateEvent(options: UpdateEventOptions): Promise<OwaRespo
     return ewsResult({
       Id: newId,
       Subject: subject || '',
-      Start: { DateTime: start || '', TimeZone: 'UTC' },
-      End: { DateTime: end || '', TimeZone: 'UTC' }
+      Start: { DateTime: start || '', TimeZone: timezone || 'UTC' },
+      End: { DateTime: end || '', TimeZone: timezone || 'UTC' }
     });
   } catch (err) {
     return ewsError(err);
@@ -2275,10 +2237,17 @@ export async function getScheduleViaOutlook(
   emails: string[],
   startDateTime: string,
   endDateTime: string,
-  durationMinutes: number = 30
+  durationMinutes: number = 30,
+  timeZone?: string
 ): Promise<OwaResponse<ScheduleInfo[]>> {
   try {
+if (!timeZone) {
+      const { getMailboxSettings } = await import('./oof-client.js');
+      const mbx = await getMailboxSettings(token);
+      timeZone = mbx.data?.timeZone || 'UTC';
     // SuggestionsViewOptions requires dates at midnight with no timezone offset
+    }
+
     const suggestStartD = new Date(startDateTime);
     suggestStartD.setHours(0, 0, 0, 0);
     const suggestEndD = new Date(endDateTime);
@@ -2301,7 +2270,6 @@ export async function getScheduleViaOutlook(
 
     const envelope = soapEnvelope(`
     <m:GetUserAvailabilityRequest>
-      ${buildTimeZoneXml()}
       <m:MailboxDataArray>
         ${mailboxDataXml}
       </m:MailboxDataArray>
@@ -2323,7 +2291,9 @@ export async function getScheduleViaOutlook(
           <t:EndTime>${xmlEscape(suggestEnd)}</t:EndTime>
         </t:DetailedSuggestionsWindow>
       </t:SuggestionsViewOptions>
-    </m:GetUserAvailabilityRequest>`);
+    </m:GetUserAvailabilityRequest>`,
+    `<t:TimeZoneContext><t:TimeZoneDefinition Id="${xmlEscape(timeZone)}"/></t:TimeZoneContext>`
+  );
 
     const xml = await callEws(token, envelope);
 
@@ -2474,7 +2444,6 @@ export async function areRoomsFree(
     try {
       const envelope = soapEnvelope(`
     <m:GetUserAvailabilityRequest>
-      ${buildTimeZoneXml()}
       <m:MailboxDataArray>
         ${batch
           .map(

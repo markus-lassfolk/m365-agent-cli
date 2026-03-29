@@ -11,7 +11,7 @@ export const counterCommand = new Command('counter')
   .argument('<end>', 'Proposed end time (e.g., 14:00, 2pm)')
   .option('--day <day>', 'Day for the proposed time (today, tomorrow, YYYY-MM-DD)', 'today')
   .option('--token <token>', 'Use a specific token')
-  .action(async (eventId: string, startTime: string, endTime: string, options: { day: string; token?: string }) => {
+  .action(async (eventId: string, startTime: string, endTime: string, options: { day: string; token?: string; json?: boolean }) => {
     const authResult = await resolveGraphAuth({ token: options.token });
     if (!authResult.success) {
       console.error(`Error: ${authResult.error}`);

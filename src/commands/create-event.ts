@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
-import { parseDay, parseTimeToDate, toUTCISOString } from '../lib/dates.js';
+import { parseDay, parseTimeToDate, toUTCISOString, toLocalUnzonedISOString } from '../lib/dates.js';
 import {
   areRoomsFree,
   createEvent,
@@ -27,6 +27,7 @@ export const createEventCommand = new Command('create-event')
   .argument('[start]', 'Start time (e.g., 13:00, 1pm) - not needed for all-day events')
   .argument('[end]', 'End time (e.g., 14:00, 2pm) - not needed for all-day events')
   .option('--day <day>', 'Day for the event (today, tomorrow, monday-sunday, YYYY-MM-DD)', 'today')
+  .option('--timezone <timezone>', 'Timezone for the event (e.g., "Pacific Standard Time")')
   .option('--description <text>', 'Event description/body')
   .option('--attendees <emails>', 'Comma-separated list of attendee emails')
   .option('--room <room>', 'Meeting room (use --list-rooms to see available)')
@@ -49,6 +50,7 @@ export const createEventCommand = new Command('create-event')
       endTime: string | undefined,
       options: {
         day: string;
+        timezone?: string;
         description?: string;
         attendees?: string;
         room?: string;
@@ -339,15 +341,16 @@ export const createEventCommand = new Command('create-event')
       const result = await createEvent({
         token: authResult.token!,
         subject: title,
-        start: toUTCISOString(start),
-        end: toUTCISOString(end),
+        start: options.timezone ? toLocalUnzonedISOString(start) : toUTCISOString(start),
+        end: options.timezone ? toLocalUnzonedISOString(end) : toUTCISOString(end),
         body: options.description,
         location: roomName,
         attendees: attendees.length > 0 ? attendees : undefined,
         isOnlineMeeting: options.teams,
         isAllDay: options.allDay,
         recurrence,
-        mailbox: options.mailbox
+        mailbox: options.mailbox,
+        timezone: options.timezone
       });
 
       if (!result.ok || !result.data) {
