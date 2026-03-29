@@ -74,10 +74,6 @@ export interface CheckinResult {
   comment?: string;
 }
 
-export interface UploadLargeResult {
-  uploadUrl: string;
-  expirationDateTime?: string;
-}
 
 async function streamWebToFile(body: ReadableStream<Uint8Array>, filePath: string): Promise<number> {
   const stream = createWriteStream(filePath, { flags: 'w', mode: 0o600 });
@@ -288,7 +284,7 @@ export async function uploadFile(
     const fileStats = await stat(absolutePath);
     if (!fileStats.isFile()) return graphError(`Not a file: ${absolutePath}`);
     if (fileStats.size > 250 * 1024 * 1024) {
-      return graphError('File exceeds 250MB simple upload limit. Use upload-large instead.');
+      return graphError('File exceeds 250MB upload limit. Split the file into smaller parts or use Microsoft SharePoint to upload large files directly.');
     }
 
     const fileName = basename(absolutePath);
@@ -315,41 +311,6 @@ export async function uploadFile(
   }
 }
 
-export async function createLargeUploadSession(
-  token: string,
-  localPath: string,
-  folder?: DriveItemReference
-): Promise<GraphResponse<UploadLargeResult>> {
-  try {
-    const absolutePath = resolve(localPath);
-    const fileStats = await stat(absolutePath);
-    if (!fileStats.isFile()) return graphError(`Not a file: ${absolutePath}`);
-    if (fileStats.size > 4 * 1024 * 1024 * 1024) {
-      return graphError('File exceeds 4GB large upload limit.');
-    }
-
-    const fileName = basename(absolutePath);
-    const folderPath = folder?.id ? `${buildItemPath(folder)}:/` : '/me/drive/root:/';
-    try {
-      const result = await callGraph<UploadLargeResult>(
-        token,
-        `${folderPath}${encodeURIComponent(fileName)}:/createUploadSession`,
-        {
-          method: 'POST',
-          body: JSON.stringify({ item: { '@microsoft.graph.conflictBehavior': 'replace', name: fileName } })
-        }
-      );
-      return result;
-    } catch (err) {
-      if (err instanceof GraphApiError) {
-        return graphError(err.message, err.code, err.status);
-      }
-      return graphError(err instanceof Error ? err.message : 'Failed to create upload session');
-    }
-  } catch (err) {
-    return graphError(err instanceof Error ? err.message : 'Failed to create upload session');
-  }
-}
 
 export async function downloadFile(
   token: string,
