@@ -11,6 +11,25 @@ describe('dates helpers', () => {
     expect(parseTimeToDate('12am', base).getHours()).toBe(0);
   });
 
+  it('parseTimeToDate throws on invalid input when configured', () => {
+    const base = new Date('2026-03-27T00:00:00');
+    const opts = { throwOnInvalid: true };
+
+    // Format errors
+    expect(() => parseTimeToDate('not-a-time', base, opts)).toThrow('Invalid time format: "not-a-time" — expected HH:MM, H:MM, or H(am|pm)');
+    
+    // Value bounds
+    expect(() => parseTimeToDate('25:00', base, opts)).toThrow('Invalid time: "25:00" — hours must be 0–23 and minutes 0–59');
+    expect(() => parseTimeToDate('9:60', base, opts)).toThrow('Invalid time: "9:60" — hours must be 0–23 and minutes 0–59');
+    
+    // AM/PM bounds
+    expect(() => parseTimeToDate('13pm', base, opts)).toThrow('Invalid time: "13pm" — 12-hour values must be 1–12');
+    expect(() => parseTimeToDate('0am', base, opts)).toThrow('Invalid time: "0am" — 12-hour values must be 1–12');
+    
+    // 24-hour hour-only bounds
+    expect(() => parseTimeToDate('24', base, opts)).toThrow('Invalid time: "24" — 24-hour values must be 0–23');
+  });
+
   it('toUTCISOString formats as UTC with Z suffix', () => {
     const date = new Date(Date.UTC(2026, 2, 27, 9, 5, 7));
     const result = toUTCISOString(date);

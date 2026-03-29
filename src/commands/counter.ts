@@ -20,20 +20,29 @@ export const counterCommand = new Command('counter')
 
     // Parse dates and times
     let baseDate: Date;
-    let start: Date;
-    let end: Date;
-
     try {
       baseDate = parseDay(options.day, { throwOnInvalid: true });
-      start = parseTimeToDate(startTime, baseDate);
-      end = parseTimeToDate(endTime, baseDate);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Invalid date/time value';
-      if (options.json) {
-        console.log(JSON.stringify({ error: message }, null, 2));
-      } else {
-        console.error(`Error: ${message}`);
-      }
+      const message = err instanceof Error ? err.message : 'Invalid day value';
+      console.error(`Error: ${message}`);
+      process.exit(1);
+    }
+
+    let start: Date;
+    try {
+      start = parseTimeToDate(startTime, baseDate, { throwOnInvalid: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Invalid start time';
+      console.error(`Error: ${message}`);
+      process.exit(1);
+    }
+
+    let end: Date;
+    try {
+      end = parseTimeToDate(endTime, baseDate, { throwOnInvalid: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Invalid end time';
+      console.error(`Error: ${message}`);
       process.exit(1);
     }
 

@@ -73,12 +73,12 @@ function getDateRange(startDay: string, endDay?: string): { start: string; end: 
   }
 
   // Single day or start of range
-  const startDate = parseDay(startDay, { weekdayDirection: 'previous', throwOnInvalid: true });
+  const startDate = parseDay(startDay, { weekdayDirection: 'previous' });
   startDate.setHours(0, 0, 0, 0);
 
   if (endDay) {
     // Date range - use nearestForward for end date
-    const endDate = parseDay(endDay, { baseDate: startDate, weekdayDirection: 'nearestForward', throwOnInvalid: true });
+    const endDate = parseDay(endDay, { baseDate: startDate, weekdayDirection: 'nearestForward' });
     endDate.setHours(0, 0, 0, 0);
     // Exclusive end: next day's midnight
     const endExclusive = new Date(endDate);
@@ -218,25 +218,7 @@ export const calendarCommand = new Command('calendar')
         process.exit(1);
       }
 
-      let start: string;
-      let end: string;
-      let label: string;
-
-      try {
-        const range = getDateRange(startDay, endDay);
-        start = range.start;
-        end = range.end;
-        label = range.label;
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Invalid date value';
-        if (options.json) {
-          console.log(JSON.stringify({ error: message }, null, 2));
-        } else {
-          console.error(`Error: ${message}`);
-        }
-        process.exit(1);
-      }
-
+      const { start, end, label } = getDateRange(startDay, endDay);
       const result = await getCalendarEvents(authResult.token!, start, end);
 
       if (!result.ok || !result.data) {

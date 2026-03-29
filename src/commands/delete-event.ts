@@ -63,18 +63,7 @@ export const deleteEventCommand = new Command('delete-event')
       }
 
       // Get events for the day
-      let baseDate: Date;
-      try {
-        baseDate = parseDay(options.day, { throwOnInvalid: true });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Invalid day value';
-        if (options.json) {
-          console.log(JSON.stringify({ error: message }, null, 2));
-        } else {
-          console.error(`Error: ${message}`);
-        }
-        process.exit(1);
-      }
+      const baseDate = parseDay(options.day);
       const startOfDay = new Date(baseDate);
       startOfDay.setHours(0, 0, 0, 0);
       const endOfDay = new Date(baseDate);
@@ -193,7 +182,7 @@ export const deleteEventCommand = new Command('delete-event')
           try {
             instanceDate = parseDay(options.instance, { throwOnInvalid: true });
           } catch (err) {
-            const message = err instanceof Error ? err.message : 'Invalid day value';
+            const message = err instanceof Error ? err.message : 'Invalid instance date';
             if (options.json) {
               console.log(JSON.stringify({ error: message }, null, 2));
             } else {

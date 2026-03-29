@@ -134,28 +134,52 @@ export const createEventCommand = new Command('create-event')
 
       // Parse date and times
       let baseDate: Date;
-      let start: Date;
-      let end: Date;
-
       try {
         baseDate = parseDay(options.day, { throwOnInvalid: true });
-        if (options.allDay) {
-          start = new Date(baseDate);
-          start.setHours(0, 0, 0, 0);
-          end = new Date(baseDate);
-          end.setHours(23, 59, 59, 999);
-        } else {
-          start = parseTimeToDate(startTime!, baseDate);
-          end = parseTimeToDate(endTime!, baseDate);
-        }
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Invalid date/time value';
+        const message = err instanceof Error ? err.message : 'Invalid day value';
         if (options.json) {
           console.log(JSON.stringify({ error: message }, null, 2));
         } else {
           console.error(`Error: ${message}`);
         }
         process.exit(1);
+      }
+
+      let start: Date;
+      let end: Date;
+
+      if (options.allDay) {
+        // For all-day events, use midnight boundaries regardless of provided times
+        start = new Date(baseDate);
+        start.setHours(0, 0, 0, 0);
+        end = new Date(baseDate);
+        end.setHours(23, 59, 59, 999);
+      } else {
+        // For regular events, parse the provided times
+        try {
+          start = parseTimeToDate(startTime!, baseDate, { throwOnInvalid: true });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Invalid start time';
+          if (options.json) {
+            console.log(JSON.stringify({ error: message }, null, 2));
+          } else {
+            console.error(`Error: ${message}`);
+          }
+          process.exit(1);
+        }
+
+        try {
+          end = parseTimeToDate(endTime!, baseDate, { throwOnInvalid: true });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Invalid end time';
+          if (options.json) {
+            console.log(JSON.stringify({ error: message }, null, 2));
+          } else {
+            console.error(`Error: ${message}`);
+          }
+          process.exit(1);
+        }
       }
 
       // Parse attendees
