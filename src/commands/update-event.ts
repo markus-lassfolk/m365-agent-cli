@@ -47,15 +47,7 @@ export const updateEventCommand = new Command('update-event')
   .option('--no-teams', 'Remove Teams meeting')
   .option('--all-day', 'Mark as an all-day event')
   .option('--no-all-day', 'Remove all-day flag')
-  .option(
-    '--category <name>',
-    'Category label (repeatable)',
-    (v, acc) => {
-      acc.push(v);
-      return acc;
-    },
-    [] as string[]
-  )
+  .option('--category <name>', 'Category label (repeatable)', (v, acc) => [...acc, v], [] as string[])
   .option('--clear-categories', 'Clear all categories')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')

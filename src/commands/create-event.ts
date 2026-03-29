@@ -32,15 +32,7 @@ export const createEventCommand = new Command('create-event')
   .option('--attendees <emails>', 'Comma-separated list of attendee emails')
   .option('--room <room>', 'Meeting room (use --list-rooms to see available)')
   .option('--teams', 'Create as Teams meeting')
-  .option(
-    '--category <name>',
-    'Category label (repeatable)',
-    (v, acc) => {
-      acc.push(v);
-      return acc;
-    },
-    [] as string[]
-  )
+  .option('--category <name>', 'Category label (repeatable)', (v, acc) => [...acc, v], [] as string[])
   .option('--all-day', 'Create as an all-day event (no time slots)')
   .option('--list-rooms', 'List available meeting rooms')
   .option('--find-room', 'Find an available room for the time slot')

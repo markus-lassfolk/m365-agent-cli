@@ -11,15 +11,7 @@ export const sendCommand = new Command('send')
   .requiredOption('--to <emails>', 'Recipient email(s), comma-separated')
   .requiredOption('--subject <text>', 'Email subject')
   .option('--body <text>', 'Email body', '')
-  .option(
-    '--category <name>',
-    'Category label (repeatable)',
-    (v, acc) => {
-      acc.push(v);
-      return acc;
-    },
-    [] as string[]
-  )
+  .option('--category <name>', 'Category label (repeatable)', (v, acc) => [...acc, v], [] as string[])
   .option('--cc <emails>', 'CC recipient(s), comma-separated')
   .option('--bcc <emails>', 'BCC recipient(s), comma-separated')
   .option('--attach <files>', 'Attach file(s), comma-separated paths')
