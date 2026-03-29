@@ -102,6 +102,10 @@ export const loginCommand = new Command('login')
         authenticated = true;
         refreshToken = tokenJson.refresh_token;
         if (!refreshToken) {
+          console.error('\nAuthentication failed: Missing refresh_token in response');
+          process.exit(1);
+        }
+        if (!refreshToken) {
           console.error('\nFailed to obtain refresh token. Ensure the offline_access scope is granted.');
           process.exit(1);
         }
