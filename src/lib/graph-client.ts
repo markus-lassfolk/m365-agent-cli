@@ -188,6 +188,8 @@ export async function fetchGraphRaw(token: string, path: string, options: Reques
   });
 }
 
+const GRAPH_TIMEOUT_MS = Number.parseInt(process.env['GRAPH_TIMEOUT_MS'] ?? '30000', 10);
+
 export async function callGraph<T>(
   token: string,
   path: string,
@@ -195,6 +197,9 @@ export async function callGraph<T>(
   expectJson: boolean = true
 ): Promise<GraphResponse<T>> {
   let response: Response;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), GRAPH_TIMEOUT_MS);
+
   try {
     response = await fetch(`${GRAPH_BASE_URL}${path}`, {
       ...options,
@@ -205,11 +210,18 @@ export async function callGraph<T>(
           ? { 'Content-Type': 'application/json' }
           : {}),
         ...(options.headers || {})
-      }
+      },
+      signal: controller.signal
     });
   } catch (err) {
-    // Network-level failure (DNS, connection refused, etc.) — surface it as a thrown error
+    clearTimeout(timer);
+    // Network-level failure (DNS, connection refused, timeout, etc.) — surface it clearly
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new GraphApiError(`Graph request timed out after ${GRAPH_TIMEOUT_MS}ms`);
+    }
     throw new GraphApiError(err instanceof Error ? err.message : 'Graph request failed');
+  } finally {
+    clearTimeout(timer);
   }
 
   if (!response.ok) {

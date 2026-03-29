@@ -99,18 +99,35 @@ export function soapEnvelope(body: string): string {
 </soap:Envelope>`;
 }
 
+const EWS_TIMEOUT_MS = Number.parseInt(process.env['EWS_TIMEOUT_MS'] ?? '30000', 10);
+
 export async function callEws(token: string, envelope: string, mailbox?: string): Promise<string> {
   const anchorMailbox = mailbox || EWS_USERNAME;
-  const response = await fetch(EWS_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'text/xml; charset=utf-8',
-      Accept: 'text/xml',
-      'X-AnchorMailbox': anchorMailbox
-    },
-    body: envelope
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), EWS_TIMEOUT_MS);
+
+  let response: Response;
+  try {
+    response = await fetch(EWS_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'text/xml; charset=utf-8',
+        Accept: 'text/xml',
+        'X-AnchorMailbox': anchorMailbox
+      },
+      body: envelope,
+      signal: controller.signal
+    });
+  } catch (err) {
+    clearTimeout(timer);
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error(`EWS request timed out after ${EWS_TIMEOUT_MS}ms`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 
   const xml = await response.text();
 
