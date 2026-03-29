@@ -173,6 +173,10 @@ export interface CalendarEvent {
   IsOnlineMeeting?: boolean;
   OnlineMeetingUrl?: string;
   WebLink?: string;
+  FirstOccurrence?: { Start: string; End: string };
+  LastOccurrence?: { Start: string; End: string };
+  ModifiedOccurrences?: Array<{ ItemId: string; Start: string; End: string; OriginalStart: string }>;
+  DeletedOccurrences?: Array<{ Start: string }>;
 }
 
 export interface RecurrencePattern {
@@ -409,6 +413,42 @@ function parseCalendarItem(block: string, mailbox?: string): CalendarEvent {
     (b) => extractTag(b, 'String') || xmlDecode(b.replace(/<[^>]+>/g, ''))
   );
 
+  // Recurrence Exceptions
+  const firstOccurrenceBlock = extractSelfClosingOrBlock(block, 'FirstOccurrence');
+  let firstOccurrence;
+  if (firstOccurrenceBlock) {
+    const st = extractTag(firstOccurrenceBlock, 'Start');
+    const en = extractTag(firstOccurrenceBlock, 'End');
+    if (st && en) firstOccurrence = { Start: st, End: en };
+  }
+
+  const lastOccurrenceBlock = extractSelfClosingOrBlock(block, 'LastOccurrence');
+  let lastOccurrence;
+  if (lastOccurrenceBlock) {
+    const st = extractTag(lastOccurrenceBlock, 'Start');
+    const en = extractTag(lastOccurrenceBlock, 'End');
+    if (st && en) lastOccurrence = { Start: st, End: en };
+  }
+
+  const modifiedOccurrencesBlock = extractSelfClosingOrBlock(block, 'ModifiedOccurrences');
+  let modifiedOccurrences;
+  if (modifiedOccurrencesBlock) {
+    modifiedOccurrences = extractBlocks(modifiedOccurrencesBlock, 'Occurrence').map(occ => ({
+      ItemId: extractAttribute(occ, 'ItemId', 'Id'),
+      Start: extractTag(occ, 'Start'),
+      End: extractTag(occ, 'End'),
+      OriginalStart: extractTag(occ, 'OriginalStart')
+    }));
+  }
+
+  const deletedOccurrencesBlock = extractSelfClosingOrBlock(block, 'DeletedOccurrences');
+  let deletedOccurrences;
+  if (deletedOccurrencesBlock) {
+    deletedOccurrences = extractBlocks(deletedOccurrencesBlock, 'DeletedOccurrence').map(occ => ({
+      Start: extractTag(occ, 'Start')
+    }));
+  }
+
   return {
     Id: id,
     ChangeKey: changeKey,
@@ -424,7 +464,11 @@ function parseCalendarItem(block: string, mailbox?: string): CalendarEvent {
     BodyPreview: bodyPreview ? bodyPreview.substring(0, 200).replace(/\s+/g, ' ').trim() : undefined,
     Categories: categories.length > 0 ? categories : undefined,
     ShowAs: showAs,
-    Importance: importance
+    Importance: importance,
+    FirstOccurrence: firstOccurrence,
+    LastOccurrence: lastOccurrence,
+    ModifiedOccurrences: modifiedOccurrences && modifiedOccurrences.length > 0 ? modifiedOccurrences : undefined,
+    DeletedOccurrences: deletedOccurrences && deletedOccurrences.length > 0 ? deletedOccurrences : undefined
   };
 }
 
@@ -607,6 +651,10 @@ export async function getCalendarEvents(
           <t:FieldURI FieldURI="calendar:LegacyFreeBusyStatus" />
           <t:FieldURI FieldURI="item:Importance" />
           <t:FieldURI FieldURI="item:TextBody" />
+          <t:FieldURI FieldURI="calendar:ModifiedOccurrences" />
+          <t:FieldURI FieldURI="calendar:DeletedOccurrences" />
+          <t:FieldURI FieldURI="calendar:FirstOccurrence" />
+          <t:FieldURI FieldURI="calendar:LastOccurrence" />
         </t:AdditionalProperties>
       </m:ItemShape>
       <m:CalendarView StartDate="${xmlEscape(startDateTime)}" EndDate="${xmlEscape(endDateTime)}" />
@@ -648,6 +696,10 @@ export async function getCalendarEvent(
           <t:FieldURI FieldURI="calendar:LegacyFreeBusyStatus" />
           <t:FieldURI FieldURI="item:Importance" />
           <t:FieldURI FieldURI="item:TextBody" />
+          <t:FieldURI FieldURI="calendar:ModifiedOccurrences" />
+          <t:FieldURI FieldURI="calendar:DeletedOccurrences" />
+          <t:FieldURI FieldURI="calendar:FirstOccurrence" />
+          <t:FieldURI FieldURI="calendar:LastOccurrence" />
         </t:AdditionalProperties>
       </m:ItemShape>
       <m:ItemIds>
