@@ -112,10 +112,13 @@ export async function callEws(token: string, envelope: string, mailbox?: string)
     throw new Error(`EWS HTTP ${response.status}${soapError ? `: ${soapError}` : ''}`);
   }
 
-  const responseCode = extractTag(xml, 'ResponseCode');
-  if (responseCode && responseCode !== 'NoError') {
-    const messageText = extractTag(xml, 'MessageText');
-    throw new Error(`EWS ${responseCode}${messageText ? `: ${messageText}` : ''}`);
+  const isGetUserAvailability = xml.includes('GetUserAvailabilityResponse');
+  if (!isGetUserAvailability) {
+    const responseCode = extractTag(xml, 'ResponseCode');
+    if (responseCode && responseCode !== 'NoError') {
+      const messageText = extractTag(xml, 'MessageText');
+      throw new Error(`EWS ${responseCode}${messageText ? `: ${messageText}` : ''}`);
+    }
   }
 
   return xml;
