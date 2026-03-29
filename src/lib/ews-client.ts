@@ -2042,7 +2042,7 @@ export async function getScheduleViaOutlook(
  * it only returns the OAuth-token-owner's own calendar. For actual cross-user
  * free/busy lookups, use GetUserAvailabilityRequest (cf. isRoomFree).
  *
- * @deprecated Use getMyCalendarEvents() for clarity, or implement GetUserAvailabilityRequest
+ * @deprecated Use getMyFreeBusySlots() for clarity, or implement GetUserAvailabilityRequest
  *             for true free/busy of arbitrary email addresses.
  */
 export async function getFreeBusy(
@@ -2050,7 +2050,7 @@ export async function getFreeBusy(
   startDateTime: string,
   endDateTime: string
 ): Promise<OwaResponse<FreeBusySlot[]>> {
-  return getMyCalendarEvents(token, startDateTime, endDateTime);
+  return getMyFreeBusySlots(token, startDateTime, endDateTime);
 }
 
 /**
@@ -2064,7 +2064,7 @@ export async function getFreeBusy(
  * @param startDateTime - Start of the time window (ISO 8601)
  * @param endDateTime - End of the time window (ISO 8601)
  */
-export async function getMyCalendarEvents(
+export async function getMyFreeBusySlots(
   token: string,
   startDateTime: string,
   endDateTime: string
