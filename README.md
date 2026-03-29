@@ -1,6 +1,6 @@
 # Clippy
 
-A command-line interface for Microsoft 365 using Exchange Web Services (EWS) and Microsoft Graph. Manage your calendar, email, and OneDrive files directly from the terminal.
+A command-line interface for Microsoft 365 using Exchange Web Services (EWS) and Microsoft Graph. Manage your calendar, email, OneDrive files, Microsoft Planner tasks, and SharePoint Sites directly from the terminal.
 
 ## Installation
 
@@ -57,6 +57,9 @@ Or pass `--mailbox` per-command (see examples below).
 ```bash
 # Check who you're logged in as
 clippy whoami
+
+# Verify your Graph API token scopes
+clippy verify-token
 ```
 
 ---
@@ -120,6 +123,9 @@ clippy create-event "Project Review" 14:00 15:00 \
 # Specify a timezone explicitly
 clippy create-event "Global Sync" 09:00 10:00 --timezone "Pacific Standard Time"
 
+# All-day event with category and sensitivity
+clippy create-event "Holiday" --all-day --category "Personal" --sensitivity private
+
 # Find an available room automatically
 clippy create-event "Workshop" 10:00 12:00 --find-room
 
@@ -167,6 +173,8 @@ clippy update-event --id <eventId> --room "Room B"
 clippy update-event --id <eventId> --location "Off-site"
 clippy update-event --id <eventId> --teams        # Add Teams meeting
 clippy update-event --id <eventId> --no-teams      # Remove Teams meeting
+clippy update-event --id <eventId> --all-day       # Make all-day
+clippy update-event --id <eventId> --sensitivity private
 
 # Show events from a specific day
 clippy update-event --day tomorrow
@@ -351,6 +359,10 @@ clippy mail --mark-unread 2
 clippy mail --flag 1
 clippy mail --unflag 2
 clippy mail --complete 3    # Mark flag as complete
+clippy mail --flag 1 --start-date 2026-05-01 --due 2026-05-05
+
+# Set sensitivity
+clippy mail --sensitivity <emailId> --level confidential
 
 # Move to folder (--to here is for folder destination, not email recipient)
 clippy mail --move 1 --to archive
@@ -425,6 +437,13 @@ clippy files search "budget 2026"
 
 # Inspect metadata
 clippy files meta <fileId>
+
+# Get file analytics
+clippy files analytics <fileId>
+
+# File versions
+clippy files versions <fileId>
+clippy files restore <fileId> <versionId>
 ```
 
 ### Upload, Download, Delete, and Share
@@ -443,6 +462,9 @@ clippy files upload-large ./backup.zip --folder <folderId>
 # Download a file
 clippy files download <fileId>
 clippy files download <fileId> --out ./local-copy.docx
+
+# Convert and download (e.g., to PDF)
+clippy files convert <fileId> --format pdf --out ./converted.pdf
 
 # Delete a file
 clippy files delete <fileId>
@@ -486,6 +508,66 @@ Legacy Office formats such as `.doc`, `.xls`, and `.ppt` must be converted first
 
 ---
 
+---
+
+## Microsoft Planner Commands
+
+Manage tasks and plans in Microsoft Planner.
+
+```bash
+# List tasks assigned to you
+clippy planner list-my-tasks
+
+# List your plans
+clippy planner list-plans
+clippy planner list-plans -g <groupId>
+
+# View plan structure
+clippy planner list-buckets --plan <planId>
+clippy planner list-tasks --plan <planId>
+
+# Create and update tasks
+clippy planner create-task --plan <planId> --title "New Task" -b <bucketId>
+clippy planner update-task <taskId> --title "Updated Task" --percent 50 --assign <userId>
+```
+
+---
+
+## SharePoint Commands
+
+Manage SharePoint lists and Site Pages.
+
+### SharePoint Lists (`clippy sharepoint` or `clippy sp`)
+
+```bash
+# List all SharePoint lists in a site
+clippy sp lists --site-id <siteId>
+
+# Get items from a list
+clippy sp items --site-id <siteId> --list-id <listId>
+
+# Create and update items
+clippy sp create-item --site-id <siteId> --list-id <listId> --fields '{"Title": "New Item"}'
+clippy sp update-item --site-id <siteId> --list-id <listId> --item-id <itemId> --fields '{"Title": "Updated Item"}'
+```
+
+### SharePoint Site Pages (`clippy pages`)
+
+```bash
+# List site pages
+clippy pages list <siteId>
+
+# Get a site page
+clippy pages get <siteId> <pageId>
+
+# Update a site page
+clippy pages update <siteId> <pageId> --title "New Title" --name "new-name.aspx"
+
+# Publish a site page
+clippy pages publish <siteId> <pageId>
+```
+
+---
 ## People & Room Search
 
 ```bash

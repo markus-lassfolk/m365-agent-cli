@@ -1,6 +1,6 @@
 ---
 name: clippy
-description: Microsoft 365 / Outlook CLI using EWS SOAP API + OAuth2. Manage calendar (view, create, update, delete events, find meeting times, respond to invitations), send/read/search email, shared mailbox support, and OneDrive file operations via Microsoft Graph.
+description: Microsoft 365 / Outlook CLI using EWS SOAP API + OAuth2. Manage calendar, send/read/search email, access shared mailboxes, manage OneDrive files, work with Microsoft Planner tasks, and interact with SharePoint Lists & Site Pages via Microsoft Graph and EWS.
 metadata: {"clawdbot":{"requires":{"bins":["clippy"]}}}
 ---
 
@@ -42,7 +42,7 @@ Or pass `--mailbox` per-command on any mail or calendar command.
 
 Check auth: `clippy whoami`
 
-## Commands (13 total)
+## Commands
 
 ---
 
@@ -76,9 +76,11 @@ clippy create-event "Sync" 14:00 15:00 --repeat weekly --days mon,wed,fri
 clippy create-event "Monthly" 10:00 11:00 --repeat monthly --count 10
 clippy create-event "Sprint" 09:00 11:00 --repeat weekly --every 2 --until 2026-12-31
 clippy create-event "Team Standup" 09:00 09:30 --mailbox shared@co.com
+clippy create-event "Holiday" --all-day
+clippy create-event "Private Sync" 10:00 11:00 --sensitivity private --category "Work"
 ```
 
-Options: `--day`, `--timezone`, `--description`, `--attendees`, `--room`, `--teams`, `--list-rooms`, `--find-room`, `--repeat` (daily|weekly|monthly|yearly), `--every`, `--days`, `--until`, `--count`, `--json`, `--token`, `--mailbox`, `--category`, `--clear-categories`, `--sensitivity`, `--all-day`
+Options: `--day`, `--timezone`, `--description`, `--attendees`, `--room`, `--teams`, `--list-rooms`, `--find-room`, `--repeat` (daily|weekly|monthly|yearly), `--every`, `--days`, `--until`, `--count`, `--json`, `--token`, `--mailbox`, `--category`, `--sensitivity`, `--all-day`
 
 #### `clippy update-event [eventIndex]`
 Update a calendar event by index or stable ID.
@@ -91,11 +93,13 @@ clippy update-event --id <eventId> --room "Room B"
 clippy update-event --id <eventId> --location "Off-site"
 clippy update-event --id <eventId> --teams       # add Teams meeting
 clippy update-event --id <eventId> --no-teams    # remove Teams meeting
+clippy update-event --id <eventId> --all-day
+clippy update-event --id <eventId> --sensitivity private
 clippy update-event --day tomorrow               # list events to pick from
 clippy update-event --id <eventId> --mailbox shared@co.com
 ```
 
-Options: `--id`, `--day`, `--timezone`, `--title`, `--description`, `--start`, `--end`, `--add-attendee`, `--room`, `--location`, `--teams`, `--no-teams`, `--json`, `--token`, `--mailbox`, `--category`, `--clear-categories`, `--sensitivity`, `--all-day`
+Options: `--id`, `--day`, `--timezone`, `--title`, `--description`, `--start`, `--end`, `--add-attendee`, `--room`, `--location`, `--teams`, `--no-teams`, `--json`, `--token`, `--mailbox`, `--category`, `--sensitivity`, `--all-day`, `--no-all-day`
 
 #### `clippy delete-event [eventIndex]`
 Delete/cancel a calendar event.
@@ -161,6 +165,8 @@ clippy mail --mark-unread 2
 clippy mail --flag 1
 clippy mail --unflag 2
 clippy mail --complete 3                 # mark flag as complete
+clippy mail --flag 1 --start-date 2026-05-01 --due 2026-05-05
+clippy mail --sensitivity <emailId> --level confidential
 clippy mail --move 1 --to archive        # move to folder
 clippy mail --mailbox shared@co.com      # shared mailbox inbox
 ```
@@ -178,7 +184,7 @@ clippy mail --reply-all 1 --message "..." --mailbox shared@co.com
 clippy mail --forward 1 --to-addr "colleague@co.com" --mailbox shared@co.com
 ```
 
-Options: `-n/--limit`, `-p/--page`, `--unread`, `--flagged`, `-s/--search`, `-r/--read`, `-d/--download`, `-o/--output`, `--mark-read`, `--mark-unread`, `--flag`, `--unflag`, `--complete`, `--move`, `--to`, `--reply`, `--reply-all`, `--draft`, `--forward`, `--to-addr`, `--message`, `--markdown`, `--json`, `--token`, `--mailbox`
+Options: `-n/--limit`, `-p/--page`, `--unread`, `--flagged`, `-s/--search`, `-r/--read`, `-d/--download`, `-o/--output`, `--mark-read`, `--mark-unread`, `--flag`, `--start-date`, `--due`, `--unflag`, `--complete`, `--move`, `--to`, `--reply`, `--reply-all`, `--draft`, `--forward`, `--to-addr`, `--message`, `--markdown`, `--json`, `--token`, `--mailbox`, `--sensitivity`, `--level`
 
 #### `clippy send`
 Send an email. **`--body` is optional** — allows sending a subject-only or even empty email.
@@ -291,6 +297,14 @@ Options: `--type` (view|edit), `--scope` (org|anonymous), `--collab`, `--lock`, 
 #### `clippy files checkin <fileId>`
 ```
 clippy files checkin <fileId> --comment "Updated Q1 numbers"
+
+# File Versions & Restore
+clippy files versions <fileId>
+clippy files restore <fileId> <versionId>
+
+# Analytics & Conversion
+clippy files analytics <fileId>
+clippy files convert <fileId> --format pdf --out ./converted.pdf
 ```
 
 ---
@@ -305,6 +319,51 @@ clippy find "smith" --people
 ```
 
 Options: `--rooms`, `--people`, `--json`, `--token`
+
+---
+
+---
+
+### Microsoft Planner (`clippy planner`)
+
+Manage tasks and plans in Microsoft Planner.
+
+```bash
+clippy planner list-my-tasks                 # Tasks assigned to you
+clippy planner list-plans                    # List your plans
+clippy planner list-plans -g <groupId>       # List plans for a Microsoft 365 group
+clippy planner list-buckets --plan <planId>  # List buckets in a plan
+clippy planner list-tasks --plan <planId>    # List tasks in a plan
+
+clippy planner create-task --plan <planId> --title "New Task" -b <bucketId>
+clippy planner update-task <taskId> --title "Updated Task" --percent 50 --assign <userId>
+```
+
+---
+
+### SharePoint Lists (`clippy sharepoint` or `clippy sp`)
+
+Manage SharePoint lists and items.
+
+```bash
+clippy sp lists --site-id <siteId>
+clippy sp items --site-id <siteId> --list-id <listId>
+clippy sp create-item --site-id <siteId> --list-id <listId> --fields '{"Title": "New Item"}'
+clippy sp update-item --site-id <siteId> --list-id <listId> --item-id <itemId> --fields '{"Title": "Updated Item"}'
+```
+
+---
+
+### SharePoint Site Pages (`clippy pages`)
+
+Manage modern SharePoint Site Pages.
+
+```bash
+clippy pages list <siteId>
+clippy pages get <siteId> <pageId>
+clippy pages update <siteId> <pageId> --title "New Title" --name "new-name.aspx"
+clippy pages publish <siteId> <pageId>
+```
 
 ---
 
