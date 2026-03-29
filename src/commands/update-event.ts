@@ -67,7 +67,6 @@ export const updateEventCommand = new Command('update-event')
         instance?: string;
         teams?: boolean;
         allDay?: boolean;
-        noAllDay?: boolean;
         json?: boolean;
         token?: string;
         mailbox?: string;
