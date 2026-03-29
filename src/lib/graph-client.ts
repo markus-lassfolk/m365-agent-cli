@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
+import { open } from 'node:fs/promises';
 import { mkdir, rename, stat, unlink } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, dirname, resolve } from 'node:path';
@@ -77,6 +78,7 @@ export interface CheckinResult {
 export interface UploadLargeResult {
   uploadUrl: string;
   expirationDateTime?: string;
+  driveItem?: DriveItem;
 }
 
 async function streamWebToFile(body: ReadableStream<Uint8Array>, filePath: string): Promise<number> {
@@ -330,8 +332,11 @@ export async function createLargeUploadSession(
 
     const fileName = basename(absolutePath);
     const folderPath = folder?.id ? `${buildItemPath(folder)}:/` : '/me/drive/root:/';
+
+    // Step 1: Create the upload session
+    let sessionResult: GraphResponse<UploadLargeResult>;
     try {
-      const result = await callGraph<UploadLargeResult>(
+      sessionResult = await callGraph<UploadLargeResult>(
         token,
         `${folderPath}${encodeURIComponent(fileName)}:/createUploadSession`,
         {
@@ -339,12 +344,72 @@ export async function createLargeUploadSession(
           body: JSON.stringify({ item: { '@microsoft.graph.conflictBehavior': 'replace', name: fileName } })
         }
       );
-      return result;
     } catch (err) {
       if (err instanceof GraphApiError) {
         return graphError(err.message, err.code, err.status);
       }
       return graphError(err instanceof Error ? err.message : 'Failed to create upload session');
+    }
+
+    if (!sessionResult.ok || !sessionResult.data) {
+      return sessionResult;
+    }
+
+    const { uploadUrl, expirationDateTime } = sessionResult.data;
+
+    // Step 2: Upload the file in chunks
+    const fileSize = fileStats.size;
+    const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB chunks
+    const fileHandle = await open(absolutePath, 'r');
+
+    try {
+      let offset = 0;
+      let lastSuccessfulResponse: Response | null = null;
+
+      while (offset < fileSize) {
+        const chunkLength = Math.min(CHUNK_SIZE, fileSize - offset);
+        const chunk = new Uint8Array(chunkLength);
+        const { bytesRead } = await fileHandle.read(chunk, { offset: 0, length: chunkLength, position: offset });
+
+        if (bytesRead === 0) break;
+
+        const endOffset = offset + bytesRead - 1;
+        const contentRange = `bytes ${offset}-${endOffset}/${fileSize}`;
+
+        lastSuccessfulResponse = await fetch(uploadUrl, {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Length': String(bytesRead),
+            'Content-Range': contentRange
+          },
+          body: chunk.subarray(0, bytesRead)
+        });
+
+        if (!lastSuccessfulResponse.ok) {
+          const errorBody = await lastSuccessfulResponse.text().catch(() => '');
+          return graphError(
+            `Chunk upload failed at offset ${offset} (HTTP ${lastSuccessfulResponse.status}): ${errorBody}`,
+            String(lastSuccessfulResponse.status),
+            lastSuccessfulResponse.status
+          );
+        }
+
+        offset += bytesRead;
+      }
+
+      // Step 3: Parse the final response — Graph returns the complete driveItem on success
+      if (lastSuccessfulResponse && lastSuccessfulResponse.ok) {
+        const driveItem = (await lastSuccessfulResponse.json()) as DriveItem;
+        return {
+          ok: true,
+          data: { uploadUrl, expirationDateTime, driveItem }
+        };
+      }
+
+      return graphError('Upload completed but final response was not valid');
+    } finally {
+      await fileHandle.close();
     }
   } catch (err) {
     return graphError(err instanceof Error ? err.message : 'Failed to create upload session');
