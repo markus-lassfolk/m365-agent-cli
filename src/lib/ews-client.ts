@@ -2448,16 +2448,30 @@ export async function areRoomsFree(
       </t:FreeBusyViewOptions>
     </m:GetUserAvailabilityRequest>`);
 
-      const response = await fetch(EWS_ENDPOINT, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'text/xml; charset=utf-8',
-          Accept: 'text/xml',
-          'X-AnchorMailbox': EWS_USERNAME
-        },
-        body: envelope
-      });
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), EWS_TIMEOUT_MS);
+
+      let response: Response;
+      try {
+        response = await fetch(EWS_ENDPOINT, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'text/xml; charset=utf-8',
+            Accept: 'text/xml',
+            'X-AnchorMailbox': EWS_USERNAME
+          },
+          body: envelope,
+          signal: controller.signal
+        });
+      } catch (err) {
+        clearTimeout(timeout);
+        if (err instanceof Error && err.name === 'AbortError') {
+          throw new Error(`EWS request timed out after ${EWS_TIMEOUT_MS / 1000}s`);
+        }
+        throw err;
+      }
+      clearTimeout(timeout);
 
       const xml = await response.text();
 

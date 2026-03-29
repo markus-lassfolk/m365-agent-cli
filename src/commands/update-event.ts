@@ -190,7 +190,18 @@ export const updateEventCommand = new Command('update-event')
       if (options.occurrence || options.instance) {
         // Find the specific occurrence, ensuring it matches the provided event ID
         if (options.instance) {
-          const instanceDate = parseDay(options.instance);
+          let instanceDate: Date;
+          try {
+            instanceDate = parseDay(options.instance, { throwOnInvalid: true });
+          } catch (err) {
+            const message = err instanceof Error ? err.message : 'Invalid instance date';
+            if (options.json) {
+              console.log(JSON.stringify({ error: message }, null, 2));
+            } else {
+              console.error(`Error: ${message}`);
+            }
+            process.exit(1);
+          }
           instanceDate.setHours(0, 0, 0, 0);
           const occEvent = events.find((e) => {
             const eventDate = new Date(e.Start.DateTime);
