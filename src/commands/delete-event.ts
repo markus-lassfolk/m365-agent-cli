@@ -17,7 +17,11 @@ export const deleteEventCommand = new Command('delete-event')
   .description('Delete/cancel a calendar event (sends cancellation if there are attendees)')
   .argument('[eventIndex]', 'Event index from the list (deprecated; use --id)')
   .option('--id <eventId>', 'Delete event by stable ID')
-  .option('--day <day>', 'Day to show events from (today, tomorrow, YYYY-MM-DD)', 'today')
+  .option(
+    '--day <day>',
+    'Day to show events from (today, tomorrow, YYYY-MM-DD) - note: may miss multi-day events crossing midnight',
+    'today'
+  )
   .option('--search <text>', 'Search for events by title')
   .option('--message <text>', 'Cancellation message to send to attendees')
   .option('--force-delete', 'Delete without sending cancellation (even with attendees)')

@@ -1,8 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { Command } from 'commander';
 import { lookup } from 'mime-types';
-import { resolveAuth } from '../lib/auth.js';
 import { AttachmentPathError, validateAttachmentPath } from '../lib/attachments.js';
+import { resolveAuth } from '../lib/auth.js';
 import {
   addAttachmentToDraft,
   createDraft,
