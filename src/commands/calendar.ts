@@ -137,6 +137,18 @@ function displayEvent(event: CalendarEvent, verbose: boolean): void {
       console.log(`     👤 Organizer: ${event.Organizer.EmailAddress.Name}`);
     }
 
+    // Show recurrence info
+    if (event.RecurrenceDescription) {
+      console.log(`     🔁 ${event.RecurrenceDescription}`);
+    } else if (event.FirstOccurrence || event.LastOccurrence) {
+      // Series bounds without full description
+      const first = event.FirstOccurrence ? ` from ${formatDate(event.FirstOccurrence.Start)}` : '';
+      const last = event.LastOccurrence ? ` until ${formatDate(event.LastOccurrence.Start)}` : '';
+      if (first || last) {
+        console.log(`     🔁 Recurring series${first}${last}`);
+      }
+    }
+
     // Show attendees
     if (event.Attendees && event.Attendees.length > 0) {
       const attendeeList = event.Attendees.map(

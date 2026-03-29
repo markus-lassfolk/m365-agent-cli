@@ -1,8 +1,8 @@
-import { randomBytes } from 'node:crypto';
-import { createReadStream, createWriteStream } from 'node:fs';
-import { mkdir, rename, stat, unlink } from 'node:fs/promises';
-import { homedir } from 'node:os';
 import { basename, dirname, resolve } from 'node:path';
+import { createReadStream, createWriteStream } from 'node:fs';
+import { mkdir, stat, unlink, rename } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { randomBytes } from 'node:crypto';
 import { GRAPH_BASE_URL } from './graph-constants.js';
 
 export { GRAPH_BASE_URL };
@@ -111,6 +111,9 @@ async function streamWebToFile(body: ReadableStream<Uint8Array>, filePath: strin
     return bytesWritten;
   } catch (err) {
     stream.destroy();
+    try {
+      await unlink(filePath);
+    } catch {}
     throw err;
   }
 }
