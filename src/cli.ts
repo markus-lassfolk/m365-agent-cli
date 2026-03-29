@@ -24,14 +24,13 @@ import { subscribeCommand } from './commands/subscribe.js';
 import { subscriptionsCommand } from './commands/subscriptions.js';
 import { suggestCommand } from './commands/suggest.js';
 import { todoCommand } from './commands/todo.js';
-import { sharepointCommand } from "./commands/sharepoint.js";
+import { sharepointCommand } from './commands/sharepoint.js';
 import { updateEventCommand } from './commands/update-event.js';
 import { whoamiCommand } from './commands/whoami.js';
 
 import { plannerCommand } from './commands/planner.js';
 
 import { sitePagesCommand } from './commands/site-pages.js';
-
 
 const program = new Command();
 
@@ -68,6 +67,5 @@ program.addCommand(todoCommand);
 program.addCommand(plannerCommand);
 
 program.addCommand(sharepointCommand);
-
 
 program.parse();

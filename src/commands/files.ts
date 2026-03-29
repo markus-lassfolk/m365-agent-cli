@@ -327,7 +327,6 @@ filesCommand
     }
   );
 
-
 filesCommand
   .command('versions <fileId>')
   .description('List versions of a file')

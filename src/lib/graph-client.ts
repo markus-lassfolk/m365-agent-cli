@@ -52,7 +52,6 @@ export interface DriveItem {
   '@microsoft.graph.downloadUrl'?: string;
 }
 
-
 export interface DriveItemVersion {
   id: string;
   lastModifiedDateTime?: string;
@@ -61,7 +60,6 @@ export interface DriveItemVersion {
 }
 
 export interface DriveItemListResponse {
-
   value: DriveItem[];
 }
 
@@ -780,12 +778,19 @@ export function defaultDownloadPath(fileName: string): string {
   return resolve(homedir(), 'Downloads', basename(fileName));
 }
 
-
 export async function listFileVersions(token: string, itemId: string): Promise<GraphResponse<DriveItemVersion[]>> {
-  return fetchAllPages<DriveItemVersion>(token, `/me/drive/items/${encodeURIComponent(itemId)}/versions`, 'Failed to list versions');
+  return fetchAllPages<DriveItemVersion>(
+    token,
+    `/me/drive/items/${encodeURIComponent(itemId)}/versions`,
+    'Failed to list versions'
+  );
 }
 
-export async function restoreFileVersion(token: string, itemId: string, versionId: string): Promise<GraphResponse<void>> {
+export async function restoreFileVersion(
+  token: string,
+  itemId: string,
+  versionId: string
+): Promise<GraphResponse<void>> {
   try {
     return await callGraph<void>(
       token,
