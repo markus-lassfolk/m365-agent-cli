@@ -1,6 +1,7 @@
 ---
 name: clippy
 description: Microsoft 365 integration CLI for managing calendars, emails, OneDrive files, Planner, SharePoint, and FindTime scheduling. Use when the user requests actions involving Outlook, OneDrive, Teams tasks, or SharePoint.
+metadata: {"clawdbot":{"requires":{"bins":["clippy"]}}}
 ---
 
 # Clippy Microsoft 365 CLI
