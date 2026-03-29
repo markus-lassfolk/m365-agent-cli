@@ -5,6 +5,7 @@
  * Each command handler is called directly to test the full CLI path including
  * argument parsing (Commander.js), auth resolution, API calls, and output formatting.
  */
+import '../lib/global-env.js';
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { clearMockFetch, createMockFetch } from '../test/mocks/index.js';
 

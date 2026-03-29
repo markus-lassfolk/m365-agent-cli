@@ -63,7 +63,7 @@ try {
     Write-Host "Tenant ID: Common (since audience is AzureADandPersonalMicrosoftAccount)"
     Write-Host ""
     
-$ConfigDir = Join-Path -Path $env:USERPROFILE -ChildPath ".config\m365-agent-cli"
+$ConfigDir = Join-Path -Path $HOME -ChildPath ".config" | Join-Path -ChildPath "m365-agent-cli"
     if (-not (Test-Path -Path $ConfigDir)) {
         New-Item -ItemType Directory -Force -Path $ConfigDir | Out-Null
     }

@@ -43,17 +43,17 @@ m365-agent-cli uses OAuth2 with a refresh token to authenticate against Microsof
 
 ### Setup
 
-If you used the setup scripts from `docs/ENTRA_SETUP.md`, your `EWS_CLIENT_ID` is already appended to a `~/.config/m365-agent-cli/.env` file . 
+If you used the setup scripts from `docs/ENTRA_SETUP.md`, your `EWS_CLIENT_ID` is already appended to your `~/.config/m365-agent-cli/.env` file. 
 
 The easiest way to obtain your refresh tokens is to run the interactive login command:
 
 ```bash
-clippy login
+m365-agent-cli login
 ```
 
 This will initiate the Microsoft Device Code flow and automatically save `EWS_REFRESH_TOKEN` and `GRAPH_REFRESH_TOKEN` into your `~/.config/m365-agent-cli/.env` file upon successful authentication.
 
-Alternatively, you can manually create a `~/.config/m365-agent-cli/.env` file in the project root (or set environment variables):
+Alternatively, you can manually create a `~/.config/m365-agent-cli/.env` file (or set environment variables):
 
 ```bash
 EWS_CLIENT_ID=your-azure-app-client-id

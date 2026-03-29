@@ -77,7 +77,7 @@ async function performDeviceCodeFlow(clientId: string, tenant: string, scope: st
             let envContent = '';
 
             const configDir = join(homedir(), '.config', 'm365-agent-cli');
-            mkdirSync(configDir, { recursive: true });
+            mkdirSync(configDir, { recursive: true, mode: 0o700 });
             const envPath = join(configDir, '.env');
 
             try {
@@ -94,7 +94,7 @@ async function performDeviceCodeFlow(clientId: string, tenant: string, scope: st
 
             await writeFile(envPath, `${envContent.trim()}\n`, { encoding: 'utf8', mode: 0o600 });
 
-            console.log(`Saved EWS_USERNAME (${username}) to ~/.config/m365-agent-cli/.env file`);
+            console.log(`Saved EWS_USERNAME (${username}) to ${envPath}`);
           }
         }
       } catch (_e) {
@@ -126,7 +126,7 @@ export const loginCommand = new Command('login')
 
     // Read existing .env if present
     const configDir = join(homedir(), '.config', 'm365-agent-cli');
-    mkdirSync(configDir, { recursive: true });
+    mkdirSync(configDir, { recursive: true, mode: 0o700 });
     const envPath = join(configDir, '.env');
     let envContent = '';
     if (existsSync(envPath)) {
@@ -190,5 +190,5 @@ export const loginCommand = new Command('login')
     envContent = envContent.replace(/\n{3,}/g, '\n\n');
     await writeFile(envPath, `${envContent.trim()}\n`, { encoding: 'utf8', mode: 0o600 });
 
-    console.log('Saved GRAPH_REFRESH_TOKEN and EWS_REFRESH_TOKEN to ~/.config/m365-agent-cli/.env file.');
+    console.log(`Saved GRAPH_REFRESH_TOKEN and EWS_REFRESH_TOKEN to ${envPath}`);
   });
