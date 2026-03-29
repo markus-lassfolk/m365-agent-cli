@@ -2127,6 +2127,93 @@ export async function isRoomFree(
   }
 }
 
+export async function areRoomsFree(
+  token: string,
+  roomEmails: string[],
+  startDateTime: string,
+  endDateTime: string
+): Promise<Map<string, boolean>> {
+  const result = new Map<string, boolean>();
+
+  if (roomEmails.length === 0) return result;
+
+  try {
+    const envelope = soapEnvelope(`
+    <m:GetUserAvailabilityRequest>
+      <t:TimeZone>
+        <t:Bias>-60</t:Bias>
+        <t:StandardTime>
+          <t:Bias>0</t:Bias>
+          <t:Time>03:00:00</t:Time>
+          <t:DayOrder>5</t:DayOrder>
+          <t:Month>10</t:Month>
+          <t:DayOfWeek>Sunday</t:DayOfWeek>
+        </t:StandardTime>
+        <t:DaylightTime>
+          <t:Bias>-60</t:Bias>
+          <t:Time>02:00:00</t:Time>
+          <t:DayOrder>5</t:DayOrder>
+          <t:Month>3</t:Month>
+          <t:DayOfWeek>Sunday</t:DayOfWeek>
+        </t:DaylightTime>
+      </t:TimeZone>
+      <m:MailboxDataArray>
+        ${roomEmails.map((email) => `
+        <t:MailboxData>
+          <t:Email><t:Address>${xmlEscape(email)}</t:Address></t:Email>
+          <t:AttendeeType>Required</t:AttendeeType>
+        </t:MailboxData>`).join('')}
+      </m:MailboxDataArray>
+      <t:FreeBusyViewOptions>
+        <t:TimeWindow>
+          <t:StartTime>${xmlEscape(startDateTime)}</t:StartTime>
+          <t:EndTime>${xmlEscape(endDateTime)}</t:EndTime>
+        </t:TimeWindow>
+        <t:MergedFreeBusyIntervalInMinutes>15</t:MergedFreeBusyIntervalInMinutes>
+        <t:RequestedView>FreeBusy</t:RequestedView>
+      </t:FreeBusyViewOptions>
+    </m:GetUserAvailabilityRequest>`);
+
+    const xml = await callEws(token, envelope);
+
+    // Parse FreeBusyResponse blocks to correlate mailboxes with their events
+    const freeBusyResponses = extractBlocks(xml, 'FreeBusyResponse');
+    const reqStart = new Date(startDateTime).getTime();
+    const reqEnd = new Date(endDateTime).getTime();
+
+    for (const resp of freeBusyResponses) {
+      const email =
+        extractTag(resp, 'Address') ||
+        resp.match(/<t:Address>([^<]*)<\/t:Address>/)?.[1] ||
+        '';
+      const calendarEvents = extractBlocks(resp, 'CalendarEvent');
+
+      let isFree = true;
+      for (const event of calendarEvents) {
+        const busyType = extractTag(event, 'BusyType');
+        if (busyType === 'Free') continue;
+
+        const evStart = new Date(extractTag(event, 'StartTime') || '').getTime();
+        const evEnd = new Date(extractTag(event, 'EndTime') || '').getTime();
+
+        if (evStart < reqEnd && evEnd > reqStart) {
+          isFree = false;
+          break;
+        }
+      }
+
+      result.set(email, isFree);
+    }
+  } catch {
+    // On error, mark all rooms as not-free (conservative)
+    for (const email of roomEmails) {
+      result.set(email, false);
+    }
+  }
+
+  return result;
+}
+
 export interface AutoReplyRule {
   messageText: string;
   enabled: boolean;
