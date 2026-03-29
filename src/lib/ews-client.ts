@@ -632,8 +632,8 @@ function parseCalendarItem(block: string, mailbox?: string): CalendarEvent {
     RecurrenceDescription: recurrenceInfo.description,
     FirstOccurrence: recurrenceInfo.firstOccurrence,
     LastOccurrence: recurrenceInfo.lastOccurrence,
-    ModifiedOccurrences: recurrenceInfo.modifiedOccurrences,
-    DeletedOccurrences: recurrenceInfo.deletedOccurrences
+    ModifiedOccurrences: modifiedOccurrences,
+    DeletedOccurrences: deletedOccurrences
   };
 }
 
@@ -1119,8 +1119,7 @@ export async function updateEvent(options: UpdateEventOptions): Promise<OwaRespo
     }
     if (end !== undefined) {
       updates.push(
-        `<t:SetItemField><t:FieldURI FieldURI="calendar:End" /><t:CalendarItem><t:End>${xmlEscape(end)}</t:End>
-          ${timezone ? `<t:StartTimeZone Id="${xmlEscape(timezone)}"/><t:EndTimeZone Id="${xmlEscape(timezone)}"/>` : ''}</t:CalendarItem></t:SetItemField>`
+        `<t:SetItemField><t:FieldURI FieldURI="calendar:End" /><t:CalendarItem><t:End>${xmlEscape(end)}</t:End></t:CalendarItem></t:SetItemField>`
       );
     }
     if (location !== undefined) {
@@ -2440,6 +2439,15 @@ export async function areRoomsFree(
 
   if (roomEmails.length === 0) return result;
 
+  let timeZone = 'UTC';
+  try {
+    const { getMailboxSettings } = await import('./oof-client.js');
+    const mbx = await getMailboxSettings(token);
+    timeZone = mbx.data?.timeZone || 'UTC';
+  } catch {
+    // Fall back to UTC if we can't get mailbox settings
+  }
+
   const BATCH_SIZE = 100;
   const batches: string[][] = [];
   for (let i = 0; i < roomEmails.length; i += BATCH_SIZE) {
@@ -2469,7 +2477,8 @@ export async function areRoomsFree(
         <t:MergedFreeBusyIntervalInMinutes>15</t:MergedFreeBusyIntervalInMinutes>
         <t:RequestedView>FreeBusy</t:RequestedView>
       </t:FreeBusyViewOptions>
-    </m:GetUserAvailabilityRequest>`);
+    </m:GetUserAvailabilityRequest>`,
+    `<t:TimeZoneContext><t:TimeZoneDefinition Id="${xmlEscape(timeZone)}"/></t:TimeZoneContext>`);
 
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), EWS_TIMEOUT_MS);

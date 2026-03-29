@@ -40,6 +40,7 @@ export const updateEventCommand = new Command('update-event')
   )
   .option('--room <room>', 'Set/change meeting room (name or email)')
   .option('--location <text>', 'Set location text')
+  .option('--timezone <timezone>', 'Timezone for the event (e.g., "Pacific Standard Time")')
   .option('--occurrence <index>', 'Update only the Nth occurrence of a recurring event')
   .option('--instance <date>', 'Update only the occurrence on a specific date (YYYY-MM-DD)')
   .option('--teams', 'Make it a Teams meeting')
@@ -291,7 +292,10 @@ export const updateEventCommand = new Command('update-event')
 
       if (options.title) {
         updateOptions.subject = options.title;
-        if (options.timezone) updateOptions.timezone = options.timezone;
+      }
+
+      if (options.timezone) {
+        updateOptions.timezone = options.timezone;
       }
 
       if (options.description) {
