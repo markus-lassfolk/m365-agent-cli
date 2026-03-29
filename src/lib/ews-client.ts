@@ -2056,77 +2056,6 @@ export async function getFreeBusy(
   return ewsResult(slots);
 }
 
-export async function isRoomFree(
-  token: string,
-  roomEmail: string,
-  startDateTime: string,
-  endDateTime: string
-): Promise<boolean> {
-  try {
-    const envelope = soapEnvelope(`
-    <m:GetUserAvailabilityRequest>
-      <t:TimeZone>
-        <t:Bias>-60</t:Bias>
-        <t:StandardTime>
-          <t:Bias>0</t:Bias>
-          <t:Time>03:00:00</t:Time>
-          <t:DayOrder>5</t:DayOrder>
-          <t:Month>10</t:Month>
-          <t:DayOfWeek>Sunday</t:DayOfWeek>
-        </t:StandardTime>
-        <t:DaylightTime>
-          <t:Bias>-60</t:Bias>
-          <t:Time>02:00:00</t:Time>
-          <t:DayOrder>5</t:DayOrder>
-          <t:Month>3</t:Month>
-          <t:DayOfWeek>Sunday</t:DayOfWeek>
-        </t:DaylightTime>
-      </t:TimeZone>
-      <m:MailboxDataArray>
-        <t:MailboxData>
-          <t:Email><t:Address>${xmlEscape(roomEmail)}</t:Address></t:Email>
-          <t:AttendeeType>Required</t:AttendeeType>
-        </t:MailboxData>
-      </m:MailboxDataArray>
-      <t:FreeBusyViewOptions>
-        <t:TimeWindow>
-          <t:StartTime>${xmlEscape(startDateTime)}</t:StartTime>
-          <t:EndTime>${xmlEscape(endDateTime)}</t:EndTime>
-        </t:TimeWindow>
-        <t:MergedFreeBusyIntervalInMinutes>15</t:MergedFreeBusyIntervalInMinutes>
-        <t:RequestedView>FreeBusy</t:RequestedView>
-      </t:FreeBusyViewOptions>
-    </m:GetUserAvailabilityRequest>`);
-
-    const xml = await callEws(token, envelope);
-    const calendarEvents = extractBlocks(xml, 'CalendarEvent');
-
-    // If no calendar events in the window, room is free
-    if (calendarEvents.length === 0) return true;
-
-    // Check if any event overlaps with our requested time
-    const reqStart = new Date(startDateTime).getTime();
-    const reqEnd = new Date(endDateTime).getTime();
-
-    for (const event of calendarEvents) {
-      const busyType = extractTag(event, 'BusyType');
-      if (busyType === 'Free') continue;
-
-      const evStart = new Date(extractTag(event, 'StartTime') || '').getTime();
-      const evEnd = new Date(extractTag(event, 'EndTime') || '').getTime();
-
-      // Check overlap
-      if (evStart < reqEnd && evEnd > reqStart) {
-        return false;
-      }
-    }
-
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export async function areRoomsFree(
   token: string,
   roomEmails: string[],
@@ -2188,6 +2117,21 @@ export async function areRoomsFree(
     for (let i = 0; i < freeBusyResponses.length; i++) {
       const resp = freeBusyResponses[i];
       const email = roomEmails[i];
+
+      // Check for per-room errors (e.g., ErrorMailRecipientNotFound)
+      const responseClass = extractTag(resp, 'ResponseClass');
+      const responseCode = extractTag(resp, 'ResponseCode');
+      if (responseClass && responseClass !== 'Success') {
+        // Room errored - mark as not free (conservative)
+        result.set(email, false);
+        continue;
+      }
+      if (responseCode && responseCode !== 'NoError') {
+        // Room errored - mark as not free (conservative)
+        result.set(email, false);
+        continue;
+      }
+
       const calendarEvents = extractBlocks(resp, 'CalendarEvent');
 
       let isFree = true;
