@@ -192,7 +192,7 @@ export const deleteEventCommand = new Command('delete-event')
           targetEvent = occEvent;
         } else if (options.occurrence) {
           const idx = parseInt(options.occurrence, 10);
-          if (isNaN(idx) || idx < 1) {
+          if (Number.isNaN(idx) || idx < 1) {
             console.error('--occurrence must be a positive integer');
             process.exit(1);
           }

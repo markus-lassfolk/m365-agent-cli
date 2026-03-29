@@ -420,14 +420,14 @@ function parseRecurrenceFromBlock(block: string): {
   };
 
   if (recurrenceBlock.includes('DailyRecurrence')) {
-    parts.push(parseInt(interval) === 1 ? 'Daily' : `Every ${interval} days`);
+    parts.push(parseInt(interval, 10) === 1 ? 'Daily' : `Every ${interval} days`);
   } else if (recurrenceBlock.includes('WeeklyRecurrence')) {
     const days = daysOfWeek ? daysOfWeek.split(' ').filter(Boolean) : [];
     const dayList = days.length > 0 ? days.join(', ') : 'week';
-    parts.push(parseInt(interval) === 1 ? `Weekly on ${dayList}` : `Every ${interval} weeks on ${dayList}`);
+    parts.push(parseInt(interval, 10) === 1 ? `Weekly on ${dayList}` : `Every ${interval} weeks on ${dayList}`);
   } else if (recurrenceBlock.includes('AbsoluteMonthlyRecurrence')) {
     parts.push(
-      parseInt(interval) === 1
+      parseInt(interval, 10) === 1
         ? `Monthly on day ${dayOfMonth || 1}`
         : `Every ${interval} months on day ${dayOfMonth || 1}`
     );
@@ -435,14 +435,14 @@ function parseRecurrenceFromBlock(block: string): {
     const idx = dayIndexNames[dayOfWeekIndex || 'First'] || '1st';
     const days = daysOfWeek ? daysOfWeek.split(' ').filter(Boolean).join(', ') : 'day';
     parts.push(
-      parseInt(interval) === 1 ? `Monthly on the ${idx} ${days}` : `Every ${interval} months on the ${idx} ${days}`
+      parseInt(interval, 10) === 1 ? `Monthly on the ${idx} ${days}` : `Every ${interval} months on the ${idx} ${days}`
     );
   } else if (recurrenceBlock.includes('AbsoluteYearlyRecurrence')) {
-    const monthName = month ? monthNames[parseInt(month) - 1] || month : 'the specified month';
+    const monthName = month ? monthNames[parseInt(month, 10) - 1] || month : 'the specified month';
     parts.push(`Yearly on ${monthName} ${dayOfMonth || 1}`);
   } else if (recurrenceBlock.includes('RelativeYearlyRecurrence')) {
     const idx = dayIndexNames[dayOfWeekIndex || 'First'] || '1st';
-    const monthName = month ? monthNames[parseInt(month) - 1] || month : 'the specified month';
+    const monthName = month ? monthNames[parseInt(month, 10) - 1] || month : 'the specified month';
     const days = daysOfWeek ? daysOfWeek.split(' ').filter(Boolean).join(', ') : 'day';
     parts.push(`Yearly on the ${idx} ${days} of ${monthName}`);
   }

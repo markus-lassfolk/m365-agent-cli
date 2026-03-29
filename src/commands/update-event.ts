@@ -200,7 +200,7 @@ export const updateEventCommand = new Command('update-event')
           );
         } else if (options.occurrence) {
           const idx = parseInt(options.occurrence, 10);
-          if (isNaN(idx) || idx < 1 || idx > events.length) {
+          if (Number.isNaN(idx) || idx < 1 || idx > events.length) {
             console.error(`Invalid --occurrence index: ${options.occurrence}. Valid range: 1-${events.length}.`);
             process.exit(1);
           }
