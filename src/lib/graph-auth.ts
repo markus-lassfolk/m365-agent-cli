@@ -131,8 +131,6 @@ export async function resolveGraphAuth(options?: { token?: string }): Promise<Gr
       };
     }
 
-    const envRefreshToken = graphRefreshToken;
-
     const tenant = getMicrosoftTenantPathSegment();
 
     const cached = await loadCachedGraphToken();
@@ -148,7 +146,7 @@ export async function resolveGraphAuth(options?: { token?: string }): Promise<Gr
       }
     }
 
-    const refreshTokens = [...new Set([cached?.refreshToken, envRefreshToken].filter((t): t is string => !!t))];
+    const refreshTokens = [...new Set([cached?.refreshToken, graphRefreshToken].filter((t): t is string => !!t))];
 
     for (let i = 0; i < refreshTokens.length; i++) {
       try {
