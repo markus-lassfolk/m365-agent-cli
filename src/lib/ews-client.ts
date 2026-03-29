@@ -433,7 +433,7 @@ function parseCalendarItem(block: string, mailbox?: string): CalendarEvent {
   const modifiedOccurrencesBlock = extractSelfClosingOrBlock(block, 'ModifiedOccurrences');
   let modifiedOccurrences;
   if (modifiedOccurrencesBlock) {
-    modifiedOccurrences = extractBlocks(modifiedOccurrencesBlock, 'Occurrence').map(occ => ({
+    modifiedOccurrences = extractBlocks(modifiedOccurrencesBlock, 'Occurrence').map((occ) => ({
       ItemId: extractAttribute(occ, 'ItemId', 'Id'),
       Start: extractTag(occ, 'Start'),
       End: extractTag(occ, 'End'),
@@ -444,7 +444,7 @@ function parseCalendarItem(block: string, mailbox?: string): CalendarEvent {
   const deletedOccurrencesBlock = extractSelfClosingOrBlock(block, 'DeletedOccurrences');
   let deletedOccurrences;
   if (deletedOccurrencesBlock) {
-    deletedOccurrences = extractBlocks(deletedOccurrencesBlock, 'DeletedOccurrence').map(occ => ({
+    deletedOccurrences = extractBlocks(deletedOccurrencesBlock, 'DeletedOccurrence').map((occ) => ({
       Start: extractTag(occ, 'Start')
     }));
   }
