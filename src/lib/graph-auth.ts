@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { getJwtExpiration, getMicrosoftTenantPathSegment, isValidJwtStructure } from './jwt-utils.js';
@@ -15,7 +15,25 @@ interface CachedGraphToken {
   expiresAt: number;
 }
 
-const GRAPH_TOKEN_CACHE_FILE = join(homedir(), '.config', 'clippy', 'graph-token-cache.json');
+const GRAPH_TOKEN_CACHE_FILE = join(homedir(), '.config', 'm365-agent-cli', 'graph-token-cache.json');
+const OLD_GRAPH_TOKEN_CACHE_FILE = join(homedir(), '.config', 'clippy', 'graph-token-cache.json');
+
+async function migrateGraphTokenCache(): Promise<void> {
+  try {
+    const newStats = await stat(GRAPH_TOKEN_CACHE_FILE).catch(() => null);
+    if (!newStats) {
+      const oldStats = await stat(OLD_GRAPH_TOKEN_CACHE_FILE).catch(() => null);
+      if (oldStats) {
+        const dir = join(homedir(), '.config', 'm365-agent-cli');
+        await mkdir(dir, { recursive: true, mode: 0o700 });
+        await rename(OLD_GRAPH_TOKEN_CACHE_FILE, GRAPH_TOKEN_CACHE_FILE);
+      }
+    }
+  } catch (_err) {
+    // Ignore migration errors
+  }
+}
+
 const GRAPH_SCOPES = [
   'https://graph.microsoft.com/Files.ReadWrite offline_access User.Read',
   'https://graph.microsoft.com/Files.ReadWrite.All offline_access User.Read',
@@ -27,6 +45,7 @@ const GRAPH_SCOPES = [
 ];
 
 async function loadCachedGraphToken(): Promise<CachedGraphToken | null> {
+  await migrateGraphTokenCache();
   try {
     const data = await readFile(GRAPH_TOKEN_CACHE_FILE, 'utf-8');
     return JSON.parse(data) as CachedGraphToken;
@@ -37,7 +56,7 @@ async function loadCachedGraphToken(): Promise<CachedGraphToken | null> {
 
 async function saveCachedGraphToken(token: CachedGraphToken): Promise<void> {
   try {
-    const dir = join(homedir(), '.config', 'clippy');
+    const dir = join(homedir(), '.config', 'm365-agent-cli');
     await mkdir(dir, { recursive: true, mode: 0o700 });
     await writeFile(GRAPH_TOKEN_CACHE_FILE, JSON.stringify(token, null, 2), {
       encoding: 'utf-8',

@@ -96,7 +96,7 @@ async function resolveListId(token: string, nameOrId: string): Promise<{ listId:
   const s = await getTodoList(token, nameOrId);
   if (!s.ok || !s.data) {
     console.error(`List not found: "${nameOrId}".`);
-    console.error('Use "clippy todo lists".');
+    console.error('Use "m365-agent-cli todo lists".');
     process.exit(1);
   }
   return { listId: s.data.id, listDisplay: s.data.displayName };

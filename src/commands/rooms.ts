@@ -83,14 +83,14 @@ export const roomsCommand = new Command('rooms')
           console.log('');
         }
         console.log('-'.repeat(70));
-        console.log('\nTip: Use "clippy rooms rooms <email>" to see rooms.\n');
+        console.log('\nTip: Use "m365-agent-cli rooms rooms <email>" to see rooms.\n');
         return;
       }
 
       if (action === 'rooms') {
         if (!roomListEmail) {
           console.error('Error: rooms action requires a room list email address.');
-          console.error('Use "clippy rooms lists" to see available room lists.');
+          console.error('Use "m365-agent-cli rooms lists" to see available room lists.');
           process.exit(1);
         }
         console.log(`Fetching rooms from list: ${roomListEmail}...`);

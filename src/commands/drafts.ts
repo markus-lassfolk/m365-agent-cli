@@ -384,11 +384,11 @@ export const draftsCommand = new Command('drafts')
 
       console.log(`\n${'\u2500'.repeat(70)}`);
       console.log('\nCommands:');
-      console.log('  clippy drafts -r <id>                  # Read draft');
-      console.log('  clippy drafts --create --to "..." --subject "..." --body "..."');
-      console.log('  clippy drafts --edit <id> --body "new text"');
-      console.log('  clippy drafts --send <id>              # Send draft');
-      console.log('  clippy drafts --delete <id>            # Delete draft');
+      console.log('  m365-agent-cli drafts -r <id>                  # Read draft');
+      console.log('  m365-agent-cli drafts --create --to "..." --subject "..." --body "..."');
+      console.log('  m365-agent-cli drafts --edit <id> --body "new text"');
+      console.log('  m365-agent-cli drafts --send <id>              # Send draft');
+      console.log('  m365-agent-cli drafts --delete <id>            # Delete draft');
       console.log();
     }
   );

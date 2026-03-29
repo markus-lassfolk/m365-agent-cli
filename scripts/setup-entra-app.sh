@@ -4,7 +4,7 @@
 
 set -e
 
-APP_NAME="Clippy"
+APP_NAME="m365-agent-cli"
 
 echo "Checking az login status..."
 if ! az account show > /dev/null 2>&1; then

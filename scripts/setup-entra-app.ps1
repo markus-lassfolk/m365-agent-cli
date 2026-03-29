@@ -6,7 +6,7 @@
     before running this script.
 #>
 
-$AppName = "Clippy"
+$AppName = "m365-agent-cli"
 
 Write-Host "Creating Entra ID App Registration: $AppName..."
 
