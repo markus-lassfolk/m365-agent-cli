@@ -61,6 +61,49 @@ async function performDeviceCodeFlow(clientId: string, tenant: string, scope: st
     if (tokenRes.ok) {
       authenticated = true;
       refreshToken = tokenJson.refresh_token;
+        // Extract username from access token
+
+        try {
+
+          const parts = tokenJson.access_token.split(".");
+
+          if (parts.length === 3) {
+
+            const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
+
+            const username = payload.upn || payload.email;
+
+            if (username) {
+
+              let envContent = "";
+
+              const envPath = join(process.cwd(), ".env");
+
+              if (existsSync(envPath)) {
+
+                envContent = await readFile(envPath, "utf8");
+
+              }
+
+              if (/^EWS_USERNAME=.*$/m.test(envContent)) {
+
+                envContent = envContent.replace(/^EWS_USERNAME=.*$/m, () => `EWS_USERNAME=${username}`);
+
+              } else {
+
+                envContent += `\nEWS_USERNAME=${username}\n`;
+
+              }
+
+              await writeFile(envPath, `${envContent.trim()}\n`, { encoding: "utf8", mode: 0o600 });
+
+              console.log(`Saved EWS_USERNAME (${username}) to .env file`);
+
+            }
+
+          }
+
+        } catch (_e) { /* ignore parse errors */ }
       if (!refreshToken) {
         console.error(`\nFailed to obtain ${label} refresh token. Ensure the offline_access scope is granted.`);
         process.exit(1);
