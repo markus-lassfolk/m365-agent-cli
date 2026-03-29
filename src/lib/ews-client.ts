@@ -99,7 +99,7 @@ export function soapEnvelope(body: string): string {
 </soap:Envelope>`;
 }
 
-const EWS_TIMEOUT_MS = Number.parseInt(process.env['EWS_TIMEOUT_MS'] ?? '30000', 10);
+const EWS_TIMEOUT_MS = Number.parseInt(process.env['EWS_TIMEOUT_MS'] ?? '30000', 10) || 30000;
 
 export async function callEws(token: string, envelope: string, mailbox?: string): Promise<string> {
   const anchorMailbox = mailbox || EWS_USERNAME;

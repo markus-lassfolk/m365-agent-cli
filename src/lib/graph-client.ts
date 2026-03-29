@@ -188,7 +188,7 @@ export async function fetchGraphRaw(token: string, path: string, options: Reques
   });
 }
 
-const GRAPH_TIMEOUT_MS = Number.parseInt(process.env['GRAPH_TIMEOUT_MS'] ?? '30000', 10);
+const GRAPH_TIMEOUT_MS = Number.parseInt(process.env['GRAPH_TIMEOUT_MS'] ?? '30000', 10) || 30000;
 
 export async function callGraph<T>(
   token: string,
@@ -202,6 +202,7 @@ export async function callGraph<T>(
 
   try {
     response = await fetch(`${GRAPH_BASE_URL}${path}`, {
+      signal: controller.signal,
       ...options,
       headers: {
         Authorization: `Bearer ${token}`,
@@ -210,8 +211,7 @@ export async function callGraph<T>(
           ? { 'Content-Type': 'application/json' }
           : {}),
         ...(options.headers || {})
-      },
-      signal: controller.signal
+      }
     });
   } catch (err) {
     clearTimeout(timer);
