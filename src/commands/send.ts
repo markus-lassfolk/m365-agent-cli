@@ -1,10 +1,10 @@
 import { readFile } from 'node:fs/promises';
 import { Command } from 'commander';
-import { lookup } from 'mime-types';
 import { AttachmentPathError, validateAttachmentPath } from '../lib/attachments.js';
 import { resolveAuth } from '../lib/auth.js';
 import { type EmailAttachment, sendEmail } from '../lib/ews-client.js';
 import { markdownToHtml } from '../lib/markdown.js';
+import { lookupMimeType } from '../lib/mime-type.js';
 
 export const sendCommand = new Command('send')
   .description('Send an email')
@@ -96,7 +96,7 @@ export const sendCommand = new Command('send')
           try {
             const validated = await validateAttachmentPath(filePath, workingDirectory);
             const content = await readFile(validated.absolutePath);
-            const contentType = lookup(validated.fileName) || 'application/octet-stream';
+            const contentType = lookupMimeType(validated.fileName);
 
             attachments.push({
               name: validated.fileName,

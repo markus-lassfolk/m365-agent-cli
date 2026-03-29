@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { Command } from 'commander';
-import { lookup } from 'mime-types';
+import { stat } from 'fs/promises';
+import { lookupMimeType } from '../lib/mime-type.js';
 import { AttachmentPathError, validateAttachmentPath } from '../lib/attachments.js';
 import { resolveAuth } from '../lib/auth.js';
 import {
@@ -159,8 +160,13 @@ export const draftsCommand = new Command('drafts')
           for (const filePath of filePaths) {
             try {
               const validated = await validateAttachmentPath(filePath, workingDirectory);
+              const fileStat = await stat(validated.absolutePath);
+              if (fileStat.size > 25 * 1024 * 1024) {
+                console.error(`File too large (>25MB): ${validated.absolutePath}`);
+                process.exit(1);
+              }
               const content = await readFile(validated.absolutePath);
-              const contentType = lookup(validated.fileName) || 'application/octet-stream';
+              const contentType = lookupMimeType(validated.fileName) || 'application/octet-stream';
 
               const attachResult = await addAttachmentToDraft(authResult.token!, result.data.Id, {
                 name: validated.fileName,
@@ -278,7 +284,7 @@ export const draftsCommand = new Command('drafts')
             try {
               const validated = await validateAttachmentPath(filePath, workingDirectory);
               const content = await readFile(validated.absolutePath);
-              const contentType = lookup(validated.fileName) || 'application/octet-stream';
+              const contentType = lookupMimeType(validated.fileName) || 'application/octet-stream';
 
               await addAttachmentToDraft(authResult.token!, id, {
                 name: validated.fileName,
