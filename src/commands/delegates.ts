@@ -7,7 +7,6 @@ import {
   removeDelegate,
   type DelegateInfo,
   type DelegatePermissions,
-  type DelegateFolderPermissionLevel,
   type DeliverMeetingRequests
 } from '../lib/delegate-client.js';
 

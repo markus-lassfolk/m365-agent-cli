@@ -6,7 +6,6 @@ import {
   findRooms,
   isRoomFree,
   type Place,
-  type RoomList,
   type RoomFilters
 } from '../lib/places-client.js';
 
@@ -14,7 +13,7 @@ function parseCapacityFilter(value: string | undefined): number | undefined {
   if (!value) return undefined;
   const cleaned = value.replace('+', '').replace('>', '').trim();
   const parsed = parseInt(cleaned, 10);
-  if (isNaN(parsed)) {
+  if (Number.isNaN(parsed)) {
     throw new Error(`Invalid capacity value: "${value}". Must be a number.`);
   }
   return parsed;

@@ -37,8 +37,8 @@ export const findCommand = new Command('find')
 
       const token = authResult.token!;
       try {
-        let results: any[] = [];
-        let errors: string[] = [];
+        const results: any[] = [];
+        const errors: string[] = [];
 
         const searchAll = !options.people && !options.groups;
 
@@ -108,7 +108,7 @@ export const findCommand = new Command('find')
             // Only expand members of the first group to avoid N+1 API calls
             const groupsToExpand = options.expand ? groupsRes.data.slice(0, 1) : [];
             for (const g of groupsRes.data) {
-              let groupItem: any = {
+              const groupItem: any = {
                 id: g.id,
                 type: 'Group',
                 name: g.displayName,
@@ -149,7 +149,7 @@ export const findCommand = new Command('find')
 
         if (errors.length > 0) {
           console.error(`Warnings:`);
-          errors.forEach((e) => console.error(` - ${e}`));
+          for (const e of errors) console.error(` - ${e}`);
         }
 
         if (results.length === 0) {

@@ -23,7 +23,7 @@ export const scheduleCommand = new Command('schedule')
     const startDate = new Date(options.start);
     const endDate = new Date(options.end);
 
-    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
       const errorMessage =
         'Invalid start or end date. Please provide ISO 8601 date/time values (e.g. 2026-04-01T00:00:00Z or 2026-04-01).';
       if (options.json) {
@@ -85,8 +85,8 @@ export const scheduleCommand = new Command('schedule')
         console.log('  Busy times:');
         for (const item of schedule.scheduleItems) {
           const status = item.status || 'Busy';
-          const start = item.start?.dateTime ? new Date(item.start.dateTime + 'Z').toLocaleString() : 'Unknown';
-          const end = item.end?.dateTime ? new Date(item.end.dateTime + 'Z').toLocaleString() : 'Unknown';
+          const start = item.start?.dateTime ? new Date(`${item.start.dateTime}Z`).toLocaleString() : 'Unknown';
+          const end = item.end?.dateTime ? new Date(`${item.end.dateTime}Z`).toLocaleString() : 'Unknown';
           const subject = item.subject ? ` - ${item.subject}` : '';
           console.log(`    [${status}] ${start} to ${end}${subject}`);
         }

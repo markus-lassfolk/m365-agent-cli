@@ -7,7 +7,6 @@ import {
   mockResolveNamesResponse,
   mockCalendarEventsResponse,
   mockCalendarEventsEmptyResponse,
-  mockCalendarEventsWithCancelled,
   mockGetScheduleResponse,
   mockRespondListResponse,
   mockRespondSuccessResponse,

@@ -1,5 +1,5 @@
 import { resolveGraphAuth } from './graph-auth.js';
-import { callGraph, graphResult, graphError, fetchAllPages, GraphApiError } from './graph-client.js';
+import { callGraph, graphResult, graphError, fetchAllPages } from './graph-client.js';
 
 export interface Place {
   id?: string;
@@ -131,7 +131,7 @@ export async function isRoomFree(
         startISO
       )}&endDateTime=${encodeURIComponent(endISO)}`
     );
-  } catch (err) {
+  } catch (_err) {
     return null;
   }
 

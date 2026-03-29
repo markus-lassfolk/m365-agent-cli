@@ -5,9 +5,12 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    - cron: '0 0 * * 0' # Weekly run to catch new vulnerabilities
 
 jobs:
   checks:
+    name: Code Quality & Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,8 +19,91 @@ jobs:
         with:
           bun-version: latest
 
-      - run: bun install
-      - run: bun run typecheck
-      - run: bun run lint
-      - run: bun run format:check
-      - run: bun test
+      - name: Install Dependencies
+        run: bun install
+
+      - name: Type Check
+        run: bun run typecheck
+
+      - name: Lint (Biome)
+        run: bun run lint
+
+      - name: Formatting Check (Biome)
+        run: bun run format:check
+
+      - name: Run Tests with Coverage
+        run: bun test --coverage
+
+      - name: Upload Coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          if-no-files-found: ignore
+
+      - name: Dead Code Analysis (Knip)
+        run: bunx knip --no-exit-code
+
+  security:
+    name: Security & Secrets Scanning
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: TruffleHog Secret Scanning
+        uses: trufflesecurity/trufflehog@main
+        continue-on-error: true
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --only-verified
+
+      - name: Gitleaks Secret Scanning
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          ignore-unfixed: true
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+
+  complexity:
+    name: Code Metrics & Quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install Dependencies
+        run: bun install
+
+      - name: Run Biome Analyzer
+        run: bunx @biomejs/biome check --max-diagnostics=none .
+
+  coverage:
+    name: Code Coverage
+    needs: checks
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download Coverage Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+      - name: Report Coverage
+        uses: romeovs/lcov-reporter-action@v0.3.1
+        with:
+          lcov-file: ./coverage/lcov.info
+          github-token: ${{ secrets.GITHUB_TOKEN }}

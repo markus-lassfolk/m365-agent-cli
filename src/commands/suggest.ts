@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
-import { findMeetingTimes, FindMeetingTimesRequest, AttendeeBase } from '../lib/graph-schedule.js';
+import { findMeetingTimes, type FindMeetingTimesRequest, type AttendeeBase } from '../lib/graph-schedule.js';
 
 export const suggestCommand = new Command('suggest')
   .description('AI meeting time suggestions')
@@ -29,7 +29,7 @@ export const suggestCommand = new Command('suggest')
     };
 
     const durationKey = options.duration.trim().toLowerCase();
-    if (!Object.prototype.hasOwnProperty.call(durationMapping, durationKey)) {
+    if (!Object.hasOwn(durationMapping, durationKey)) {
       const message = `Invalid duration "${options.duration}". Supported values are: ${Object.keys(durationMapping).join(', ')}.`;
       if (options.json) {
         console.log(JSON.stringify({ error: message }, null, 2));
@@ -115,10 +115,10 @@ export const suggestCommand = new Command('suggest')
 
     for (const suggestion of meetingTimeSuggestions) {
       const start = suggestion.meetingTimeSlot?.start?.dateTime
-        ? new Date(suggestion.meetingTimeSlot.start.dateTime + 'Z').toLocaleString()
+        ? new Date(`${suggestion.meetingTimeSlot.start.dateTime}Z`).toLocaleString()
         : 'Unknown';
       const end = suggestion.meetingTimeSlot?.end?.dateTime
-        ? new Date(suggestion.meetingTimeSlot.end.dateTime + 'Z').toLocaleString()
+        ? new Date(`${suggestion.meetingTimeSlot.end.dateTime}Z`).toLocaleString()
         : 'Unknown';
 
       const confidence = suggestion.confidence !== undefined ? `${suggestion.confidence}%` : 'Unknown';

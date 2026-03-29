@@ -1,7 +1,5 @@
 import { describe, expect, test, mock, beforeEach, afterEach } from 'bun:test';
 import { resolveAuth } from '../lib/auth.js';
-import * as fs from 'node:fs/promises';
-import * as jwtUtils from '../lib/jwt-utils.js';
 
 const mockRead = mock();
 const mockWrite = mock();
@@ -28,7 +26,7 @@ describe('auth resolution', () => {
 
   beforeEach(() => {
     originalEnv = { ...process.env };
-    global.fetch = mockFetch;
+    global.fetch = mockFetch as any as any;
     mockRead.mockClear();
     mockWrite.mockClear();
     mockFetch.mockClear();

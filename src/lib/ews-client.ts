@@ -834,8 +834,7 @@ export async function createEvent(options: CreateEventOptions): Promise<OwaRespo
 
 export async function updateEvent(options: UpdateEventOptions): Promise<OwaResponse<CreatedEvent>> {
   try {
-    const { token, eventId, changeKey, subject, start, end, body, location, attendees, isOnlineMeeting, mailbox } =
-      options;
+    const { token, eventId, changeKey, subject, start, end, body, location, attendees, mailbox } = options;
 
     const updates: string[] = [];
 
@@ -2151,7 +2150,9 @@ export async function getAutoReplyRule(token: string, mailbox?: string): Promise
     const rulesRegex = /<t:Rule>(.*?)<\/t:Rule>/gs;
     let match;
     let ruleXml = null;
-    while ((match = rulesRegex.exec(xml)) !== null) {
+    while (true) {
+      match = rulesRegex.exec(xml);
+      if (match === null) break;
       if (match[1].includes('<t:DisplayName>AutoReplyTemplate</t:DisplayName>')) {
         ruleXml = match[1];
         break;
@@ -2231,7 +2232,9 @@ export async function setAutoReplyRule(
     let oldTemplateId = '';
     const rulesRegex = /<t:Rule>(.*?)<\/t:Rule>/gs;
     let match;
-    while ((match = rulesRegex.exec(rulesXml)) !== null) {
+    while (true) {
+      match = rulesRegex.exec(rulesXml);
+      if (match === null) break;
       if (match[1].includes('<t:DisplayName>AutoReplyTemplate</t:DisplayName>')) {
         ruleIdStr = extractTag(match[1], 'RuleId');
         oldTemplateId = extractAttribute(match[1], 'ItemId', 'Id');
@@ -2333,7 +2336,7 @@ export async function setAutoReplyRule(
           </m:DeleteItem>
         `);
         await callEws(token, deleteTemplateEnvelope, address);
-      } catch (err) {
+      } catch (_err) {
         // Old template might already be deleted, continue
       }
     }

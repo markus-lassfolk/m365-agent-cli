@@ -84,7 +84,7 @@ export const autoReplyCommand = new Command('auto-reply')
           if (options.enable === undefined && options.disable === undefined) {
             enabled = currentRuleRes.data.enabled;
           } else {
-            enabled = options.enable ? true : false;
+            enabled = !!options.enable;
           }
           if (!messageText) messageText = currentRuleRes.data.messageText;
           if (!options.start && currentRuleRes.data.startTime) start = currentRuleRes.data.startTime;

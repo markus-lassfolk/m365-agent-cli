@@ -138,7 +138,6 @@ import { delegatesCommand } from '../commands/delegates.js';
 import { todoCommand } from '../commands/todo.js';
 
 // Helper to call a command action with options
-type CommandAction = (opts: any) => Promise<void>;
 
 async function _runCmdAction(command: any, opts: any): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   return runCommand(async () => {
