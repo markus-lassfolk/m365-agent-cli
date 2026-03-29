@@ -414,8 +414,7 @@ export async function uploadLargeFile(
               'Content-Range': contentRange
             },
             body: chunkData,
-            signal: controller.signal,
-            redirect: 'manual'
+            signal: controller.signal
           });
         } catch (err: any) {
           if (err && err.name === 'AbortError') {
