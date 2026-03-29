@@ -304,6 +304,8 @@ export interface GetEmailsOptions {
   search?: string;
   select?: string[];
   orderBy?: string;
+  isRead?: boolean;
+  flagStatus?: 'Flagged' | 'NotFlagged' | 'Complete';
 }
 
 export interface Attachment {
@@ -1275,21 +1277,36 @@ export async function respondToEvent(options: RespondToEventOptions): Promise<Ow
 
 export async function getEmails(options: GetEmailsOptions): Promise<OwaResponse<EmailListResponse>> {
   try {
-    const { token, folder = 'inbox', top = 10, skip = 0, filter, search } = options;
+    const { token, folder = 'inbox', top = 10, skip = 0, filter, search, isRead, flagStatus } = options;
 
     // Build restriction for filters
     let restrictionXml = '';
-    if (filter && !search) {
+    if (!search) {
       const restrictions: string[] = [];
 
-      if (filter.includes('IsRead eq false')) {
+      if (isRead !== undefined) {
+        restrictions.push(`
+        <t:IsEqualTo>
+          <t:FieldURI FieldURI="message:IsRead" />
+          <t:FieldURIOrConstant><t:Constant Value="${isRead ? 'true' : 'false'}" /></t:FieldURIOrConstant>
+        </t:IsEqualTo>`);
+      } else if (filter?.includes('IsRead eq false')) {
+        // Fallback for legacy filter string
         restrictions.push(`
         <t:IsEqualTo>
           <t:FieldURI FieldURI="message:IsRead" />
           <t:FieldURIOrConstant><t:Constant Value="false" /></t:FieldURIOrConstant>
         </t:IsEqualTo>`);
       }
-      if (filter.includes('FlagStatus') && filter.includes('Flagged')) {
+
+      if (flagStatus) {
+        restrictions.push(`
+        <t:IsEqualTo>
+          <t:FieldURI FieldURI="item:Flag/FlagStatus" />
+          <t:FieldURIOrConstant><t:Constant Value="${flagStatus}" /></t:FieldURIOrConstant>
+        </t:IsEqualTo>`);
+      } else if (filter?.includes('FlagStatus') && filter?.includes('Flagged')) {
+        // Fallback for legacy filter string
         restrictions.push(`
         <t:IsEqualTo>
           <t:FieldURI FieldURI="item:Flag/FlagStatus" />

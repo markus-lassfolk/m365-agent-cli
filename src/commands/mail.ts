@@ -154,22 +154,14 @@ export const mailCommand = new Command('mail')
       const page = parseInt(options.page, 10) || 1;
       const skip = (page - 1) * limit;
 
-      // Build filter
-      const filters: string[] = [];
-      if (options.unread) {
-        filters.push('IsRead eq false');
-      }
-      if (options.flagged) {
-        filters.push("Flag/FlagStatus eq 'Flagged'");
-      }
-
       const result = await getEmails({
         token: authResult.token!,
         folder: apiFolder,
         top: limit,
         skip,
-        filter: filters.length > 0 ? filters.join(' and ') : undefined,
-        search: options.search
+        search: options.search,
+        isRead: options.unread ? false : undefined,
+        flagStatus: options.flagged ? 'Flagged' : undefined
       });
 
       if (!result.ok || !result.data) {
