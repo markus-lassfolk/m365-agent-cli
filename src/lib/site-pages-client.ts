@@ -1,4 +1,4 @@
-import { callGraph, GraphApiError, GraphResponse, graphError } from './graph-client.js';
+import { callGraph, fetchAllPages, GraphApiError, GraphResponse, graphError } from './graph-client.js';
 
 export interface SitePage {
   id: string;
@@ -14,17 +14,15 @@ export interface SitePage {
 }
 
 export async function listSitePages(token: string, siteId: string): Promise<GraphResponse<{ value: SitePage[] }>> {
-  try {
-    return await callGraph<{ value: SitePage[] }>(
-      token,
-      `/sites/${encodeURIComponent(siteId)}/pages/microsoft.graph.sitePage`
-    );
-  } catch (err) {
-    if (err instanceof GraphApiError) {
-      return graphError(err.message, err.code, err.status);
-    }
-    return graphError(err instanceof Error ? err.message : 'Failed to list site pages');
+  const result = await fetchAllPages<SitePage>(
+    token,
+    `/sites/${encodeURIComponent(siteId)}/pages/microsoft.graph.sitePage`,
+    'Failed to list site pages'
+  );
+  if (!result.ok) {
+    return { ok: false, error: result.error };
   }
+  return { ok: true, data: { value: result.data || [] } };
 }
 
 export async function getSitePage(token: string, siteId: string, pageId: string): Promise<GraphResponse<SitePage>> {

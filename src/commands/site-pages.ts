@@ -39,7 +39,9 @@ sitePagesCommand
     }
 
     for (const page of result.data.value) {
-      const state = page.publishingState ? `${page.publishingState.level} (v${page.publishingState.versionId})` : 'Unknown';
+      const state = page.publishingState
+        ? `${page.publishingState.level} (v${page.publishingState.versionId})`
+        : 'Unknown';
       console.log(`- ${page.name || page.title || page.id} (${page.id}) - State: ${state}`);
     }
   });
@@ -83,35 +85,41 @@ sitePagesCommand
   .option('--name <name>', 'New name')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
-  .action(async (siteId: string, pageId: string, options: { title?: string; name?: string; json?: boolean; token?: string }) => {
-    const auth = await resolveGraphAuth({ token: options.token });
-    if (!auth.success) {
-      console.error(`Error: ${auth.error}`);
-      process.exit(1);
+  .action(
+    async (
+      siteId: string,
+      pageId: string,
+      options: { title?: string; name?: string; json?: boolean; token?: string }
+    ) => {
+      const auth = await resolveGraphAuth({ token: options.token });
+      if (!auth.success) {
+        console.error(`Error: ${auth.error}`);
+        process.exit(1);
+      }
+
+      const payload: Partial<SitePage> = {};
+      if (options.title) payload.title = options.title;
+      if (options.name) payload.name = options.name;
+
+      if (Object.keys(payload).length === 0) {
+        console.error('Error: Please provide at least one field to update (--title or --name)');
+        process.exit(1);
+      }
+
+      const result = await updateSitePage(auth.token!, siteId, pageId, payload);
+      if (!result.ok || !result.data) {
+        console.error(`Error: ${result.error?.message || 'Request failed'}`);
+        process.exit(1);
+      }
+
+      if (options.json) {
+        console.log(JSON.stringify(result.data, null, 2));
+        return;
+      }
+
+      console.log(`✓ Updated page ${pageId}`);
     }
-
-    const payload: Partial<SitePage> = {};
-    if (options.title) payload.title = options.title;
-    if (options.name) payload.name = options.name;
-
-    if (Object.keys(payload).length === 0) {
-      console.error('Error: Please provide at least one field to update (--title or --name)');
-      process.exit(1);
-    }
-
-    const result = await updateSitePage(auth.token!, siteId, pageId, payload);
-    if (!result.ok || !result.data) {
-      console.error(`Error: ${result.error?.message || 'Request failed'}`);
-      process.exit(1);
-    }
-
-    if (options.json) {
-      console.log(JSON.stringify(result.data, null, 2));
-      return;
-    }
-
-    console.log(`✓ Updated page ${pageId}`);
-  });
+  );
 
 sitePagesCommand
   .command('publish <siteId> <pageId>')
