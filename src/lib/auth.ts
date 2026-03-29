@@ -41,8 +41,8 @@ async function saveCachedToken(identity: string, token: CachedToken): Promise<vo
       encoding: 'utf-8',
       mode: 0o600
     });
-  } catch {
-    // Ignore write errors
+  } catch (err) {
+    console.error(`Failed to write token cache for identity '${identity}':`, err instanceof Error ? err.message : err);
   }
 }
 
