@@ -31,7 +31,7 @@ describe('searchFiles query encoding', () => {
   });
 });
 
-import { writeFileSync, unlinkSync } from 'node:fs';
+import { unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { uploadLargeFile } from './graph-client.js';
