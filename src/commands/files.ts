@@ -13,7 +13,10 @@ import {
   searchFiles,
   shareFile,
   uploadFile,
-  uploadLargeFile
+  uploadLargeFile,
+  listFileVersions,
+  restoreFileVersion,
+  type DriveItemVersion
 } from '../lib/graph-client.js';
 
 function parseFolderRef(folder?: string): DriveItemReference | undefined {
@@ -321,6 +324,69 @@ filesCommand
       if (result.data.id) console.log(`  Link ID: ${result.data.id}`);
     }
   );
+
+
+filesCommand
+  .command('versions <fileId>')
+  .description('List versions of a file')
+  .option('--json', 'Output as JSON')
+  .option('--token <token>', 'Use a specific Graph token')
+  .action(async (fileId: string, options: { json?: boolean; token?: string }) => {
+    const auth = await resolveGraphAuth({ token: options.token });
+    if (!auth.success) {
+      console.error(`Error: ${auth.error}`);
+      process.exit(1);
+    }
+
+    const result = await listFileVersions(auth.token!, fileId);
+    if (!result.ok || !result.data) {
+      console.error(`Error: ${result.error?.message || 'Failed to list versions'}`);
+      process.exit(1);
+    }
+
+    if (options.json) {
+      console.log(JSON.stringify({ versions: result.data }, null, 2));
+      return;
+    }
+
+    if (result.data.length === 0) {
+      console.log('No versions found.');
+      return;
+    }
+
+    for (const v of result.data) {
+      console.log(`VERSION  ${v.id}`);
+      if (v.lastModifiedDateTime) console.log(`      Modified: ${v.lastModifiedDateTime}`);
+      if (v.size !== undefined) console.log(`      Size:     ${formatBytes(v.size)}`);
+      if (v.lastModifiedBy?.user?.displayName) console.log(`      By:       ${v.lastModifiedBy.user.displayName}`);
+    }
+  });
+
+filesCommand
+  .command('restore <fileId> <versionId>')
+  .description('Restore a specific version of a file')
+  .option('--json', 'Output as JSON')
+  .option('--token <token>', 'Use a specific Graph token')
+  .action(async (fileId: string, versionId: string, options: { json?: boolean; token?: string }) => {
+    const auth = await resolveGraphAuth({ token: options.token });
+    if (!auth.success) {
+      console.error(`Error: ${auth.error}`);
+      process.exit(1);
+    }
+
+    const result = await restoreFileVersion(auth.token!, fileId, versionId);
+    if (!result.ok) {
+      console.error(`Error: ${result.error?.message || 'Restore failed'}`);
+      process.exit(1);
+    }
+
+    if (options.json) {
+      console.log(JSON.stringify({ success: true, fileId, versionId }, null, 2));
+      return;
+    }
+
+    console.log(`✓ Restored version ${versionId} of file ${fileId}`);
+  });
 
 filesCommand
   .command('checkin <fileId>')
