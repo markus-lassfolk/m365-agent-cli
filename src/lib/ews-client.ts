@@ -413,9 +413,9 @@ function parseCalendarItem(block: string, mailbox?: string): CalendarEvent {
 
   // Extract timezone info (EWS may return StartTimeZone/EndTimeZone or a TimeZone block)
   const startTimeZone =
-    extractTag(block, 'StartTimeZone') || extractTag(block, 'TimeZoneId') || 'UTC';
+    extractAttribute(block, 'StartTimeZone', 'Id') || extractTag(block, 'TimeZoneId') || 'UTC';
   const endTimeZone =
-    extractTag(block, 'EndTimeZone') || extractTag(block, 'TimeZoneId') || 'UTC';
+    extractAttribute(block, 'EndTimeZone', 'Id') || extractTag(block, 'TimeZoneId') || 'UTC';
 
   return {
     Id: id,
