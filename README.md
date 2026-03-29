@@ -66,8 +66,11 @@ Or pass `--mailbox` per-command (see examples below).
 ### How It Works
 
 1. m365-agent-cli uses the refresh token to obtain a short-lived access token via Microsoft's OAuth2 endpoint
-2. Access tokens are cached in `~/.config/m365-agent-cli/token-cache.json` and refreshed automatically when expired
-3. Microsoft may rotate the refresh token on each use — the latest one is cached automatically
+2. Access tokens are cached under `~/.config/m365-agent-cli/`:
+   - EWS tokens are stored per identity as `token-cache-{identity}.json`
+   - Microsoft Graph tokens are stored in `graph-token-cache.json`
+   Tokens are refreshed automatically when expired.
+3. Microsoft may rotate the refresh token on each use — the latest one is cached automatically in the same directory
 
 ### Verify Authentication
 

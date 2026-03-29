@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, rename, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { getJwtExpiration, getMicrosoftTenantPathSegment, isValidJwtStructure } from './jwt-utils.js';
@@ -21,8 +21,29 @@ interface CachedToken {
 // network values (token contents) are written only as file data, never used to select
 // an arbitrary write location.
 const TOKEN_CACHE_FILE_TEMPLATE = join(homedir(), '.config', 'm365-agent-cli', 'token-cache-{identity}.json');
+const OLD_TOKEN_CACHE_FILE_TEMPLATE = join(homedir(), '.config', 'clippy', 'token-cache-{identity}.json');
+
+async function migrateTokenCache(identity: string): Promise<void> {
+  const TOKEN_CACHE_FILE = TOKEN_CACHE_FILE_TEMPLATE.replace('{identity}', identity);
+  const OLD_TOKEN_CACHE_FILE = OLD_TOKEN_CACHE_FILE_TEMPLATE.replace('{identity}', identity);
+
+  try {
+    const newStats = await stat(TOKEN_CACHE_FILE).catch(() => null);
+    if (!newStats) {
+      const oldStats = await stat(OLD_TOKEN_CACHE_FILE).catch(() => null);
+      if (oldStats) {
+        const dir = join(homedir(), '.config', 'm365-agent-cli');
+        await mkdir(dir, { recursive: true, mode: 0o700 });
+        await rename(OLD_TOKEN_CACHE_FILE, TOKEN_CACHE_FILE);
+      }
+    }
+  } catch (_err) {
+    // Ignore migration errors
+  }
+}
 
 async function loadCachedToken(identity: string): Promise<CachedToken | null> {
+  await migrateTokenCache(identity);
   try {
     const TOKEN_CACHE_FILE = TOKEN_CACHE_FILE_TEMPLATE.replace('{identity}', identity);
     const data = await readFile(TOKEN_CACHE_FILE, 'utf-8');

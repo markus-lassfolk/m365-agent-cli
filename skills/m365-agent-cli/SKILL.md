@@ -30,7 +30,7 @@ A command-line tool for interacting with Microsoft 365 services.
 
 ### Files (OneDrive/SharePoint)
 * `m365-agent-cli files` - List files in OneDrive.
-* `m365-agent-cli files upload --file <local_path> --dest <remote_path>` - Upload or replace a file in-place.
+* `m365-agent-cli files upload <local_path> [--folder <id>]` - Upload or replace a file in OneDrive or SharePoint.
 * `m365-agent-cli sharepoint` - Interact with SharePoint sites and document libraries.
 * `m365-agent-cli pages` - Manage SharePoint pages.
 
