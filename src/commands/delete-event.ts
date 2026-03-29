@@ -166,7 +166,8 @@ export const deleteEventCommand = new Command('delete-event')
       }
 
       // If occurrence/instance flags are provided without explicit scope, default to 'this'
-      if ((options.occurrence || options.instance) && options.scope === 'all') {
+      const scopeSource = deleteEventCommand.getOptionValueSource('scope');
+      if ((options.occurrence || options.instance) && options.scope === 'all' && scopeSource === 'default') {
         scope = 'this';
       }
 
