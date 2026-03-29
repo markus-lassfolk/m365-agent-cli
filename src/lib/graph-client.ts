@@ -339,7 +339,7 @@ export async function uploadLargeFile(
 ): Promise<GraphResponse<UploadLargeResult>> {
   try {
     const absolutePath = resolve(localPath);
-    let fileHandle;
+    let fileHandle: any;
     try {
       fileHandle = await open(absolutePath, 'r');
     } catch (err: any) {

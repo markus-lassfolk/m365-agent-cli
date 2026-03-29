@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 
 const token = 'test-token';
 const baseUrl = 'https://graph.microsoft.com/v1.0';
