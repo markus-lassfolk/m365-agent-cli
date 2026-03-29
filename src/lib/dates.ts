@@ -23,10 +23,10 @@ export function parseTimeToDate(timeStr: string, baseDate: Date = new Date()): D
     return result;
   }
 
-  const hourMatch = timeStr.match(/^(\d{1,2})(am|pm)?$/i);
+  const hourMatch = timeStr.match(/^(\d{1,2})(am|pm)$/i);
   if (hourMatch) {
     const hourStr = hourMatch[1];
-    const period = hourMatch[2]?.toLowerCase();
+    const period = hourMatch[2].toLowerCase();
     const hourNum = parseInt(hourStr, 10);
     if (hourNum < 1 || hourNum > 12) {
       throw new Error(`Invalid time value: '${timeStr}' — hour must be between 1 and 12.`);

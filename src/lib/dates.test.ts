@@ -13,14 +13,22 @@ describe('dates helpers', () => {
 
   it('parseTimeToDate throws on invalid hour in HH:MM format', () => {
     const base = new Date('2026-03-27T00:00:00');
-    expect(() => parseTimeToDate('25:00', base)).toThrow("Invalid time value: '25:00' — hour must be between 0 and 23.");
-    expect(() => parseTimeToDate('24:00', base)).toThrow("Invalid time value: '24:00' — hour must be between 0 and 23.");
+    expect(() => parseTimeToDate('25:00', base)).toThrow(
+      "Invalid time value: '25:00' — hour must be between 0 and 23."
+    );
+    expect(() => parseTimeToDate('24:00', base)).toThrow(
+      "Invalid time value: '24:00' — hour must be between 0 and 23."
+    );
   });
 
   it('parseTimeToDate throws on invalid minute in HH:MM format', () => {
     const base = new Date('2026-03-27T00:00:00');
-    expect(() => parseTimeToDate('13:75', base)).toThrow("Invalid time value: '13:75' — minute must be between 0 and 59.");
-    expect(() => parseTimeToDate('13:99', base)).toThrow("Invalid time value: '13:99' — minute must be between 0 and 59.");
+    expect(() => parseTimeToDate('13:75', base)).toThrow(
+      "Invalid time value: '13:75' — minute must be between 0 and 59."
+    );
+    expect(() => parseTimeToDate('13:99', base)).toThrow(
+      "Invalid time value: '13:99' — minute must be between 0 and 59."
+    );
   });
 
   it('parseTimeToDate throws on invalid hour in H(am/pm) format', () => {
@@ -31,7 +39,9 @@ describe('dates helpers', () => {
 
   it('parseTimeToDate throws on completely invalid format', () => {
     const base = new Date('2026-03-27T00:00:00');
-    expect(() => parseTimeToDate('not-a-time', base)).toThrow("Invalid time value: 'not-a-time' — expected HH:MM, H:MM, or H(am/pm) format.");
+    expect(() => parseTimeToDate('not-a-time', base)).toThrow(
+      "Invalid time value: 'not-a-time' — expected HH:MM, H:MM, or H(am/pm) format."
+    );
   });
 
   it('toUTCISOString formats as UTC with Z suffix', () => {
