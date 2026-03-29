@@ -1119,15 +1119,15 @@ export async function updateEvent(options: UpdateEventOptions): Promise<OwaRespo
         `<t:SetItemField><t:FieldURI FieldURI="item:Body" /><t:CalendarItem><t:Body BodyType="Text">${xmlEscape(body)}</t:Body></t:CalendarItem></t:SetItemField>`
       );
     }
-    if (start !== undefined) {
-      updates.push(
-        `<t:SetItemField><t:FieldURI FieldURI="calendar:Start" /><t:CalendarItem><t:Start>${xmlEscape(start)}</t:Start></t:CalendarItem></t:SetItemField>`
-      );
-    }
     if (timezone !== undefined) {
       updates.push(
         `<t:SetItemField><t:FieldURI FieldURI="calendar:StartTimeZone" /><t:CalendarItem><t:StartTimeZone Id="${xmlEscape(timezone)}"/></t:CalendarItem></t:SetItemField>`,
         `<t:SetItemField><t:FieldURI FieldURI="calendar:EndTimeZone" /><t:CalendarItem><t:EndTimeZone Id="${xmlEscape(timezone)}"/></t:CalendarItem></t:SetItemField>`
+      );
+    }
+    if (start !== undefined) {
+      updates.push(
+        `<t:SetItemField><t:FieldURI FieldURI="calendar:Start" /><t:CalendarItem><t:Start>${xmlEscape(start)}</t:Start></t:CalendarItem></t:SetItemField>`
       );
     }
     if (end !== undefined) {
