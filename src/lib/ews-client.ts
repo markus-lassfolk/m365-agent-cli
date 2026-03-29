@@ -438,11 +438,11 @@ function parseRecurrenceFromBlock(block: string): {
       parseInt(interval, 10) === 1 ? `Monthly on the ${idx} ${days}` : `Every ${interval} months on the ${idx} ${days}`
     );
   } else if (recurrenceBlock.includes('AbsoluteYearlyRecurrence')) {
-    const monthName = month ? monthNames[parseInt(month, 10) - 1] || month : 'the specified month';
+    const monthName = month || 'the specified month';
     parts.push(`Yearly on ${monthName} ${dayOfMonth || 1}`);
   } else if (recurrenceBlock.includes('RelativeYearlyRecurrence')) {
     const idx = dayIndexNames[dayOfWeekIndex || 'First'] || '1st';
-    const monthName = month ? monthNames[parseInt(month, 10) - 1] || month : 'the specified month';
+    const monthName = month || 'the specified month';
     const days = daysOfWeek ? daysOfWeek.split(' ').filter(Boolean).join(', ') : 'day';
     parts.push(`Yearly on the ${idx} ${days} of ${monthName}`);
   }
