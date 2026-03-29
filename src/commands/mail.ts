@@ -1,5 +1,5 @@
 import { access, mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { extname, join } from 'node:path';
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
 import {
@@ -81,6 +81,7 @@ export const mailCommand = new Command('mail')
         read?: string;
         download?: string;
         output: string;
+        force?: boolean;
         markRead?: string;
         markUnread?: string;
         flag?: string;
@@ -266,6 +267,8 @@ export const mailCommand = new Command('mail')
 
         console.log(`\nDownloading ${attachments.length} attachment(s) to ${options.output}/\n`);
 
+        const usedPaths = new Set<string>();
+
         for (const att of attachments) {
           // Get full attachment with content
           const fullAtt = await getAttachment(authResult.token!, emailSummary.data.Id, att.Id);
@@ -274,27 +277,46 @@ export const mailCommand = new Command('mail')
             continue;
           }
 
+          const content = Buffer.from(fullAtt.data.ContentBytes, 'base64');
+
+          // Resolve the actual file path, avoiding collisions and existing files
           let filePath = join(options.output, att.Name);
-          const ext = att.Name.includes('.') ? `.${att.Name.split('.').pop()}` : '';
-          const baseName = ext ? att.Name.slice(0, -ext.length) : att.Name;
           let counter = 1;
           while (true) {
-            try {
-              await access(filePath);
-              // File exists — try a suffixed name
-              filePath = join(options.output, ext ? `${baseName} (${counter})${ext}` : `${att.Name} (${counter})`);
+            // Always check for intra-download collisions
+            if (usedPaths.has(filePath)) {
+              const ext = extname(att.Name);
+              const base = att.Name.slice(0, att.Name.length - ext.length);
+              filePath = join(options.output, `${base} (${counter})${ext}`);
               counter++;
-            } catch {
-              // File doesn't exist, safe to write
-              break;
+              continue;
             }
+
+            // Check for pre-existing files only if --force is not set
+            if (!options.force) {
+              try {
+                await access(filePath);
+                // File exists — resolve collision with a numeric suffix
+                const ext = extname(att.Name);
+                const base = att.Name.slice(0, att.Name.length - ext.length);
+                filePath = join(options.output, `${base} (${counter})${ext}`);
+                counter++;
+                continue;
+              } catch {
+                // File doesn't exist — safe to use
+              }
+            }
+
+            // Path is safe to use
+            break;
           }
-          const content = Buffer.from(fullAtt.data.ContentBytes, 'base64');
+
+          usedPaths.add(filePath);
           await writeFile(filePath, content);
 
           const sizeKB = Math.round(content.length / 1024);
-          const savedFileName = filePath.split('/').pop() || att.Name;
-          console.log(`  \u2713 ${savedFileName} (${sizeKB} KB)`);
+          const written = filePath === join(options.output, att.Name) ? att.Name : filePath.split(/[\\/]/).pop();
+          console.log(`  \u2713 ${written} (${sizeKB} KB)`);
         }
 
         console.log('\nDone.\n');
