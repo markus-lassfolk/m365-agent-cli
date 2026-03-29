@@ -2119,7 +2119,7 @@ export async function areRoomsFree(
       const email = roomEmails[i];
 
       // Check for per-room errors (e.g., ErrorMailRecipientNotFound)
-      const responseClass = extractTag(resp, 'ResponseClass');
+      const responseClass = extractAttribute(resp, 'ResponseMessage', 'ResponseClass');
       const responseCode = extractTag(resp, 'ResponseCode');
       if (responseClass && responseClass !== 'Success') {
         // Room errored - mark as not free (conservative)
