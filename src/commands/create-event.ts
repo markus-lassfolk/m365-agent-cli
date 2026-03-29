@@ -24,8 +24,8 @@ function formatDate(dateStr: string): string {
 export const createEventCommand = new Command('create-event')
   .description('Create a new calendar event')
   .argument('<title>', 'Event title/subject')
-  .argument('<start>', 'Start time (e.g., 13:00, 1pm)')
-  .argument('<end>', 'End time (e.g., 14:00, 2pm)')
+  .argument('[start]', 'Start time (e.g., 13:00, 1pm) - optional for all-day events')
+  .argument('[end]', 'End time (e.g., 14:00, 2pm) - optional for all-day events')
   .option('--day <day>', 'Day for the event (today, tomorrow, monday-sunday, YYYY-MM-DD)', 'today')
   .option('--description <text>', 'Event description/body')
   .option('--attendees <emails>', 'Comma-separated list of attendee emails')
@@ -46,8 +46,8 @@ export const createEventCommand = new Command('create-event')
   .action(
     async (
       title: string,
-      startTime: string,
-      endTime: string,
+      startTime: string | undefined,
+      endTime: string | undefined,
       options: {
         day: string;
         description?: string;
@@ -122,6 +122,23 @@ export const createEventCommand = new Command('create-event')
           console.log('You can still specify a room by email address with --room <email>');
         }
         return;
+      }
+
+      // Handle missing times for all-day events
+      if (!startTime || !endTime) {
+        if (!options.allDay) {
+          if (options.json) {
+            console.log(
+              JSON.stringify({ error: 'Start and end times are required unless --all-day is specified' }, null, 2)
+            );
+          } else {
+            console.error('Error: Start and end times are required unless --all-day is specified');
+          }
+          process.exit(1);
+        }
+        // For all-day events without times, use midnight to midnight
+        startTime = startTime || '00:00';
+        endTime = endTime || '23:59';
       }
 
       // Parse date and times
