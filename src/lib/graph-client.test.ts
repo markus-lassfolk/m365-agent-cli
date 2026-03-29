@@ -35,15 +35,8 @@ import { unlink, writeFile } from 'node:fs/promises';
 import { uploadLargeFile } from './graph-client.js';
 
 describe('uploadLargeFile chunking', () => {
-  const tmpFile = 'test-upload-large.tmp';
-
-  afterEach(async () => {
-    try {
-      await unlink(tmpFile);
-    } catch {}
-  });
-
   it('uploads file in chunks and returns DriveItem', async () => {
+    const tmpFile = `test-upload-large-${Date.now()}-${Math.random().toString(36).substring(7)}.tmp`;
     const fileSize = 25 * 1024 * 1024; // 25MB
     const buffer = new Uint8Array(fileSize);
     buffer.fill(42);
@@ -75,7 +68,7 @@ describe('uploadLargeFile chunking', () => {
             bodySize: (init.body as any)?.length
           });
           const range = (init.headers as any)?.['Content-Range'];
-          if (range.endsWith('-26214399/26214400')) {
+          if (range?.endsWith('-26214399/26214400')) {
             // Last chunk 10MB*2 to 25MB
             return new Response(JSON.stringify({ id: 'item-123', name: 'test.tmp' }), {
               status: 201,
@@ -103,6 +96,7 @@ describe('uploadLargeFile chunking', () => {
       expect(lastCall.bodySize).toBeGreaterThan(0);
     } finally {
       globalThis.fetch = originalFetch;
+      await unlink(tmpFile).catch(() => {});
     }
   });
 });
