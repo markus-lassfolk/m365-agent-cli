@@ -258,6 +258,7 @@ export const updateEventCommand = new Command('update-event')
         options.removeAttendee.length > 0 ||
         options.room ||
         options.location ||
+        options.timezone ||
         options.teams !== undefined ||
         options.allDay !== undefined;
 
