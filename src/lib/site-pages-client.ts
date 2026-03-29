@@ -16,7 +16,7 @@ export interface SitePage {
 export async function listSitePages(token: string, siteId: string): Promise<GraphResponse<{ value: SitePage[] }>> {
   const result = await fetchAllPages<SitePage>(
     token,
-    `/sites/${encodeURIComponent(siteId)}/pages/microsoft.graph.sitePage`,
+    `/sites/${siteId}/pages/microsoft.graph.sitePage`,
     'Failed to list site pages'
   );
   if (!result.ok) {
@@ -29,7 +29,7 @@ export async function getSitePage(token: string, siteId: string, pageId: string)
   try {
     return await callGraph<SitePage>(
       token,
-      `/sites/${encodeURIComponent(siteId)}/pages/${encodeURIComponent(pageId)}/microsoft.graph.sitePage`
+      `/sites/${siteId}/pages/${encodeURIComponent(pageId)}/microsoft.graph.sitePage`
     );
   } catch (err) {
     if (err instanceof GraphApiError) {
@@ -48,7 +48,7 @@ export async function updateSitePage(
   try {
     return await callGraph<SitePage>(
       token,
-      `/sites/${encodeURIComponent(siteId)}/pages/${encodeURIComponent(pageId)}/microsoft.graph.sitePage`,
+      `/sites/${siteId}/pages/${encodeURIComponent(pageId)}/microsoft.graph.sitePage`,
       {
         method: 'PATCH',
         body: JSON.stringify({ '@odata.type': '#microsoft.graph.sitePage', ...pageData })
@@ -66,7 +66,7 @@ export async function publishSitePage(token: string, siteId: string, pageId: str
   try {
     return await callGraph<void>(
       token,
-      `/sites/${encodeURIComponent(siteId)}/pages/${encodeURIComponent(pageId)}/microsoft.graph.sitePage/publish`,
+      `/sites/${siteId}/pages/${encodeURIComponent(pageId)}/microsoft.graph.sitePage/publish`,
       {
         method: 'POST'
       },

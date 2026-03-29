@@ -95,6 +95,12 @@ sharepointCommand
       console.error(`Error parsing fields JSON: ${err.message}`);
       process.exit(1);
     }
+    if (typeof parsedFields !== 'object' || parsedFields === null || Array.isArray(parsedFields)) {
+      console.error(
+        'Error: --fields JSON must be an object (e.g. "{"Title": "New Title"}"), not an array or primitive.'
+      );
+      process.exit(1);
+    }
     const res = await createListItem(auth.token, opts.siteId, opts.listId, parsedFields);
     if (!res.ok) {
       console.error(`Error creating list item: ${res.error?.message || 'Unknown error'}`);
@@ -135,6 +141,12 @@ sharepointCommand
         parsedFields = JSON.parse(opts.fields);
       } catch (err: any) {
         console.error(`Error parsing fields JSON: ${err.message}`);
+        process.exit(1);
+      }
+      if (typeof parsedFields !== 'object' || parsedFields === null || Array.isArray(parsedFields)) {
+        console.error(
+          'Error: --fields JSON must be an object (e.g. "{"Title": "New Title"}"), not an array or primitive.'
+        );
         process.exit(1);
       }
       const res = await updateListItem(auth.token, opts.siteId, opts.listId, opts.itemId, parsedFields);
