@@ -1,8 +1,22 @@
 # Clippy
 
-A command-line interface for Microsoft 365 using Exchange Web Services (EWS) and Microsoft Graph. Manage your calendar, email, OneDrive files, Microsoft Planner tasks, and SharePoint Sites directly from the terminal.
+> **Credits:** This repository is heavily extended from the original project by [foeken/clippy](https://github.com/foeken/clippy).
 
-## Installation
+A powerful command-line interface for Microsoft 365 using Exchange Web Services (EWS) and Microsoft Graph. Manage your calendar, email, OneDrive files, Microsoft Planner tasks, and SharePoint Sites directly from the terminal.
+
+## The Ultimate AI Personal Assistant (PA)
+
+When combined with an autonomous AI agent like **[OpenClaw](https://github.com/openclaw/openclaw)**, `clippy` stops being just a CLI tool and becomes a highly effective **Personal Assistant (PA)**.
+
+Using the included Agent Skills (found in the `skills/` directory), you can teach an AI agent how to proactively triage your unread emails, identify important tasks, draft replies, automatically find meeting times without email ping-pong, and track your project statuses using long-term memory.
+
+### Deployment Modes
+You can run this PA setup in two distinct ways:
+1. **Direct Access (Your Own Mailbox):** Give the AI access to your own personal M365 account. It will monitor your direct inbox, read your unread emails, and draft replies straight into your Drafts folder for you to review and send.
+2. **Dedicated PA User (Shared Mailbox / Service Account):** Create a completely separate Microsoft 365 user account or Shared Mailbox (e.g., `assistant@yourcompany.com`). The AI acts as an independent entity, fielding requests sent to its address, managing your calendar via delegation, and sending emails on your behalf as the assistant. Both modes are fully supported out-of-the-box (use the `--mailbox` flag to operate on shared mailboxes).
+
+---
+
 
 ```bash
 # Clone the repository
