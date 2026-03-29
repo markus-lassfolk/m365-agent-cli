@@ -206,8 +206,22 @@ todoCommand
       }
 
       const filters: string[] = [];
-      if (opts.status) filters.push(`status eq '${opts.status}'`);
-      if (opts.importance) filters.push(`importance eq '${opts.importance}'`);
+      if (opts.status) {
+        const validStatuses: TodoStatus[] = ['notStarted', 'inProgress', 'completed', 'waitingOnOthers', 'deferred'];
+        if (!validStatuses.includes(opts.status as TodoStatus)) {
+          console.error(`Error: Invalid status "${opts.status}". Valid values: ${validStatuses.join(', ')}`);
+          process.exit(1);
+        }
+        filters.push(`status eq '${opts.status}'`);
+      }
+      if (opts.importance) {
+        const validImportance: TodoImportance[] = ['low', 'normal', 'high'];
+        if (!validImportance.includes(opts.importance as TodoImportance)) {
+          console.error(`Error: Invalid importance "${opts.importance}". Valid values: ${validImportance.join(', ')}`);
+          process.exit(1);
+        }
+        filters.push(`importance eq '${opts.importance}'`);
+      }
       const result = await getTasks(auth.token!, listId, filters.join(' and ') || undefined);
       if (!result.ok || !result.data) {
         console.error(`Error: ${result.error?.message}`);
