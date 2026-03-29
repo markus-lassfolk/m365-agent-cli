@@ -153,7 +153,7 @@ export const mailCommand = new Command('mail')
             apiFolder = found.Id;
           } else {
             console.error(`Folder "${folder}" not found.`);
-            console.error('Use "clippy folders" to see available folders.');
+            console.error('Use "m365-agent-cli folders" to see available folders.');
             process.exit(1);
           }
         } else {
@@ -416,7 +416,7 @@ export const mailCommand = new Command('mail')
 
         if (!options.level) {
           console.error('Error: --sensitivity requires --level to be specified');
-          console.error('Example: clippy mail --sensitivity <id> --level personal');
+          console.error('Example: m365-agent-cli mail --sensitivity <id> --level personal');
           console.error('Levels: normal, personal, private, confidential');
           process.exit(1);
         }
@@ -446,7 +446,7 @@ export const mailCommand = new Command('mail')
       if (options.move) {
         if (!options.to) {
           console.error('Please specify destination folder with --to');
-          console.error('Example: clippy mail --move <id> --to archive');
+          console.error('Example: m365-agent-cli mail --move <id> --to archive');
           console.error('Folders: inbox, archive, deleted, junk, drafts, sent');
           process.exit(1);
         }
@@ -481,7 +481,7 @@ export const mailCommand = new Command('mail')
               destFolder = found.Id;
             } else {
               console.error(`Folder "${options.to}" not found.`);
-              console.error('Use "clippy folders" to see available folders.');
+              console.error('Use "m365-agent-cli folders" to see available folders.');
               process.exit(1);
             }
           } else {
@@ -513,7 +513,7 @@ export const mailCommand = new Command('mail')
 
         if (!options.message) {
           console.error('Please provide reply text with --message');
-          console.error('Example: clippy mail --reply <id> --message "Thanks for your email!"');
+          console.error('Example: m365-agent-cli mail --reply <id> --message "Thanks for your email!"');
           process.exit(1);
         }
 
@@ -558,7 +558,7 @@ export const mailCommand = new Command('mail')
 
         if (!options.toAddr) {
           console.error('Please provide forward recipients with --to-addr');
-          console.error('Example: clippy mail --forward <id> --to-addr "user@example.com"');
+          console.error('Example: m365-agent-cli mail --forward <id> --to-addr "user@example.com"');
           process.exit(1);
         }
 
@@ -647,11 +647,11 @@ export const mailCommand = new Command('mail')
 
       console.log(`\n${'\u2500'.repeat(70)}`);
       console.log('\nCommands:');
-      console.log(`  clippy mail -r <id>               # Read email`);
-      console.log(`  clippy mail -p ${page + 1}                   # Next page`);
-      console.log(`  clippy mail --unread              # Only unread`);
-      console.log(`  clippy mail -s "keyword"          # Search emails`);
-      console.log(`  clippy mail sent                  # Sent folder`);
+      console.log(`  m365-agent-cli mail -r <id>               # Read email`);
+      console.log(`  m365-agent-cli mail -p ${page + 1}                   # Next page`);
+      console.log(`  m365-agent-cli mail --unread              # Only unread`);
+      console.log(`  m365-agent-cli mail -s "keyword"          # Search emails`);
+      console.log(`  m365-agent-cli mail sent                  # Sent folder`);
       console.log('');
     }
   );

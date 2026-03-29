@@ -142,9 +142,9 @@ export const deleteEventCommand = new Command('delete-event')
 
         console.log(`\n${'\u2500'.repeat(60)}`);
         console.log('\nTo delete/cancel an event:');
-        console.log('  clippy delete-event <number>                    # Cancel & notify attendees');
-        console.log('  clippy delete-event <number> --message "Sorry"  # With cancellation message');
-        console.log('  clippy delete-event <number> --force-delete     # Delete without notifying');
+        console.log('  m365-agent-cli delete-event <number>                    # Cancel & notify attendees');
+        console.log('  m365-agent-cli delete-event <number> --message "Sorry"  # With cancellation message');
+        console.log('  m365-agent-cli delete-event <number> --force-delete     # Delete without notifying');
         console.log('');
         return;
       }
@@ -152,7 +152,7 @@ export const deleteEventCommand = new Command('delete-event')
       // Delete the specified event by ID
       if (!options.id) {
         console.error('Please specify the event id with --id.');
-        console.error('Run `clippy delete-event` to list events and IDs.');
+        console.error('Run `m365-agent-cli delete-event` to list events and IDs.');
         process.exit(1);
       }
 

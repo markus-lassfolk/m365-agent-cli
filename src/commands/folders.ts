@@ -73,7 +73,7 @@ export const foldersCommand = new Command('folders')
       if (options.rename) {
         if (!options.to) {
           console.error('Please specify new name with --to');
-          console.error('Example: clippy folders --rename "Old Name" --to "New Name"');
+          console.error('Example: m365-agent-cli folders --rename "Old Name" --to "New Name"');
           process.exit(1);
         }
 
@@ -157,9 +157,9 @@ export const foldersCommand = new Command('folders')
 
       console.log(`\n${'\u2500'.repeat(50)}`);
       console.log('\nCommands:');
-      console.log('  clippy folders --create "Folder Name"');
-      console.log('  clippy folders --rename "Old" --to "New"');
-      console.log('  clippy folders --delete "Folder Name"');
+      console.log('  m365-agent-cli folders --create "Folder Name"');
+      console.log('  m365-agent-cli folders --rename "Old" --to "New"');
+      console.log('  m365-agent-cli folders --delete "Folder Name"');
       console.log('');
     }
   );

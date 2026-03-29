@@ -7,17 +7,17 @@
 
 ## Part 1: Product & Experience Goals
 
-### 1. Vision: The Ultimate Headless M365 CLI for AI Agents
+### 1. The OpenClaw PA — M365 Agent CLI as the Executive Assistant
 
-The Personal Assistant (PA) behavioral persona has been successfully spun out to its own repository (`openclaw-personal-assistant`). The goal of *this* repository is now to be the ultimate, secure, headless Microsoft 365 CLI designed specifically for AI agents. Every feature should serve this mission: providing agents with reliable, token-based, zero-friction access to email, calendars, directory, tasks, files, and SharePoint pages—all from the terminal, driven autonomously without the human lifting a finger.
+M365 Agent CLI exists to make the OpenClaw agent the most capable Personal Assistant possible. Every feature should serve this mission: the PA reads email, manages calendars, finds people, searches the directory, tracks tasks, handles files, and communicates — all from the terminal, all driven by an agent, all without the human lifting a finger.
 
-The benchmark is not "can we do this in Outlook" — it is "can an AI agent do this autonomously without prompting the user." A task that requires the user to open a browser, log in, and click through a UI is not yet solved.
+The benchmark is not "can we do this in Outlook" — it is "can the agent do this autonomously without prompting the user." A task that requires the user to open a browser, log in, and click through a UI is not yet solved.
 
 ### 2. Single Authentication, Zero Re-authentication
 
-The user authenticates once. M365 Agent CLI requests all necessary scopes via Microsoft OAuth2 incremental consent. All APIs (EWS SOAP, Microsoft Graph) reuse the same token. No second Azure AD app, no separate credentials, no re-authentication flows.
+Our ultimate goal is that the user authenticates once. M365 Agent CLI must request all necessary scopes via Microsoft OAuth2 incremental consent, and all APIs (EWS SOAP, Microsoft Graph) must reuse the same token. There should be no second Azure AD app, no separate credentials, and no re-authentication flows.
 
-We have successfully added automated Entra ID setup scripts (`setup-entra-app.sh` / `setup-entra-app.ps1`) to streamline initial registration, along with a `verify-token` command to instantly validate authentication state and scopes.
+We have successfully added automated Entra ID setup scripts (`scripts/setup-entra-app.sh` / `scripts/setup-entra-app.ps1`) to streamline initial registration, along with a `verify-token` command to instantly validate authentication state and scopes.
 
 This is not a nice-to-have — it is the foundation. If a new feature requires a separate auth mechanism, it is not compatible with M365 Agent CLI unless that is explicitly resolved first.
 
@@ -50,11 +50,10 @@ A capable PA needs to handle all of these areas. Each is tracked as a separate i
 | Room discovery | ❌ Missing | #80 — Places API integration |
 | Free/busy + meeting suggestions | ⚠️ Basic | findtime exists; getSchedule/findMeetingTimes missing (#86) |
 | Out-of-Office | ❌ Missing | #83 — automatic replies via mailboxSettings |
-| To-Do / task tracking | ✅ Implemented | Planner API integration complete |
+| To-Do / task tracking | ✅ Implemented | Planner + Microsoft To Do API integration complete |
 | Push notifications | ❌ Missing | #84 — Graph subscriptions |
 | Contacts / distribution lists | ❌ Missing | #85 — GAL lookup, DL expansion |
-| Office 365 Files (SharePoint + OneDrive) | ✅ Implemented | Full file lifecycle, versions, and analytics |
-| SharePoint Site Pages | ✅ Implemented | Page read/publish workflows |
+| Office 365 Files (SharePoint + OneDrive) | ❌ Missing | See Part 2 — this is critical |
 | Delegation (act on behalf of) | ❌ Missing | #79 — shared mailbox, delegate permissions |
 
 ---
@@ -171,7 +170,7 @@ Any feature that requires PowerShell remoting (WinRM, remote Exchange management
 - Exchange Admin operations (eDiscovery, litigation hold, permission granting)
 - Any operation requiring `*-Mailbox`, `*-Recipient`, `*-ExchangeServer` PowerShell cmdlets
 
-If an operation requires PowerShell, the correct answer is: "that requires admin access and is not a M365 Agent CLI feature."
+If an operation requires PowerShell, the correct answer is: "that requires admin access and is not an M365 Agent CLI feature."
 
 ---
 

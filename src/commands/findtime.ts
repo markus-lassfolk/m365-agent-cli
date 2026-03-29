@@ -163,7 +163,7 @@ export const findtimeCommand = new Command('findtime')
 
       if (emails.length === 0) {
         console.error('Error: Please provide at least one email address.');
-        console.error('\nUsage: clippy findtime nextweek user@example.com');
+        console.error('\nUsage: m365-agent-cli findtime nextweek user@example.com');
         process.exit(1);
       }
 

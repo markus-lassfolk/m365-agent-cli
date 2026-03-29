@@ -1,18 +1,20 @@
-# Clippy Architecture
+# m365-agent-cli Architecture
 
 ## Principles
 
 ### 1. Single Authentication Token
 
-Clippy authenticates once using **Microsoft OAuth2 (Azure AD)**. A single refresh token is cached and used to obtain access tokens for all APIs.
+m365-agent-cli authenticates once using **Microsoft OAuth2 (Azure AD)**. A single refresh token is cached and used to obtain access tokens for all APIs.
 
 **Current state:** EWS and Graph use separate token caches. This is being consolidated.
 
 **Target state:**
 - One Azure AD app registration
 - One refresh token
-- One token cache file (`~/.config/clippy/token-cache.json`)
+- One token cache file (`~/.config/m365-agent-cli/token-cache.json`)
 - Incremental consent: new API scopes are added to the existing app without requiring re-authentication
+
+*Note: The current implementation uses separate caches (`token-cache-{identity}.json` for EWS and `graph-token-cache.json` for Graph) and separate refresh tokens (`EWS_REFRESH_TOKEN` and `GRAPH_REFRESH_TOKEN`). The single-token approach described here is a target-state design.*
 
 **API priority:**
 1. **Microsoft Graph REST** — preferred for new features (cleaner, modern)
@@ -21,7 +23,7 @@ Clippy authenticates once using **Microsoft OAuth2 (Azure AD)**. A single refres
 
 ### 2. Dynamic Settings
 
-Clippy must not hardcode user-specific settings. These must always be read from the user's actual Microsoft 365 profile:
+m365-agent-cli must not hardcode user-specific settings. These must always be read from the user's actual Microsoft 365 profile:
 
 | Setting | Source | API |
 |---------|--------|-----|
@@ -42,10 +44,10 @@ Clippy must not hardcode user-specific settings. These must always be read from 
 
 The token cache file is the most sensitive file on disk.
 
-- Directory: `~/.config/clippy/` — created with `0o700` (owner-only)
-- Token file: `token-cache.json` — written with `0o600` (owner-only read/write)
+- Directory: `~/.config/m365-agent-cli/` — created with `0o700` (owner-only)
+- Token files: `token-cache-{identity}.json` (EWS) and `graph-token-cache.json` (Graph) — written with `0o600` (owner-only read/write)
 - Cache path uses `homedir()` — never a configurable path that could redirect to arbitrary locations
-- Refresh token failures are silently tolerated — Clippy fails gracefully with an auth error rather than crashing
+- Refresh token failures are silently tolerated — m365-agent-cli fails gracefully with an auth error rather than crashing
 
 ### 4. Error Handling
 
@@ -59,16 +61,19 @@ The token cache file is the most sensitive file on disk.
 ```
 User sets env vars:
   EWS_CLIENT_ID         — Azure AD app client ID
-  EWS_REFRESH_TOKEN     — OAuth refresh token (EWS + Graph combined)
+  EWS_REFRESH_TOKEN     — OAuth refresh token for EWS
+  GRAPH_REFRESH_TOKEN   — OAuth refresh token for Graph
   EWS_USERNAME          — user's email address
   EWS_ENDPOINT          — Exchange Online EWS endpoint (default: outlook.office365.com)
   GRAPH_SCOPES          — optional: additional Graph scopes (incremental consent)
 
 Token cache:
-  ~/.config/clippy/token-cache.json
-  — holds EWS access token + refresh token + expiry
-  — both EWS and Graph reuse this same cached token
+  ~/.config/m365-agent-cli/
+  — `token-cache-{identity}.json` holds EWS access token + refresh token + expiry
+  — `graph-token-cache.json` holds Graph access token + refresh token + expiry
   — on expiry: refresh token is used to obtain a new access token
+
+  *(Target state: A single `token-cache.json` reused for both)*
 ```
 
 ### Scope Strategy
@@ -162,10 +167,10 @@ Preferred for new features:
 
 ## Out of Scope
 
-The following are explicitly NOT part of Clippy's roadmap:
+The following are explicitly NOT part of m365-agent-cli's roadmap:
 
 - **Exchange PowerShell remoting** — requires WinRM/RDP or separate credential management
-- **SendAs / SendOnBehalf permission granting** — requires Exchange Admin role; Clippy can USE an already-granted SendAs permission but cannot grant it
+- **SendAs / SendOnBehalf permission granting** — requires Exchange Admin role; m365-agent-cli can USE an already-granted SendAs permission but cannot grant it
 - **eDiscovery / compliance** — admin-only APIs
 - **SharePoint / OneDrive business** — separate auth domain
 - **Azure AD B2C guest accounts** — different auth surface

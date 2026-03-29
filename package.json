@@ -1,18 +1,18 @@
 {
-  "name": "clippy",
+  "name": "m365-agent-cli",
   "version": "0.1.1",
   "description": "CLI for Microsoft 365/EWS using OAuth2 refresh token authentication",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/markus-lassfolk/clippy.git"
+    "url": "git+https://github.com/markus-lassfolk/m365-agent-cli.git"
   },
   "bugs": {
-    "url": "https://github.com/markus-lassfolk/clippy/issues"
+    "url": "https://github.com/markus-lassfolk/m365-agent-cli/issues"
   },
   "type": "module",
   "main": "src/index.ts",
   "bin": {
-    "clippy": "src/cli.ts"
+    "m365-agent-cli": "src/cli.ts"
   },
   "scripts": {
     "start": "bun run src/cli.ts",

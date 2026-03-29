@@ -1,12 +1,12 @@
 import { serve } from 'bun';
 
 export function startWebhookServer(port: number = 3000) {
-  console.log(`Starting webhook receiver on http://localhost:${port}/webhooks/clippy`);
+  console.log(`Starting webhook receiver on http://localhost:${port}/webhooks/m365-agent-cli`);
   serve({
     port,
     async fetch(req) {
       const url = new URL(req.url);
-      if (url.pathname === '/webhooks/clippy') {
+      if (url.pathname === '/webhooks/m365-agent-cli' || url.pathname === '/webhooks/clippy') {
         // Microsoft Graph sends validationToken as a query param on POST (not GET)
         const validationToken = url.searchParams.get('validationToken');
         if (validationToken) {
