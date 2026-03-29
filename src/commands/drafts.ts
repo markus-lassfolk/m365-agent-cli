@@ -50,6 +50,7 @@ export const draftsCommand = new Command('drafts')
   .option('--html', 'Treat body as HTML')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Use a specific authentication identity (default: default)')
   .action(
     async (options: {
       limit: string;
@@ -67,9 +68,11 @@ export const draftsCommand = new Command('drafts')
       html?: boolean;
       json?: boolean;
       token?: string;
+      identity?: string;
     }) => {
       const authResult = await resolveAuth({
-        token: options.token
+        token: options.token,
+        identity: options.identity
       });
 
       if (!authResult.success) {

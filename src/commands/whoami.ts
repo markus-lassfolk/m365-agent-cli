@@ -6,9 +6,11 @@ export const whoamiCommand = new Command('whoami')
   .description('Show authenticated user information')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
-  .action(async (options: { json?: boolean; token?: string }) => {
+  .option('--identity <name>', 'Use a specific authentication identity (default: default)')
+  .action(async (options: { json?: boolean; token?: string; identity?: string }) => {
     const authResult = await resolveAuth({
-      token: options.token
+      token: options.token,
+      identity: options.identity
     });
 
     if (!authResult.success) {
@@ -45,19 +47,27 @@ export const whoamiCommand = new Command('whoami')
     const { displayName, email } = userInfo.data;
 
     if (options.json) {
-      console.log(
-        JSON.stringify(
-          {
-            displayName,
-            email,
-            authenticated: true
-          },
-          null,
-          2
-        )
-      );
+      const result: { displayName: string; email: string; authenticated: boolean; identity?: string } = {
+        displayName,
+        email,
+        authenticated: true
+      };
+
+      // Only include identity if token-based auth was not used
+      if (!options.token) {
+        result.identity = options.identity || 'default';
+      }
+
+      console.log(JSON.stringify(result, null, 2));
     } else {
       console.log('\u2713 Authenticated');
+
+      // Only display identity if token-based auth was not used
+      if (!options.token) {
+        const identity = options.identity || 'default';
+        console.log(`  Identity: ${identity}`);
+      }
+
       console.log(`  Name: ${displayName}`);
       console.log(`  Email: ${email}`);
     }
