@@ -1,6 +1,6 @@
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { getJwtExpiration, getMicrosoftTenantPathSegment, isValidJwtStructure } from './jwt-utils.js';
 
 export interface AuthResult {
@@ -20,11 +20,11 @@ interface CachedToken {
 // The cache path is anchored to a fixed, local per-user directory under homedir();
 // network values (token contents) are written only as file data, never used to select
 // an arbitrary write location.
-const TOKEN_CACHE_FILE_TEMPLATE = join(homedir(), '.config', 'clippy', 'token-cache-${identity}.json');
+const TOKEN_CACHE_FILE_TEMPLATE = join(homedir(), '.config', 'clippy', 'token-cache-{identity}.json');
 
 async function loadCachedToken(identity: string): Promise<CachedToken | null> {
   try {
-    const TOKEN_CACHE_FILE = TOKEN_CACHE_FILE_TEMPLATE.replace('${identity}', identity);
+    const TOKEN_CACHE_FILE = TOKEN_CACHE_FILE_TEMPLATE.replace('{identity}', identity);
     const data = await readFile(TOKEN_CACHE_FILE, 'utf-8');
     return JSON.parse(data) as CachedToken;
   } catch {
@@ -36,7 +36,7 @@ async function saveCachedToken(identity: string, token: CachedToken): Promise<vo
   try {
     const dir = join(homedir(), '.config', 'clippy');
     await mkdir(dir, { recursive: true, mode: 0o700 });
-    const TOKEN_CACHE_FILE = TOKEN_CACHE_FILE_TEMPLATE.replace('${identity}', identity);
+    const TOKEN_CACHE_FILE = TOKEN_CACHE_FILE_TEMPLATE.replace('{identity}', identity);
     await writeFile(TOKEN_CACHE_FILE, JSON.stringify(token, null, 2), {
       encoding: 'utf-8',
       mode: 0o600

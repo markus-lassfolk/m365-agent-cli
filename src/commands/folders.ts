@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
-import { getMailFolders, createMailFolder, updateMailFolder, deleteMailFolder } from '../lib/ews-client.js';
+import { createMailFolder, deleteMailFolder, getMailFolders, updateMailFolder } from '../lib/ews-client.js';
 
 export const foldersCommand = new Command('folders')
   .description('Manage mail folders')

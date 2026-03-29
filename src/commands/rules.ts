@@ -1,16 +1,16 @@
 import { Command } from 'commander';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
 import {
-  listMessageRules,
-  getMessageRule,
-  createMessageRule,
-  updateMessageRule,
-  deleteMessageRule,
-  type MessageRule,
   type CreateMessageRulePayload,
-  type UpdateMessageRulePayload,
+  createMessageRule,
+  deleteMessageRule,
+  getMessageRule,
+  listMessageRules,
+  type MessageRule,
+  type MessageRuleAction,
   type MessageRuleCondition,
-  type MessageRuleAction
+  type UpdateMessageRulePayload,
+  updateMessageRule
 } from '../lib/rules-client.js';
 
 // ---------------------------------------------------------------------------

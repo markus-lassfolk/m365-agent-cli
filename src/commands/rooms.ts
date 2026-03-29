@@ -1,10 +1,10 @@
 import { Command } from 'commander';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
 import {
-  listPlaceRoomLists,
-  listRoomsInRoomList,
   findRooms,
   isRoomFree,
+  listPlaceRoomLists,
+  listRoomsInRoomList,
   type Place,
   type RoomFilters
 } from '../lib/places-client.js';

@@ -1,15 +1,15 @@
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
+import { parseDay, parseTimeToDate, toUTCISOString } from '../lib/dates.js';
 import {
   createEvent,
   getRooms,
-  searchRooms,
   isRoomFree,
   type Recurrence,
   type RecurrencePattern,
-  type RecurrenceRange
+  type RecurrenceRange,
+  searchRooms
 } from '../lib/ews-client.js';
-import { parseDay, parseTimeToDate, toUTCISOString } from '../lib/dates.js';
 
 function formatTime(dateStr: string): string {
   const date = new Date(dateStr);

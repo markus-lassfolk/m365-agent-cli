@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
-import { getScheduleViaOutlook, getOwaUserInfo } from '../lib/ews-client.js';
 import { parseDay } from '../lib/dates.js';
+import { getOwaUserInfo, getScheduleViaOutlook } from '../lib/ews-client.js';
 
 function formatTime(dateStr: string): string {
   const date = new Date(dateStr);

@@ -1,5 +1,5 @@
 import { resolveGraphAuth } from './graph-auth.js';
-import { callGraph, graphError, type GraphResponse } from './graph-client.js';
+import { callGraph, type GraphResponse, graphError } from './graph-client.js';
 
 export interface Subscription {
   id: string;

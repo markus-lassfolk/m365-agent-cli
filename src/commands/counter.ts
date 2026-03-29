@@ -1,7 +1,7 @@
 import { Command } from 'commander';
+import { parseDay, parseTimeToDate } from '../lib/dates.js';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
 import { proposeNewTime } from '../lib/graph-event.js';
-import { parseDay, parseTimeToDate } from '../lib/dates.js';
 
 export const counterCommand = new Command('counter')
   .description('Propose a new time for a calendar event')

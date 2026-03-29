@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
-import { findMeetingTimes, type FindMeetingTimesRequest, type AttendeeBase } from '../lib/graph-schedule.js';
+import { type AttendeeBase, type FindMeetingTimesRequest, findMeetingTimes } from '../lib/graph-schedule.js';
 
 export const suggestCommand = new Command('suggest')
   .description('AI meeting time suggestions')

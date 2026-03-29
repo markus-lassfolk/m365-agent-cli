@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
-import { setAutoReplyRule, getAutoReplyRule } from '../lib/ews-client.js';
+import { getAutoReplyRule, setAutoReplyRule } from '../lib/ews-client.js';
 
 export const autoReplyCommand = new Command('auto-reply')
   .description('Manage server-side out-of-office (OOF) auto-reply templates via EWS Inbox Rules')

@@ -1,10 +1,10 @@
-import { Command } from 'commander';
-import { resolveAuth } from '../lib/auth.js';
-import { sendEmail, type EmailAttachment } from '../lib/ews-client.js';
-import { markdownToHtml } from '../lib/markdown.js';
 import { readFile } from 'node:fs/promises';
+import { Command } from 'commander';
 import { lookup } from 'mime-types';
 import { AttachmentPathError, validateAttachmentPath } from '../lib/attachments.js';
+import { resolveAuth } from '../lib/auth.js';
+import { type EmailAttachment, sendEmail } from '../lib/ews-client.js';
+import { markdownToHtml } from '../lib/markdown.js';
 
 export const sendCommand = new Command('send')
   .description('Send an email')

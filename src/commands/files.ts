@@ -4,6 +4,8 @@ import {
   checkinFile,
   createLargeUploadSession,
   createOfficeCollaborationLink,
+  type DriveItem,
+  type DriveItemReference,
   defaultDownloadPath,
   deleteFile,
   downloadFile,
@@ -11,9 +13,7 @@ import {
   listFiles,
   searchFiles,
   shareFile,
-  uploadFile,
-  type DriveItem,
-  type DriveItemReference
+  uploadFile
 } from '../lib/graph-client.js';
 
 function parseFolderRef(folder?: string): DriveItemReference | undefined {

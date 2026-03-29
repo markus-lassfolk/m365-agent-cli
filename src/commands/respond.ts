@@ -1,11 +1,11 @@
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
 import {
-  getCalendarEvents,
-  respondToEvent,
-  getOwaUserInfo,
   getCalendarEvent,
-  type ResponseType
+  getCalendarEvents,
+  getOwaUserInfo,
+  type ResponseType,
+  respondToEvent
 } from '../lib/ews-client.js';
 
 function formatTime(dateStr: string): string {

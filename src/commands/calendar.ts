@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
-import { getCalendarEvents, type CalendarEvent, type CalendarAttendee } from '../lib/ews-client.js';
 import { parseDay, parseLocalDate } from '../lib/dates.js';
+import { type CalendarAttendee, type CalendarEvent, getCalendarEvents } from '../lib/ews-client.js';
 
 function formatTime(dateStr: string): string {
   const date = parseLocalDate(dateStr);

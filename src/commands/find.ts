@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
-import { searchPeople, searchUsers, searchGroups, expandGroup } from '../lib/graph-directory.js';
+import { expandGroup, searchGroups, searchPeople, searchUsers } from '../lib/graph-directory.js';
 
 export const findCommand = new Command('find')
   .description('Search for people or groups in the directory')

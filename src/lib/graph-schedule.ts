@@ -1,4 +1,4 @@
-import { callGraph, type GraphResponse, graphError, graphResult, GraphApiError } from './graph-client.js';
+import { callGraph, GraphApiError, type GraphResponse, graphError, graphResult } from './graph-client.js';
 
 export interface GetScheduleRequest {
   schedules: string[];

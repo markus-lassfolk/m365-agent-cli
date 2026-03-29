@@ -1,4 +1,4 @@
-import { callGraph, graphError, GraphApiError } from './graph-client.js';
+import { callGraph, GraphApiError, graphError } from './graph-client.js';
 
 export type OofStatus = 'alwaysEnabled' | 'scheduled' | 'disabled';
 
@@ -80,7 +80,7 @@ export async function setMailboxSettings(
     }
   };
 
-  let result;
+  let result: any;
   try {
     result = await callGraph<Record<string, never>>(
       token,

@@ -1,5 +1,5 @@
-import { callGraph, graphError, graphResult, GraphApiError } from './graph-client.js';
 import type { GraphResponse } from './graph-client.js';
+import { callGraph, GraphApiError, graphError, graphResult } from './graph-client.js';
 
 export interface MessageRuleCondition {
   /** Strings the message body contains (case-insensitive) */

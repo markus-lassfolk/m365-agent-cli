@@ -1,13 +1,13 @@
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
 import {
-  getDelegates,
   addDelegate,
-  updateDelegate,
-  removeDelegate,
   type DelegateInfo,
   type DelegatePermissions,
-  type DeliverMeetingRequests
+  type DeliverMeetingRequests,
+  getDelegates,
+  removeDelegate,
+  updateDelegate
 } from '../lib/delegate-client.js';
 
 const VALID_PERMISSIONS = [

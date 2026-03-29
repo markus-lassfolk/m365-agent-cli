@@ -5,8 +5,8 @@
  * Each command handler is called directly to test the full CLI path including
  * argument parsing (Commander.js), auth resolution, API calls, and output formatting.
  */
-import { describe, expect, test, beforeAll, afterAll, beforeEach } from 'bun:test';
-import { createMockFetch, clearMockFetch } from '../test/mocks/index.js';
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import { clearMockFetch, createMockFetch } from '../test/mocks/index.js';
 
 // Track console output to assert on it
 let stdout = '';
@@ -110,32 +110,32 @@ beforeEach(() => {
 
 // ─── Import commands ───────────────────────────────────────────────────────
 
-import { whoamiCommand } from '../commands/whoami.js';
 import { autoReplyCommand } from '../commands/auto-reply.js';
 import { calendarCommand } from '../commands/calendar.js';
-import { findtimeCommand } from '../commands/findtime.js';
-import { respondCommand } from '../commands/respond.js';
+import { counterCommand } from '../commands/counter.js';
 import { createEventCommand } from '../commands/create-event.js';
+import { delegatesCommand } from '../commands/delegates.js';
 import { deleteEventCommand } from '../commands/delete-event.js';
-import { findCommand } from '../commands/find.js';
-import { updateEventCommand } from '../commands/update-event.js';
-import { mailCommand } from '../commands/mail.js';
-import { foldersCommand } from '../commands/folders.js';
-import { sendCommand } from '../commands/send.js';
 import { draftsCommand } from '../commands/drafts.js';
 import { filesCommand } from '../commands/files.js';
+import { findCommand } from '../commands/find.js';
+import { findtimeCommand } from '../commands/findtime.js';
+import { foldersCommand } from '../commands/folders.js';
 import { forwardEventCommand } from '../commands/forward-event.js';
-import { counterCommand } from '../commands/counter.js';
+import { mailCommand } from '../commands/mail.js';
+import { oofCommand } from '../commands/oof.js';
+import { respondCommand } from '../commands/respond.js';
+import { roomsCommand } from '../commands/rooms.js';
+import { rulesCommand } from '../commands/rules.js';
 import { scheduleCommand } from '../commands/schedule.js';
-import { suggestCommand } from '../commands/suggest.js';
+import { sendCommand } from '../commands/send.js';
+import { serveCommand } from '../commands/serve.js';
 import { subscribeCommand } from '../commands/subscribe.js';
 import { subscriptionsCommand } from '../commands/subscriptions.js';
-import { serveCommand } from '../commands/serve.js';
-import { roomsCommand } from '../commands/rooms.js';
-import { oofCommand } from '../commands/oof.js';
-import { rulesCommand } from '../commands/rules.js';
-import { delegatesCommand } from '../commands/delegates.js';
+import { suggestCommand } from '../commands/suggest.js';
 import { todoCommand } from '../commands/todo.js';
+import { updateEventCommand } from '../commands/update-event.js';
+import { whoamiCommand } from '../commands/whoami.js';
 
 // Helper to call a command action with options
 

@@ -1,20 +1,20 @@
+import { mkdir, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
 import {
-  getEmails,
-  getEmail,
-  getAttachments,
+  forwardEmail,
   getAttachment,
-  updateEmail,
-  moveEmail,
+  getAttachments,
+  getEmail,
+  getEmails,
   getMailFolders,
+  moveEmail,
   replyToEmail,
   replyToEmailDraft,
-  forwardEmail
+  updateEmail
 } from '../lib/ews-client.js';
 import { markdownToHtml } from '../lib/markdown.js';
-import { writeFile, mkdir } from 'node:fs/promises';
-import { join } from 'node:path';
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);

@@ -3,13 +3,13 @@
 
 import {
   callEws,
-  soapEnvelope,
+  EWS_USERNAME,
+  ewsError,
+  ewsResult,
   extractBlocks,
   extractTag,
-  xmlEscape,
-  ewsResult,
-  ewsError,
-  EWS_USERNAME
+  soapEnvelope,
+  xmlEscape
 } from './ews-client.js';
 
 // ─── Types ───

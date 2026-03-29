@@ -1,5 +1,5 @@
 import { resolveGraphAuth } from './graph-auth.js';
-import { callGraph, graphResult, graphError, fetchAllPages } from './graph-client.js';
+import { callGraph, fetchAllPages, graphError, graphResult } from './graph-client.js';
 
 export interface Place {
   id?: string;
@@ -123,7 +123,7 @@ export async function isRoomFree(
   startISO: string,
   endISO: string
 ): Promise<boolean | null> {
-  let result;
+  let result: any;
   try {
     result = await callGraph<{ value: Array<{ showAs?: string }> }>(
       token,
@@ -139,6 +139,6 @@ export async function isRoomFree(
     return null;
   }
 
-  const busyEvents = (result.data.value || []).filter((event) => event.showAs !== 'free');
+  const busyEvents = (result.data.value || []).filter((event: any) => event.showAs !== 'free');
   return busyEvents.length === 0;
 }

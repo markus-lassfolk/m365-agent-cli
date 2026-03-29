@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
-import { getMailboxSettings, setMailboxSettings, type OofStatus, type DateTimeTimeZone } from '../lib/oof-client.js';
+import { type DateTimeTimeZone, getMailboxSettings, type OofStatus, setMailboxSettings } from '../lib/oof-client.js';
 
 function formatStatus(status: OofStatus): string {
   switch (status) {

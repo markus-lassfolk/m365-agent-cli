@@ -1,4 +1,4 @@
-import { callGraph, graphError, type GraphResponse, GraphApiError } from './graph-client.js';
+import { callGraph, GraphApiError, type GraphResponse, graphError } from './graph-client.js';
 
 export interface ForwardEventOptions {
   token: string;

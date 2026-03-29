@@ -1,18 +1,18 @@
-import { Command } from 'commander';
-import { resolveAuth } from '../lib/auth.js';
-import {
-  getEmails,
-  getEmail,
-  createDraft,
-  updateDraft,
-  sendDraftById,
-  deleteDraftById,
-  addAttachmentToDraft
-} from '../lib/ews-client.js';
-import { markdownToHtml } from '../lib/markdown.js';
 import { readFile, stat } from 'node:fs/promises';
 import { basename } from 'node:path';
+import { Command } from 'commander';
 import { lookup } from 'mime-types';
+import { resolveAuth } from '../lib/auth.js';
+import {
+  addAttachmentToDraft,
+  createDraft,
+  deleteDraftById,
+  getEmail,
+  getEmails,
+  sendDraftById,
+  updateDraft
+} from '../lib/ews-client.js';
+import { markdownToHtml } from '../lib/markdown.js';
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);

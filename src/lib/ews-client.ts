@@ -2148,7 +2148,7 @@ export async function getAutoReplyRule(token: string, mailbox?: string): Promise
     // Parse the rules
     // Find the rule with DisplayName = "AutoReplyTemplate"
     const rulesRegex = /<t:Rule>(.*?)<\/t:Rule>/gs;
-    let match;
+    let match: RegExpExecArray | null;
     let ruleXml = null;
     while (true) {
       match = rulesRegex.exec(xml);
@@ -2231,7 +2231,7 @@ export async function setAutoReplyRule(
     let ruleIdStr = '';
     let oldTemplateId = '';
     const rulesRegex = /<t:Rule>(.*?)<\/t:Rule>/gs;
-    let match;
+    let match: RegExpExecArray | null;
     while (true) {
       match = rulesRegex.exec(rulesXml);
       if (match === null) break;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { getDelegates, addDelegate } from './delegate-client.js';
+import { addDelegate, getDelegates } from './delegate-client.js';
 
 describe('delegate-client', () => {
   const token = 'test-token';

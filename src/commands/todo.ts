@@ -1,20 +1,20 @@
 import { Command } from 'commander';
-import { resolveGraphAuth } from '../lib/graph-auth.js';
 import { resolveAuth } from '../lib/auth.js';
 import { getEmail } from '../lib/ews-client.js';
+import { resolveGraphAuth } from '../lib/graph-auth.js';
 import {
-  getTodoLists,
-  getTodoList,
-  getTasks,
-  getTask,
-  createTask,
-  updateTask,
-  deleteTask,
   addChecklistItem,
+  createTask,
+  deleteTask,
+  getTask,
+  getTasks,
+  getTodoList,
+  getTodoLists,
   type TodoImportance,
+  type TodoList,
   type TodoStatus,
   type TodoTask,
-  type TodoList
+  updateTask
 } from '../lib/todo-client.js';
 
 function fmtDate(iso: string | undefined): string {
@@ -283,7 +283,7 @@ todoCommand
       const listName = opts.list || 'Tasks';
       const { listId } = await resolveListId(auth.token!, listName);
 
-      let linkedResources;
+      let linkedResources: any[] | undefined;
       if (opts.link) {
         // Do not pass the Graph --token to EWS auth, as they require different tokens
         const ewsAuth = await resolveAuth({});
