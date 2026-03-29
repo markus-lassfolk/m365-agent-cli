@@ -31,16 +31,18 @@ describe('searchFiles query encoding', () => {
   });
 });
 
-import { unlink, writeFile } from 'node:fs/promises';
+import { writeFileSync, unlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { resolve } from 'node:path';
 import { uploadLargeFile } from './graph-client.js';
 
 describe('uploadLargeFile chunking', () => {
   it('uploads file in chunks and returns DriveItem', async () => {
-    const tmpFile = `test-upload-large-${Date.now()}-${Math.random().toString(36).substring(7)}.tmp`;
+    const tmpFile = resolve(tmpdir(), `test-upload-large-${Date.now()}-${Math.random().toString(36).substring(7)}.tmp`);
     const fileSize = 25 * 1024 * 1024; // 25MB
     const buffer = new Uint8Array(fileSize);
     buffer.fill(42);
-    await writeFile(tmpFile, buffer);
+    writeFileSync(tmpFile, buffer);
 
     const originalFetch = globalThis.fetch;
     const fetchCalls: any[] = [];
@@ -96,7 +98,9 @@ describe('uploadLargeFile chunking', () => {
       expect(lastCall.bodySize).toBeGreaterThan(0);
     } finally {
       globalThis.fetch = originalFetch;
-      await unlink(tmpFile).catch(() => {});
+      try {
+        unlinkSync(tmpFile);
+      } catch {}
     }
   });
 });
