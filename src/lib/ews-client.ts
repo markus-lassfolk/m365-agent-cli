@@ -67,6 +67,13 @@ export function extractSelfClosingOrBlock(xml: string, tagName: string): string 
   return match ? match[0] : '';
 }
 
+function requireNonEmpty(value: string, fieldName: string): string {
+  if (!value || !value.trim()) {
+    throw new Error(`${fieldName} cannot be empty`);
+  }
+  return value.trim();
+}
+
 // ─── SOAP Core ───
 
 import { validateUrl } from './url-validation';
@@ -790,6 +797,7 @@ export async function getCalendarEvent(
   mailbox?: string
 ): Promise<OwaResponse<CalendarEvent>> {
   try {
+    eventId = requireNonEmpty(eventId, 'eventId');
     const envelope = soapEnvelope(`
     <m:GetItem>
       <m:ItemShape>
@@ -1008,7 +1016,7 @@ export async function createEvent(options: CreateEventOptions): Promise<OwaRespo
  * manipulate the attendees array locally, and pass the full list back here.
  * This introduces a potential race condition: if an attendee is added/removed externally between the
  * fetch and update steps, those changes will be overwritten.
- * 
+ *
  * Future improvement: provide explicit add/remove delta operations if needed.
  */
 export async function updateEvent(options: UpdateEventOptions): Promise<OwaResponse<CreatedEvent>> {
@@ -1154,6 +1162,7 @@ export interface DeleteEventOptions {
 export async function deleteEvent(options: DeleteEventOptions): Promise<OwaResponse<void>> {
   try {
     const { token, eventId, occurrenceItemId, scope = 'all', mailbox, forceDelete, comment } = options;
+    requireNonEmpty(eventId, 'eventId');
 
     // If a comment is provided for occurrence delete, use CancelCalendarItem instead
     if (comment && !forceDelete && (scope === 'this' || scope === 'future')) {
@@ -1185,7 +1194,6 @@ export async function deleteEvent(options: DeleteEventOptions): Promise<OwaRespo
     const itemIdXml = occurrenceItemId
       ? `<t:ItemId Id="${xmlEscape(occurrenceItemId)}" />`
       : `<t:ItemId Id="${xmlEscape(eventId)}" />`;
-
     const envelope = soapEnvelope(`
     <m:DeleteItem DeleteType="MoveToDeletedItems" SendMeetingCancellations="${sendCancellations}">
       <m:ItemIds>
@@ -1380,6 +1388,7 @@ export async function getEmails(options: GetEmailsOptions): Promise<OwaResponse<
 
 export async function getEmail(token: string, messageId: string): Promise<OwaResponse<EmailMessage>> {
   try {
+    messageId = requireNonEmpty(messageId, 'messageId');
     const envelope = soapEnvelope(`
     <m:GetItem>
       <m:ItemShape>
@@ -1781,6 +1790,7 @@ async function sendItemById(token: string, itemId: string): Promise<void> {
 
 export async function sendDraftById(token: string, draftId: string): Promise<OwaResponse<void>> {
   try {
+    draftId = requireNonEmpty(draftId, 'draftId');
     await sendItemById(token, draftId);
     return { ok: true, status: 200 };
   } catch (err) {
@@ -1790,6 +1800,7 @@ export async function sendDraftById(token: string, draftId: string): Promise<Owa
 
 export async function deleteDraftById(token: string, draftId: string): Promise<OwaResponse<void>> {
   try {
+    draftId = requireNonEmpty(draftId, 'draftId');
     const envelope = soapEnvelope(`
     <m:DeleteItem DeleteType="HardDelete">
       <m:ItemIds>
@@ -2114,9 +2125,10 @@ export async function getRooms(token: string, roomListAddress?: string): Promise
       return ewsResult([]);
     }
 
+    const results = await Promise.all(listsResult.data.map((list) => getRooms(token, list.Address)));
+
     const allRooms: Room[] = [];
-    for (const list of listsResult.data) {
-      const roomsResult = await getRooms(token, list.Address);
+    for (const roomsResult of results) {
       if (roomsResult.ok && roomsResult.data) {
         allRooms.push(...roomsResult.data);
       }

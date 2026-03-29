@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { access, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
@@ -274,7 +274,21 @@ export const mailCommand = new Command('mail')
             continue;
           }
 
-          const filePath = join(options.output, att.Name);
+          let filePath = join(options.output, att.Name);
+          const ext = att.Name.includes('.') ? '.' + att.Name.split('.').pop() : '';
+          const baseName = ext ? att.Name.slice(0, -ext.length) : att.Name;
+          let counter = 1;
+          while (true) {
+            try {
+              await access(filePath);
+              // File exists — try a suffixed name
+              filePath = join(options.output, ext ? `${baseName} (${counter})${ext}` : `${att.Name} (${counter})`);
+              counter++;
+            } catch {
+              // File doesn't exist, safe to write
+              break;
+            }
+          }
           const content = Buffer.from(fullAtt.data.ContentBytes, 'base64');
           await writeFile(filePath, content);
 
@@ -404,6 +418,11 @@ export const mailCommand = new Command('mail')
       if (options.reply || options.replyAll) {
         const id = (options.reply || options.replyAll)?.trim();
 
+        if (!id) {
+          console.error('Error: --reply/--reply-all requires a message ID');
+          process.exit(1);
+        }
+
         if (!options.message) {
           console.error('Please provide reply text with --message');
           console.error('Example: clippy mail --reply <id> --message "Thanks for your email!"');
@@ -421,10 +440,6 @@ export const mailCommand = new Command('mail')
         }
 
         if (options.draft) {
-          if (!id) {
-            console.error('Error: --reply/--reply-all requires a message ID');
-            process.exit(1);
-          }
           const result = await replyToEmailDraft(authResult.token!, id, message, isReplyAll, isHtml, options.mailbox);
 
           if (!result.ok || !result.data) {
@@ -437,10 +452,6 @@ export const mailCommand = new Command('mail')
           return;
         }
 
-        if (!id) {
-          console.error('Error: --reply/--reply-all requires a message ID');
-          process.exit(1);
-        }
         const result = await replyToEmail(authResult.token!, id, message, isReplyAll, isHtml, options.mailbox);
 
         if (!result.ok) {
