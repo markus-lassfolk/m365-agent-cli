@@ -5,6 +5,7 @@ import { resolveAuth } from '../lib/auth.js';
 import { type EmailAttachment, sendEmail } from '../lib/ews-client.js';
 import { markdownToHtml } from '../lib/markdown.js';
 import { lookupMimeType } from '../lib/mime-type.js';
+import { checkReadOnly } from '../lib/utils.js';
 
 export const sendCommand = new Command('send')
   .description('Send an email')
@@ -36,7 +37,9 @@ export const sendCommand = new Command('send')
       mailbox?: string;
       identity?: string;
       category?: string[];
-    }) => {
+    },
+    cmd: any) => {
+      checkReadOnly(cmd);
       const authResult = await resolveAuth({
         token: options.token,
         identity: options.identity

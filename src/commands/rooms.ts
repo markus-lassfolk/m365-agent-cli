@@ -38,6 +38,7 @@ export const roomsCommand = new Command('rooms')
   .option('--equipment <items>', 'Required equipment tags, comma-separated (for find action)')
   .option('--start <iso>', 'Start time ISO string (for find action)')
   .option('--end <iso>', 'End time ISO string (for find action)')
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
   .action(
     async (
       action: string,
@@ -45,6 +46,7 @@ export const roomsCommand = new Command('rooms')
       options: {
         json?: boolean;
         token?: string;
+        identity?: string;
         building?: string;
         capacity?: string;
         equipment?: string;
@@ -52,7 +54,7 @@ export const roomsCommand = new Command('rooms')
         end?: string;
       }
     ) => {
-      const authResult = await resolveGraphAuth({ token: options.token });
+      const authResult = await resolveGraphAuth({ token: options.token, identity: options.identity });
       if (!authResult.success) {
         console.error(`Error: ${authResult.error}`);
         process.exit(1);
@@ -60,7 +62,7 @@ export const roomsCommand = new Command('rooms')
 
       if (action === 'lists' || action === undefined) {
         console.log('Fetching room lists...');
-        const result = await listPlaceRoomLists({ token: authResult.token });
+        const result = await listPlaceRoomLists({ token: authResult.token, identity: options.identity });
         if (!result.ok || !result.data) {
           console.error(`Error: ${result.error?.message || 'Failed to fetch room lists'}`);
           process.exit(1);
@@ -94,7 +96,7 @@ export const roomsCommand = new Command('rooms')
           process.exit(1);
         }
         console.log(`Fetching rooms from list: ${roomListEmail}...`);
-        const result = await listRoomsInRoomList(roomListEmail, { token: authResult.token });
+        const result = await listRoomsInRoomList(roomListEmail, { token: authResult.token, identity: options.identity });
         if (!result.ok || !result.data) {
           console.error(`Error: ${result.error?.message || 'Failed to fetch rooms'}`);
           process.exit(1);
@@ -147,7 +149,7 @@ export const roomsCommand = new Command('rooms')
           process.exit(1);
         }
         console.log('Searching for rooms...');
-        const result = await findRooms(filters, { token: authResult.token });
+        const result = await findRooms(filters, { token: authResult.token, identity: options.identity });
         if (!result.ok || !result.data) {
           console.error(`Error: ${result.error?.message || 'Failed to search rooms'}`);
           process.exit(1);

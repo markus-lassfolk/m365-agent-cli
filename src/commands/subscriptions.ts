@@ -7,9 +7,10 @@ subscriptionsCommand
   .command('list')
   .description('List all active subscriptions')
   .option('--token <token>', 'Use a specific token')
-  .action(async (options: { token?: string }) => {
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .action(async (options: { token?: string; identity?: string }) => {
     try {
-      const res = await listSubscriptions(options.token);
+      const res = await listSubscriptions(options.token, options.identity);
       if (!res.ok || !res.data) {
         console.error(`Failed to list subscriptions: ${res.error?.message}`);
         process.exit(1);

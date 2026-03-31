@@ -1,5 +1,10 @@
 import type { GraphResponse } from './graph-client.js';
 import { callGraph, GraphApiError, graphError, graphResult } from './graph-client.js';
+import { graphUserPath } from './graph-user-path.js';
+
+function inboxRulesBase(user?: string): string {
+  return `${graphUserPath(user, 'mailFolders/inbox/messageRules')}`;
+}
 
 export interface MessageRuleCondition {
   /** Strings the message body contains (case-insensitive) */
@@ -80,10 +85,10 @@ export interface UpdateMessageRulePayload {
 }
 
 /** List all inbox message rules */
-export async function listMessageRules(token: string): Promise<GraphResponse<MessageRule[]>> {
+export async function listMessageRules(token: string, user?: string): Promise<GraphResponse<MessageRule[]>> {
   let result: GraphResponse<MessageRuleListResponse>;
   try {
-    result = await callGraph<MessageRuleListResponse>(token, '/me/mailFolders/inbox/messageRules');
+    result = await callGraph<MessageRuleListResponse>(token, inboxRulesBase(user));
   } catch (err) {
     if (err instanceof GraphApiError) {
       return graphError(err.message, err.code, err.status);
@@ -101,9 +106,12 @@ export async function listMessageRules(token: string): Promise<GraphResponse<Mes
 }
 
 /** Get a single message rule by ID */
-export async function getMessageRule(token: string, ruleId: string): Promise<GraphResponse<MessageRule>> {
+export async function getMessageRule(token: string, ruleId: string, user?: string): Promise<GraphResponse<MessageRule>> {
   try {
-    return await callGraph<MessageRule>(token, `/me/mailFolders/inbox/messageRules/${encodeURIComponent(ruleId)}`);
+    return await callGraph<MessageRule>(
+      token,
+      `${inboxRulesBase(user)}/${encodeURIComponent(ruleId)}`
+    );
   } catch (err) {
     if (err instanceof GraphApiError) {
       return graphError(err.message, err.code, err.status);
@@ -115,10 +123,11 @@ export async function getMessageRule(token: string, ruleId: string): Promise<Gra
 /** Create a new inbox message rule */
 export async function createMessageRule(
   token: string,
-  payload: CreateMessageRulePayload
+  payload: CreateMessageRulePayload,
+  user?: string
 ): Promise<GraphResponse<MessageRule>> {
   try {
-    return await callGraph<MessageRule>(token, '/me/mailFolders/inbox/messageRules', {
+    return await callGraph<MessageRule>(token, inboxRulesBase(user), {
       method: 'POST',
       body: JSON.stringify(payload)
     });
@@ -134,10 +143,11 @@ export async function createMessageRule(
 export async function updateMessageRule(
   token: string,
   ruleId: string,
-  payload: UpdateMessageRulePayload
+  payload: UpdateMessageRulePayload,
+  user?: string
 ): Promise<GraphResponse<MessageRule>> {
   try {
-    return await callGraph<MessageRule>(token, `/me/mailFolders/inbox/messageRules/${encodeURIComponent(ruleId)}`, {
+    return await callGraph<MessageRule>(token, `${inboxRulesBase(user)}/${encodeURIComponent(ruleId)}`, {
       method: 'PATCH',
       body: JSON.stringify(payload)
     });
@@ -150,11 +160,11 @@ export async function updateMessageRule(
 }
 
 /** Delete an inbox message rule */
-export async function deleteMessageRule(token: string, ruleId: string): Promise<GraphResponse<void>> {
+export async function deleteMessageRule(token: string, ruleId: string, user?: string): Promise<GraphResponse<void>> {
   try {
     return await callGraph<void>(
       token,
-      `/me/mailFolders/inbox/messageRules/${encodeURIComponent(ruleId)}`,
+      `${inboxRulesBase(user)}/${encodeURIComponent(ruleId)}`,
       { method: 'DELETE' },
       false
     );

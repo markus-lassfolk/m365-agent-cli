@@ -198,15 +198,17 @@ export const calendarCommand = new Command('calendar')
   .option('-v, --verbose', 'Show attendees and more details')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Use a specific authentication identity (default: default)')
   .option('--mailbox <email>', 'Delegated or shared mailbox calendar')
   .action(
     async (
       startDay: string,
       endDay: string | undefined,
-      options: { json?: boolean; token?: string; verbose?: boolean; mailbox?: string }
+      options: { json?: boolean; token?: string; identity?: string; verbose?: boolean; mailbox?: string }
     ) => {
       const authResult = await resolveAuth({
-        token: options.token
+        token: options.token,
+        identity: options.identity
       });
 
       if (!authResult.success) {

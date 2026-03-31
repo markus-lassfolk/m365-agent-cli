@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
 import { type DateTimeTimeZone, getMailboxSettings, type OofStatus, setMailboxSettings } from '../lib/oof-client.js';
+import { checkReadOnly } from '../lib/utils.js';
 
 function formatStatus(status: OofStatus): string {
   switch (status) {
@@ -32,8 +33,10 @@ export const oofCommand = new Command('oof')
   .option('--end <datetime>', 'Scheduled end datetime (ISO 8601, e.g. 2025-12-15T23:59:59)')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
-  .action(async (options) => {
-    const authResult = await resolveGraphAuth({ token: options.token });
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .action(async (options: any, cmd: any) => {
+    const authResult = await resolveGraphAuth({ token: options.token, identity: options.identity });
     if (!authResult.success || !authResult.token) {
       const msg = authResult.error || 'Graph authentication failed';
       if (options.json) {
@@ -54,7 +57,7 @@ export const oofCommand = new Command('oof')
       !options.start &&
       !options.end
     ) {
-      const res = await getMailboxSettings(token);
+      const res = await getMailboxSettings(token, options.user);
       if (!res.ok || !res.data) {
         const msg = res.error?.message || 'Failed to retrieve mailbox settings';
         if (options.json) {
@@ -116,6 +119,7 @@ export const oofCommand = new Command('oof')
     }
 
     // --- WRITE mode: validate inputs ---
+    checkReadOnly(cmd);
     const errors: string[] = [];
 
     let status: OofStatus | undefined;
@@ -172,7 +176,7 @@ export const oofCommand = new Command('oof')
     let statusWasUndefined = false;
     if (!status && (options.internalMessage !== undefined || options.externalMessage !== undefined)) {
       statusWasUndefined = true;
-      const currentRes = await getMailboxSettings(token);
+      const currentRes = await getMailboxSettings(token, options.user);
       if (currentRes.ok && currentRes.data?.automaticRepliesSetting) {
         status = currentRes.data.automaticRepliesSetting.status;
         if (status === 'scheduled') {
@@ -186,13 +190,17 @@ export const oofCommand = new Command('oof')
     }
 
     // --- Apply updates ---
-    const patchResult = await setMailboxSettings(token, {
-      status,
-      internalReplyMessage: options.internalMessage,
-      externalReplyMessage: options.externalMessage,
-      scheduledStartDateTime,
-      scheduledEndDateTime
-    });
+    const patchResult = await setMailboxSettings(
+      token,
+      {
+        status,
+        internalReplyMessage: options.internalMessage,
+        externalReplyMessage: options.externalMessage,
+        scheduledStartDateTime,
+        scheduledEndDateTime
+      },
+      options.user
+    );
 
     if (!patchResult.ok) {
       const msg = patchResult.error?.message || 'Failed to update mailbox settings';

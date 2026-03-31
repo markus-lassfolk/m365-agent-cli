@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
 import { getEmail } from '../lib/ews-client.js';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
+import { checkReadOnly } from '../lib/utils.js';
 import {
   addChecklistItem,
   createTask,
@@ -75,8 +76,12 @@ function emailUrl(id: string): string {
   return `https://outlook.office365.com/mail/${encodeURIComponent(id)}`;
 }
 
-async function resolveListId(token: string, nameOrId: string): Promise<{ listId: string; listDisplay: string }> {
-  const listsR = await getTodoLists(token);
+async function resolveListId(
+  token: string,
+  nameOrId: string,
+  user?: string
+): Promise<{ listId: string; listDisplay: string }> {
+  const listsR = await getTodoLists(token, user);
   if (!listsR.ok || !listsR.data) {
     console.error(`Error: ${listsR.error?.message}`);
     process.exit(1);
@@ -93,7 +98,7 @@ async function resolveListId(token: string, nameOrId: string): Promise<{ listId:
     return { listId: matched.id, listDisplay: matched.displayName };
   }
 
-  const s = await getTodoList(token, nameOrId);
+  const s = await getTodoList(token, nameOrId, user);
   if (!s.ok || !s.data) {
     console.error(`List not found: "${nameOrId}".`);
     console.error('Use "m365-agent-cli todo lists".');
@@ -109,13 +114,15 @@ todoCommand
   .description('List all To-Do task lists')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
-  .action(async (opts: { json?: boolean; token?: string }) => {
-    const auth = await resolveGraphAuth({ token: opts.token });
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .action(async (opts: { json?: boolean; token?: string; identity?: string; user?: string }) => {
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success) {
       console.error(`Auth error: ${auth.error}`);
       process.exit(1);
     }
-    const result = await getTodoLists(auth.token!);
+    const result = await getTodoLists(auth.token!, opts.user);
     if (!result.ok || !result.data) {
       console.error(`Error: ${result.error?.message}`);
       process.exit(1);
@@ -148,6 +155,8 @@ todoCommand
   .option('--importance <importance>', 'Filter by importance: low, normal, high')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
   .action(
     async (opts: {
       list?: string;
@@ -156,18 +165,20 @@ todoCommand
       importance?: string;
       json?: boolean;
       token?: string;
+      identity?: string;
+      user?: string;
     }) => {
-      const auth = await resolveGraphAuth({ token: opts.token });
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
       if (!auth.success) {
         console.error(`Auth error: ${auth.error}`);
         process.exit(1);
       }
 
       const listName = opts.list || 'Tasks';
-      const { listId, listDisplay } = await resolveListId(auth.token!, listName);
+      const { listId, listDisplay } = await resolveListId(auth.token!, listName, opts.user);
 
       if (opts.task) {
-        const r = await getTask(auth.token!, listId, opts.task);
+        const r = await getTask(auth.token!, listId, opts.task, opts.user);
         if (!r.ok || !r.data) {
           console.error(`Error: ${r.error?.message}`);
           process.exit(1);
@@ -222,7 +233,7 @@ todoCommand
         }
         filters.push(`importance eq '${opts.importance}'`);
       }
-      const result = await getTasks(auth.token!, listId, filters.join(' and ') || undefined);
+      const result = await getTasks(auth.token!, listId, filters.join(' and ') || undefined, opts.user);
       if (!result.ok || !result.data) {
         console.error(`Error: ${result.error?.message}`);
         process.exit(1);
@@ -262,6 +273,9 @@ todoCommand
   .option('--mailbox <email>', 'Delegated or shared mailbox (with --link, for EWS message lookup)')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .option('--ews-identity <name>', 'EWS token cache identity for --link (default: default)')
+  .option('--user <email>', 'Target user or shared mailbox for the task (Graph delegation)')
   .action(
     async (opts: {
       title: string;
@@ -275,20 +289,25 @@ todoCommand
       mailbox?: string;
       json?: boolean;
       token?: string;
-    }) => {
-      const auth = await resolveGraphAuth({ token: opts.token });
+      identity?: string;
+      ewsIdentity?: string;
+      user?: string;
+    },
+    cmd: any) => {
+      checkReadOnly(cmd);
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
       if (!auth.success) {
         console.error(`Auth error: ${auth.error}`);
         process.exit(1);
       }
 
       const listName = opts.list || 'Tasks';
-      const { listId } = await resolveListId(auth.token!, listName);
+      const { listId } = await resolveListId(auth.token!, listName, opts.user);
 
       let linkedResources: any[] | undefined;
       if (opts.link) {
         // Do not pass the Graph --token to EWS auth, as they require different tokens
-        const ewsAuth = await resolveAuth({});
+        const ewsAuth = await resolveAuth({ identity: opts.ewsIdentity });
         if (!ewsAuth.success) {
           console.error(`EWS Auth error: ${ewsAuth.error}`);
           process.exit(1);
@@ -301,16 +320,21 @@ todoCommand
         linkedResources = [{ webUrl: emailUrl(er.data.Id), description: er.data.Subject || 'Linked email' }];
       }
 
-      const result = await createTask(auth.token!, listId, {
-        title: opts.title,
-        body: opts.body,
-        importance: opts.importance as TodoImportance,
-        status: opts.status as TodoStatus,
-        dueDateTime: opts.due,
-        reminderDateTime: opts.reminder,
-        isReminderOn: !!opts.reminder,
-        linkedResources
-      });
+      const result = await createTask(
+        auth.token!,
+        listId,
+        {
+          title: opts.title,
+          body: opts.body,
+          importance: opts.importance as TodoImportance,
+          status: opts.status as TodoStatus,
+          dueDateTime: opts.due,
+          reminderDateTime: opts.reminder,
+          isReminderOn: !!opts.reminder,
+          linkedResources
+        },
+        opts.user
+      );
       if (!result.ok || !result.data) {
         console.error(`Error: ${result.error?.message}`);
         process.exit(1);
@@ -333,17 +357,20 @@ todoCommand
   .requiredOption('-t, --task <id>', 'Task ID')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
-  .action(async (opts: { list: string; task: string; json?: boolean; token?: string }) => {
-    const auth = await resolveGraphAuth({ token: opts.token });
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .action(async (opts: { list: string; task: string; json?: boolean; token?: string; identity?: string; user?: string }, cmd: any) => {
+    checkReadOnly(cmd);
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success) {
       console.error(`Auth error: ${auth.error}`);
       process.exit(1);
     }
-    const { listId } = await resolveListId(auth.token!, opts.list);
+    const { listId } = await resolveListId(auth.token!, opts.list, opts.user);
     // dateTime should not include Z/offset - keep dateTime and timeZone separate
     const nowISO = new Date().toISOString();
     const now = nowISO.replace('Z', '');
-    const r = await updateTask(auth.token!, listId, opts.task, { status: 'completed', completedDateTime: now });
+    const r = await updateTask(auth.token!, listId, opts.task, { status: 'completed', completedDateTime: now }, opts.user);
     if (!r.ok || !r.data) {
       console.error(`Error: ${r.error?.message}`);
       process.exit(1);
@@ -359,14 +386,17 @@ todoCommand
   .requiredOption('-t, --task <id>', 'Task ID')
   .option('--confirm', 'Skip confirmation prompt')
   .option('--token <token>', 'Use a specific token')
-  .action(async (opts: { list: string; task: string; confirm?: boolean; token?: string }) => {
-    const auth = await resolveGraphAuth({ token: opts.token });
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .action(async (opts: { list: string; task: string; confirm?: boolean; token?: string; identity?: string; user?: string }, cmd: any) => {
+    checkReadOnly(cmd);
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success) {
       console.error(`Auth error: ${auth.error}`);
       process.exit(1);
     }
-    const { listId, listDisplay: listName } = await resolveListId(auth.token!, opts.list);
-    const taskR = await getTask(auth.token!, listId, opts.task);
+    const { listId, listDisplay: listName } = await resolveListId(auth.token!, opts.list, opts.user);
+    const taskR = await getTask(auth.token!, listId, opts.task, opts.user);
     if (!taskR.ok || !taskR.data) {
       console.error(`Task not found: ${taskR.error?.message}`);
       process.exit(1);
@@ -376,7 +406,7 @@ todoCommand
       console.log('Run with --confirm to confirm.');
       process.exit(1);
     }
-    const r = await deleteTask(auth.token!, listId, opts.task);
+    const r = await deleteTask(auth.token!, listId, opts.task, opts.user);
     if (!r.ok) {
       console.error(`Error: ${r.error?.message}`);
       process.exit(1);
@@ -392,14 +422,17 @@ todoCommand
   .requiredOption('-n, --name <text>', 'Checklist item text')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
-  .action(async (opts: { list: string; task: string; name: string; json?: boolean; token?: string }) => {
-    const auth = await resolveGraphAuth({ token: opts.token });
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .action(async (opts: { list: string; task: string; name: string; json?: boolean; token?: string; identity?: string; user?: string }, cmd: any) => {
+    checkReadOnly(cmd);
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success) {
       console.error(`Auth error: ${auth.error}`);
       process.exit(1);
     }
-    const { listId } = await resolveListId(auth.token!, opts.list);
-    const r = await addChecklistItem(auth.token!, listId, opts.task, opts.name);
+    const { listId } = await resolveListId(auth.token!, opts.list, opts.user);
+    const r = await addChecklistItem(auth.token!, listId, opts.task, opts.name, opts.user);
     if (!r.ok || !r.data) {
       console.error(`Error: ${r.error?.message}`);
       process.exit(1);

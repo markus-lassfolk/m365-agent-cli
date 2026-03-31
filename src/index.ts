@@ -87,6 +87,7 @@ export {
 } from './lib/ews-client.js';
 export type { GraphAuthResult } from './lib/graph-auth.js';
 export { resolveGraphAuth } from './lib/graph-auth.js';
+export { graphUserPath } from './lib/graph-user-path.js';
 export type {
   CheckinResult,
   DriveItem,

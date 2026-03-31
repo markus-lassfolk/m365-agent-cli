@@ -46,6 +46,7 @@ export const respondCommand = new Command('respond')
   .option('--only-required', 'Only show required invitations')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Use a specific authentication identity (default: default)')
   .option('--mailbox <email>', 'Respond to event in shared mailbox calendar')
   .action(
     async (
@@ -59,13 +60,14 @@ export const respondCommand = new Command('respond')
         onlyRequired?: boolean;
         json?: boolean;
         token?: string;
+        identity?: string;
         mailbox?: string;
       },
       cmd: any
     ) => {
-      checkReadOnly(cmd);
       const authResult = await resolveAuth({
-        token: options.token
+        token: options.token,
+        identity: options.identity
       });
 
       if (!authResult.success) {
@@ -209,6 +211,8 @@ export const respondCommand = new Command('respond')
         console.error('Valid actions: list, accept, decline, tentative');
         process.exit(1);
       }
+
+      checkReadOnly(cmd);
 
       if (!options.id) {
         console.error('Please specify the event id with --id.');

@@ -1,14 +1,17 @@
 import { callGraph, GraphApiError, type GraphResponse, graphError } from './graph-client.js';
+import { graphUserPath } from './graph-user-path.js';
 
 export interface ForwardEventOptions {
   token: string;
   eventId: string;
   toRecipients: string[];
   comment?: string;
+  /** User UPN or id for delegated calendar (omit for /me) */
+  user?: string;
 }
 
 export async function forwardEvent(options: ForwardEventOptions): Promise<GraphResponse<void>> {
-  const { token, eventId, toRecipients, comment } = options;
+  const { token, eventId, toRecipients, comment, user } = options;
 
   const recipientsList = toRecipients.map((email) => ({
     emailAddress: { address: email }
@@ -25,7 +28,7 @@ export async function forwardEvent(options: ForwardEventOptions): Promise<GraphR
   try {
     return await callGraph<void>(
       token,
-      `/me/events/${encodeURIComponent(eventId)}/forward`,
+      `${graphUserPath(user, `events/${encodeURIComponent(eventId)}/forward`)}`,
       {
         method: 'POST',
         body: JSON.stringify(body)
@@ -46,10 +49,11 @@ export interface ProposeNewTimeOptions {
   startDateTime: string;
   endDateTime: string;
   timeZone?: string;
+  user?: string;
 }
 
 export async function proposeNewTime(options: ProposeNewTimeOptions): Promise<GraphResponse<void>> {
-  const { token, eventId, startDateTime, endDateTime, timeZone = 'UTC' } = options;
+  const { token, eventId, startDateTime, endDateTime, timeZone = 'UTC', user } = options;
 
   const body = {
     proposedNewTime: {
@@ -62,7 +66,7 @@ export async function proposeNewTime(options: ProposeNewTimeOptions): Promise<Gr
   try {
     return await callGraph<void>(
       token,
-      `/me/events/${encodeURIComponent(eventId)}/tentativelyAccept`,
+      `${graphUserPath(user, `events/${encodeURIComponent(eventId)}/tentativelyAccept`)}`,
       {
         method: 'POST',
         body: JSON.stringify(body)

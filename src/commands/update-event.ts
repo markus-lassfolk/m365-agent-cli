@@ -53,6 +53,7 @@ export const updateEventCommand = new Command('update-event')
   .option('--sensitivity <level>', 'Set sensitivity: normal, personal, private, confidential')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Use a specific authentication identity (default: default)')
   .option('--mailbox <email>', 'Update event in shared mailbox calendar')
   .action(
     async (
@@ -76,6 +77,7 @@ export const updateEventCommand = new Command('update-event')
         sensitivity?: string;
         json?: boolean;
         token?: string;
+        identity?: string;
         mailbox?: string;
         category?: string[];
         clearCategories?: boolean;
@@ -84,7 +86,8 @@ export const updateEventCommand = new Command('update-event')
     ) => {
       checkReadOnly(cmd);
       const authResult = await resolveAuth({
-        token: options.token
+        token: options.token,
+        identity: options.identity
       });
 
       if (!authResult.success) {

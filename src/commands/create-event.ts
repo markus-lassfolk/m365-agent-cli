@@ -46,6 +46,7 @@ export const createEventCommand = new Command('create-event')
   .option('--count <n>', 'Number of occurrences (alternative to --until)')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Use a specific authentication identity (default: default)')
   .option('--mailbox <email>', 'Create event in shared mailbox calendar')
   .action(
     async (
@@ -70,6 +71,7 @@ export const createEventCommand = new Command('create-event')
         count?: string;
         json?: boolean;
         token?: string;
+        identity?: string;
         mailbox?: string;
         category?: string[];
       },
@@ -77,7 +79,8 @@ export const createEventCommand = new Command('create-event')
     ) => {
       checkReadOnly(cmd);
       const authResult = await resolveAuth({
-        token: options.token
+        token: options.token,
+        identity: options.identity
       });
 
       if (!authResult.success) {

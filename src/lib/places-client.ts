@@ -37,7 +37,7 @@ async function withAuth<T>(
   fn: (
     token: string
   ) => Promise<{ ok: boolean; data?: T; error?: { message: string; code?: string; status?: number } }>,
-  options?: { token?: string }
+  options?: { token?: string; identity?: string }
 ): Promise<{ ok: boolean; data?: T; error?: { message: string; code?: string; status?: number } }> {
   const auth = await resolveGraphAuth(options);
   if (!auth.success || !auth.token) {
@@ -46,7 +46,7 @@ async function withAuth<T>(
   return fn(auth.token);
 }
 
-export async function listPlaceRoomLists(options?: { token?: string }): Promise<{
+export async function listPlaceRoomLists(options?: { token?: string; identity?: string }): Promise<{
   ok: boolean;
   data?: RoomList[];
   error?: { message: string; code?: string; status?: number };
@@ -58,7 +58,7 @@ export async function listPlaceRoomLists(options?: { token?: string }): Promise<
 
 export async function listRoomsInRoomList(
   roomListEmail: string,
-  options?: { token?: string }
+  options?: { token?: string; identity?: string }
 ): Promise<{
   ok: boolean;
   data?: Place[];
@@ -81,7 +81,7 @@ export interface RoomFilters {
 
 export async function findRooms(
   filters?: RoomFilters,
-  options?: { token?: string }
+  options?: { token?: string; identity?: string }
 ): Promise<{
   ok: boolean;
   data?: Place[];

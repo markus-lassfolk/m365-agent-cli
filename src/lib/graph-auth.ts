@@ -15,18 +15,30 @@ interface CachedGraphToken {
   expiresAt: number;
 }
 
-const GRAPH_TOKEN_CACHE_FILE = join(homedir(), '.config', 'm365-agent-cli', 'graph-token-cache.json');
+const GRAPH_TOKEN_CACHE_TEMPLATE = join(homedir(), '.config', 'm365-agent-cli', 'graph-token-cache-{identity}.json');
+const LEGACY_GRAPH_TOKEN_CACHE_FILE = join(homedir(), '.config', 'm365-agent-cli', 'graph-token-cache.json');
 const OLD_GRAPH_TOKEN_CACHE_FILE = join(homedir(), '.config', 'clippy', 'graph-token-cache.json');
+
+function graphTokenCachePath(identity: string): string {
+  return GRAPH_TOKEN_CACHE_TEMPLATE.replace('{identity}', identity);
+}
 
 async function migrateGraphTokenCache(): Promise<void> {
   try {
-    const newStats = await stat(GRAPH_TOKEN_CACHE_FILE).catch(() => null);
-    if (!newStats) {
-      const oldStats = await stat(OLD_GRAPH_TOKEN_CACHE_FILE).catch(() => null);
-      if (oldStats) {
-        const dir = join(homedir(), '.config', 'm365-agent-cli');
+    const dir = join(homedir(), '.config', 'm365-agent-cli');
+    const defaultPath = graphTokenCachePath('default');
+    const defaultStats = await stat(defaultPath).catch(() => null);
+    if (!defaultStats) {
+      const legacyStats = await stat(LEGACY_GRAPH_TOKEN_CACHE_FILE).catch(() => null);
+      if (legacyStats) {
         await mkdir(dir, { recursive: true, mode: 0o700 });
-        await rename(OLD_GRAPH_TOKEN_CACHE_FILE, GRAPH_TOKEN_CACHE_FILE);
+        await rename(LEGACY_GRAPH_TOKEN_CACHE_FILE, defaultPath);
+        return;
+      }
+      const oldClippyStats = await stat(OLD_GRAPH_TOKEN_CACHE_FILE).catch(() => null);
+      if (oldClippyStats) {
+        await mkdir(dir, { recursive: true, mode: 0o700 });
+        await rename(OLD_GRAPH_TOKEN_CACHE_FILE, defaultPath);
       }
     }
   } catch (_err) {
@@ -44,21 +56,21 @@ const GRAPH_SCOPES = [
   'https://graph.microsoft.com/Files.Read offline_access User.Read'
 ];
 
-async function loadCachedGraphToken(): Promise<CachedGraphToken | null> {
+async function loadCachedGraphToken(identity: string): Promise<CachedGraphToken | null> {
   await migrateGraphTokenCache();
   try {
-    const data = await readFile(GRAPH_TOKEN_CACHE_FILE, 'utf-8');
+    const data = await readFile(graphTokenCachePath(identity), 'utf-8');
     return JSON.parse(data) as CachedGraphToken;
   } catch {
     return null;
   }
 }
 
-async function saveCachedGraphToken(token: CachedGraphToken): Promise<void> {
+async function saveCachedGraphToken(identity: string, token: CachedGraphToken): Promise<void> {
   try {
     const dir = join(homedir(), '.config', 'm365-agent-cli');
     await mkdir(dir, { recursive: true, mode: 0o700 });
-    await writeFile(GRAPH_TOKEN_CACHE_FILE, JSON.stringify(token, null, 2), {
+    await writeFile(graphTokenCachePath(identity), JSON.stringify(token, null, 2), {
       encoding: 'utf-8',
       mode: 0o600
     });
@@ -120,7 +132,7 @@ async function refreshGraphAccessToken(
   throw new Error(`Graph token refresh failed: ${lastError}`);
 }
 
-export async function resolveGraphAuth(options?: { token?: string }): Promise<GraphAuthResult> {
+export async function resolveGraphAuth(options?: { token?: string; identity?: string }): Promise<GraphAuthResult> {
   if (options?.token) {
     return { success: true, token: options.token };
   }
@@ -152,9 +164,17 @@ export async function resolveGraphAuth(options?: { token?: string }): Promise<Gr
       };
     }
 
+    const identity = options?.identity || 'default';
+    if (!/^[a-zA-Z0-9_-]+$/.test(identity)) {
+      return {
+        success: false,
+        error: 'Invalid identity name. Only alphanumeric characters, hyphens, and underscores are allowed.'
+      };
+    }
+
     const tenant = getMicrosoftTenantPathSegment();
 
-    const cached = await loadCachedGraphToken();
+    const cached = await loadCachedGraphToken(identity);
     if (cached && cached.expiresAt > Date.now() + 60_000) {
       // Guard against corrupted cache: validate JWT structure before returning
       if (!isValidJwtStructure(cached.accessToken)) {
@@ -172,7 +192,7 @@ export async function resolveGraphAuth(options?: { token?: string }): Promise<Gr
     for (let i = 0; i < refreshTokens.length; i++) {
       try {
         const result = await refreshGraphAccessToken(clientId, refreshTokens[i], tenant);
-        await saveCachedGraphToken(result);
+        await saveCachedGraphToken(identity, result);
         return { success: true, token: result.accessToken };
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);

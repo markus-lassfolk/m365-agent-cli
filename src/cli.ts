@@ -36,7 +36,7 @@ import { whoamiCommand } from './commands/whoami.js';
 
 const program = new Command();
 
-program.name('m365-agent-cli').description('CLI for Microsoft 365/EWS').version('0.1.0');
+program.name('m365-agent-cli').description('CLI for Microsoft 365/EWS').version('1.0.0');
 
 program.option('--read-only', 'Run in read-only mode, blocking any mutating operations');
 

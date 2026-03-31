@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
 import { createMailFolder, deleteMailFolder, getMailFolders, updateMailFolder } from '../lib/ews-client.js';
+import { checkReadOnly } from '../lib/utils.js';
 
 export const foldersCommand = new Command('folders')
   .description('Manage mail folders')
@@ -10,6 +11,7 @@ export const foldersCommand = new Command('folders')
   .option('--to <newname>', 'New name for rename operation')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Use a specific authentication identity (default: default)')
   .option('--mailbox <email>', 'Delegated or shared mailbox')
   .action(
     async (options: {
@@ -19,10 +21,13 @@ export const foldersCommand = new Command('folders')
       to?: string;
       json?: boolean;
       token?: string;
+      identity?: string;
       mailbox?: string;
-    }) => {
+    },
+    cmd: any) => {
       const authResult = await resolveAuth({
-        token: options.token
+        token: options.token,
+        identity: options.identity
       });
 
       if (!authResult.success) {
@@ -51,6 +56,7 @@ export const foldersCommand = new Command('folders')
 
       // Handle create
       if (options.create) {
+        checkReadOnly(cmd);
         const existing = findFolder(options.create);
         if (existing) {
           console.error(`Folder "${options.create}" already exists.`);
@@ -73,6 +79,7 @@ export const foldersCommand = new Command('folders')
 
       // Handle rename
       if (options.rename) {
+        checkReadOnly(cmd);
         if (!options.to) {
           console.error('Please specify new name with --to');
           console.error('Example: m365-agent-cli folders --rename "Old Name" --to "New Name"');
@@ -101,6 +108,7 @@ export const foldersCommand = new Command('folders')
 
       // Handle delete
       if (options.delete) {
+        checkReadOnly(cmd);
         const folder = findFolder(options.delete);
         if (!folder) {
           console.error(`Folder "${options.delete}" not found.`);

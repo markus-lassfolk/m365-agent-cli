@@ -51,7 +51,7 @@ export const draftsCommand = new Command('drafts')
   .option('--html', 'Treat body as HTML')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
-  .option('--identity <name>', 'Use a specific authentication identity (default: default)')
+  .option('--identity <name>', 'Use a specific authentication identity (EWS; default: default)')
   .option('--mailbox <email>', 'Delegated or shared mailbox drafts folder')
   .action(
     async (

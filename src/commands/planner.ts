@@ -19,8 +19,9 @@ plannerCommand
   .description('List tasks assigned to you')
   .option('--json', 'Output JSON')
   .option('--token <token>', 'Use a specific token')
-  .action(async (opts: { json?: boolean; token?: string }) => {
-    const auth = await resolveGraphAuth({ token: opts.token });
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .action(async (opts: { json?: boolean; token?: string; identity?: string }) => {
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success) {
       console.error(`Auth error: ${auth.error}`);
       process.exit(1);
@@ -46,8 +47,9 @@ plannerCommand
   .option('-g, --group <groupId>', 'Group ID to list plans for')
   .option('--json', 'Output JSON')
   .option('--token <token>', 'Use a specific token')
-  .action(async (opts: { group?: string; json?: boolean; token?: string }) => {
-    const auth = await resolveGraphAuth({ token: opts.token });
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .action(async (opts: { group?: string; json?: boolean; token?: string; identity?: string }) => {
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success) {
       console.error(`Auth error: ${auth.error}`);
       process.exit(1);
@@ -72,8 +74,9 @@ plannerCommand
   .requiredOption('-p, --plan <planId>', 'Plan ID')
   .option('--json', 'Output JSON')
   .option('--token <token>', 'Use a specific token')
-  .action(async (opts: { plan: string; json?: boolean; token?: string }) => {
-    const auth = await resolveGraphAuth({ token: opts.token });
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .action(async (opts: { plan: string; json?: boolean; token?: string; identity?: string }) => {
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success) {
       console.error(`Auth error: ${auth.error}`);
       process.exit(1);
@@ -98,8 +101,9 @@ plannerCommand
   .requiredOption('-p, --plan <planId>', 'Plan ID')
   .option('--json', 'Output JSON')
   .option('--token <token>', 'Use a specific token')
-  .action(async (opts: { plan: string; json?: boolean; token?: string }) => {
-    const auth = await resolveGraphAuth({ token: opts.token });
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .action(async (opts: { plan: string; json?: boolean; token?: string; identity?: string }) => {
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success) {
       console.error(`Auth error: ${auth.error}`);
       process.exit(1);
@@ -126,9 +130,10 @@ plannerCommand
   .option('-b, --bucket <bucketId>', 'Bucket ID')
   .option('--json', 'Output JSON')
   .option('--token <token>', 'Use a specific token')
-  .action(async (opts: { plan: string; title: string; bucket?: string; json?: boolean; token?: string }, cmd: any) => {
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .action(async (opts: { plan: string; title: string; bucket?: string; json?: boolean; token?: string; identity?: string }, cmd: any) => {
     checkReadOnly(cmd);
-    const auth = await resolveGraphAuth({ token: opts.token });
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success) {
       console.error(`Auth error: ${auth.error}`);
       process.exit(1);
@@ -155,6 +160,7 @@ plannerCommand
   .option('--assign <userId>', 'Assign to user ID')
   .option('--json', 'Output JSON')
   .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
   .action(
     async (
       opts: {
@@ -165,11 +171,12 @@ plannerCommand
         assign?: string;
         json?: boolean;
         token?: string;
+        identity?: string;
       },
       cmd: any
     ) => {
       checkReadOnly(cmd);
-      const auth = await resolveGraphAuth({ token: opts.token });
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
       if (!auth.success) {
         console.error(`Auth error: ${auth.error}`);
         process.exit(1);

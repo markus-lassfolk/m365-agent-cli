@@ -12,8 +12,8 @@ export interface Subscription {
   creatorId?: string;
 }
 
-async function getAuthToken(token?: string): Promise<string> {
-  const auth = await resolveGraphAuth({ token });
+async function getAuthToken(token?: string, identity?: string): Promise<string> {
+  const auth = await resolveGraphAuth({ token, identity });
   if (!auth.success || !auth.token) {
     throw new Error(auth.error || 'Failed to authenticate to Graph API');
   }
@@ -26,10 +26,11 @@ export async function createSubscription(
   notificationUrl: string,
   expirationDateTime: string,
   clientState?: string,
-  token?: string
+  token?: string,
+  identity?: string
 ): Promise<GraphResponse<Subscription>> {
   try {
-    const authToken = await getAuthToken(token);
+    const authToken = await getAuthToken(token, identity);
     const body: Record<string, string> = {
       changeType,
       notificationUrl,
@@ -49,9 +50,9 @@ export async function createSubscription(
   }
 }
 
-export async function listSubscriptions(token?: string): Promise<GraphResponse<Subscription[]>> {
+export async function listSubscriptions(token?: string, identity?: string): Promise<GraphResponse<Subscription[]>> {
   try {
-    const authToken = await getAuthToken(token);
+    const authToken = await getAuthToken(token, identity);
     const res = await callGraph<{ value: Subscription[] }>(authToken, '/subscriptions', {
       method: 'GET'
     });
@@ -62,9 +63,9 @@ export async function listSubscriptions(token?: string): Promise<GraphResponse<S
   }
 }
 
-export async function deleteSubscription(id: string, token?: string): Promise<GraphResponse<void>> {
+export async function deleteSubscription(id: string, token?: string, identity?: string): Promise<GraphResponse<void>> {
   try {
-    const authToken = await getAuthToken(token);
+    const authToken = await getAuthToken(token, identity);
     return await callGraph<void>(authToken, `/subscriptions/${encodeURIComponent(id)}`, {
       method: 'DELETE'
     });
@@ -76,10 +77,11 @@ export async function deleteSubscription(id: string, token?: string): Promise<Gr
 export async function renewSubscription(
   id: string,
   expirationDateTime: string,
-  token?: string
+  token?: string,
+  identity?: string
 ): Promise<GraphResponse<void>> {
   try {
-    const authToken = await getAuthToken(token);
+    const authToken = await getAuthToken(token, identity);
     return await callGraph<void>(authToken, `/subscriptions/${encodeURIComponent(id)}`, {
       method: 'PATCH',
       body: JSON.stringify({

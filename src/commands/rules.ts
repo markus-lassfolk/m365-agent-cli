@@ -12,6 +12,7 @@ import {
   type UpdateMessageRulePayload,
   updateMessageRule
 } from '../lib/rules-client.js';
+import { checkReadOnly } from '../lib/utils.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -195,14 +196,16 @@ Conditions you can filter by:
   .option('--hasAttachments <value>', 'Match has attachments (true|false)')
   .option('--importance <level>', 'Match importance (Low|Normal|High)')
   .option('--isAutomaticForward <value>', 'Match is auto-forward (true|false)')
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .option('--user <email>', 'Target mailbox for inbox rules (Graph delegation)')
   .action(async (opts) => {
-    const auth = await resolveGraphAuth({ token: opts.token });
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success) {
       console.error(`Error: ${auth.error}`);
       process.exit(1);
     }
 
-    const result = await listMessageRules(auth.token!);
+    const result = await listMessageRules(auth.token!, opts.user);
     if (!result.ok) {
       console.error(`Error: ${result.error?.message}`);
       process.exit(1);
@@ -301,14 +304,16 @@ const getCmd = new Command('get')
   .argument('<ruleId>', 'The rule ID')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .option('--user <email>', 'Target mailbox for inbox rules (Graph delegation)')
   .action(async (ruleId, opts) => {
-    const auth = await resolveGraphAuth({ token: opts.token });
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success) {
       console.error(`Error: ${auth.error}`);
       process.exit(1);
     }
 
-    const result = await getMessageRule(auth.token!, ruleId);
+    const result = await getMessageRule(auth.token!, ruleId, opts.user);
     if (!result.ok) {
       console.error(`Error: ${result.error?.message}`);
       process.exit(1);
@@ -348,8 +353,11 @@ const createCmd = new Command('create')
   .option('--forwardAsAttachmentTo <emails>', 'Action: forward as attachment to recipients (comma-separated or JSON)')
   .option('--assignCategories <cats>', 'Action: assign categories (comma-separated)')
   .option('--stopProcessingRules', 'Action: stop processing more rules')
-  .action(async (opts) => {
-    const auth = await resolveGraphAuth({ token: opts.token });
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .option('--user <email>', 'Target mailbox for inbox rules (Graph delegation)')
+  .action(async (opts, cmd: any) => {
+    checkReadOnly(cmd);
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success) {
       console.error(`Error: ${auth.error}`);
       process.exit(1);
@@ -382,7 +390,7 @@ const createCmd = new Command('create')
       console.log(`  Enabled:   ${payload.isEnabled}`);
     }
 
-    const result = await createMessageRule(auth.token!, payload);
+    const result = await createMessageRule(auth.token!, payload, opts.user);
     if (!result.ok) {
       console.error(`Error: ${result.error?.message}`);
       process.exit(1);
@@ -428,8 +436,11 @@ const updateCmd = new Command('update')
   .option('--forwardAsAttachmentTo <emails>', 'Action: forward as attachment to recipients (comma-separated or JSON)')
   .option('--assignCategories <cats>', 'Action: assign categories (comma-separated)')
   .option('--stopProcessingRules', 'Action: stop processing more rules')
-  .action(async (opts) => {
-    const auth = await resolveGraphAuth({ token: opts.token });
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .option('--user <email>', 'Target mailbox for inbox rules (Graph delegation)')
+  .action(async (opts, cmd: any) => {
+    checkReadOnly(cmd);
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success) {
       console.error(`Error: ${auth.error}`);
       process.exit(1);
@@ -452,7 +463,7 @@ const updateCmd = new Command('update')
     if (Object.keys(actions).length > 0) payload.actions = actions;
 
     console.log(`Updating rule ${opts.id}…`);
-    const result = await updateMessageRule(auth.token!, opts.id, payload);
+    const result = await updateMessageRule(auth.token!, opts.id, payload, opts.user);
     if (!result.ok) {
       console.error(`Error: ${result.error?.message}`);
       process.exit(1);
@@ -469,14 +480,17 @@ const deleteCmd = new Command('delete')
   .argument('<ruleId>', 'The rule ID to delete')
   .option('--token <token>', 'Use a specific token')
   .option('--json', 'Output as JSON')
-  .action(async (ruleId, opts) => {
-    const auth = await resolveGraphAuth({ token: opts.token });
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .option('--user <email>', 'Target mailbox for inbox rules (Graph delegation)')
+  .action(async (ruleId, opts, cmd: any) => {
+    checkReadOnly(cmd);
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success) {
       console.error(`Error: ${auth.error}`);
       process.exit(1);
     }
 
-    const result = await deleteMessageRule(auth.token!, ruleId);
+    const result = await deleteMessageRule(auth.token!, ruleId, opts.user);
     if (!result.ok) {
       console.error(`Error: ${result.error?.message}`);
       process.exit(1);

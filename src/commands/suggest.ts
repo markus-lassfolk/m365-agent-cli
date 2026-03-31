@@ -9,8 +9,10 @@ export const suggestCommand = new Command('suggest')
   .option('--days <days>', 'Number of days to check from now', '5')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Graph access token (bypass interactive auth)')
-  .action(async (options: { attendees?: string; duration: string; days: string; json?: boolean; token?: string }) => {
-    const authResult = await resolveGraphAuth({ token: options.token });
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .option('--user <email>', 'Mailbox whose calendar is used for findMeetingTimes (delegation)')
+  .action(async (options: { attendees?: string; duration: string; days: string; json?: boolean; token?: string; identity?: string; user?: string }) => {
+    const authResult = await resolveGraphAuth({ token: options.token, identity: options.identity });
     if (!authResult.success || !authResult.token) {
       if (options.json) {
         console.log(JSON.stringify({ error: authResult.error }, null, 2));
@@ -82,7 +84,7 @@ export const suggestCommand = new Command('suggest')
       minimumAttendeePercentage: 100
     };
 
-    const result = await findMeetingTimes(authResult.token, request);
+    const result = await findMeetingTimes(authResult.token, request, options.user);
 
     if (!result.ok || !result.data) {
       if (options.json) {

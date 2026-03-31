@@ -60,8 +60,9 @@ filesCommand
   .option('--folder <id>', 'Folder item ID')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
-  .action(async (options: { folder?: string; json?: boolean; token?: string }) => {
-    const auth = await resolveGraphAuth({ token: options.token });
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .action(async (options: { folder?: string; json?: boolean; token?: string; identity?: string }) => {
+    const auth = await resolveGraphAuth({ token: options.token, identity: options.identity });
     if (!auth.success) {
       console.error(`Error: ${auth.error}`);
       process.exit(1);
@@ -86,8 +87,9 @@ filesCommand
   .description('Search OneDrive files')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
-  .action(async (query: string, options: { json?: boolean; token?: string }) => {
-    const auth = await resolveGraphAuth({ token: options.token });
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .action(async (query: string, options: { json?: boolean; token?: string; identity?: string }) => {
+    const auth = await resolveGraphAuth({ token: options.token, identity: options.identity });
     if (!auth.success) {
       console.error(`Error: ${auth.error}`);
       process.exit(1);
@@ -112,8 +114,9 @@ filesCommand
   .description('Get file metadata')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
-  .action(async (fileId: string, options: { json?: boolean; token?: string }) => {
-    const auth = await resolveGraphAuth({ token: options.token });
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .action(async (fileId: string, options: { json?: boolean; token?: string; identity?: string }) => {
+    const auth = await resolveGraphAuth({ token: options.token, identity: options.identity });
     if (!auth.success) {
       console.error(`Error: ${auth.error}`);
       process.exit(1);
@@ -139,9 +142,10 @@ filesCommand
   .option('--folder <id>', 'Target folder item ID')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
-  .action(async (path: string, options: { folder?: string; json?: boolean; token?: string }, cmd: any) => {
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .action(async (path: string, options: { folder?: string; json?: boolean; token?: string; identity?: string }, cmd: any) => {
     checkReadOnly(cmd);
-    const auth = await resolveGraphAuth({ token: options.token });
+    const auth = await resolveGraphAuth({ token: options.token, identity: options.identity });
     if (!auth.success) {
       console.error(`Error: ${auth.error}`);
       process.exit(1);
@@ -169,8 +173,10 @@ filesCommand
   .option('--folder <id>', 'Target folder item ID')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
-  .action(async (path: string, options: { folder?: string; json?: boolean; token?: string }) => {
-    const auth = await resolveGraphAuth({ token: options.token });
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .action(async (path: string, options: { folder?: string; json?: boolean; token?: string; identity?: string }, cmd: any) => {
+    checkReadOnly(cmd);
+    const auth = await resolveGraphAuth({ token: options.token, identity: options.identity });
     if (!auth.success) {
       console.error(`Error: ${auth.error}`);
       process.exit(1);
@@ -204,8 +210,9 @@ filesCommand
   .option('--out <path>', 'Output path (defaults to ~/Downloads/<name>)')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
-  .action(async (fileId: string, options: { out?: string; json?: boolean; token?: string }) => {
-    const auth = await resolveGraphAuth({ token: options.token });
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .action(async (fileId: string, options: { out?: string; json?: boolean; token?: string; identity?: string }) => {
+    const auth = await resolveGraphAuth({ token: options.token, identity: options.identity });
     if (!auth.success) {
       console.error(`Error: ${auth.error}`);
       process.exit(1);
@@ -233,8 +240,10 @@ filesCommand
   .description('Delete a file by ID')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
-  .action(async (fileId: string, options: { json?: boolean; token?: string }) => {
-    const auth = await resolveGraphAuth({ token: options.token });
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .action(async (fileId: string, options: { json?: boolean; token?: string; identity?: string }, cmd: any) => {
+    checkReadOnly(cmd);
+    const auth = await resolveGraphAuth({ token: options.token, identity: options.identity });
     if (!auth.success) {
       console.error(`Error: ${auth.error}`);
       process.exit(1);
@@ -263,6 +272,7 @@ filesCommand
   .option('--lock', 'Checkout the file before creating a collaboration link (use with --collab)')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
   .action(
     async (
       fileId: string,
@@ -273,9 +283,12 @@ filesCommand
         lock?: boolean;
         json?: boolean;
         token?: string;
-      }
+        identity?: string;
+      },
+      cmd: any
     ) => {
-      const auth = await resolveGraphAuth({ token: options.token });
+      checkReadOnly(cmd);
+      const auth = await resolveGraphAuth({ token: options.token, identity: options.identity });
       if (!auth.success) {
         console.error(`Error: ${auth.error}`);
         process.exit(1);
@@ -333,8 +346,9 @@ filesCommand
   .description('List versions of a file')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
-  .action(async (fileId: string, options: { json?: boolean; token?: string }) => {
-    const auth = await resolveGraphAuth({ token: options.token });
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .action(async (fileId: string, options: { json?: boolean; token?: string; identity?: string }) => {
+    const auth = await resolveGraphAuth({ token: options.token, identity: options.identity });
     if (!auth.success) {
       console.error(`Error: ${auth.error}`);
       process.exit(1);
@@ -369,9 +383,10 @@ filesCommand
   .description('Restore a specific version of a file')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
-  .action(async (fileId: string, versionId: string, options: { json?: boolean; token?: string }, cmd: any) => {
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .action(async (fileId: string, versionId: string, options: { json?: boolean; token?: string; identity?: string }, cmd: any) => {
     checkReadOnly(cmd);
-    const auth = await resolveGraphAuth({ token: options.token });
+    const auth = await resolveGraphAuth({ token: options.token, identity: options.identity });
     if (!auth.success) {
       console.error(`Error: ${auth.error}`);
       process.exit(1);
@@ -397,8 +412,10 @@ filesCommand
   .option('--comment <comment>', 'Optional check-in comment')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
-  .action(async (fileId: string, options: { comment?: string; json?: boolean; token?: string }) => {
-    const auth = await resolveGraphAuth({ token: options.token });
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .action(async (fileId: string, options: { comment?: string; json?: boolean; token?: string; identity?: string }, cmd: any) => {
+    checkReadOnly(cmd);
+    const auth = await resolveGraphAuth({ token: options.token, identity: options.identity });
     if (!auth.success) {
       console.error(`Error: ${auth.error}`);
       process.exit(1);
@@ -428,8 +445,9 @@ filesCommand
   .option('--out <path>', 'Output path')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
-  .action(async (fileId: string, options: { format: string; out?: string; json?: boolean; token?: string }) => {
-    const auth = await resolveGraphAuth({ token: options.token });
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .action(async (fileId: string, options: { format: string; out?: string; json?: boolean; token?: string; identity?: string }) => {
+    const auth = await resolveGraphAuth({ token: options.token, identity: options.identity });
     if (!auth.success) {
       console.error(`Error: ${auth.error}`);
       process.exit(1);
@@ -455,8 +473,9 @@ filesCommand
   .description('Get file analytics (access/action counts)')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
-  .action(async (fileId: string, options: { json?: boolean; token?: string }) => {
-    const auth = await resolveGraphAuth({ token: options.token });
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .action(async (fileId: string, options: { json?: boolean; token?: string; identity?: string }) => {
+    const auth = await resolveGraphAuth({ token: options.token, identity: options.identity });
     if (!auth.success) {
       console.error(`Error: ${auth.error}`);
       process.exit(1);

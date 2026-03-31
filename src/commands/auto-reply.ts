@@ -13,10 +13,11 @@ export const autoReplyCommand = new Command('auto-reply')
   .option('--mailbox <email>', 'Target mailbox (if different from authenticated user)')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific EWS token')
+  .option('--identity <name>', 'Use a specific authentication identity (default: default)')
   .action(async (options, cmd: any) => {
     checkReadOnly(cmd);
     try {
-      const auth = await resolveAuth({ token: options.token });
+      const auth = await resolveAuth({ token: options.token, identity: options.identity });
       if (!auth.success || !auth.token) {
         const msg = auth.error || 'Authentication failed';
         if (options.json) {

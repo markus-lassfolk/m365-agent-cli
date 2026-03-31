@@ -9,8 +9,13 @@ export const scheduleCommand = new Command('schedule')
   .requiredOption('--end <date>', 'End date/time (e.g. 2026-04-07T00:00:00Z or 2026-04-07)')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Graph access token (bypass interactive auth)')
-  .action(async (emails: string[], options: { start: string; end: string; json?: boolean; token?: string }) => {
-    const authResult = await resolveGraphAuth({ token: options.token });
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .option(
+    '--user <email>',
+    'Mailbox whose calendar getSchedule runs in (delegation); omit to use signed-in user'
+  )
+  .action(async (emails: string[], options: { start: string; end: string; json?: boolean; token?: string; identity?: string; user?: string }) => {
+    const authResult = await resolveGraphAuth({ token: options.token, identity: options.identity });
     if (!authResult.success || !authResult.token) {
       if (options.json) {
         console.log(JSON.stringify({ error: authResult.error }, null, 2));
@@ -38,18 +43,22 @@ export const scheduleCommand = new Command('schedule')
     const startDateTime = startDate.toISOString().replace('Z', '');
     const endDateTime = endDate.toISOString().replace('Z', '');
 
-    const result = await getSchedule(authResult.token, {
-      schedules: emails,
-      startTime: {
-        dateTime: startDateTime,
-        timeZone: 'UTC'
+    const result = await getSchedule(
+      authResult.token,
+      {
+        schedules: emails,
+        startTime: {
+          dateTime: startDateTime,
+          timeZone: 'UTC'
+        },
+        endTime: {
+          dateTime: endDateTime,
+          timeZone: 'UTC'
+        },
+        availabilityViewInterval: 60
       },
-      endTime: {
-        dateTime: endDateTime,
-        timeZone: 'UTC'
-      },
-      availabilityViewInterval: 60
-    });
+      options.user
+    );
 
     if (!result.ok || !result.data) {
       if (options.json) {

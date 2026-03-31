@@ -10,6 +10,7 @@ export const findCommand = new Command('find')
   .option('--expand', 'Expand group members if the query matches a group')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
   .action(
     async (
       query: string,
@@ -19,10 +20,12 @@ export const findCommand = new Command('find')
         expand?: boolean;
         json?: boolean;
         token?: string;
+        identity?: string;
       }
     ) => {
       const authResult = await resolveGraphAuth({
-        token: options.token
+        token: options.token,
+        identity: options.identity
       });
 
       if (!authResult.success) {

@@ -1,42 +1,51 @@
 ---
 name: m365-agent-cli
-description: Microsoft 365 integration CLI for managing calendars, emails, OneDrive files, Planner, SharePoint, and FindTime scheduling. Use when the user requests actions involving Outlook, OneDrive, Teams tasks, or SharePoint.
+description: Microsoft 365 CLI (EWS + Graph) for calendar, mail, OneDrive, Planner, SharePoint, To Do, inbox rules, delegates, and subscriptions. Use when the user needs Outlook/Exchange, Graph, or M365 automation from the terminal.
 metadata: {"clawdbot":{"requires":{"bins":["m365-agent-cli"]}}}
 ---
 
-# m365-agent-cli Microsoft 365 CLI
+# m365-agent-cli
 
-A command-line tool for interacting with Microsoft 365 services.
+CLI for Microsoft 365: **Exchange Web Services (EWS)** and **Microsoft Graph**. Prefer `m365-agent-cli <command> --help` for exact flags on each command.
 
-## Core Commands
+## Authentication and profiles
 
-### Email (Outlook)
-* `m365-agent-cli mail` - List recent emails.
-* `m365-agent-cli mail [folder]` - List emails in a specific folder (e.g., `inbox`, `sent`).
-* `m365-agent-cli mail --unread` - List unread emails.
-* `m365-agent-cli mail --read <id>` - Read a specific email.
-* `m365-agent-cli mail --flag <id>` - Flag an email.
-* `m365-agent-cli drafts` - List and manage mail drafts.
-* `m365-agent-cli mail --reply <id> --draft` - Create a draft reply to a specific email.
+- Config directory: `~/.config/m365-agent-cli/` (`.env`, token caches).
+- **EWS** cache: `token-cache-{identity}.json` — default identity name: `default`.
+- **Graph** cache: `graph-token-cache-{identity}.json` — same identity string as EWS for that “profile”.
+- **`--identity <name>`** — use a named cache profile (Graph- and EWS-backed commands that expose the flag). Default is `default`.
+- **`--token <token>`** — override cached access token for that request (advanced).
+- Interactive login: `m365-agent-cli login` (device code); tokens land in `.env` / caches.
+- Check session: `m365-agent-cli whoami`, `m365-agent-cli verify-token [--identity <name>]`.
 
-### Calendar (Outlook)
-* `m365-agent-cli calendar` - View upcoming events.
-* `m365-agent-cli create-event --title "Meeting" --start "YYYY-MM-DDTHH:MM:SS" --end "YYYY-MM-DDTHH:MM:SS"` - Schedule a new event.
-* `m365-agent-cli findtime` - Propose meeting times using FindTime.
-* `m365-agent-cli counter` - Counter-propose a meeting time.
+## Delegation and shared access
 
-### Tasks (Planner/To Do)
-* `m365-agent-cli planner` - List Planner/To Do tasks.
+- **EWS shared mailbox:** `--mailbox <email>` on calendar, mail, send, folders, drafts, respond, findtime, delegates, auto-reply (and similar) to act as that mailbox where supported.
+- **Graph delegation:** **`--user <upn-or-id>`** on supported commands (e.g. inbox **rules**, **oof**, **todo**, **schedule** / meeting-time helpers, **subscribe**, **rooms**/places, **files** where implemented) — calls Graph as `/users/{id}/...` instead of `/me/...`. Requires app permissions + admin consent where applicable.
 
-### Files (OneDrive/SharePoint)
-* `m365-agent-cli files` - List files in OneDrive.
-* `m365-agent-cli files upload <local_path> [--folder <id>]` - Upload or replace a file in OneDrive or SharePoint.
-* `m365-agent-cli sharepoint` - Interact with SharePoint sites and document libraries.
-* `m365-agent-cli pages` - Manage SharePoint pages.
+## Safety
 
-### Authentication
-* `m365-agent-cli verify-token` - Check or refresh your M365 authentication token.
+- **`--read-only`** (root) or **`READ_ONLY_MODE=true`** in env / `.env` runs `checkReadOnly()` before specific mutating actions (exits before the request). The **authoritative list** is the **Read-Only Mode** table in this repo’s `README.md` (kept in sync with `grep checkReadOnly src` in source).
+- Read/query commands (e.g. `calendar`, `schedule`, `suggest`, `subscriptions list`, `rules list`) are **not** gated unless they call `checkReadOnly`—see README.
+- **`m365-agent-cli --help`** only lists root flags (e.g. `--read-only`). Per-command flags are on each subcommand’s help.
 
-## Notes
-* **Always verify tokens** if commands start failing with unauthorized errors.
-* **Progressive Disclosure:** Start by listing items (`m365-agent-cli mail`, `m365-agent-cli files`), then drill down using specific IDs or paths.
+## Command map (high level)
+
+| Area | Commands / notes |
+|------|------------------|
+| Calendar | `calendar`, `create-event`, `update-event`, `delete-event`, `respond`, `findtime`, `forward-event`, `counter`, `schedule`, `suggest` |
+| Mail | `mail`, `send`, `drafts`, `folders` |
+| Files | `files` (list, search, upload, download, share, versions, …) |
+| Planner | `planner` |
+| SharePoint | `sharepoint` / `sp`, `pages` (site pages) |
+| Directory / rooms | `find`, `rooms` |
+| Graph mail extras | `rules` (inbox message rules), `oof` (automatic replies), `todo` (Microsoft To Do) |
+| EWS admin-style | `delegates`, `auto-reply` |
+| Push | `subscribe`, `subscriptions` |
+| Other | `login`, `whoami`, `verify-token`, `serve` |
+
+## Agent tips
+
+- Start with **list/read** commands, then use IDs from output for updates.
+- If auth fails, suggest `verify-token` and re-`login`; wrong **identity** profile means wrong cache file—check `--identity`.
+- For “on behalf of user X” Graph work, confirm **`--user`** is available on that subcommand via `--help` before assuming it works everywhere.

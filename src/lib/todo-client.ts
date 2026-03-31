@@ -1,4 +1,9 @@
 import { callGraph, GraphApiError, type GraphResponse, graphError, graphResult } from './graph-client.js';
+import { graphUserPath } from './graph-user-path.js';
+
+function todoRoot(user?: string): string {
+  return graphUserPath(user, 'todo');
+}
 
 export type TodoImportance = 'low' | 'normal' | 'high';
 export type TodoStatus = 'notStarted' | 'inProgress' | 'completed' | 'waitingOnOthers' | 'deferred';
@@ -41,10 +46,10 @@ export interface TodoList {
   wellknownListName?: string;
 }
 
-export async function getTodoLists(token: string): Promise<GraphResponse<TodoList[]>> {
+export async function getTodoLists(token: string, user?: string): Promise<GraphResponse<TodoList[]>> {
   let result: GraphResponse<{ value: TodoList[] }>;
   try {
-    result = await callGraph<{ value: TodoList[] }>(token, '/me/todo/lists');
+    result = await callGraph<{ value: TodoList[] }>(token, `${todoRoot(user)}/lists`);
   } catch (err) {
     if (err instanceof GraphApiError) {
       return graphError(err.message, err.code, err.status);
@@ -57,9 +62,9 @@ export async function getTodoLists(token: string): Promise<GraphResponse<TodoLis
   return graphResult(result.data.value);
 }
 
-export async function getTodoList(token: string, listId: string): Promise<GraphResponse<TodoList>> {
+export async function getTodoList(token: string, listId: string, user?: string): Promise<GraphResponse<TodoList>> {
   try {
-    return await callGraph<TodoList>(token, `/me/todo/lists/${encodeURIComponent(listId)}`);
+    return await callGraph<TodoList>(token, `${todoRoot(user)}/lists/${encodeURIComponent(listId)}`);
   } catch (err) {
     if (err instanceof GraphApiError) {
       return graphError(err.message, err.code, err.status);
@@ -68,7 +73,12 @@ export async function getTodoList(token: string, listId: string): Promise<GraphR
   }
 }
 
-export async function getTasks(token: string, listId: string, filter?: string): Promise<GraphResponse<TodoTask[]>> {
+export async function getTasks(
+  token: string,
+  listId: string,
+  filter?: string,
+  user?: string
+): Promise<GraphResponse<TodoTask[]>> {
   const params = new URLSearchParams();
   if (filter) params.set('$filter', filter);
   const query = params.toString() ? `?${params.toString()}` : '';
@@ -76,7 +86,7 @@ export async function getTasks(token: string, listId: string, filter?: string): 
   try {
     result = await callGraph<{ value: TodoTask[] }>(
       token,
-      `/me/todo/lists/${encodeURIComponent(listId)}/tasks${query}`
+      `${todoRoot(user)}/lists/${encodeURIComponent(listId)}/tasks${query}`
     );
   } catch (err) {
     if (err instanceof GraphApiError) {
@@ -90,11 +100,16 @@ export async function getTasks(token: string, listId: string, filter?: string): 
   return graphResult(result.data.value);
 }
 
-export async function getTask(token: string, listId: string, taskId: string): Promise<GraphResponse<TodoTask>> {
+export async function getTask(
+  token: string,
+  listId: string,
+  taskId: string,
+  user?: string
+): Promise<GraphResponse<TodoTask>> {
   try {
     return await callGraph<TodoTask>(
       token,
-      `/me/todo/lists/${encodeURIComponent(listId)}/tasks/${encodeURIComponent(taskId)}`
+      `${todoRoot(user)}/lists/${encodeURIComponent(listId)}/tasks/${encodeURIComponent(taskId)}`
     );
   } catch (err) {
     if (err instanceof GraphApiError) {
@@ -120,7 +135,8 @@ export interface CreateTaskOptions {
 export async function createTask(
   token: string,
   listId: string,
-  options: CreateTaskOptions
+  options: CreateTaskOptions,
+  user?: string
 ): Promise<GraphResponse<TodoTask>> {
   const payload: Record<string, unknown> = { title: options.title };
   if (options.body) payload.body = { content: options.body, contentType: options.bodyContentType || 'text' };
@@ -134,7 +150,7 @@ export async function createTask(
   if (options.linkedResources?.length) payload.linkedResources = options.linkedResources;
   let result: GraphResponse<TodoTask>;
   try {
-    result = await callGraph<TodoTask>(token, `/me/todo/lists/${encodeURIComponent(listId)}/tasks`, {
+    result = await callGraph<TodoTask>(token, `${todoRoot(user)}/lists/${encodeURIComponent(listId)}/tasks`, {
       method: 'POST',
       body: JSON.stringify(payload)
     });
@@ -168,7 +184,8 @@ export async function updateTask(
   token: string,
   listId: string,
   taskId: string,
-  options: UpdateTaskOptions
+  options: UpdateTaskOptions,
+  user?: string
 ): Promise<GraphResponse<TodoTask>> {
   const payload: Record<string, unknown> = {};
   if (options.title !== undefined) payload.title = options.title;
@@ -198,7 +215,7 @@ export async function updateTask(
   try {
     result = await callGraph<TodoTask>(
       token,
-      `/me/todo/lists/${encodeURIComponent(listId)}/tasks/${encodeURIComponent(taskId)}`,
+      `${todoRoot(user)}/lists/${encodeURIComponent(listId)}/tasks/${encodeURIComponent(taskId)}`,
       { method: 'PATCH', body: JSON.stringify(payload) }
     );
   } catch (err) {
@@ -213,11 +230,16 @@ export async function updateTask(
   return graphResult(result.data);
 }
 
-export async function deleteTask(token: string, listId: string, taskId: string): Promise<GraphResponse<void>> {
+export async function deleteTask(
+  token: string,
+  listId: string,
+  taskId: string,
+  user?: string
+): Promise<GraphResponse<void>> {
   try {
     return await callGraph<void>(
       token,
-      `/me/todo/lists/${encodeURIComponent(listId)}/tasks/${encodeURIComponent(taskId)}`,
+      `${todoRoot(user)}/lists/${encodeURIComponent(listId)}/tasks/${encodeURIComponent(taskId)}`,
       { method: 'DELETE' },
       false
     );
@@ -233,13 +255,14 @@ export async function addChecklistItem(
   token: string,
   listId: string,
   taskId: string,
-  displayName: string
+  displayName: string,
+  user?: string
 ): Promise<GraphResponse<TodoChecklistItem>> {
   let result: GraphResponse<TodoChecklistItem>;
   try {
     result = await callGraph<TodoChecklistItem>(
       token,
-      `/me/todo/lists/${encodeURIComponent(listId)}/tasks/${encodeURIComponent(taskId)}/checklistItems`,
+      `${todoRoot(user)}/lists/${encodeURIComponent(listId)}/tasks/${encodeURIComponent(taskId)}/checklistItems`,
       { method: 'POST', body: JSON.stringify({ displayName }) }
     );
   } catch (err) {
@@ -262,12 +285,13 @@ export async function deleteChecklistItem(
   token: string,
   listId: string,
   taskId: string,
-  checklistItemId: string
+  checklistItemId: string,
+  user?: string
 ): Promise<GraphResponse<void>> {
   try {
     return await callGraph<void>(
       token,
-      `/me/todo/lists/${encodeURIComponent(listId)}/tasks/${encodeURIComponent(taskId)}/checklistItems/${encodeURIComponent(checklistItemId)}`,
+      `${todoRoot(user)}/lists/${encodeURIComponent(listId)}/tasks/${encodeURIComponent(taskId)}/checklistItems/${encodeURIComponent(checklistItemId)}`,
       { method: 'DELETE' },
       false
     );

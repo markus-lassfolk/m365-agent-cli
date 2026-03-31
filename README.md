@@ -77,8 +77,9 @@ Or pass `--mailbox` per-command (see examples below).
 
 1. m365-agent-cli uses the refresh token to obtain a short-lived access token via Microsoft's OAuth2 endpoint
 2. Access tokens are cached under `~/.config/m365-agent-cli/`:
-   - EWS tokens are stored per identity as `token-cache-{identity}.json`
-   - Microsoft Graph tokens are stored in `graph-token-cache.json`
+   - **EWS:** `token-cache-{identity}.json` (default identity: `default`)
+   - **Microsoft Graph:** `graph-token-cache-{identity}.json` (same identity name; default `default`)
+   - A legacy `graph-token-cache.json` (no identity suffix) is migrated once to `graph-token-cache-default.json` when present.
    Tokens are refreshed automatically when expired.
 3. Microsoft may rotate the refresh token on each use — the latest one is cached automatically in the same directory
 
@@ -94,29 +95,56 @@ m365-agent-cli verify-token
 
 ---
 
-## Global Options
+## Options: root vs per-command
 
-All commands support these global options:
+`m365-agent-cli --help` shows only options registered on the **root** program, currently:
 
 ```bash
---json              # Output as JSON (for scripting)
---token <token>     # Use a specific access token (overrides cached token)
---read-only         # Run in read-only mode, blocking any mutating operations
+--read-only         # Run in read-only mode, blocking mutating operations
+--version, -V       # CLI version (1.0.0+)
 ```
+
+Many **subcommands** accept their own flags. Common patterns (not every command has every flag—use `m365-agent-cli <command> --help`):
+
+```bash
+--json                    # Machine-readable output (where supported)
+--token <token>           # Use a specific access token (overrides cache)
+--identity <name>         # Token cache profile (default: default). Selects EWS and Graph cache files for that name.
+--user <email>            # Graph delegation: target another user/mailbox (supported commands only; needs permissions)
+```
+
+**EWS shared mailbox:** use `--mailbox <email>` on calendar, mail, send, folders, drafts, respond, findtime, delegates, auto-reply, and related flows.
 
 ### Read-Only Mode
 
-You can run `m365-agent-cli` in a strict Read-Only mode to prevent accidental mutations (such as sending emails, deleting events, or updating files). When enabled, commands that perform mutating operations will be blocked and the CLI will gracefully exit with an error message before any network request is made.
+When read-only mode is on (`READ_ONLY_MODE=true` in env / `~/.config/m365-agent-cli/.env`, or `--read-only` on the **root** command), the CLI calls `checkReadOnly()` before the listed actions and exits with an error **before** the mutating request is sent.
 
-**Mutating operations that are blocked include:**
-- Creating, updating, or deleting calendar events
-- Sending emails or managing drafts (create, edit, send, delete)
-- Email operations: flagging/unflagging, marking read/unread, moving, replying, forwarding, changing sensitivity
-- File operations: uploading, restoring files
-- Planner operations: creating or updating tasks
-- SharePoint operations: creating or updating list items, updating or publishing pages
-- Auto-reply configuration changes
-- Meeting response actions (accept, decline, tentative)
+The table below matches **`checkReadOnly` in the source** (search the repo for `checkReadOnly(` to verify after changes). Anything **not** listed here is either read-only or not wired to read-only yet.
+
+| Command | Blocked actions (read-only on) |
+|---------|--------------------------------|
+| `create-event` | Entire command |
+| `update-event` | Entire command |
+| `delete-event` | Entire command |
+| `forward-event` | Entire command |
+| `counter` | Entire command |
+| `respond` | `accept`, `decline`, `tentative` (not `respond list`) |
+| `send` | Entire command |
+| `mail` | Mutating flags only: `--flag`, `--unflag`, `--mark-read`, `--mark-unread`, `--complete`, `--sensitivity`, `--move`, `--reply`, `--reply-all`, `--forward` (listing, `--read`, `--download` stay allowed) |
+| `drafts` | `--create`, `--edit`, `--send`, `--delete` (plain list/read allowed) |
+| `folders` | `--create`, `--rename` (with `--to`), `--delete` (listing folders allowed) |
+| `files` | `upload`, `upload-large`, `delete`, `share`, `restore`, `checkin` |
+| `planner` | `create-task`, `update-task` |
+| `sharepoint` / `sp` | `create-item`, `update-item` |
+| `pages` | `update`, `publish` |
+| `rules` | `create`, `update`, `delete` |
+| `todo` | `create`, `complete`, `delete`, `add-checklist` |
+| `subscribe` | Creating a subscription; `subscribe cancel <id>` |
+| `delegates` | `add`, `update`, `remove` |
+| `oof` | Write path only (when `--status`, `--internal-message`, `--external-message`, `--start`, or `--end` is used to change settings) |
+| `auto-reply` | Entire command (EWS auto-reply rules) |
+
+**Intentionally not gated** (no `checkReadOnly` today): read/query helpers such as `schedule`, `suggest`, `findtime`, `calendar`, `subscriptions list`, `rules list` / `rules get`, `todo` list-only usage, `files` list/search/meta/download/convert/analytics/versions, etc. Those calls do not use the guard in code; if a new subcommand adds writes, it should call `checkReadOnly` and this table should be updated.
 
 You can enable Read-Only mode in two ways:
 

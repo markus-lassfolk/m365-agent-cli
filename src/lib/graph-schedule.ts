@@ -1,4 +1,5 @@
 import { callGraph, GraphApiError, type GraphResponse, graphError, graphResult } from './graph-client.js';
+import { graphUserPath } from './graph-user-path.js';
 
 export interface GetScheduleRequest {
   schedules: string[];
@@ -54,11 +55,12 @@ export interface GetScheduleResponse {
 
 export async function getSchedule(
   token: string,
-  request: GetScheduleRequest
+  request: GetScheduleRequest,
+  user?: string
 ): Promise<GraphResponse<GetScheduleResponse>> {
   let result: GraphResponse<GetScheduleResponse>;
   try {
-    result = await callGraph<GetScheduleResponse>(token, '/me/calendar/getSchedule', {
+    result = await callGraph<GetScheduleResponse>(token, graphUserPath(user, 'calendar/getSchedule'), {
       method: 'POST',
       body: JSON.stringify(request),
       headers: {
@@ -141,11 +143,12 @@ export interface FindMeetingTimesResponse {
 
 export async function findMeetingTimes(
   token: string,
-  request: FindMeetingTimesRequest
+  request: FindMeetingTimesRequest,
+  user?: string
 ): Promise<GraphResponse<FindMeetingTimesResponse>> {
   let result: GraphResponse<FindMeetingTimesResponse>;
   try {
-    result = await callGraph<FindMeetingTimesResponse>(token, '/me/findMeetingTimes', {
+    result = await callGraph<FindMeetingTimesResponse>(token, graphUserPath(user, 'findMeetingTimes'), {
       method: 'POST',
       body: JSON.stringify(request),
       headers: {

@@ -31,6 +31,7 @@ export const deleteEventCommand = new Command('delete-event')
   .option('--scope <scope>', 'Scope: all (default), this (single occurrence), future (this and future)', 'all')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Use a specific authentication identity (default: default)')
   .option('--mailbox <email>', 'Delete event in shared mailbox calendar')
   .action(
     async (
@@ -46,13 +47,15 @@ export const deleteEventCommand = new Command('delete-event')
         scope: string;
         json?: boolean;
         token?: string;
+        identity?: string;
         mailbox?: string;
       },
       cmd: any
     ) => {
       checkReadOnly(cmd);
       const authResult = await resolveAuth({
-        token: options.token
+        token: options.token,
+        identity: options.identity
       });
 
       if (!authResult.success) {

@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import { createSubscription, deleteSubscription } from '../lib/graph-subscriptions.js';
+import { checkReadOnly } from '../lib/utils.js';
 
 export const subscribeCommand = new Command('subscribe')
   .description('Subscribe to Microsoft Graph push notifications')
@@ -8,6 +9,8 @@ export const subscribeCommand = new Command('subscribe')
   .option('--expiry <datetime>', 'Expiration datetime (ISO 8601, defaults to 3 days from now)')
   .option('--change-type <type>', 'Change type (comma-separated)', 'created,updated')
   .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .option('--user <email>', 'Subscribe under this user or shared mailbox (users/{id}/...)')
   .action(async (resource, options, cmd) => {
     if (!resource) {
       return cmd.help();
@@ -17,20 +20,23 @@ export const subscribeCommand = new Command('subscribe')
       process.exit(1);
     }
 
+    checkReadOnly(cmd);
+
     // Map friendly resource names to graph endpoints
-    const mapResource = (res: string) => {
+    const mapResource = (res: string, user?: string) => {
+      const prefix = user?.trim() ? `users/${encodeURIComponent(user.trim())}` : 'me';
       switch (res.toLowerCase()) {
         case 'mail':
-          return 'me/messages';
+          return `${prefix}/messages`;
         case 'event':
-          return 'me/events';
+          return `${prefix}/events`;
         case 'contact':
-          return 'me/contacts';
+          return `${prefix}/contacts`;
         case 'todotask':
           // Note: Todo subscriptions require a specific list ID.
           // Use the format: me/todo/lists/{listId}/tasks
           // For the default Tasks list, use: me/todo/lists/Tasks/tasks
-          return 'me/todo/lists/Tasks/tasks';
+          return `${prefix}/todo/lists/Tasks/tasks`;
         default:
           return res;
       }
@@ -39,7 +45,7 @@ export const subscribeCommand = new Command('subscribe')
     // Generate clientState for subscription validation (if GRAPH_CLIENT_STATE env is set)
     const clientState = process.env.GRAPH_CLIENT_STATE;
 
-    const graphResource = mapResource(resource);
+    const graphResource = mapResource(resource, options.user);
 
     // Default expiration to 3 days (Graph allows up to 3 days for most resources)
     let expiry = options.expiry;
@@ -59,7 +65,8 @@ export const subscribeCommand = new Command('subscribe')
         options.url,
         expiry,
         clientState,
-        options.token
+        options.token,
+        options.identity
       );
       if (!res.ok) {
         console.error(`Failed to create subscription: ${res.error?.message}`);
@@ -78,10 +85,12 @@ subscribeCommand
   .command('cancel <id>')
   .description('Cancel an existing subscription')
   .option('--token <token>', 'Use a specific token')
-  .action(async (id, options) => {
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .action(async (id, options, cmd) => {
     try {
+      checkReadOnly(cmd);
       console.log(`Deleting subscription ${id}...`);
-      const res = await deleteSubscription(id, options.token);
+      const res = await deleteSubscription(id, options.token, options.identity);
       if (!res.ok) {
         console.error(`Failed to delete subscription: ${res.error?.message}`);
         process.exit(1);

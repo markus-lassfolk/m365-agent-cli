@@ -11,8 +11,9 @@ sharepointCommand
   .requiredOption('--site-id <id>', 'SharePoint Site ID')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
-  .action(async (opts: { siteId: string; json?: boolean; token?: string }) => {
-    const auth = await resolveGraphAuth({ token: opts.token });
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .action(async (opts: { siteId: string; json?: boolean; token?: string; identity?: string }) => {
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success || !auth.token) {
       console.error(`Auth error: ${auth.error || 'Unknown error'}`);
       process.exit(1);
@@ -43,8 +44,9 @@ sharepointCommand
   .requiredOption('--list-id <id>', 'SharePoint List ID')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
-  .action(async (opts: { siteId: string; listId: string; json?: boolean; token?: string }) => {
-    const auth = await resolveGraphAuth({ token: opts.token });
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .action(async (opts: { siteId: string; listId: string; json?: boolean; token?: string; identity?: string }) => {
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success || !auth.token) {
       console.error(`Auth error: ${auth.error || 'Unknown error'}`);
       process.exit(1);
@@ -83,10 +85,11 @@ sharepointCommand
   .requiredOption('--fields <json>', 'JSON string of fields to set (e.g. \'{"Title": "My Item"}\')')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
   .action(
-    async (opts: { siteId: string; listId: string; fields: string; json?: boolean; token?: string }, cmd: any) => {
+    async (opts: { siteId: string; listId: string; fields: string; json?: boolean; token?: string; identity?: string }, cmd: any) => {
       checkReadOnly(cmd);
-      const auth = await resolveGraphAuth({ token: opts.token });
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
       if (!auth.success || !auth.token) {
         console.error(`Auth error: ${auth.error || 'Unknown error'}`);
         process.exit(1);
@@ -126,6 +129,7 @@ sharepointCommand
   .requiredOption('--fields <json>', 'JSON string of fields to set (e.g. \'{"Title": "New Title"}\')')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
   .action(
     async (
       opts: {
@@ -135,11 +139,12 @@ sharepointCommand
         fields: string;
         json?: boolean;
         token?: string;
+        identity?: string;
       },
       cmd: any
     ) => {
       checkReadOnly(cmd);
-      const auth = await resolveGraphAuth({ token: opts.token });
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
       if (!auth.success || !auth.token) {
         console.error(`Auth error: ${auth.error || 'Unknown error'}`);
         process.exit(1);

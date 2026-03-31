@@ -16,8 +16,9 @@ sitePagesCommand
   .description('List site pages for a given site ID')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
-  .action(async (siteId: string, options: { json?: boolean; token?: string }) => {
-    const auth = await resolveGraphAuth({ token: options.token });
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .action(async (siteId: string, options: { json?: boolean; token?: string; identity?: string }) => {
+    const auth = await resolveGraphAuth({ token: options.token, identity: options.identity });
     if (!auth.success) {
       console.error(`Error: ${auth.error}`);
       process.exit(1);
@@ -52,8 +53,9 @@ sitePagesCommand
   .description('Get a site page by ID')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
-  .action(async (siteId: string, pageId: string, options: { json?: boolean; token?: string }) => {
-    const auth = await resolveGraphAuth({ token: options.token });
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .action(async (siteId: string, pageId: string, options: { json?: boolean; token?: string; identity?: string }) => {
+    const auth = await resolveGraphAuth({ token: options.token, identity: options.identity });
     if (!auth.success) {
       console.error(`Error: ${auth.error}`);
       process.exit(1);
@@ -86,15 +88,16 @@ sitePagesCommand
   .option('--name <name>', 'New name')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
   .action(
     async (
       siteId: string,
       pageId: string,
-      options: { title?: string; name?: string; json?: boolean; token?: string },
+      options: { title?: string; name?: string; json?: boolean; token?: string; identity?: string },
       cmd: any
     ) => {
       checkReadOnly(cmd);
-      const auth = await resolveGraphAuth({ token: options.token });
+      const auth = await resolveGraphAuth({ token: options.token, identity: options.identity });
       if (!auth.success) {
         console.error(`Error: ${auth.error}`);
         process.exit(1);
@@ -129,9 +132,10 @@ sitePagesCommand
   .description('Publish a site page')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
-  .action(async (siteId: string, pageId: string, options: { json?: boolean; token?: string }, cmd: any) => {
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .action(async (siteId: string, pageId: string, options: { json?: boolean; token?: string; identity?: string }, cmd: any) => {
     checkReadOnly(cmd);
-    const auth = await resolveGraphAuth({ token: options.token });
+    const auth = await resolveGraphAuth({ token: options.token, identity: options.identity });
     if (!auth.success) {
       console.error(`Error: ${auth.error}`);
       process.exit(1);

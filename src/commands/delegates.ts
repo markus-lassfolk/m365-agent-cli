@@ -9,6 +9,7 @@ import {
   removeDelegate,
   updateDelegate
 } from '../lib/delegate-client.js';
+import { checkReadOnly } from '../lib/utils.js';
 
 const VALID_PERMISSIONS = [
   'None',
@@ -52,8 +53,9 @@ listCommand
   .description('List all delegates on the mailbox')
   .option('--mailbox <email>', 'mailbox (shared/alternative primary)')
   .option('--token <token>', 'Use a specific token')
-  .action(async (opts: { mailbox?: string; token?: string }) => {
-    const auth = await resolveAuth({ token: opts.token });
+  .option('--identity <name>', 'Use a specific authentication identity (default: default)')
+  .action(async (opts: { mailbox?: string; token?: string; identity?: string }) => {
+    const auth = await resolveAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success || !auth.token) {
       console.error('Auth failed:', auth.error);
       process.exit(1);
@@ -94,20 +96,26 @@ addCommand
   .option('--deliver <mode>', `deliver meeting requests (${VALID_DELIVER.join('|')})`, 'DelegatesAndMe')
   .option('--mailbox <email>', 'mailbox to add delegate to (shared/alternative primary)')
   .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Use a specific authentication identity (default: default)')
   .action(
-    async (opts: {
-      email: string;
-      name?: string;
-      calendar?: string;
-      inbox?: string;
-      contacts?: string;
-      tasks?: string;
-      notes?: string;
-      viewPrivate?: boolean;
-      deliver: string;
-      mailbox?: string;
-      token?: string;
-    }) => {
+    async (
+      opts: {
+        email: string;
+        name?: string;
+        calendar?: string;
+        inbox?: string;
+        contacts?: string;
+        tasks?: string;
+        notes?: string;
+        viewPrivate?: boolean;
+        deliver: string;
+        mailbox?: string;
+        token?: string;
+        identity?: string;
+      },
+      cmd: any
+    ) => {
+      checkReadOnly(cmd);
       // Validate permission levels
       const perms: DelegatePermissions = {};
       for (const folder of VALID_FOLDERS) {
@@ -128,7 +136,7 @@ addCommand
         process.exit(1);
       }
 
-      const auth = await resolveAuth({ token: opts.token });
+      const auth = await resolveAuth({ token: opts.token, identity: opts.identity });
       if (!auth.success || !auth.token) {
         console.error('Auth failed:', auth.error);
         process.exit(1);
@@ -169,19 +177,25 @@ updateCommand
   .option('--deliver <mode>', `deliver meeting requests (${VALID_DELIVER.join('|')})`)
   .option('--mailbox <email>', 'mailbox (shared/alternative primary)')
   .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Use a specific authentication identity (default: default)')
   .action(
-    async (opts: {
-      email: string;
-      calendar?: string;
-      inbox?: string;
-      contacts?: string;
-      tasks?: string;
-      notes?: string;
-      viewPrivate?: string | boolean;
-      deliver?: string;
-      mailbox?: string;
-      token?: string;
-    }) => {
+    async (
+      opts: {
+        email: string;
+        calendar?: string;
+        inbox?: string;
+        contacts?: string;
+        tasks?: string;
+        notes?: string;
+        viewPrivate?: string | boolean;
+        deliver?: string;
+        mailbox?: string;
+        token?: string;
+        identity?: string;
+      },
+      cmd: any
+    ) => {
+      checkReadOnly(cmd);
       const permsOut: DelegatePermissions = {};
       let hasPerms = false;
 
@@ -204,7 +218,7 @@ updateCommand
         process.exit(1);
       }
 
-      const auth = await resolveAuth({ token: opts.token });
+      const auth = await resolveAuth({ token: opts.token, identity: opts.identity });
       if (!auth.success || !auth.token) {
         console.error('Auth failed:', auth.error);
         process.exit(1);
@@ -238,8 +252,10 @@ removeCommand
   .requiredOption('--email <email>', 'delegate email address')
   .option('--mailbox <email>', 'mailbox (shared/alternative primary)')
   .option('--token <token>', 'Use a specific token')
-  .action(async (opts: { email: string; mailbox?: string; token?: string }) => {
-    const auth = await resolveAuth({ token: opts.token });
+  .option('--identity <name>', 'Use a specific authentication identity (default: default)')
+  .action(async (opts: { email: string; mailbox?: string; token?: string; identity?: string }, cmd: any) => {
+    checkReadOnly(cmd);
+    const auth = await resolveAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success || !auth.token) {
       console.error('Auth failed:', auth.error);
       process.exit(1);

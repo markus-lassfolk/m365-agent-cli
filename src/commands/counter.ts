@@ -12,16 +12,18 @@ export const counterCommand = new Command('counter')
   .argument('<end>', 'Proposed end time (e.g., 14:00, 2pm)')
   .option('--day <day>', 'Day for the proposed time (today, tomorrow, YYYY-MM-DD)', 'today')
   .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .option('--user <email>', 'Mailbox whose calendar contains the event (delegation)')
   .action(
     async (
       eventId: string,
       startTime: string,
       endTime: string,
-      options: { day: string; token?: string; json?: boolean },
+      options: { day: string; token?: string; json?: boolean; identity?: string; user?: string },
       cmd: any
     ) => {
       checkReadOnly(cmd);
-      const authResult = await resolveGraphAuth({ token: options.token });
+      const authResult = await resolveGraphAuth({ token: options.token, identity: options.identity });
       if (!authResult.success) {
         console.error(`Error: ${authResult.error}`);
         process.exit(1);
@@ -71,7 +73,8 @@ export const counterCommand = new Command('counter')
         eventId,
         startDateTime,
         endDateTime,
-        timeZone
+        timeZone,
+        user: options.user
       });
 
       if (!response.ok) {

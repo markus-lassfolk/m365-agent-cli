@@ -101,7 +101,7 @@ The PA (agent) and the user both work in SharePoint and OneDrive. When the PA cr
 
 ### 1. Single Token Cache (Critical Path)
 
-**Issue:** Currently EWS and Graph each have their own token cache (`token-cache-${identity}.json` and `graph-token-cache.json`). This violates the single-auth principle and causes sync issues.
+**Issue:** EWS and Graph still use **separate** cache files (even though both honor the same `--identity` / `default` profile: `token-cache-{identity}.json` and `graph-token-cache-{identity}.json`). This violates the single-auth principle and can cause sync issues when refresh tokens diverge.
 
 **Target:** One file: `~/.config/m365-agent-cli/token-cache.json`. All APIs reuse the same refresh token. Incremental scope consent adds new scopes to the token on next refresh.
 
@@ -109,7 +109,7 @@ The PA (agent) and the user both work in SharePoint and OneDrive. When the PA cr
 1. Audit current scopes in `auth.ts` and `graph-auth.ts`
 2. Merge into single cache with scope metadata
 3. Update token refresh to request all known scopes in one call
-4. Remove `graph-token-cache.json` migration path
+4. Remove legacy `graph-token-cache.json` migration path after single-cache cutover
 
 ### 2. Security Hardening (Non-Negotiable)
 

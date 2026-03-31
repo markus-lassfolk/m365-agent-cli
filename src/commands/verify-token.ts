@@ -4,9 +4,10 @@ import { resolveGraphAuth } from '../lib/graph-auth.js';
 export const verifyTokenCommand = new Command('verify-token')
   .description('Verify Graph API token scopes and permissions')
   .option('--token <token>', 'Use a specific Graph token')
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
   .option('--json', 'Output as JSON')
-  .action(async (options: { token?: string; json?: boolean }) => {
-    const authResult = await resolveGraphAuth({ token: options.token });
+  .action(async (options: { token?: string; json?: boolean; identity?: string }) => {
+    const authResult = await resolveGraphAuth({ token: options.token, identity: options.identity });
     if (!authResult.success || !authResult.token) {
       if (options.json) {
         console.log(JSON.stringify({ error: authResult.error || 'Failed to resolve auth token' }, null, 2));

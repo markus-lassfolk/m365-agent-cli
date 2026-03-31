@@ -1,4 +1,5 @@
 import { callGraph, GraphApiError, graphError } from './graph-client.js';
+import { graphUserPath } from './graph-user-path.js';
 
 export type OofStatus = 'alwaysEnabled' | 'scheduled' | 'disabled';
 
@@ -25,13 +26,13 @@ export interface GetMailboxSettingsResponse {
   timeZone?: string;
 }
 
-export async function getMailboxSettings(token: string): Promise<{
+export async function getMailboxSettings(token: string, user?: string): Promise<{
   ok: boolean;
   data?: GetMailboxSettingsResponse;
   error?: { message: string; code?: string; status?: number };
 }> {
   try {
-    return await callGraph<GetMailboxSettingsResponse>(token, '/me/mailboxSettings');
+    return await callGraph<GetMailboxSettingsResponse>(token, graphUserPath(user, 'mailboxSettings'));
   } catch (err) {
     if (err instanceof GraphApiError) {
       return graphError(err.message, err.code, err.status) as {
@@ -53,7 +54,8 @@ export async function setMailboxSettings(
   settings: Omit<Partial<AutomaticRepliesSetting>, 'scheduledStartDateTime' | 'scheduledEndDateTime'> & {
     scheduledStartDateTime?: string | DateTimeTimeZone;
     scheduledEndDateTime?: string | DateTimeTimeZone;
-  }
+  },
+  user?: string
 ): Promise<{
   ok: boolean;
   error?: { message: string; code?: string; status?: number };
@@ -86,7 +88,7 @@ export async function setMailboxSettings(
   try {
     result = await callGraph<Record<string, never>>(
       token,
-      '/me/mailboxSettings',
+      graphUserPath(user, 'mailboxSettings'),
       {
         method: 'PATCH',
         body: JSON.stringify(payload)

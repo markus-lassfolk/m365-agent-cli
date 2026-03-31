@@ -10,9 +10,11 @@ export const forwardEventCommand = new Command('forward-event')
   .argument('<recipients...>', 'Email addresses to forward the event to')
   .option('--comment <text>', 'Optional comment to include in the forwarded invitation')
   .option('--token <token>', 'Use a specific token')
-  .action(async (eventId: string, recipients: string[], options: { comment?: string; token?: string }, cmd: any) => {
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .option('--user <email>', 'Mailbox whose calendar contains the event (delegation)')
+  .action(async (eventId: string, recipients: string[], options: { comment?: string; token?: string; identity?: string; user?: string }, cmd: any) => {
     checkReadOnly(cmd);
-    const authResult = await resolveGraphAuth({ token: options.token });
+    const authResult = await resolveGraphAuth({ token: options.token, identity: options.identity });
     if (!authResult.success) {
       console.error(`Error: ${authResult.error}`);
       process.exit(1);
@@ -27,7 +29,8 @@ export const forwardEventCommand = new Command('forward-event')
       token: authResult.token!,
       eventId,
       toRecipients: recipients,
-      comment: options.comment
+      comment: options.comment,
+      user: options.user
     });
 
     if (!response.ok) {
