@@ -74,7 +74,10 @@ export const mailCommand = new Command('mail')
   .option('--markdown', 'Parse message as markdown (bold, links, lists)')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
-  .option('--mailbox <email>', 'Shared mailbox for reply/forward (routes via X-AnchorMailbox)')
+  .option(
+    '--mailbox <email>',
+    'Delegated or shared mailbox (list, read, move, flags, attachments, reply, forward; X-AnchorMailbox)'
+  )
   .option('--identity <name>', 'Use a specific authentication identity (default: default)')
   .action(
     async (
@@ -163,7 +166,7 @@ export const mailCommand = new Command('mail')
 
       // If not a well-known folder, look up by name
       if (!apiFolder) {
-        const foldersResult = await getMailFolders(authResult.token!);
+        const foldersResult = await getMailFolders(authResult.token!, undefined, options.mailbox);
         if (foldersResult.ok && foldersResult.data) {
           const found = foldersResult.data.value.find((f) => f.DisplayName.toLowerCase() === folder.toLowerCase());
           if (found) {
@@ -185,6 +188,7 @@ export const mailCommand = new Command('mail')
       const result = await getEmails({
         token: authResult.token!,
         folder: apiFolder,
+        mailbox: options.mailbox,
         top: limit,
         skip,
         search: options.search,
@@ -206,7 +210,7 @@ export const mailCommand = new Command('mail')
       // Handle reading a specific email
       if (options.read) {
         const id = options.read.trim();
-        const fullEmail = await getEmail(authResult.token!, id);
+        const fullEmail = await getEmail(authResult.token!, id, options.mailbox);
 
         if (!fullEmail.ok || !fullEmail.data) {
           console.error(`Error: ${fullEmail.error?.message || 'Failed to fetch email'}`);
@@ -243,7 +247,7 @@ export const mailCommand = new Command('mail')
         }
 
         if (email.HasAttachments) {
-          const attachmentsResult = await getAttachments(authResult.token!, email.Id);
+          const attachmentsResult = await getAttachments(authResult.token!, email.Id, options.mailbox);
           if (attachmentsResult.ok && attachmentsResult.data) {
             const atts = attachmentsResult.data.value.filter((a) => !a.IsInline);
             if (atts.length > 0) {
@@ -265,7 +269,7 @@ export const mailCommand = new Command('mail')
       // Handle downloading attachments
       if (options.download) {
         const id = options.download.trim();
-        const emailSummary = await getEmail(authResult.token!, id);
+        const emailSummary = await getEmail(authResult.token!, id, options.mailbox);
         if (!emailSummary.ok || !emailSummary.data) {
           console.error(`Error: ${emailSummary.error?.message || 'Failed to fetch email'}`);
           process.exit(1);
@@ -276,7 +280,7 @@ export const mailCommand = new Command('mail')
           return;
         }
 
-        const attachmentsResult = await getAttachments(authResult.token!, emailSummary.data.Id);
+        const attachmentsResult = await getAttachments(authResult.token!, emailSummary.data.Id, options.mailbox);
         if (!attachmentsResult.ok || !attachmentsResult.data) {
           console.error(`Error: ${attachmentsResult.error?.message || 'Failed to fetch attachments'}`);
           process.exit(1);
@@ -298,7 +302,7 @@ export const mailCommand = new Command('mail')
 
         for (const att of attachments) {
           // Get full attachment with content
-          const fullAtt = await getAttachment(authResult.token!, emailSummary.data.Id, att.Id);
+          const fullAtt = await getAttachment(authResult.token!, emailSummary.data.Id, att.Id, options.mailbox);
           if (!fullAtt.ok || !fullAtt.data?.ContentBytes) {
             console.error(`  Failed to download: ${att.Name}`);
             continue;
@@ -359,7 +363,7 @@ export const mailCommand = new Command('mail')
         }
         const isRead = !!options.markRead;
 
-        const result = await updateEmail(authResult.token!, id, { IsRead: isRead });
+        const result = await updateEmail(authResult.token!, id, { IsRead: isRead }, options.mailbox);
 
         if (!result.ok) {
           console.error(`Error: ${result.error?.message || 'Failed to update email'}`);
@@ -414,9 +418,14 @@ export const mailCommand = new Command('mail')
           console.error('Error: --flag/--unflag/--complete requires a message ID');
           process.exit(1);
         }
-        const result = await updateEmail(authResult.token!, id, {
-          Flag: { FlagStatus: flagStatus, StartDate: startDate, DueDate: dueDate }
-        });
+        const result = await updateEmail(
+          authResult.token!,
+          id,
+          {
+            Flag: { FlagStatus: flagStatus, StartDate: startDate, DueDate: dueDate }
+          },
+          options.mailbox
+        );
 
         if (!result.ok) {
           console.error(`Error: ${result.error?.message || 'Failed to update email'}`);
@@ -446,9 +455,7 @@ export const mailCommand = new Command('mail')
           process.exit(1);
         }
 
-        const result = await updateEmail(authResult.token!, id, {
-          Sensitivity: sensitivity
-        });
+        const result = await updateEmail(authResult.token!, id, { Sensitivity: sensitivity }, options.mailbox);
 
         if (!result.ok) {
           console.error(`Error: ${result.error?.message || 'Failed to update email sensitivity'}`);
@@ -489,7 +496,7 @@ export const mailCommand = new Command('mail')
 
         // If not a well-known folder, look up by name
         if (!destFolder) {
-          const foldersResult = await getMailFolders(authResult.token!);
+          const foldersResult = await getMailFolders(authResult.token!, undefined, options.mailbox);
           if (foldersResult.ok && foldersResult.data) {
             const found = foldersResult.data.value.find(
               (f) => f.DisplayName.toLowerCase() === options.to?.toLowerCase()
@@ -507,7 +514,7 @@ export const mailCommand = new Command('mail')
           }
         }
 
-        const result = await moveEmail(authResult.token!, id, destFolder);
+        const result = await moveEmail(authResult.token!, id, destFolder, options.mailbox);
 
         if (!result.ok) {
           console.error(`Error: ${result.error?.message || 'Failed to move email'}`);
@@ -631,7 +638,8 @@ export const mailCommand = new Command('mail')
       const folderDisplay = folder.charAt(0).toUpperCase() + folder.slice(1);
       const searchInfo = options.search ? ` - search: "${options.search}"` : '';
       const pageInfo = page > 1 ? ` (page ${page})` : '';
-      console.log(`\n\ud83d\udcec ${folderDisplay}${searchInfo}${pageInfo}:\n`);
+      const mbInfo = options.mailbox ? ` — ${options.mailbox}` : '';
+      console.log(`\n\ud83d\udcec ${folderDisplay}${mbInfo}${searchInfo}${pageInfo}:\n`);
       console.log('\u2500'.repeat(70));
 
       if (emails.length === 0) {

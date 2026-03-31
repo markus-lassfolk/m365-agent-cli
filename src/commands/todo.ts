@@ -259,6 +259,7 @@ todoCommand
   .option('--status <status>', 'Initial status: notStarted, inProgress, waitingOnOthers, deferred', 'notStarted')
   .option('--reminder <ISO-8601>', 'Reminder datetime')
   .option('--link <msgId>', 'Link task to an email by message ID')
+  .option('--mailbox <email>', 'Delegated or shared mailbox (with --link, for EWS message lookup)')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .action(
@@ -271,6 +272,7 @@ todoCommand
       status?: string;
       reminder?: string;
       link?: string;
+      mailbox?: string;
       json?: boolean;
       token?: string;
     }) => {
@@ -291,7 +293,7 @@ todoCommand
           console.error(`EWS Auth error: ${ewsAuth.error}`);
           process.exit(1);
         }
-        const er = await getEmail(ewsAuth.token!, opts.link);
+        const er = await getEmail(ewsAuth.token!, opts.link, opts.mailbox);
         if (!er.ok || !er.data) {
           console.error(`Could not fetch email: ${er.error?.message}`);
           process.exit(1);

@@ -344,6 +344,8 @@ export interface EmailListResponse {
 export interface GetEmailsOptions {
   token: string;
   folder?: string;
+  /** Shared or delegated mailbox (X-AnchorMailbox + folder scoping) */
+  mailbox?: string;
   top?: number;
   skip?: number;
   search?: string;
@@ -755,12 +757,23 @@ const FOLDER_MAP: Record<string, string> = {
   archive: 'archivemsgfolderoot'
 };
 
-function folderIdXml(folder: string): string {
+function folderIdXml(folder: string, mailbox?: string): string {
   const distinguished = FOLDER_MAP[folder.toLowerCase()];
   if (distinguished) {
-    return `<t:DistinguishedFolderId Id="${distinguished}" />`;
+    return mailbox
+      ? `<t:DistinguishedFolderId Id="${distinguished}"><t:Mailbox><t:EmailAddress>${xmlEscape(mailbox)}</t:EmailAddress></t:Mailbox></t:DistinguishedFolderId>`
+      : `<t:DistinguishedFolderId Id="${distinguished}" />`;
   }
   return `<t:FolderId Id="${xmlEscape(folder)}" />`;
+}
+
+function mailParentFolderXml(parentFolderId: string | undefined, mailbox?: string): string {
+  if (parentFolderId) {
+    return `<t:FolderId Id="${xmlEscape(parentFolderId)}" />`;
+  }
+  return mailbox
+    ? `<t:DistinguishedFolderId Id="msgfolderroot"><t:Mailbox><t:EmailAddress>${xmlEscape(mailbox)}</t:EmailAddress></t:Mailbox></t:DistinguishedFolderId>`
+    : '<t:DistinguishedFolderId Id="msgfolderroot" />';
 }
 
 // ─── Session Validation ───
@@ -1435,7 +1448,7 @@ export async function respondToEvent(options: RespondToEventOptions): Promise<Ow
 
 export async function getEmails(options: GetEmailsOptions): Promise<OwaResponse<EmailListResponse>> {
   try {
-    const { token, folder = 'inbox', top = 10, skip = 0, search, isRead, flagStatus } = options;
+    const { token, folder = 'inbox', mailbox, top = 10, skip = 0, search, isRead, flagStatus } = options;
 
     // Build restriction for filters
     let restrictionXml = '';
@@ -1497,11 +1510,11 @@ export async function getEmails(options: GetEmailsOptions): Promise<OwaResponse<
       }
       ${queryStringXml}
       <m:ParentFolderIds>
-        ${folderIdXml(folder)}
+        ${folderIdXml(folder, mailbox)}
       </m:ParentFolderIds>
     </m:FindItem>`);
 
-    const xml = await callEws(token, envelope);
+    const xml = await callEws(token, envelope, mailbox);
     const blocks = extractBlocks(xml, 'Message');
     const emails = blocks.map(parseEmailMessage);
 
@@ -1511,7 +1524,7 @@ export async function getEmails(options: GetEmailsOptions): Promise<OwaResponse<
   }
 }
 
-export async function getEmail(token: string, messageId: string): Promise<OwaResponse<EmailMessage>> {
+export async function getEmail(token: string, messageId: string, mailbox?: string): Promise<OwaResponse<EmailMessage>> {
   try {
     messageId = requireNonEmpty(messageId, 'messageId');
     const envelope = soapEnvelope(`
@@ -1537,7 +1550,7 @@ export async function getEmail(token: string, messageId: string): Promise<OwaRes
       </m:ItemIds>
     </m:GetItem>`);
 
-    const xml = await callEws(token, envelope);
+    const xml = await callEws(token, envelope, mailbox);
     const block = extractBlocks(xml, 'Message')[0];
     if (!block) return { ok: false, status: 404, error: { code: 'NOT_FOUND', message: 'Message not found' } };
 
@@ -1622,15 +1635,16 @@ export async function sendEmail(
       subject: options.subject,
       body: options.body,
       bodyType,
-      categories: options.categories
+      categories: options.categories,
+      mailbox
     });
     if (!draftResult.ok || !draftResult.data) return draftResult as OwaResponse<void>;
 
     for (const att of options.attachments) {
-      await addAttachmentToItem(token, draftResult.data.Id, att);
+      await addAttachmentToItem(token, draftResult.data.Id, att, mailbox);
     }
 
-    await sendItemById(token, draftResult.data.Id);
+    await sendItemById(token, draftResult.data.Id, mailbox);
     return { ok: true, status: 200 };
   } catch (err) {
     return ewsError(err);
@@ -1737,7 +1751,8 @@ export async function updateEmail(
       StartDate?: { DateTime: string; TimeZone: string };
       DueDate?: { DateTime: string; TimeZone: string };
     };
-  }
+  },
+  mailbox?: string
 ): Promise<OwaResponse<EmailMessage>> {
   try {
     const setFields: string[] = [];
@@ -1788,7 +1803,7 @@ export async function updateEmail(
       </m:ItemChanges>
     </m:UpdateItem>`);
 
-    const xml = await callEws(token, envelope);
+    const xml = await callEws(token, envelope, mailbox);
     const newId = extractAttribute(xml, 'ItemId', 'Id') || messageId;
     return ewsResult({ Id: newId } as EmailMessage);
   } catch (err) {
@@ -1799,20 +1814,21 @@ export async function updateEmail(
 export async function moveEmail(
   token: string,
   messageId: string,
-  destinationFolder: string
+  destinationFolder: string,
+  mailbox?: string
 ): Promise<OwaResponse<EmailMessage>> {
   try {
     const envelope = soapEnvelope(`
     <m:MoveItem>
       <m:ToFolderId>
-        ${folderIdXml(destinationFolder)}
+        ${folderIdXml(destinationFolder, mailbox)}
       </m:ToFolderId>
       <m:ItemIds>
         <t:ItemId Id="${xmlEscape(messageId)}" />
       </m:ItemIds>
     </m:MoveItem>`);
 
-    const xml = await callEws(token, envelope);
+    const xml = await callEws(token, envelope, mailbox);
     const newId = extractAttribute(xml, 'ItemId', 'Id') || messageId;
     return ewsResult({ Id: newId } as EmailMessage);
   } catch (err) {
@@ -1831,9 +1847,13 @@ export async function createDraft(
     body?: string;
     bodyType?: 'Text' | 'HTML';
     categories?: string[];
+    /** Save draft in this mailbox's drafts folder */
+    mailbox?: string;
   }
 ): Promise<OwaResponse<{ Id: string }>> {
   try {
+    const { mailbox } = options;
+
     const toXml =
       options.to && options.to.length > 0
         ? `<t:ToRecipients>${options.to
@@ -1850,8 +1870,13 @@ export async function createDraft(
 
     const bodyType = options.bodyType || 'Text';
 
+    const savedDraftFolderXml = mailbox
+      ? `<m:SavedItemFolderId><t:DistinguishedFolderId Id="drafts"><t:Mailbox><t:EmailAddress>${xmlEscape(mailbox)}</t:EmailAddress></t:Mailbox></t:DistinguishedFolderId></m:SavedItemFolderId>`
+      : '';
+
     const envelope = soapEnvelope(`
     <m:CreateItem MessageDisposition="SaveOnly">
+      ${savedDraftFolderXml}
       <m:Items>
         <t:Message>
           ${options.subject ? `<t:Subject>${xmlEscape(options.subject)}</t:Subject>` : ''}
@@ -1863,7 +1888,7 @@ export async function createDraft(
       </m:Items>
     </m:CreateItem>`);
 
-    const xml = await callEws(token, envelope);
+    const xml = await callEws(token, envelope, mailbox);
     const id = extractAttribute(xml, 'ItemId', 'Id');
     return ewsResult({ Id: id });
   } catch (err) {
@@ -1880,6 +1905,7 @@ export async function updateDraft(
     subject?: string;
     body?: string;
     bodyType?: 'Text' | 'HTML';
+    mailbox?: string;
   }
 ): Promise<OwaResponse<void>> {
   try {
@@ -1921,37 +1947,41 @@ export async function updateDraft(
       </m:ItemChanges>
     </m:UpdateItem>`);
 
-    await callEws(token, envelope);
+    await callEws(token, envelope, options.mailbox);
     return { ok: true, status: 200 };
   } catch (err) {
     return ewsError(err);
   }
 }
 
-async function sendItemById(token: string, itemId: string): Promise<void> {
+async function sendItemById(token: string, itemId: string, mailbox?: string): Promise<void> {
+  const savedSentXml = mailbox
+    ? `<m:SavedItemFolderId><t:DistinguishedFolderId Id="sentitems"><t:Mailbox><t:EmailAddress>${xmlEscape(mailbox)}</t:EmailAddress></t:Mailbox></t:DistinguishedFolderId></m:SavedItemFolderId>`
+    : `<m:SavedItemFolderId>
+      <t:DistinguishedFolderId Id="sentitems" />
+    </m:SavedItemFolderId>`;
+
   const envelope = soapEnvelope(`
   <m:SendItem SaveItemToFolder="true">
     <m:ItemIds>
       <t:ItemId Id="${xmlEscape(itemId)}" />
     </m:ItemIds>
-    <m:SavedItemFolderId>
-      <t:DistinguishedFolderId Id="sentitems" />
-    </m:SavedItemFolderId>
+    ${savedSentXml}
   </m:SendItem>`);
-  await callEws(token, envelope);
+  await callEws(token, envelope, mailbox);
 }
 
-export async function sendDraftById(token: string, draftId: string): Promise<OwaResponse<void>> {
+export async function sendDraftById(token: string, draftId: string, mailbox?: string): Promise<OwaResponse<void>> {
   try {
     draftId = requireNonEmpty(draftId, 'draftId');
-    await sendItemById(token, draftId);
+    await sendItemById(token, draftId, mailbox);
     return { ok: true, status: 200 };
   } catch (err) {
     return ewsError(err);
   }
 }
 
-export async function deleteDraftById(token: string, draftId: string): Promise<OwaResponse<void>> {
+export async function deleteDraftById(token: string, draftId: string, mailbox?: string): Promise<OwaResponse<void>> {
   try {
     draftId = requireNonEmpty(draftId, 'draftId');
     const envelope = soapEnvelope(`
@@ -1960,14 +1990,14 @@ export async function deleteDraftById(token: string, draftId: string): Promise<O
         <t:ItemId Id="${xmlEscape(draftId)}" />
       </m:ItemIds>
     </m:DeleteItem>`);
-    await callEws(token, envelope);
+    await callEws(token, envelope, mailbox);
     return { ok: true, status: 200 };
   } catch (err) {
     return ewsError(err);
   }
 }
 
-async function addAttachmentToItem(token: string, itemId: string, attachment: EmailAttachment): Promise<void> {
+async function addAttachmentToItem(token: string, itemId: string, attachment: EmailAttachment, mailbox?: string): Promise<void> {
   const envelope = soapEnvelope(`
   <m:CreateAttachment>
     <m:ParentItemId Id="${xmlEscape(itemId)}" />
@@ -1979,16 +2009,17 @@ async function addAttachmentToItem(token: string, itemId: string, attachment: Em
       </t:FileAttachment>
     </m:Attachments>
   </m:CreateAttachment>`);
-  await callEws(token, envelope);
+  await callEws(token, envelope, mailbox);
 }
 
 export async function addAttachmentToDraft(
   token: string,
   draftId: string,
-  attachment: { name: string; contentType: string; contentBytes: string }
+  attachment: { name: string; contentType: string; contentBytes: string },
+  mailbox?: string
 ): Promise<OwaResponse<void>> {
   try {
-    await addAttachmentToItem(token, draftId, attachment);
+    await addAttachmentToItem(token, draftId, attachment, mailbox);
     return { ok: true, status: 200 };
   } catch (err) {
     return ewsError(err);
@@ -1999,12 +2030,13 @@ export async function addAttachmentToDraft(
 
 export async function getMailFolders(
   token: string,
-  parentFolderId?: string
+  parentFolderId?: string,
+  mailbox?: string
 ): Promise<OwaResponse<MailFolderListResponse>> {
   try {
     const parentXml = parentFolderId
       ? `<t:FolderId Id="${xmlEscape(parentFolderId)}" />`
-      : '<t:DistinguishedFolderId Id="msgfolderroot" />';
+      : mailParentFolderXml(undefined, mailbox);
 
     const envelope = soapEnvelope(`
     <m:FindFolder Traversal="Shallow">
@@ -2021,7 +2053,7 @@ export async function getMailFolders(
       </m:ParentFolderIds>
     </m:FindFolder>`);
 
-    const xml = await callEws(token, envelope);
+    const xml = await callEws(token, envelope, mailbox);
     const blocks = extractBlocks(xml, 'Folder');
     const folders = blocks.map(parseFolder);
 
@@ -2034,12 +2066,13 @@ export async function getMailFolders(
 export async function createMailFolder(
   token: string,
   displayName: string,
-  parentFolderId?: string
+  parentFolderId?: string,
+  mailbox?: string
 ): Promise<OwaResponse<MailFolder>> {
   try {
     const parentXml = parentFolderId
       ? `<t:FolderId Id="${xmlEscape(parentFolderId)}" />`
-      : '<t:DistinguishedFolderId Id="msgfolderroot" />';
+      : mailParentFolderXml(undefined, mailbox);
 
     const envelope = soapEnvelope(`
     <m:CreateFolder>
@@ -2053,7 +2086,7 @@ export async function createMailFolder(
       </m:Folders>
     </m:CreateFolder>`);
 
-    const xml = await callEws(token, envelope);
+    const xml = await callEws(token, envelope, mailbox);
     const block = extractBlocks(xml, 'Folder')[0] || '';
 
     return ewsResult({
@@ -2071,7 +2104,8 @@ export async function createMailFolder(
 export async function updateMailFolder(
   token: string,
   folderId: string,
-  displayName: string
+  displayName: string,
+  mailbox?: string
 ): Promise<OwaResponse<MailFolder>> {
   try {
     const envelope = soapEnvelope(`
@@ -2091,7 +2125,7 @@ export async function updateMailFolder(
       </m:FolderChanges>
     </m:UpdateFolder>`);
 
-    await callEws(token, envelope);
+    await callEws(token, envelope, mailbox);
 
     return ewsResult({
       Id: folderId,
@@ -2105,7 +2139,7 @@ export async function updateMailFolder(
   }
 }
 
-export async function deleteMailFolder(token: string, folderId: string): Promise<OwaResponse<void>> {
+export async function deleteMailFolder(token: string, folderId: string, mailbox?: string): Promise<OwaResponse<void>> {
   try {
     const envelope = soapEnvelope(`
     <m:DeleteFolder DeleteType="MoveToDeletedItems">
@@ -2114,7 +2148,7 @@ export async function deleteMailFolder(token: string, folderId: string): Promise
       </m:FolderIds>
     </m:DeleteFolder>`);
 
-    await callEws(token, envelope);
+    await callEws(token, envelope, mailbox);
     return { ok: true, status: 200 };
   } catch (err) {
     return ewsError(err);
@@ -2123,7 +2157,7 @@ export async function deleteMailFolder(token: string, folderId: string): Promise
 
 // ─── Attachment Operations ───
 
-export async function getAttachments(token: string, messageId: string): Promise<OwaResponse<AttachmentListResponse>> {
+export async function getAttachments(token: string, messageId: string, mailbox?: string): Promise<OwaResponse<AttachmentListResponse>> {
   try {
     // First get the item to find attachment IDs
     const envelope = soapEnvelope(`
@@ -2139,7 +2173,7 @@ export async function getAttachments(token: string, messageId: string): Promise<
       </m:ItemIds>
     </m:GetItem>`);
 
-    const xml = await callEws(token, envelope);
+    const xml = await callEws(token, envelope, mailbox);
     const attachBlocks = extractBlocks(xml, 'FileAttachment');
 
     const attachments: Attachment[] = attachBlocks.map((ab) => ({
@@ -2162,7 +2196,8 @@ export async function getAttachments(token: string, messageId: string): Promise<
 export async function getAttachment(
   token: string,
   _messageId: string,
-  attachmentId: string
+  attachmentId: string,
+  mailbox?: string
 ): Promise<OwaResponse<Attachment>> {
   try {
     const envelope = soapEnvelope(`
@@ -2172,7 +2207,7 @@ export async function getAttachment(
       </m:AttachmentIds>
     </m:GetAttachment>`);
 
-    const xml = await callEws(token, envelope);
+    const xml = await callEws(token, envelope, mailbox);
     const block = extractBlocks(xml, 'FileAttachment')[0] || '';
 
     return ewsResult({
@@ -2321,7 +2356,9 @@ export async function getScheduleViaOutlook(
   startDateTime: string,
   endDateTime: string,
   durationMinutes: number = 30,
-  timeZone?: string
+  timeZone?: string,
+  /** Optional anchor for EWS (e.g. shared mailbox context) */
+  mailbox?: string
 ): Promise<OwaResponse<ScheduleInfo[]>> {
   try {
     if (!timeZone) {
@@ -2393,7 +2430,7 @@ export async function getScheduleViaOutlook(
       `<t:TimeZoneContext><t:TimeZoneDefinition Id="${xmlEscape(timeZone)}"/></t:TimeZoneContext>`
     );
 
-    const xml = await callEws(token, envelope);
+    const xml = await callEws(token, envelope, mailbox);
 
     // Parse suggestions into free slots
     const schedules: ScheduleInfo[] = emails.map((email) => ({
@@ -2481,9 +2518,10 @@ export async function getScheduleViaOutlook(
 export async function getFreeBusy(
   token: string,
   startDateTime: string,
-  endDateTime: string
+  endDateTime: string,
+  mailbox?: string
 ): Promise<OwaResponse<FreeBusySlot[]>> {
-  return getMyFreeBusySlots(token, startDateTime, endDateTime);
+  return getMyFreeBusySlots(token, startDateTime, endDateTime, mailbox);
 }
 
 /**
@@ -2500,9 +2538,10 @@ export async function getFreeBusy(
 export async function getMyFreeBusySlots(
   token: string,
   startDateTime: string,
-  endDateTime: string
+  endDateTime: string,
+  mailbox?: string
 ): Promise<OwaResponse<FreeBusySlot[]>> {
-  const result = await getCalendarEvents(token, startDateTime, endDateTime);
+  const result = await getCalendarEvents(token, startDateTime, endDateTime, mailbox);
   if (!result.ok || !result.data) return { ok: false, status: result.status, error: result.error };
 
   const slots: FreeBusySlot[] = result.data

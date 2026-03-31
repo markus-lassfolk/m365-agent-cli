@@ -78,6 +78,7 @@ export const findtimeCommand = new Command('findtime')
   .option('--solo', "Only check specified people, don't include yourself")
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
+  .option('--mailbox <email>', 'EWS anchor mailbox (delegated / shared mailbox context)')
   .action(
     async (
       startDay: string,
@@ -89,6 +90,7 @@ export const findtimeCommand = new Command('findtime')
         solo?: boolean;
         json?: boolean;
         token?: string;
+        mailbox?: string;
       },
       _cmd: any
     ) => {
@@ -190,7 +192,9 @@ export const findtimeCommand = new Command('findtime')
         emails,
         start.toISOString(),
         end.toISOString(),
-        duration
+        duration,
+        undefined,
+        options.mailbox
       );
 
       if (!result.ok || !result.data) {

@@ -52,6 +52,7 @@ export const draftsCommand = new Command('drafts')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Use a specific authentication identity (default: default)')
+  .option('--mailbox <email>', 'Delegated or shared mailbox drafts folder')
   .action(
     async (
       options: {
@@ -71,6 +72,7 @@ export const draftsCommand = new Command('drafts')
         json?: boolean;
         token?: string;
         identity?: string;
+        mailbox?: string;
       },
       cmd: any
     ) => {
@@ -98,6 +100,7 @@ export const draftsCommand = new Command('drafts')
       const draftsResult = await getEmails({
         token: authResult.token!,
         folder: 'drafts',
+        mailbox: options.mailbox,
         top: limit
       });
 
@@ -148,7 +151,8 @@ export const draftsCommand = new Command('drafts')
           cc: ccList,
           subject: options.subject,
           body,
-          bodyType
+          bodyType,
+          mailbox: options.mailbox
         });
 
         if (!result.ok || !result.data) {
@@ -174,11 +178,16 @@ export const draftsCommand = new Command('drafts')
               const content = await readFile(validated.absolutePath);
               const contentType = lookupMimeType(validated.fileName) || 'application/octet-stream';
 
-              const attachResult = await addAttachmentToDraft(authResult.token!, result.data.Id, {
-                name: validated.fileName,
-                contentType,
-                contentBytes: content.toString('base64')
-              });
+              const attachResult = await addAttachmentToDraft(
+                authResult.token!,
+                result.data.Id,
+                {
+                  name: validated.fileName,
+                  contentType,
+                  contentBytes: content.toString('base64')
+                },
+                options.mailbox
+              );
 
               if (!attachResult.ok) {
                 console.error(`Failed to attach ${validated.fileName}: ${attachResult.error?.message}`);
@@ -211,7 +220,7 @@ export const draftsCommand = new Command('drafts')
       // Handle read
       if (options.read) {
         const id = options.read.trim();
-        const fullDraft = await getEmail(authResult.token!, id);
+        const fullDraft = await getEmail(authResult.token!, id, options.mailbox);
 
         if (!fullDraft.ok || !fullDraft.data) {
           console.error(`Error: ${fullDraft.error?.message || 'Failed to fetch draft'}`);
@@ -271,7 +280,8 @@ export const draftsCommand = new Command('drafts')
           cc: ccList,
           subject: options.subject,
           body,
-          bodyType
+          bodyType,
+          mailbox: options.mailbox
         });
 
         if (!result.ok) {
@@ -292,11 +302,16 @@ export const draftsCommand = new Command('drafts')
               const content = await readFile(validated.absolutePath);
               const contentType = lookupMimeType(validated.fileName) || 'application/octet-stream';
 
-              await addAttachmentToDraft(authResult.token!, id, {
-                name: validated.fileName,
-                contentType,
-                contentBytes: content.toString('base64')
-              });
+              await addAttachmentToDraft(
+                authResult.token!,
+                id,
+                {
+                  name: validated.fileName,
+                  contentType,
+                  contentBytes: content.toString('base64')
+                },
+                options.mailbox
+              );
 
               if (!options.json) {
                 console.log(`  Attached: ${validated.fileName}`);
@@ -319,7 +334,7 @@ export const draftsCommand = new Command('drafts')
       // Handle send
       if (options.send) {
         const id = options.send.trim();
-        const result = await sendDraftById(authResult.token!, id);
+        const result = await sendDraftById(authResult.token!, id, options.mailbox);
 
         if (!result.ok) {
           console.error(`Error: ${result.error?.message || 'Failed to send draft'}`);
@@ -337,7 +352,7 @@ export const draftsCommand = new Command('drafts')
           console.error('Error: --delete requires a draft ID');
           process.exit(1);
         }
-        const result = await deleteDraftById(authResult.token!, id);
+        const result = await deleteDraftById(authResult.token!, id, options.mailbox);
 
         if (!result.ok) {
           console.error(`Error: ${result.error?.message || 'Failed to delete draft'}`);
@@ -369,7 +384,7 @@ export const draftsCommand = new Command('drafts')
         return;
       }
 
-      console.log('\n\ud83d\udcdd Drafts:\n');
+      console.log(`\n\ud83d\udcdd Drafts${options.mailbox ? ` — ${options.mailbox}` : ''}:\n`);
       console.log('\u2500'.repeat(70));
 
       if (drafts.length === 0) {

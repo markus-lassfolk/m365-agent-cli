@@ -198,11 +198,12 @@ export const calendarCommand = new Command('calendar')
   .option('-v, --verbose', 'Show attendees and more details')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
+  .option('--mailbox <email>', 'Delegated or shared mailbox calendar')
   .action(
     async (
       startDay: string,
       endDay: string | undefined,
-      options: { json?: boolean; token?: string; verbose?: boolean }
+      options: { json?: boolean; token?: string; verbose?: boolean; mailbox?: string }
     ) => {
       const authResult = await resolveAuth({
         token: options.token
@@ -219,7 +220,7 @@ export const calendarCommand = new Command('calendar')
       }
 
       const { start, end, label } = getDateRange(startDay, endDay);
-      const result = await getCalendarEvents(authResult.token!, start, end);
+      const result = await getCalendarEvents(authResult.token!, start, end, options.mailbox);
 
       if (!result.ok || !result.data) {
         if (options.json) {
@@ -237,7 +238,7 @@ export const calendarCommand = new Command('calendar')
         return;
       }
 
-      console.log(`\n📆 Calendar for ${label}`);
+      console.log(`\n📆 Calendar for ${label}${options.mailbox ? ` — ${options.mailbox}` : ''}`);
       console.log('─'.repeat(40));
 
       if (events.length === 0) {

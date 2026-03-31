@@ -10,6 +10,7 @@ export const foldersCommand = new Command('folders')
   .option('--to <newname>', 'New name for rename operation')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
+  .option('--mailbox <email>', 'Delegated or shared mailbox')
   .action(
     async (options: {
       create?: string;
@@ -18,6 +19,7 @@ export const foldersCommand = new Command('folders')
       to?: string;
       json?: boolean;
       token?: string;
+      mailbox?: string;
     }) => {
       const authResult = await resolveAuth({
         token: options.token
@@ -34,7 +36,7 @@ export const foldersCommand = new Command('folders')
       }
 
       // Get all folders first (needed for most operations)
-      const foldersResult = await getMailFolders(authResult.token!);
+      const foldersResult = await getMailFolders(authResult.token!, undefined, options.mailbox);
       if (!foldersResult.ok || !foldersResult.data) {
         console.error(`Error: ${foldersResult.error?.message || 'Failed to fetch folders'}`);
         process.exit(1);
@@ -55,7 +57,7 @@ export const foldersCommand = new Command('folders')
           process.exit(1);
         }
 
-        const result = await createMailFolder(authResult.token!, options.create);
+        const result = await createMailFolder(authResult.token!, options.create, undefined, options.mailbox);
         if (!result.ok || !result.data) {
           console.error(`Error: ${result.error?.message || 'Failed to create folder'}`);
           process.exit(1);
@@ -83,7 +85,7 @@ export const foldersCommand = new Command('folders')
           process.exit(1);
         }
 
-        const result = await updateMailFolder(authResult.token!, folder.Id, options.to);
+        const result = await updateMailFolder(authResult.token!, folder.Id, options.to, options.mailbox);
         if (!result.ok || !result.data) {
           console.error(`Error: ${result.error?.message || 'Failed to rename folder'}`);
           process.exit(1);
@@ -112,7 +114,7 @@ export const foldersCommand = new Command('folders')
           process.exit(1);
         }
 
-        const result = await deleteMailFolder(authResult.token!, folder.Id);
+        const result = await deleteMailFolder(authResult.token!, folder.Id, options.mailbox);
         if (!result.ok) {
           console.error(`Error: ${result.error?.message || 'Failed to delete folder'}`);
           process.exit(1);
@@ -146,7 +148,7 @@ export const foldersCommand = new Command('folders')
         return;
       }
 
-      console.log('\n\ud83d\udcc1 Mail Folders:\n');
+      console.log(`\n\ud83d\udcc1 Mail Folders${options.mailbox ? ` — ${options.mailbox}` : ''}:\n`);
       console.log('\u2500'.repeat(50));
 
       for (const folder of folders) {
