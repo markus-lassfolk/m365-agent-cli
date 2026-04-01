@@ -74,6 +74,21 @@ function requireNonEmpty(value: string, fieldName: string): string {
   return value.trim();
 }
 
+/** ReferenceItemId for CreateItem reply/forward/cancel shapes; ChangeKey avoids ErrorChangeKeyRequiredForWriteOperations. */
+function referenceItemIdXml(itemId: string, changeKey?: string): string {
+  const ck = changeKey?.trim();
+  return ck
+    ? `<t:ReferenceItemId Id="${xmlEscape(itemId)}" ChangeKey="${xmlEscape(ck)}" />`
+    : `<t:ReferenceItemId Id="${xmlEscape(itemId)}" />`;
+}
+
+function itemIdXml(itemId: string, changeKey?: string): string {
+  const ck = changeKey?.trim();
+  return ck
+    ? `<t:ItemId Id="${xmlEscape(itemId)}" ChangeKey="${xmlEscape(ck)}" />`
+    : `<t:ItemId Id="${xmlEscape(itemId)}" />`;
+}
+
 // ─── SOAP Core ───
 
 import { validateUrl } from './url-validation';
@@ -101,6 +116,10 @@ export function soapEnvelope(body: string, header?: string): string {
 </soap:Envelope>`;
 }
 
+/**
+ * Posts a SOAP envelope to EWS. Uses the first `ResponseCode` in the body; multi-response
+ * batches are not specially handled (same as typical single-operation CLI usage).
+ */
 export async function callEws(token: string, envelope: string, mailbox?: string): Promise<string> {
   const anchorMailbox = mailbox || EWS_USERNAME;
   const controller = new AbortController();
@@ -920,6 +939,19 @@ export async function getCalendarEvent(
   }
 }
 
+async function resolveCalendarForWrite(
+  token: string,
+  itemId: string,
+  mailbox?: string
+): Promise<OwaResponse<{ id: string; changeKey?: string }>> {
+  const res = await getCalendarEvent(token, itemId, mailbox);
+  if (!res.ok || !res.data) {
+    if (!res.ok) return res as unknown as OwaResponse<{ id: string; changeKey?: string }>;
+    return { ok: false, status: 404, error: { code: 'NOT_FOUND', message: 'Event not found' } };
+  }
+  return ewsResult({ id: res.data.Id, changeKey: res.data.ChangeKey });
+}
+
 /**
  * Validates required fields on a Recurrence input.
  * Throws a descriptive Error for any missing required field.
@@ -1244,6 +1276,18 @@ export async function updateEvent(options: UpdateEventOptions): Promise<OwaRespo
       return { ok: false, status: 400, error: { code: 'NO_UPDATES', message: 'No fields to update' } };
     }
 
+    let effectiveChangeKey = changeKey;
+    if (!effectiveChangeKey) {
+      const lookupId = occurrenceItemId || eventId;
+      const fetched = await getCalendarEvent(token, lookupId, mailbox);
+      if (!fetched.ok) {
+        return fetched as unknown as OwaResponse<CreatedEvent>;
+      }
+      if (fetched.data?.ChangeKey) {
+        effectiveChangeKey = fetched.data.ChangeKey;
+      }
+    }
+
     const sendUpdates = hasAttendeeUpdates ? 'SendToAllAndSaveCopy' : 'SendToNone';
 
     const buildEnvelope = (
@@ -1251,8 +1295,8 @@ export async function updateEvent(options: UpdateEventOptions): Promise<OwaRespo
       includeChangeKey: boolean
     ): string => {
       const itemIdXml = occurrenceItemId
-        ? `<t:ItemId Id="${xmlEscape(occurrenceItemId)}"${includeChangeKey && changeKey ? ` ChangeKey="${xmlEscape(changeKey)}"` : ''} />`
-        : `<t:ItemId Id="${xmlEscape(eventId)}"${includeChangeKey && changeKey ? ` ChangeKey="${xmlEscape(changeKey)}"` : ''} />`;
+        ? `<t:ItemId Id="${xmlEscape(occurrenceItemId)}"${includeChangeKey && effectiveChangeKey ? ` ChangeKey="${xmlEscape(effectiveChangeKey)}"` : ''} />`
+        : `<t:ItemId Id="${xmlEscape(eventId)}"${includeChangeKey && effectiveChangeKey ? ` ChangeKey="${xmlEscape(effectiveChangeKey)}"` : ''} />`;
 
       return soapEnvelope(`
     <m:UpdateItem ConflictResolution="${conflictResolution}" SendMeetingInvitationsOrCancellations="${sendUpdates}">
@@ -1269,7 +1313,7 @@ export async function updateEvent(options: UpdateEventOptions): Promise<OwaRespo
 
     let xml: string;
     try {
-      xml = await callEws(token, buildEnvelope(changeKey ? 'AutoResolve' : 'AlwaysOverwrite', true), mailbox);
+      xml = await callEws(token, buildEnvelope(effectiveChangeKey ? 'AutoResolve' : 'AlwaysOverwrite', true), mailbox);
     } catch (err) {
       const message = err instanceof Error ? err.message : '';
       const isConflict =
@@ -1277,7 +1321,7 @@ export async function updateEvent(options: UpdateEventOptions): Promise<OwaRespo
         message.includes('ErrorConflictResolutionRequired') ||
         message.includes('ErrorChangeKeyRequiredForWriteOperations');
 
-      if (!changeKey || !isConflict) {
+      if (!effectiveChangeKey || !isConflict) {
         throw err;
       }
 
@@ -1316,14 +1360,20 @@ export async function deleteEvent(options: DeleteEventOptions): Promise<OwaRespo
     const { token, eventId, occurrenceItemId, scope = 'all', mailbox, forceDelete, comment } = options;
     requireNonEmpty(eventId, 'eventId');
 
+    const targetId = occurrenceItemId || eventId;
+    const resolved = await resolveCalendarForWrite(token, targetId, mailbox);
+    if (!resolved.ok || !resolved.data) {
+      return resolved as OwaResponse<void>;
+    }
+    const { id: calId, changeKey: calCk } = resolved.data;
+
     // If a comment is provided for occurrence delete, use CancelCalendarItem instead
     if (comment && !forceDelete && (scope === 'this' || scope === 'future')) {
-      const targetId = occurrenceItemId || eventId;
       const cancelEnvelope = soapEnvelope(`
     <m:CreateItem MessageDisposition="SendAndSaveCopy">
       <m:Items>
         <t:CancelCalendarItem>
-          <t:ReferenceItemId Id="${xmlEscape(targetId)}" />
+          ${referenceItemIdXml(calId, calCk)}
           <t:NewBodyContent BodyType="Text">${xmlEscape(comment)}</t:NewBodyContent>
         </t:CancelCalendarItem>
       </m:Items>
@@ -1342,14 +1392,10 @@ export async function deleteEvent(options: DeleteEventOptions): Promise<OwaRespo
       sendCancellations = 'SendToAllAndSaveCopy';
     }
 
-    // Use ItemId for both series and occurrences (CalendarView returns ItemId for occurrences)
-    const itemIdXml = occurrenceItemId
-      ? `<t:ItemId Id="${xmlEscape(occurrenceItemId)}" />`
-      : `<t:ItemId Id="${xmlEscape(eventId)}" />`;
     const envelope = soapEnvelope(`
     <m:DeleteItem DeleteType="MoveToDeletedItems" SendMeetingCancellations="${sendCancellations}">
       <m:ItemIds>
-        ${itemIdXml}
+        ${itemIdXml(calId, calCk)}
       </m:ItemIds>
     </m:DeleteItem>`);
     await callEws(token, envelope, mailbox);
@@ -1368,6 +1414,13 @@ export interface CancelEventOptions {
 
 export async function cancelEvent(options: CancelEventOptions): Promise<OwaResponse<void>> {
   const { token, eventId, comment, mailbox } = options;
+  requireNonEmpty(eventId, 'eventId');
+
+  const resolved = await resolveCalendarForWrite(token, eventId, mailbox);
+  if (!resolved.ok || !resolved.data) {
+    return resolved as OwaResponse<void>;
+  }
+  const { id: calId, changeKey: calCk } = resolved.data;
 
   // Primary: CancelCalendarItem
   try {
@@ -1375,7 +1428,7 @@ export async function cancelEvent(options: CancelEventOptions): Promise<OwaRespo
     <m:CreateItem MessageDisposition="SendAndSaveCopy">
       <m:Items>
         <t:CancelCalendarItem>
-          <t:ReferenceItemId Id="${xmlEscape(eventId)}" />
+          ${referenceItemIdXml(calId, calCk)}
           ${comment ? `<t:NewBodyContent BodyType="Text">${xmlEscape(comment)}</t:NewBodyContent>` : ''}
         </t:CancelCalendarItem>
       </m:Items>
@@ -1388,7 +1441,7 @@ export async function cancelEvent(options: CancelEventOptions): Promise<OwaRespo
       const envelope = soapEnvelope(`
       <m:DeleteItem DeleteType="MoveToDeletedItems" SendMeetingCancellations="SendToAllAndSaveCopy">
         <m:ItemIds>
-          <t:ItemId Id="${xmlEscape(eventId)}" />
+          ${itemIdXml(calId, calCk)}
         </m:ItemIds>
       </m:DeleteItem>`);
       await callEws(token, envelope, mailbox);
@@ -1418,6 +1471,12 @@ export async function cancelEvent(options: CancelEventOptions): Promise<OwaRespo
 export async function respondToEvent(options: RespondToEventOptions): Promise<OwaResponse<void>> {
   try {
     const { token, eventId, response, comment, sendResponse = true, mailbox } = options;
+    const resolved = await resolveCalendarForWrite(token, eventId, mailbox);
+    if (!resolved.ok || !resolved.data) {
+      return resolved as OwaResponse<void>;
+    }
+    const { id: calId, changeKey: calCk } = resolved.data;
+
     const disposition = sendResponse ? 'SendAndSaveCopy' : 'SaveOnly';
 
     const responseTagMap: Record<ResponseType, string> = {
@@ -1431,7 +1490,7 @@ export async function respondToEvent(options: RespondToEventOptions): Promise<Ow
     <m:CreateItem MessageDisposition="${disposition}">
       <m:Items>
         <t:${tag}>
-          <t:ReferenceItemId Id="${xmlEscape(eventId)}" />
+          ${referenceItemIdXml(calId, calCk)}
           ${comment ? `<t:Body BodyType="Text">${xmlEscape(comment)}</t:Body>` : ''}
         </t:${tag}>
       </m:Items>
@@ -1560,6 +1619,19 @@ export async function getEmail(token: string, messageId: string, mailbox?: strin
   }
 }
 
+async function resolveMessageForWrite(
+  token: string,
+  messageId: string,
+  mailbox?: string
+): Promise<OwaResponse<{ id: string; changeKey?: string }>> {
+  const res = await getEmail(token, messageId, mailbox);
+  if (!res.ok || !res.data) {
+    if (!res.ok) return res as unknown as OwaResponse<{ id: string; changeKey?: string }>;
+    return { ok: false, status: 404, error: { code: 'NOT_FOUND', message: 'Message not found' } };
+  }
+  return ewsResult({ id: res.data.Id, changeKey: res.data.ChangeKey });
+}
+
 export async function sendEmail(
   token: string,
   options: {
@@ -1640,11 +1712,15 @@ export async function sendEmail(
     });
     if (!draftResult.ok || !draftResult.data) return draftResult as OwaResponse<void>;
 
+    let item: { id: string; changeKey?: string } = {
+      id: draftResult.data.Id,
+      changeKey: draftResult.data.ChangeKey
+    };
     for (const att of options.attachments) {
-      await addAttachmentToItem(token, draftResult.data.Id, att, mailbox);
+      item = await addAttachmentToItem(token, item.id, att, mailbox, item);
     }
 
-    await sendItemById(token, draftResult.data.Id, mailbox);
+    await sendItemById(token, item.id, mailbox, item);
     return { ok: true, status: 200 };
   } catch (err) {
     return ewsError(err);
@@ -1660,6 +1736,12 @@ export async function replyToEmail(
   mailbox?: string
 ): Promise<OwaResponse<void>> {
   try {
+    const resolved = await resolveMessageForWrite(token, messageId, mailbox);
+    if (!resolved.ok || !resolved.data) {
+      return resolved as OwaResponse<void>;
+    }
+    const { id: refId, changeKey: refCk } = resolved.data;
+
     const tag = replyAll ? 'ReplyAllToItem' : 'ReplyToItem';
     const bodyType = isHtml ? 'HTML' : 'Text';
 
@@ -1667,7 +1749,7 @@ export async function replyToEmail(
     <m:CreateItem MessageDisposition="SendAndSaveCopy">
       <m:Items>
         <t:${tag}>
-          <t:ReferenceItemId Id="${xmlEscape(messageId)}" />
+          ${referenceItemIdXml(refId, refCk)}
           <t:NewBodyContent BodyType="${bodyType}">${xmlEscape(comment)}</t:NewBodyContent>
         </t:${tag}>
       </m:Items>
@@ -1689,6 +1771,12 @@ export async function replyToEmailDraft(
   mailbox?: string
 ): Promise<OwaResponse<{ draftId: string }>> {
   try {
+    const resolved = await resolveMessageForWrite(token, messageId, mailbox);
+    if (!resolved.ok || !resolved.data) {
+      return resolved as unknown as OwaResponse<{ draftId: string }>;
+    }
+    const { id: refId, changeKey: refCk } = resolved.data;
+
     const tag = replyAll ? 'ReplyAllToItem' : 'ReplyToItem';
     const bodyType = isHtml ? 'HTML' : 'Text';
 
@@ -1696,7 +1784,7 @@ export async function replyToEmailDraft(
     <m:CreateItem MessageDisposition="SaveOnly">
       <m:Items>
         <t:${tag}>
-          <t:ReferenceItemId Id="${xmlEscape(messageId)}" />
+          ${referenceItemIdXml(refId, refCk)}
           <t:NewBodyContent BodyType="${bodyType}">${xmlEscape(comment)}</t:NewBodyContent>
         </t:${tag}>
       </m:Items>
@@ -1704,6 +1792,13 @@ export async function replyToEmailDraft(
 
     const xml = await callEws(token, envelope, mailbox);
     const draftId = extractAttribute(xml, 'ItemId', 'Id');
+    if (!draftId?.trim()) {
+      return {
+        ok: false,
+        status: 400,
+        error: { code: 'EWS_ERROR', message: 'Reply draft response did not include an item id' }
+      };
+    }
     return ewsResult({ draftId });
   } catch (err) {
     return ewsError(err);
@@ -1718,6 +1813,12 @@ export async function forwardEmail(
   mailbox?: string
 ): Promise<OwaResponse<void>> {
   try {
+    const resolved = await resolveMessageForWrite(token, messageId, mailbox);
+    if (!resolved.ok || !resolved.data) {
+      return resolved as OwaResponse<void>;
+    }
+    const { id: refId, changeKey: refCk } = resolved.data;
+
     const toXml = toRecipients
       .map((e) => `<t:Mailbox><t:EmailAddress>${xmlEscape(e)}</t:EmailAddress></t:Mailbox>`)
       .join('');
@@ -1726,7 +1827,7 @@ export async function forwardEmail(
     <m:CreateItem MessageDisposition="SendAndSaveCopy">
       <m:Items>
         <t:ForwardItem>
-          <t:ReferenceItemId Id="${xmlEscape(messageId)}" />
+          ${referenceItemIdXml(refId, refCk)}
           <t:ToRecipients>${toXml}</t:ToRecipients>
           ${comment ? `<t:NewBodyContent BodyType="Text">${xmlEscape(comment)}</t:NewBodyContent>` : ''}
         </t:ForwardItem>
@@ -1791,11 +1892,21 @@ export async function updateEmail(
       </t:SetItemField>`);
     }
 
+    if (setFields.length === 0) {
+      return { ok: false, status: 400, error: { code: 'NO_UPDATES', message: 'No fields to update' } };
+    }
+
+    const resolved = await resolveMessageForWrite(token, messageId, mailbox);
+    if (!resolved.ok || !resolved.data) {
+      return resolved as unknown as OwaResponse<EmailMessage>;
+    }
+    const { id: msgId, changeKey: msgCk } = resolved.data;
+
     const envelope = soapEnvelope(`
     <m:UpdateItem ConflictResolution="AlwaysOverwrite" MessageDisposition="SaveOnly" SuppressReadReceipts="true">
       <m:ItemChanges>
         <t:ItemChange>
-          <t:ItemId Id="${xmlEscape(messageId)}" />
+          ${itemIdXml(msgId, msgCk)}
           <t:Updates>
             ${setFields.join('')}
           </t:Updates>
@@ -1804,7 +1915,7 @@ export async function updateEmail(
     </m:UpdateItem>`);
 
     const xml = await callEws(token, envelope, mailbox);
-    const newId = extractAttribute(xml, 'ItemId', 'Id') || messageId;
+    const newId = extractAttribute(xml, 'ItemId', 'Id') || msgId;
     return ewsResult({ Id: newId } as EmailMessage);
   } catch (err) {
     return ewsError(err);
@@ -1818,18 +1929,24 @@ export async function moveEmail(
   mailbox?: string
 ): Promise<OwaResponse<EmailMessage>> {
   try {
+    const resolved = await resolveMessageForWrite(token, messageId, mailbox);
+    if (!resolved.ok || !resolved.data) {
+      return resolved as unknown as OwaResponse<EmailMessage>;
+    }
+    const { id: msgId, changeKey: msgCk } = resolved.data;
+
     const envelope = soapEnvelope(`
     <m:MoveItem>
       <m:ToFolderId>
         ${folderIdXml(destinationFolder, mailbox)}
       </m:ToFolderId>
       <m:ItemIds>
-        <t:ItemId Id="${xmlEscape(messageId)}" />
+        ${itemIdXml(msgId, msgCk)}
       </m:ItemIds>
     </m:MoveItem>`);
 
     const xml = await callEws(token, envelope, mailbox);
-    const newId = extractAttribute(xml, 'ItemId', 'Id') || messageId;
+    const newId = extractAttribute(xml, 'ItemId', 'Id') || msgId;
     return ewsResult({ Id: newId } as EmailMessage);
   } catch (err) {
     return ewsError(err);
@@ -1850,7 +1967,7 @@ export async function createDraft(
     /** Save draft in this mailbox's drafts folder */
     mailbox?: string;
   }
-): Promise<OwaResponse<{ Id: string }>> {
+): Promise<OwaResponse<{ Id: string; ChangeKey?: string }>> {
   try {
     const { mailbox } = options;
 
@@ -1890,7 +2007,15 @@ export async function createDraft(
 
     const xml = await callEws(token, envelope, mailbox);
     const id = extractAttribute(xml, 'ItemId', 'Id');
-    return ewsResult({ Id: id });
+    if (!id?.trim()) {
+      return {
+        ok: false,
+        status: 400,
+        error: { code: 'EWS_ERROR', message: 'Create draft response did not include an item id' }
+      };
+    }
+    const ck = extractAttribute(xml, 'ItemId', 'ChangeKey')?.trim();
+    return ewsResult({ Id: id, ChangeKey: ck || undefined });
   } catch (err) {
     return ewsError(err);
   }
@@ -1937,11 +2062,21 @@ export async function updateDraft(
       );
     }
 
+    if (setFields.length === 0) {
+      return { ok: false, status: 400, error: { code: 'NO_UPDATES', message: 'No fields to update' } };
+    }
+
+    const resolved = await resolveMessageForWrite(token, draftId, options.mailbox);
+    if (!resolved.ok || !resolved.data) {
+      return resolved as OwaResponse<void>;
+    }
+    const { id: did, changeKey: dck } = resolved.data;
+
     const envelope = soapEnvelope(`
     <m:UpdateItem ConflictResolution="AlwaysOverwrite" MessageDisposition="SaveOnly">
       <m:ItemChanges>
         <t:ItemChange>
-          <t:ItemId Id="${xmlEscape(draftId)}" />
+          ${itemIdXml(did, dck)}
           <t:Updates>${setFields.join('')}</t:Updates>
         </t:ItemChange>
       </m:ItemChanges>
@@ -1954,7 +2089,26 @@ export async function updateDraft(
   }
 }
 
-async function sendItemById(token: string, itemId: string, mailbox?: string): Promise<void> {
+async function sendItemById(
+  token: string,
+  itemId: string,
+  mailbox?: string,
+  preResolved?: { id: string; changeKey?: string }
+): Promise<void> {
+  let sid: string;
+  let sck: string | undefined;
+  if (preResolved?.id?.trim()) {
+    sid = preResolved.id.trim();
+    sck = preResolved.changeKey?.trim() || undefined;
+  } else {
+    const resolved = await resolveMessageForWrite(token, itemId, mailbox);
+    if (!resolved.ok || !resolved.data) {
+      throw new Error(resolved.error?.message || 'Failed to resolve item for send');
+    }
+    sid = resolved.data.id;
+    sck = resolved.data.changeKey;
+  }
+
   const savedSentXml = mailbox
     ? `<m:SavedItemFolderId><t:DistinguishedFolderId Id="sentitems"><t:Mailbox><t:EmailAddress>${xmlEscape(mailbox)}</t:EmailAddress></t:Mailbox></t:DistinguishedFolderId></m:SavedItemFolderId>`
     : `<m:SavedItemFolderId>
@@ -1964,7 +2118,7 @@ async function sendItemById(token: string, itemId: string, mailbox?: string): Pr
   const envelope = soapEnvelope(`
   <m:SendItem SaveItemToFolder="true">
     <m:ItemIds>
-      <t:ItemId Id="${xmlEscape(itemId)}" />
+      ${itemIdXml(sid, sck)}
     </m:ItemIds>
     ${savedSentXml}
   </m:SendItem>`);
@@ -1984,10 +2138,16 @@ export async function sendDraftById(token: string, draftId: string, mailbox?: st
 export async function deleteDraftById(token: string, draftId: string, mailbox?: string): Promise<OwaResponse<void>> {
   try {
     draftId = requireNonEmpty(draftId, 'draftId');
+    const resolved = await resolveMessageForWrite(token, draftId, mailbox);
+    if (!resolved.ok || !resolved.data) {
+      return resolved as OwaResponse<void>;
+    }
+    const { id: did, changeKey: dck } = resolved.data;
+
     const envelope = soapEnvelope(`
     <m:DeleteItem DeleteType="HardDelete">
       <m:ItemIds>
-        <t:ItemId Id="${xmlEscape(draftId)}" />
+        ${itemIdXml(did, dck)}
       </m:ItemIds>
     </m:DeleteItem>`);
     await callEws(token, envelope, mailbox);
@@ -1997,10 +2157,31 @@ export async function deleteDraftById(token: string, draftId: string, mailbox?: 
   }
 }
 
-async function addAttachmentToItem(token: string, itemId: string, attachment: EmailAttachment, mailbox?: string): Promise<void> {
+async function addAttachmentToItem(
+  token: string,
+  itemId: string,
+  attachment: EmailAttachment,
+  mailbox?: string,
+  preResolved?: { id: string; changeKey?: string }
+): Promise<{ id: string; changeKey?: string }> {
+  let pid: string;
+  let pck: string | undefined;
+  if (preResolved?.id?.trim()) {
+    pid = preResolved.id.trim();
+    pck = preResolved.changeKey?.trim() || undefined;
+  } else {
+    const resolved = await resolveMessageForWrite(token, itemId, mailbox);
+    if (!resolved.ok || !resolved.data) {
+      throw new Error(resolved.error?.message || 'Failed to resolve message for attachment');
+    }
+    pid = resolved.data.id;
+    pck = resolved.data.changeKey;
+  }
+  const parentCkAttr = pck ? ` ChangeKey="${xmlEscape(pck)}"` : '';
+
   const envelope = soapEnvelope(`
   <m:CreateAttachment>
-    <m:ParentItemId Id="${xmlEscape(itemId)}" />
+    <m:ParentItemId Id="${xmlEscape(pid)}"${parentCkAttr} />
     <m:Attachments>
       <t:FileAttachment>
         <t:Name>${xmlEscape(attachment.name)}</t:Name>
@@ -2009,7 +2190,14 @@ async function addAttachmentToItem(token: string, itemId: string, attachment: Em
       </t:FileAttachment>
     </m:Attachments>
   </m:CreateAttachment>`);
-  await callEws(token, envelope, mailbox);
+  const xml = await callEws(token, envelope, mailbox);
+
+  const rootId = extractAttribute(xml, 'RootItemId', 'Id')?.trim();
+  const rootCk = extractAttribute(xml, 'RootItemId', 'ChangeKey')?.trim();
+  if (rootId) {
+    return { id: rootId, changeKey: rootCk || pck };
+  }
+  return { id: pid, changeKey: pck };
 }
 
 export async function addAttachmentToDraft(
@@ -2157,7 +2345,11 @@ export async function deleteMailFolder(token: string, folderId: string, mailbox?
 
 // ─── Attachment Operations ───
 
-export async function getAttachments(token: string, messageId: string, mailbox?: string): Promise<OwaResponse<AttachmentListResponse>> {
+export async function getAttachments(
+  token: string,
+  messageId: string,
+  mailbox?: string
+): Promise<OwaResponse<AttachmentListResponse>> {
   try {
     // First get the item to find attachment IDs
     const envelope = soapEnvelope(`

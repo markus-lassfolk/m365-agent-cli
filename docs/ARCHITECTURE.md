@@ -148,6 +148,8 @@ Used for operations with no Graph equivalent:
 | Free/busy | `GetUserAvailability` | Graph getSchedule is preferred |
 | People search | `ResolveNames` | Graph People API is preferred |
 
+**Write operations:** `ews-client.ts` resolves targets with **`GetItem`** (messages) or **`getCalendarEvent`** (calendar) before mutating SOAP calls and includes **ChangeKey** on `ItemId`, `ReferenceItemId`, `ParentItemId`, and related shapes where Exchange requires it (notably delegated/shared mailbox scenarios). Callers continue to pass only **item IDs** from list/read commands. `updateEvent` may prefetch **ChangeKey** when the caller does not supply one; a failed prefetch returns that error instead of sending an invalid **UpdateItem**.
+
 ### Microsoft Graph REST (via `graph-client.ts`)
 
 Preferred for new features:

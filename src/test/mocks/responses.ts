@@ -87,6 +87,25 @@ function makeCalendarItem(opts: {
   </t:CalendarItem>`;
 }
 
+/** GetItem response for calendar event IDs (respond/cancel/delete prefetch). */
+export function makeGetCalendarItemDetailResponse(itemId: string): string {
+  return soapResponse(`
+  <m:GetItemResponse>
+    <m:ResponseCode>NoError</m:ResponseCode>
+    <m:Items>
+      ${makeCalendarItem({
+        id: itemId,
+        subject: 'Calendar item',
+        start: '2026-03-30T10:00:00Z',
+        end: '2026-03-30T11:00:00Z',
+        isOrganizer: true,
+        myResponseType: 'Organizer'
+      })}
+    </m:Items>
+  </m:GetItemResponse>
+`);
+}
+
 const MOCK_CALENDAR_RESPONSE = soapResponse(`
   <m:FindItemResponse>
     <m:ResponseCode>NoError</m:ResponseCode>
@@ -708,6 +727,7 @@ export const mockAddAttachmentResponse = soapResponse(`
         <t:Name>attachment.pdf</t:Name>
       </t:FileAttachment>
     </m:Attachments>
+    <t:RootItemId Id="new-draft-id-123" ChangeKey="afterAttachCK" />
   </m:CreateAttachmentResponse>
 `);
 

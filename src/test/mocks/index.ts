@@ -8,6 +8,7 @@ import {
   mockCalendarEventsResponse,
   mockCancelEventSuccessResponse,
   mockCreateEventResponse,
+  mockCreateDraftResponse,
   mockCreateMailFolderResponse,
   mockDeleteEventSuccessResponse,
   mockDeleteMailFolderResponse,
@@ -20,6 +21,7 @@ import {
   mockGetRoomsFromListResponse,
   mockGetRoomsResponse,
   mockGetScheduleResponse,
+  makeGetCalendarItemDetailResponse,
   mockGraphCheckinResponse,
   mockGraphCreateUploadSessionResponse,
   mockGraphDeleteResponse,
@@ -146,6 +148,17 @@ export function createMockFetch(): any {
         return makeResponse(mockCreateEventResponse);
       }
 
+      // CreateItem (new mail draft — SaveOnly Message; reply/forward use ReplyToItem/ForwardItem instead)
+      if (
+        hasTag(body, 'CreateItem') &&
+        hasTag(body, 'Message') &&
+        body.includes('MessageDisposition="SaveOnly"') &&
+        !hasTag(body, 'ReplyToItem') &&
+        !hasTag(body, 'ForwardItem')
+      ) {
+        return makeResponse(mockCreateDraftResponse);
+      }
+
       // Update calendar item
       if (hasTag(body, 'UpdateItem') && hasTag(body, 'CalendarItem')) {
         return makeResponse(mockUpdateEventResponse);
@@ -183,8 +196,22 @@ export function createMockFetch(): any {
         return makeResponse(mockGetEmailsResponse);
       }
 
-      // GetItem for email detail
+      // GetItem: calendar vs mail (calendar flows prefetch ChangeKey before CreateItem/DeleteItem)
       if (hasTag(body, 'GetItem')) {
+        const idMatch = body.match(/<t:ItemId\s+[^>]*Id="([^"]+)"/);
+        const reqId = idMatch?.[1] ?? '';
+        if (
+          reqId.startsWith('invite-') ||
+          reqId.startsWith('event-') ||
+          reqId.startsWith('new-event-id') ||
+          reqId === 'event-id' ||
+          reqId.startsWith('occurrence-') ||
+          reqId.startsWith('exception-') ||
+          reqId.startsWith('series-') ||
+          reqId.startsWith('cal-')
+        ) {
+          return makeResponse(makeGetCalendarItemDetailResponse(reqId));
+        }
         return makeResponse(mockGetEmailDetailResponse);
       }
 

@@ -160,4 +160,109 @@ describe('ews-client safety and conflict behavior', () => {
     expect(result.data?.Start.TimeZone).toBe('Pacific Standard Time');
     expect(result.data?.End.TimeZone).toBe('Pacific Standard Time');
   });
+
+  it('replyToEmail sends ReferenceItemId with ChangeKey after GetItem', async () => {
+    const fetchCalls: string[] = [];
+    let callCount = 0;
+
+    globalThis.fetch = mock(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = String(init?.body || '');
+      fetchCalls.push(body);
+      callCount += 1;
+      if (callCount === 1) {
+        return new Response(
+          `<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages" xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types">
+  <soap:Body>
+    <m:ResponseCode>NoError</m:ResponseCode>
+    <m:GetItemResponse>
+      <m:Items>
+        <t:Message>
+          <t:ItemId Id="msg-1" ChangeKey="ck-from-get" />
+          <t:Subject>Subj</t:Subject>
+        </t:Message>
+      </m:Items>
+    </m:GetItemResponse>
+  </soap:Body>
+</soap:Envelope>`,
+          { status: 200 }
+        );
+      }
+      return new Response(
+        `<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages">
+  <soap:Body>
+    <m:ResponseCode>NoError</m:ResponseCode>
+  </soap:Body>
+</soap:Envelope>`,
+        { status: 200 }
+      );
+    }) as unknown as typeof fetch;
+
+    const { replyToEmail } = await import('../lib/ews-client.js');
+    const result = await replyToEmail('token', 'msg-1', 'Thanks', false, false, undefined);
+
+    expect(result.ok).toBe(true);
+    expect(fetchCalls.length).toBe(2);
+    expect(fetchCalls[0]).toContain('<m:GetItem>');
+    expect(fetchCalls[1]).toContain('ReferenceItemId');
+    expect(fetchCalls[1]).toContain('ChangeKey="ck-from-get"');
+    expect(fetchCalls[1]).toContain('Id="msg-1"');
+  });
+
+  it('replyToEmailDraft sends ReferenceItemId with ChangeKey after GetItem', async () => {
+    const fetchCalls: string[] = [];
+    let callCount = 0;
+
+    globalThis.fetch = mock(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = String(init?.body || '');
+      fetchCalls.push(body);
+      callCount += 1;
+      if (callCount === 1) {
+        return new Response(
+          `<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages" xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types">
+  <soap:Body>
+    <m:ResponseCode>NoError</m:ResponseCode>
+    <m:GetItemResponse>
+      <m:Items>
+        <t:Message>
+          <t:ItemId Id="msg-2" ChangeKey="ck-draft" />
+          <t:Subject>Subj</t:Subject>
+        </t:Message>
+      </m:Items>
+    </m:GetItemResponse>
+  </soap:Body>
+</soap:Envelope>`,
+          { status: 200 }
+        );
+      }
+      return new Response(
+        `<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages" xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types">
+  <soap:Body>
+    <m:ResponseCode>NoError</m:ResponseCode>
+    <m:CreateItemResponse>
+      <m:Items>
+        <t:Message>
+          <t:ItemId Id="reply-draft-x" ChangeKey="rck" />
+        </t:Message>
+      </m:Items>
+    </m:CreateItemResponse>
+  </soap:Body>
+</soap:Envelope>`,
+        { status: 200 }
+      );
+    }) as unknown as typeof fetch;
+
+    const { replyToEmailDraft } = await import('../lib/ews-client.js');
+    const result = await replyToEmailDraft('token', 'msg-2', 'Draft reply', false, false, undefined);
+
+    expect(result.ok).toBe(true);
+    expect(result.data?.draftId).toBe('reply-draft-x');
+    expect(fetchCalls.length).toBe(2);
+    expect(fetchCalls[0]).toContain('<m:GetItem>');
+    expect(fetchCalls[1]).toContain('ChangeKey="ck-draft"');
+    expect(fetchCalls[1]).toContain('MessageDisposition="SaveOnly"');
+  });
 });

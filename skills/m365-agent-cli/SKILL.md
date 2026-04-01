@@ -44,8 +44,14 @@ CLI for Microsoft 365: **Exchange Web Services (EWS)** and **Microsoft Graph**. 
 | Push | `subscribe`, `subscriptions` |
 | Other | `login`, `whoami`, `verify-token`, `serve` |
 
+## EWS writes (mail/calendar)
+
+- Mutating EWS calls (reply, forward, move, flag/read state, drafts send, calendar respond/cancel/delete/update, etc.) are implemented in **`ews-client.ts`** to resolve **ItemId + ChangeKey** via **`GetItem`** / **`getCalendarEvent`** before **`CreateItem`**, **`UpdateItem`**, **`MoveItem`**, **`SendItem`**, and similar—especially important for **delegated/shared mailbox** use (`--mailbox`), where Exchange may return **`ErrorChangeKeyRequiredForWriteOperations`** if ChangeKey is omitted.
+- Callers pass **message or event IDs** from list/read output as today; they do **not** supply ChangeKey manually.
+
 ## Agent tips
 
 - Start with **list/read** commands, then use IDs from output for updates.
 - If auth fails, suggest `verify-token` and re-`login`; wrong **identity** profile means wrong cache file—check `--identity`.
 - For “on behalf of user X” Graph work, confirm **`--user`** is available on that subcommand via `--help` before assuming it works everywhere.
+- If a user still sees EWS change-key or conflict errors after an update, suggest **re-fetching the item ID** (another process may have modified the message/event) and retrying.
