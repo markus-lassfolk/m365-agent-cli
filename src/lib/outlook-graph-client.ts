@@ -206,7 +206,7 @@ function mailboxMessagesPath(user: string | undefined, query?: RootMailboxMessag
   if (query?.top !== undefined) params.set('$top', String(query.top));
   if (query?.skip !== undefined) params.set('$skip', String(query.skip));
   if (query?.search) {
-    const escaped = query.search.replace(/"/g, '\\"');
+    const escaped = query.search.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
     params.set('$search', `"${escaped}"`);
   }
   const qs = params.toString() ? `?${params.toString()}` : '';

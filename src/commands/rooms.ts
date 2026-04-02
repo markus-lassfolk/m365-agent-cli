@@ -11,7 +11,7 @@ import {
 
 function parseCapacityFilter(value: string | undefined): number | undefined {
   if (!value) return undefined;
-  const cleaned = value.replace('+', '').replace('>', '').trim();
+  const cleaned = value.replaceAll('+', '').replaceAll('>', '').trim();
   const parsed = parseInt(cleaned, 10);
   if (Number.isNaN(parsed)) {
     throw new Error(`Invalid capacity value: "${value}". Must be a number.`);

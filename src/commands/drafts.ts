@@ -1,4 +1,4 @@
-import { readFile, stat } from 'node:fs/promises';
+import { open, readFile } from 'node:fs/promises';
 import { Command } from 'commander';
 import { AttachmentLinkSpecError, parseAttachLinkSpec } from '../lib/attach-link-spec.js';
 import { AttachmentPathError, validateAttachmentPath } from '../lib/attachments.js';
@@ -190,12 +190,22 @@ export const draftsCommand = new Command('drafts')
           for (const filePath of filePaths) {
             try {
               const validated = await validateAttachmentPath(filePath, workingDirectory);
-              const fileStat = await stat(validated.absolutePath);
-              if (fileStat.size > 25 * 1024 * 1024) {
-                console.error(`File too large (>25MB): ${validated.absolutePath}`);
-                process.exit(1);
+              const fh = await open(validated.absolutePath, 'r');
+              let content: Buffer;
+              try {
+                const st = await fh.stat();
+                if (!st.isFile()) {
+                  console.error(`Not a file: ${validated.absolutePath}`);
+                  process.exit(1);
+                }
+                if (st.size > 25 * 1024 * 1024) {
+                  console.error(`File too large (>25MB): ${validated.absolutePath}`);
+                  process.exit(1);
+                }
+                content = await fh.readFile();
+              } finally {
+                await fh.close();
               }
-              const content = await readFile(validated.absolutePath);
               const contentType = lookupMimeType(validated.fileName) || 'application/octet-stream';
 
               const attachResult = await addAttachmentToDraft(

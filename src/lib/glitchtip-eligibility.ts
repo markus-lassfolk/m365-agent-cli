@@ -3,9 +3,10 @@
  * commit matches the GitHub tag v{version} (see docs/GLITCHTIP.md).
  */
 import { readFileSync } from 'node:fs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
+import { atomicWriteUtf8File } from './atomic-write.js';
 import { COMMIT_SHA } from './git-commit.js';
 import { getPackageJsonPath, getPackageVersion } from './package-info.js';
 
@@ -43,26 +44,59 @@ function cacheFile(): string {
   return join(homedir(), '.config', 'm365-agent-cli', 'cache', 'glitchtip-eligibility.json');
 }
 
+function assertEligibilityCache(data: unknown): EligibilityCache {
+  if (!data || typeof data !== 'object') throw new Error('invalid eligibility cache');
+  const o = data as Record<string, unknown>;
+  if (typeof o.fetchedAt !== 'number' || !Number.isFinite(o.fetchedAt)) throw new Error('invalid eligibility cache');
+  if (typeof o.npmLatest !== 'string' || o.npmLatest.trim().length < 3 || o.npmLatest.length > 80) {
+    throw new Error('invalid eligibility cache');
+  }
+  const sha = o.tagCommitSha;
+  if (sha !== null && (typeof sha !== 'string' || !/^[0-9a-f]{40}$/i.test(sha))) {
+    throw new Error('invalid eligibility cache');
+  }
+  return {
+    fetchedAt: o.fetchedAt,
+    npmLatest: o.npmLatest.trim(),
+    tagCommitSha: sha
+  };
+}
+
 async function loadCache(): Promise<EligibilityCache | null> {
   try {
     const raw = await readFile(cacheFile(), 'utf8');
-    return JSON.parse(raw) as EligibilityCache;
+    return assertEligibilityCache(JSON.parse(raw));
   } catch {
     return null;
   }
 }
 
 async function saveCache(c: EligibilityCache): Promise<void> {
-  const dir = dirname(cacheFile());
-  await mkdir(dir, { recursive: true, mode: 0o700 });
-  await writeFile(cacheFile(), JSON.stringify(c, null, 2), { encoding: 'utf8', mode: 0o600 });
+  const safe = assertEligibilityCache(c);
+  await atomicWriteUtf8File(cacheFile(), JSON.stringify(safe, null, 2), 0o600);
+}
+
+function assertEligibilityFetchUrl(url: string): URL {
+  const u = new URL(url);
+  if (u.protocol !== 'https:') throw new Error('unsupported URL');
+  const host = u.hostname;
+  if (host !== 'registry.npmjs.org' && host !== 'api.github.com') {
+    throw new Error('unsupported URL');
+  }
+  return u;
 }
 
 async function fetchJson<T>(url: string): Promise<{ ok: boolean; data?: T; status: number }> {
+  let href: string;
+  try {
+    href = assertEligibilityFetchUrl(url).toString();
+  } catch {
+    return { ok: false, status: 0 };
+  }
   const ac = new AbortController();
   const t = setTimeout(() => ac.abort(), FETCH_TIMEOUT_MS);
   try {
-    const r = await fetch(url, {
+    const r = await fetch(href, {
       signal: ac.signal,
       headers: {
         Accept: 'application/vnd.github+json',

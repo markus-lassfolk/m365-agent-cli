@@ -1128,6 +1128,7 @@ async function uploadFileViaTodoAttachmentSession(
     const contentRange = `bytes ${start}-${end - 1}/${total}`;
     let response: Response;
     try {
+      // codeql[js/file-access-to-http]: chunked upload of a user-selected attachment file to Graph (pre-authorized uploadUrl).
       response = await fetch(uploadUrl, {
         method: 'PUT',
         headers: {

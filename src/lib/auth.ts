@@ -1,6 +1,7 @@
-import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { atomicWriteUtf8File } from './atomic-write.js';
 import { getJwtExpiration, getMicrosoftTenantPathSegment, isValidJwtStructure } from './jwt-utils.js';
 
 export interface AuthResult {
@@ -13,6 +14,15 @@ interface CachedToken {
   accessToken: string;
   refreshToken: string;
   expiresAt: number;
+}
+
+function assertCachedToken(data: unknown): CachedToken {
+  if (!data || typeof data !== 'object') throw new Error('invalid token cache');
+  const o = data as Record<string, unknown>;
+  if (typeof o.accessToken !== 'string' || o.accessToken.length > 100_000) throw new Error('invalid token cache');
+  if (typeof o.refreshToken !== 'string' || o.refreshToken.length > 100_000) throw new Error('invalid token cache');
+  if (typeof o.expiresAt !== 'number' || !Number.isFinite(o.expiresAt)) throw new Error('invalid token cache');
+  return { accessToken: o.accessToken, refreshToken: o.refreshToken, expiresAt: o.expiresAt };
 }
 
 // Security model: cache file stores bearer/refresh tokens and must be owner-only.
@@ -47,7 +57,7 @@ async function loadCachedToken(identity: string): Promise<CachedToken | null> {
   try {
     const TOKEN_CACHE_FILE = TOKEN_CACHE_FILE_TEMPLATE.replace('{identity}', identity);
     const data = await readFile(TOKEN_CACHE_FILE, 'utf-8');
-    return JSON.parse(data) as CachedToken;
+    return assertCachedToken(JSON.parse(data));
   } catch {
     return null;
   }
@@ -55,13 +65,9 @@ async function loadCachedToken(identity: string): Promise<CachedToken | null> {
 
 async function saveCachedToken(identity: string, token: CachedToken): Promise<void> {
   try {
-    const dir = join(homedir(), '.config', 'm365-agent-cli');
-    await mkdir(dir, { recursive: true, mode: 0o700 });
+    const safe = assertCachedToken(token);
     const TOKEN_CACHE_FILE = TOKEN_CACHE_FILE_TEMPLATE.replace('{identity}', identity);
-    await writeFile(TOKEN_CACHE_FILE, JSON.stringify(token, null, 2), {
-      encoding: 'utf-8',
-      mode: 0o600
-    });
+    await atomicWriteUtf8File(TOKEN_CACHE_FILE, JSON.stringify(safe, null, 2), 0o600);
   } catch (err) {
     console.error(`Failed to write token cache for identity '${identity}':`, err instanceof Error ? err.message : err);
   }

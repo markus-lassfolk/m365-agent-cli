@@ -89,6 +89,17 @@ function itemIdXml(itemId: string, changeKey?: string): string {
     : `<t:ItemId Id="${xmlEscape(itemId)}" />`;
 }
 
+/** Strip tags iteratively so nested markup is removed (avoids incomplete single-pass stripping). */
+function stripXmlTagsFromXmlish(s: string): string {
+  let prev = '';
+  let cur = s;
+  while (cur !== prev) {
+    prev = cur;
+    cur = cur.replace(/<[^>]+>/g, '');
+  }
+  return cur;
+}
+
 // ─── SOAP Core ───
 
 import { validateUrl } from './url-validation';
@@ -127,6 +138,7 @@ export async function callEws(token: string, envelope: string, mailbox?: string)
 
   let response: Response;
   try {
+    // codeql[js/file-access-to-http]: Bearer token may originate from the local OAuth cache; SOAP body is built in-process (not arbitrary file reads).
     response = await fetch(EWS_ENDPOINT, {
       method: 'POST',
       headers: {
@@ -645,7 +657,7 @@ function parseCalendarItem(block: string, mailbox?: string): CalendarEvent {
   // Categories
   const categoriesBlock = extractSelfClosingOrBlock(block, 'Categories');
   const categories = extractBlocks(categoriesBlock, 'String').map(
-    (b) => extractTag(b, 'String') || xmlDecode(b.replace(/<[^>]+>/g, ''))
+    (b) => extractTag(b, 'String') || xmlDecode(stripXmlTagsFromXmlish(b))
   );
 
   // Recurrence info
@@ -746,7 +758,7 @@ function parseEmailMessage(block: string): EmailMessage {
 
   const categoriesBlock = extractSelfClosingOrBlock(block, 'Categories');
   const categories = extractBlocks(categoriesBlock, 'String').map(
-    (b) => extractTag(b, 'String') || xmlDecode(b.replace(/<[^>]+>/g, ''))
+    (b) => extractTag(b, 'String') || xmlDecode(stripXmlTagsFromXmlish(b))
   );
 
   return {
@@ -3106,6 +3118,7 @@ export async function areRoomsFree(
       let response: Response;
       let xml: string;
       try {
+        // codeql[js/file-access-to-http]: Bearer token may originate from the local OAuth cache; SOAP body is built in-process.
         response = await fetch(EWS_ENDPOINT, {
           method: 'POST',
           headers: {

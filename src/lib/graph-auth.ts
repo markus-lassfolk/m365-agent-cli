@@ -1,6 +1,7 @@
-import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { atomicWriteUtf8File } from './atomic-write.js';
 import { getJwtExpiration, getMicrosoftTenantPathSegment, isValidJwtStructure } from './jwt-utils.js';
 
 export interface GraphAuthResult {
@@ -13,6 +14,15 @@ interface CachedGraphToken {
   accessToken: string;
   refreshToken: string;
   expiresAt: number;
+}
+
+function assertCachedGraphToken(data: unknown): CachedGraphToken {
+  if (!data || typeof data !== 'object') throw new Error('invalid graph token cache');
+  const o = data as Record<string, unknown>;
+  if (typeof o.accessToken !== 'string' || o.accessToken.length > 100_000) throw new Error('invalid graph token cache');
+  if (typeof o.refreshToken !== 'string' || o.refreshToken.length > 100_000) throw new Error('invalid graph token cache');
+  if (typeof o.expiresAt !== 'number' || !Number.isFinite(o.expiresAt)) throw new Error('invalid graph token cache');
+  return { accessToken: o.accessToken, refreshToken: o.refreshToken, expiresAt: o.expiresAt };
 }
 
 const GRAPH_TOKEN_CACHE_TEMPLATE = join(homedir(), '.config', 'm365-agent-cli', 'graph-token-cache-{identity}.json');
@@ -60,7 +70,7 @@ async function loadCachedGraphToken(identity: string): Promise<CachedGraphToken 
   await migrateGraphTokenCache();
   try {
     const data = await readFile(graphTokenCachePath(identity), 'utf-8');
-    return JSON.parse(data) as CachedGraphToken;
+    return assertCachedGraphToken(JSON.parse(data));
   } catch {
     return null;
   }
@@ -68,12 +78,8 @@ async function loadCachedGraphToken(identity: string): Promise<CachedGraphToken 
 
 async function saveCachedGraphToken(identity: string, token: CachedGraphToken): Promise<void> {
   try {
-    const dir = join(homedir(), '.config', 'm365-agent-cli');
-    await mkdir(dir, { recursive: true, mode: 0o700 });
-    await writeFile(graphTokenCachePath(identity), JSON.stringify(token, null, 2), {
-      encoding: 'utf-8',
-      mode: 0o600
-    });
+    const safe = assertCachedGraphToken(token);
+    await atomicWriteUtf8File(graphTokenCachePath(identity), JSON.stringify(safe, null, 2), 0o600);
   } catch (err) {
     console.error('Failed to write Graph token cache:', err instanceof Error ? err.message : err);
   }

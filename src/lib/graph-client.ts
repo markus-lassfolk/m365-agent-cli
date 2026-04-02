@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
-import { mkdir, open, rename, stat, unlink } from 'node:fs/promises';
+import { mkdir, open, realpath, rename, stat, unlink } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, dirname, resolve } from 'node:path';
 import { Readable } from 'node:stream';
@@ -83,12 +83,24 @@ export interface CheckinResult {
   comment?: string;
 }
 
-async function streamWebToFile(body: ReadableStream<Uint8Array>, filePath: string): Promise<number> {
+const MAX_DOWNLOAD_STREAM_BYTES = 5 * 1024 * 1024 * 1024;
+
+/** Streams HTTPS response body to disk with a hard size cap (mitigates unbounded http-to-file writes). */
+async function streamWebToFile(
+  body: ReadableStream<Uint8Array>,
+  filePath: string,
+  maxBytes: number = MAX_DOWNLOAD_STREAM_BYTES
+): Promise<number> {
   const stream = createWriteStream(filePath, { flags: 'w', mode: 0o600 });
   let bytesWritten = 0;
 
   try {
     for await (const chunk of body) {
+      if (bytesWritten + chunk.byteLength > maxBytes) {
+        stream.destroy();
+        await unlink(filePath).catch(() => {});
+        throw new Error(`Download exceeded maximum size (${maxBytes} bytes)`);
+      }
       if (!stream.write(chunk)) {
         await new Promise<void>((resolveDrain, rejectDrain) => {
           const onDrain = () => {
@@ -185,6 +197,7 @@ export async function fetchAllPages<T>(
 }
 
 export async function fetchGraphRaw(token: string, path: string, options: RequestInit = {}): Promise<Response> {
+  // codeql[js/file-access-to-http]: Bearer token may come from the local OAuth cache; path is a Graph API path string.
   return fetch(`${GRAPH_BASE_URL}${path}`, {
     ...options,
     headers: {
@@ -206,6 +219,7 @@ export async function callGraphAt<T>(
 
   let response: Response;
   try {
+    // codeql[js/file-access-to-http]: Bearer token may come from the local OAuth cache; request body is JSON or binary from callers.
     response = await fetch(`${baseUrl.replace(/\/$/, '')}${path}`, {
       ...options,
       headers: {
@@ -272,6 +286,7 @@ export async function callGraphAbsolute<T>(
 
   let response: Response;
   try {
+    // codeql[js/file-access-to-http]: Bearer token may come from the local OAuth cache; absoluteUrl is Graph `@odata.nextLink` / `@odata.deltaLink`.
     response = await fetch(absoluteUrl, {
       ...options,
       headers: {
@@ -376,16 +391,23 @@ export async function uploadFile(
 ): Promise<GraphResponse<DriveItem>> {
   try {
     const absolutePath = resolve(localPath);
-    const fileStats = await stat(absolutePath);
-    if (!fileStats.isFile()) return graphError(`Not a file: ${absolutePath}`);
+    let resolvedPath: string;
+    try {
+      resolvedPath = await realpath(absolutePath);
+    } catch {
+      return graphError(`Failed to resolve file: ${absolutePath}`);
+    }
+    const fileStats = await stat(resolvedPath);
+    if (!fileStats.isFile()) return graphError(`Not a file: ${resolvedPath}`);
     if (fileStats.size > 250 * 1024 * 1024) {
       return graphError('File exceeds 250MB simple upload limit. Use upload-large instead.');
     }
 
-    const fileName = basename(absolutePath);
+    const fileName = basename(resolvedPath);
     const folderPath = folder?.id ? `${buildItemPath(folder)}:/` : '/me/drive/root:/';
-    const stream = createReadStream(absolutePath);
+    const stream = createReadStream(resolvedPath);
     try {
+      // codeql[js/file-access-to-http]: intentional upload of a user-selected local file to Microsoft Graph after resolve+stat+isFile.
       return await callGraph<DriveItem>(token, `${folderPath}${encodeURIComponent(fileName)}:/content`, {
         method: 'PUT',
         body: Readable.toWeb(stream) as unknown as BodyInit,
@@ -413,21 +435,27 @@ export async function uploadLargeFile(
 ): Promise<GraphResponse<UploadLargeResult>> {
   try {
     const absolutePath = resolve(localPath);
+    let resolvedPath: string;
+    try {
+      resolvedPath = await realpath(absolutePath);
+    } catch {
+      return graphError(`Failed to resolve file: ${absolutePath}`);
+    }
     let fileHandle: any;
     try {
-      fileHandle = await open(absolutePath, 'r');
+      fileHandle = await open(resolvedPath, 'r');
     } catch (err: any) {
       return graphError(`Failed to open file: ${err.message}`);
     }
 
     try {
       const fileStats = await fileHandle.stat();
-      if (!fileStats.isFile()) return graphError(`Not a file: ${absolutePath}`);
+      if (!fileStats.isFile()) return graphError(`Not a file: ${resolvedPath}`);
       if (fileStats.size > 4 * 1024 * 1024 * 1024) {
         return graphError('File exceeds 4GB large upload limit.');
       }
 
-      const fileName = basename(absolutePath);
+      const fileName = basename(resolvedPath);
       const folderPath = folder?.id ? `${buildItemPath(folder)}:/` : '/me/drive/root:/';
 
       // Step 1: Create the upload session

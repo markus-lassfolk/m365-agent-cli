@@ -1,9 +1,10 @@
 import { existsSync, mkdirSync } from 'node:fs';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { Command } from 'commander';
+import { atomicWriteUtf8File } from '../lib/atomic-write.js';
 import { getMicrosoftTenantPathSegment } from '../lib/jwt-utils.js';
 
 async function performDeviceCodeFlow(clientId: string, tenant: string, scope: string, label: string): Promise<string> {
@@ -92,7 +93,7 @@ async function performDeviceCodeFlow(clientId: string, tenant: string, scope: st
               envContent += `\nEWS_USERNAME=${username}\n`;
             }
 
-            await writeFile(envPath, `${envContent.trim()}\n`, { encoding: 'utf8', mode: 0o600 });
+            await atomicWriteUtf8File(envPath, `${envContent.trim()}\n`, 0o600);
 
             console.log(`Saved EWS_USERNAME (${username}) to ${envPath}`);
           }
@@ -155,7 +156,7 @@ export const loginCommand = new Command('login')
 
       // Save it to .env
       envContent += `\nEWS_CLIENT_ID=${clientId}\n`;
-      await writeFile(envPath, `${envContent.trim()}\n`, { encoding: 'utf8', mode: 0o600 });
+      await atomicWriteUtf8File(envPath, `${envContent.trim()}\n`, 0o600);
     }
 
     const tenant = getMicrosoftTenantPathSegment();
@@ -188,7 +189,7 @@ export const loginCommand = new Command('login')
     }
 
     envContent = envContent.replace(/\n{3,}/g, '\n\n');
-    await writeFile(envPath, `${envContent.trim()}\n`, { encoding: 'utf8', mode: 0o600 });
+    await atomicWriteUtf8File(envPath, `${envContent.trim()}\n`, 0o600);
 
     console.log(`Saved GRAPH_REFRESH_TOKEN and EWS_REFRESH_TOKEN to ${envPath}`);
   });

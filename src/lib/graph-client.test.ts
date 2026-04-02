@@ -1,4 +1,8 @@
 import { describe, expect, it } from 'bun:test';
+import { mkdtemp, unlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { uploadLargeFile } from './graph-client.js';
 
 const token = 'test-token';
 const baseUrl = 'https://graph.microsoft.com/v1.0';
@@ -31,18 +35,14 @@ describe('searchFiles query encoding', () => {
   });
 });
 
-import { unlinkSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { resolve } from 'node:path';
-import { uploadLargeFile } from './graph-client.js';
-
 describe('uploadLargeFile chunking', () => {
   it('uploads file in chunks and returns DriveItem', async () => {
-    const tmpFile = resolve(tmpdir(), `test-upload-large-${Date.now()}-${Math.random().toString(36).substring(7)}.tmp`);
+    const dir = await mkdtemp(join(tmpdir(), 'm365-graph-upload-'));
+    const tmpFile = join(dir, 'chunk.bin');
     const fileSize = 25 * 1024 * 1024; // 25MB
     const buffer = new Uint8Array(fileSize);
     buffer.fill(42);
-    writeFileSync(tmpFile, buffer);
+    await writeFile(tmpFile, buffer);
 
     const originalFetch = globalThis.fetch;
     const fetchCalls: any[] = [];
@@ -99,7 +99,7 @@ describe('uploadLargeFile chunking', () => {
     } finally {
       globalThis.fetch = originalFetch;
       try {
-        unlinkSync(tmpFile);
+        await unlink(tmpFile).catch(() => {});
       } catch {}
     }
   });
