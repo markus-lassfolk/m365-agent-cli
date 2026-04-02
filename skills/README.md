@@ -7,7 +7,7 @@ These skills teach the AI *how* to use the `m365-agent-cli` CLI and *how* to beh
 ## Included Skills
 
 ### 1. `m365-agent-cli` (The Technical Manual)
-Located in `./m365-agent-cli/SKILL.md`, this is the strict technical documentation for the CLI. It teaches the AI agent the exact syntax, flags, and endpoints required to interact with Microsoft 365 (e.g., `mail`, `calendar`, `files`, `planner`, `sharepoint`). It also covers **categories/labels** (Outlook vs To Do vs Planner), **calendar business-day ranges**, and **`outlook-categories`**. The AI reads this to know how to execute actions on your behalf without hallucinating commands.
+Located in `./m365-agent-cli/SKILL.md`, this is the strict technical documentation for the CLI. It teaches the AI agent the exact syntax, flags, and endpoints required to interact with Microsoft 365 (e.g., `mail`, `calendar`, `files`, `planner`, `sharepoint`). It also covers **categories/labels** (Outlook vs To Do vs Planner), **calendar business-day ranges**, and **`outlook-categories`**. The AI reads this to know how to execute actions on your behalf without hallucinating commands. The skill frontmatter **`version`** is kept in sync with the npm package via **`npm run sync-skill`** when releasing (see [docs/RELEASE.md](../docs/RELEASE.md)).
 
 ### 2. `personal-assistant` (Moved)
 The **Personal Assistant** behavioral playbook and associated ecosystem recommendations have been moved to their own dedicated repository.

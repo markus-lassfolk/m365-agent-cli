@@ -9,6 +9,7 @@
 import type { ErrorEvent, EventHint, StackFrame } from '@sentry/core';
 import { captureException, flush, init, isInitialized } from '@sentry/node';
 import { checkGlitchTipEligibility } from './glitchtip-eligibility.js';
+import { getPackageVersionSync } from './package-info.js';
 
 /** Keys we never attach to reports (callers may pass `extra`; these are dropped). */
 const EXTRA_KEY_DENYLIST =
@@ -218,11 +219,17 @@ export async function initGlitchTip(): Promise<void> {
     return;
   }
 
+  const releaseFromEnv = process.env.GLITCHTIP_RELEASE?.trim();
+  const release =
+    releaseFromEnv && releaseFromEnv.length > 0
+      ? releaseFromEnv
+      : `m365-agent-cli@${getPackageVersionSync()}`;
+
   init({
     dsn,
     sendDefaultPii: false,
     environment: process.env.GLITCHTIP_ENVIRONMENT || process.env.NODE_ENV || 'production',
-    release: process.env.GLITCHTIP_RELEASE,
+    release,
     tracesSampleRate: 0,
     profilesSampleRate: 0,
     maxBreadcrumbs: 0,

@@ -23,6 +23,8 @@
     "format:check": "biome format --max-diagnostics=none .",
     "biome:check": "biome check --max-diagnostics=none .",
     "embed-sha": "node scripts/embed-git-sha.mjs",
+    "sync-skill": "node scripts/sync-skill-version.mjs",
+    "test-glitchtip-send": "node scripts/test-glitchtip-send.mjs",
     "knip": "knip",
     "verify:coverage": "node scripts/check-coverage.mjs",
     "test": "bun test",

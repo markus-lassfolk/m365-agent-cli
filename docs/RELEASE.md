@@ -22,7 +22,7 @@ If publish fails with an authentication error, the trusted publisher is usually 
 
 ## Cutting a release
 
-1. On `main`, set **`version`** in `package.json` to the new semver (e.g. `1.2.3`). Commit, for example: `chore: release 1.2.3`.
+1. On `main`, set **`version`** in `package.json` to the new semver (e.g. `1.2.3`). Run **`npm run sync-skill`** so `skills/m365-agent-cli/SKILL.md` frontmatter `version:` matches the package (OpenClaw/ClawHub skill metadata). Commit, for example: `chore: release 1.2.3`.
 2. Tag that commit: `git tag v1.2.3` (the tag **must** be `v` + the exact version string from `package.json`).
 3. Push the tag: `git push origin v1.2.3` (and push the commit to `main` if needed).
 

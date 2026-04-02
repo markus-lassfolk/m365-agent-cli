@@ -12,7 +12,11 @@
 | **`GLITCHTIP_DSN`** or **`SENTRY_DSN`** | Project DSN. If unset, **no** reporting runs. |
 | `GLITCHTIP_ENABLED` | Set to `0` or `false` to disable even when DSN is set. |
 | `GLITCHTIP_ENVIRONMENT` | e.g. `production`, `ci` (defaults to `NODE_ENV` or `production`). |
-| `GLITCHTIP_RELEASE` | Optional release string (e.g. git SHA or version). |
+| `GLITCHTIP_RELEASE` | Optional **override** for the release tag in GlitchTip. If unset, the CLI sets **`m365-agent-cli@` + version** from the **installed package** (`package.json` next to the running binary — same source as `m365-agent-cli --version`). Use a git SHA here **not** recommended; prefer the default so release tracks the published semver. |
+
+### Example `.env` for agents / production
+
+Copy **[`env.glitchtip.example`](./env.glitchtip.example)** to `~/.config/m365-agent-cli/.env`. You do **not** need to set **`GLITCHTIP_RELEASE`** unless you want a custom label; the running CLI version is applied automatically.
 
 ## When reporting runs (release gating)
 
@@ -63,6 +67,24 @@ What remains is mainly **error type**, **redacted message**, **stack frames** (w
 ## Verify
 
 After setting `GLITCHTIP_DSN`, run a command that throws inside the CLI (or temporarily break a local branch). You should see the event in GlitchTip within a few seconds.
+
+### DSN / host connectivity
+
+The ingest API lives at `{scheme}://{host}/api/{project_id}/store/` (Sentry-compatible). A quick check that the host and project path respond (expect **405** on `GET` — only `POST` is valid for ingest):
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" "http://glitchtip.lassfolk.cc/api/6/store/"
+```
+
+You should see **`405`**. A connection error or **long timeout** means DNS/firewall or the server is down. (**`403`** on the site root URL alone is normal if the UI is restricted.)
+
+To send a **real test event** (same SDK as the CLI), from the repo root:
+
+```bash
+node scripts/test-glitchtip-send.mjs
+```
+
+Uses **`GLITCHTIP_DSN`** / **`SENTRY_DSN`** if set; otherwise reads **`GLITCHTIP_DSN`** from **`docs/env.glitchtip.example`**. On success you should see the message in GlitchTip within seconds (search for `connectivity test`).
 
 If nothing appears, set **`GLITCHTIP_DEBUG_ELIGIBILITY=1`** — common reasons are: not on the latest npm version, commit not matching tag `v{version}`, or missing network to npm/GitHub.
 

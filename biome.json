@@ -29,12 +29,5 @@
       "style": { "noNonNullAssertion": "off" }
     }
   },
-  "assist": { "enabled": true },
-  "overrides": [
-    {
-      "includes": ["issues.json"],
-      "formatter": { "enabled": false },
-      "linter": { "enabled": false }
-    }
-  ]
+  "assist": { "enabled": true }
 }

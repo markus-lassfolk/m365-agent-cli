@@ -1,7 +1,13 @@
 ---
 name: m365-agent-cli
+version: 1.0.0
 description: Microsoft 365 CLI (EWS + Graph) for calendar, mail, OneDrive, Planner, SharePoint, To Do, inbox rules, delegates, and subscriptions. Use when the user needs Outlook/Exchange, Graph, or M365 automation from the terminal.
-metadata: {"clawdbot":{"requires":{"bins":["m365-agent-cli"]}}}
+# `version` matches the npm CLI release; run `npm run sync-skill` after bumping package.json.
+metadata:
+  openclaw:
+    requires:
+      bins:
+        - m365-agent-cli
 ---
 
 # m365-agent-cli
@@ -87,9 +93,13 @@ Do **not** combine these flags with each other or with an explicit **`[end]`** d
 
 ## Agent tips
 
+### For agents
+
+End users can describe intent in **natural language** (e.g. “read mail in the shared mailbox”). The **agent** maps that to the right flags: use **`--mailbox`** for **EWS** commands and **`--user`** for **Microsoft Graph** commands, according to the command’s API (see the next bullet). The end user does **not** need to know whether a call is EWS or Graph.
+
 - Start with **list/read** commands, then use IDs from output for updates.
 - If auth fails, suggest `verify-token` and re-`login`; wrong **identity** profile means wrong cache file—check `--identity`.
-- For “on behalf of user X” Graph work, confirm **`--user`** is available on that subcommand via `--help` before assuming it works everywhere.
+- **Graph vs EWS “acting as another mailbox”:** use **`--user <upn-or-id>`** only on commands that call **Microsoft Graph** (`outlook-graph`, `graph-calendar`, `todo`, `rules`, `oof`, `schedule`, etc.) — it switches the API path to `/users/{id}/...`. Use **`--mailbox <email>`** on **EWS** commands (`calendar`, `mail`, `send`, `drafts`, `respond`, `findtime`, `delegates`, …) for **shared mailboxes** via Exchange SOAP. They are **not** interchangeable: a Graph subcommand will not accept `--mailbox`, and typical EWS mail/calendar flows do not use `--user`. Confirm the flag exists on that subcommand’s **`--help`** before assuming delegation works.
 - If a user still sees EWS change-key or conflict errors after an update, suggest **re-fetching the item ID** (another process may have modified the message/event) and retrying.
 - For **Outlook-colored categories** on mail/calendar items, use **names** that exist in **`outlook-categories list`** (or Outlook) so colors match; **Planner** and **To Do** use different label models.
 - For **attachments**, use **`mail -d`**, **`send`/`drafts`/`create-event`/`update-event`** flags above; **OneDrive/SharePoint files** use **`files`**, not EWS attachments.
