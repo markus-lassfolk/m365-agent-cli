@@ -1,6 +1,6 @@
 {
   "name": "m365-agent-cli",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "CLI for Microsoft 365/EWS using OAuth2 refresh token authentication",
   "repository": {
     "type": "git",

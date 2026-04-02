@@ -20,6 +20,21 @@ The workflow [`.github/workflows/release.yml`](../.github/workflows/release.yml)
 
 If publish fails with an authentication error, the trusted publisher is usually misconfigured (wrong repo, workflow name, or package owner on npm).
 
+### First publish (name not yet on the registry)
+
+Trusted Publishing only applies **after** the package exists under your npm account. For the **initial** `npm publish`:
+
+1. **Create an access token** on npm: [Access tokens](https://docs.npmjs.com/creating-and-viewing-access-tokens) — use a **Granular Access Token** with **Read and write** for the package (or **Automation** classic token if you prefer).
+2. **Locally** (or in a one-off CI job), from this repo at the release commit:
+   - `npm run embed-sha`
+   - `npm pack` (optional sanity check)
+   - `npm publish --access public`  
+     With a token: `npm config set //registry.npmjs.org/:_authToken=YOUR_TOKEN` (or `NPM_TOKEN` env with `npm publish` per npm docs). Do **not** commit the token.
+3. On [npmjs.com](https://www.npmjs.com/) open **`m365-agent-cli` → Package → Access → Trusted publishers** and add **GitHub Actions** with repository `markus-lassfolk/m365-agent-cli` and workflow file **`release.yml`** (see section above).
+4. From then on, **only** push tags to trigger [`.github/workflows/release.yml`](../.github/workflows/release.yml); CI publishes via OIDC (no `NPM_TOKEN` in GitHub).
+
+If the package name is already taken on npm, you must rename the package in `package.json` or obtain access from the owner before publishing.
+
 ## Cutting a release
 
 1. On `main`, set **`version`** in `package.json` to the new semver (e.g. `1.2.3`). Run **`npm run sync-skill`** so `skills/m365-agent-cli/SKILL.md` frontmatter `version:` matches the package (OpenClaw/ClawHub skill metadata). Commit, for example: `chore: release 1.2.3`.

@@ -113,7 +113,7 @@ m365-agent-cli verify-token
 
 ```bash
 --read-only         # Run in read-only mode, blocking mutating operations
---version, -V       # CLI version (1.0.0+)
+--version, -V       # CLI version (semver from package)
 ```
 
 Many **subcommands** accept their own flags. Common patterns (not every command has every flag—use `m365-agent-cli <command> --help`):
