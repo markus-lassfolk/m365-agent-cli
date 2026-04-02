@@ -131,10 +131,31 @@ export function graphError(message: string, code?: string, status?: number): Gra
   return { ok: false, error: { message, code, status } };
 }
 
+function resolveNextPath(nextLink: string, baseUrl: string): string {
+  try {
+    const normalizedBase = baseUrl.replace(/\/$/, '');
+    if (nextLink.startsWith(normalizedBase)) {
+      return nextLink.substring(normalizedBase.length);
+    }
+    const nextUrl = new URL(nextLink);
+    const baseUrlUrl = new URL(normalizedBase);
+    if (nextUrl.origin === baseUrlUrl.origin) {
+      const baseDir = baseUrlUrl.pathname.replace(/\/$/, '');
+      if (nextUrl.pathname.startsWith(baseDir)) {
+        return nextUrl.pathname.substring(baseDir.length) + nextUrl.search;
+      }
+    }
+    return '';
+  } catch {
+    return '';
+  }
+}
+
 export async function fetchAllPages<T>(
   token: string,
   initialPath: string,
-  errorMessage: string
+  errorMessage: string,
+  baseUrl: string = GRAPH_BASE_URL
 ): Promise<GraphResponse<T[]>> {
   const items: T[] = [];
   let path = initialPath;
@@ -142,7 +163,7 @@ export async function fetchAllPages<T>(
   while (path) {
     let result: GraphResponse<{ value: T[]; '@odata.nextLink'?: string }>;
     try {
-      result = await callGraph<{ value: T[]; '@odata.nextLink'?: string }>(token, path);
+      result = await callGraphAt<{ value: T[]; '@odata.nextLink'?: string }>(baseUrl, token, path);
     } catch (err) {
       if (err instanceof GraphApiError) {
         return graphError(err.message, err.code, err.status) as GraphResponse<T[]>;
@@ -157,27 +178,7 @@ export async function fetchAllPages<T>(
       ) as GraphResponse<T[]>;
     }
     items.push(...(result.data.value || []));
-    path = result.data['@odata.nextLink']
-      ? (() => {
-          try {
-            const nextLink = result.data['@odata.nextLink']!;
-            if (nextLink.startsWith(GRAPH_BASE_URL)) {
-              return nextLink.substring(GRAPH_BASE_URL.length);
-            }
-            const nextUrl = new URL(nextLink);
-            const baseUrlUrl = new URL(GRAPH_BASE_URL);
-            if (nextUrl.origin === baseUrlUrl.origin) {
-              const baseDir = baseUrlUrl.pathname.replace(/\/$/, '');
-              if (nextUrl.pathname.startsWith(baseDir)) {
-                return nextUrl.pathname.substring(baseDir.length) + nextUrl.search;
-              }
-            }
-            return '';
-          } catch {
-            return '';
-          }
-        })()
-      : '';
+    path = result.data['@odata.nextLink'] ? resolveNextPath(result.data['@odata.nextLink']!, baseUrl) : '';
   }
   return graphResult(items);
 }
@@ -192,7 +193,8 @@ export async function fetchGraphRaw(token: string, path: string, options: Reques
   });
 }
 
-export async function callGraph<T>(
+export async function callGraphAt<T>(
+  baseUrl: string,
   token: string,
   path: string,
   options: RequestInit = {},
@@ -203,7 +205,7 @@ export async function callGraph<T>(
 
   let response: Response;
   try {
-    response = await fetch(`${GRAPH_BASE_URL}${path}`, {
+    response = await fetch(`${baseUrl.replace(/\/$/, '')}${path}`, {
       ...options,
       headers: {
         Authorization: `Bearer ${token}`,
@@ -217,7 +219,6 @@ export async function callGraph<T>(
     });
   } catch (err) {
     clearTimeout(timeout);
-    // Network-level failure (DNS, connection refused, timeout, etc.) — surface it as a thrown error
     if (err instanceof Error && err.name === 'AbortError') {
       throw new GraphApiError(`Graph request timed out after ${GRAPH_TIMEOUT_MS / 1000}s`, undefined, 408);
     }
@@ -232,7 +233,72 @@ export async function callGraph<T>(
       message = json.error?.message || message;
       code = json.error?.code;
     } catch {
-      // Non-JSON error body — throw with HTTP status instead
+      clearTimeout(timeout);
+      throw new GraphApiError(message, code, response.status);
+    }
+    clearTimeout(timeout);
+    throw new GraphApiError(message, code, response.status);
+  }
+
+  if (!expectJson || response.status === 204) {
+    clearTimeout(timeout);
+    return graphResult(undefined as T);
+  }
+
+  const result = await response.json();
+  clearTimeout(timeout);
+  return graphResult(result as T);
+}
+
+export async function callGraph<T>(
+  token: string,
+  path: string,
+  options: RequestInit = {},
+  expectJson: boolean = true
+): Promise<GraphResponse<T>> {
+  return callGraphAt(GRAPH_BASE_URL, token, path, options, expectJson);
+}
+
+/** GET/PATCH a full Graph URL (e.g. `@odata.nextLink` / `@odata.deltaLink`). */
+export async function callGraphAbsolute<T>(
+  token: string,
+  absoluteUrl: string,
+  options: RequestInit = {},
+  expectJson: boolean = true
+): Promise<GraphResponse<T>> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), GRAPH_TIMEOUT_MS);
+
+  let response: Response;
+  try {
+    response = await fetch(absoluteUrl, {
+      ...options,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(expectJson ? { Accept: 'application/json' } : {}),
+        ...(options.body && !(options.body instanceof Uint8Array) && !(options.body instanceof ArrayBuffer)
+          ? { 'Content-Type': 'application/json' }
+          : {}),
+        ...(options.headers || {})
+      },
+      signal: controller.signal
+    });
+  } catch (err) {
+    clearTimeout(timeout);
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new GraphApiError(`Graph request timed out after ${GRAPH_TIMEOUT_MS / 1000}s`, undefined, 408);
+    }
+    throw new GraphApiError(err instanceof Error ? err.message : 'Graph request failed');
+  }
+
+  if (!response.ok) {
+    let message = `Graph request failed: HTTP ${response.status}`;
+    let code: string | undefined;
+    try {
+      const json = (await response.json()) as { error?: { code?: string; message?: string } };
+      message = json.error?.message || message;
+      code = json.error?.code;
+    } catch {
       clearTimeout(timeout);
       throw new GraphApiError(message, code, response.status);
     }

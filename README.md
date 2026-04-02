@@ -6,14 +6,13 @@ A powerful command-line interface for Microsoft 365 using Exchange Web Services 
 
 ## The Ultimate AI Personal Assistant (PA)
 
-The Personal Assistant (PA) playbook and skills have been moved to their own dedicated repository. 
+The Personal Assistant (PA) playbook and skills have been moved to their own dedicated repository.
 
 To use this tool as a highly effective Personal Assistant within OpenClaw, please visit the **[openclaw-personal-assistant](https://github.com/markus-lassfolk/openclaw-personal-assistant)** repository for the Master Guide, ecosystem requirements, and skill installation instructions.
 
 ---
 
 ## Installation
-
 
 ```bash
 # Clone the repository
@@ -45,18 +44,18 @@ m365-agent-cli update
 `update` checks the npm registry and runs `npm install -g m365-agent-cli@latest` (or `bun install -g` when you run the CLI with Bun). Maintainers: versioning, tags, and npm publish are documented in [docs/RELEASE.md](docs/RELEASE.md).
 
 ## Authentication
-> **Need help setting up the Azure AD App?** Follow our [Automated Entra ID App Setup Guide](docs/ENTRA_SETUP.md) for bash and PowerShell scripts that configure the exact permissions you need in seconds.
 
-> **EWS retirement:** Microsoft is phasing out EWS for Exchange Online in favor of Microsoft Graph. Track migration work in [docs/EWS_TO_GRAPH_MIGRATION_EPIC.md](docs/EWS_TO_GRAPH_MIGRATION_EPIC.md) (phased plan, inventory, Graph-primary + EWS-fallback strategy).
+**Need help setting up the Azure AD App?** Follow our [Automated Entra ID App Setup Guide](docs/ENTRA_SETUP.md) for bash and PowerShell scripts that configure the exact permissions you need in seconds.
 
-> **Optional error reporting:** To receive CLI crashes and unhandled errors in [GlitchTip](https://glitchtip.com/) (Sentry-compatible), set **`GLITCHTIP_DSN`** (or **`SENTRY_DSN`**) in your environment. See [docs/GLITCHTIP.md](docs/GLITCHTIP.md).
+**EWS retirement:** Microsoft is phasing out EWS for Exchange Online in favor of Microsoft Graph. Track migration work in [docs/EWS_TO_GRAPH_MIGRATION_EPIC.md](docs/EWS_TO_GRAPH_MIGRATION_EPIC.md) (phased plan, inventory, Graph-primary + EWS-fallback strategy).
 
+**Optional error reporting:** To receive CLI crashes and unhandled errors in [GlitchTip](https://glitchtip.com/) (Sentry-compatible), set **`GLITCHTIP_DSN`** (or **`SENTRY_DSN`**) in your environment. See [docs/GLITCHTIP.md](docs/GLITCHTIP.md).
 
 m365-agent-cli uses OAuth2 with a refresh token to authenticate against Microsoft 365. You need an Azure AD app registration.
 
 ### Setup
 
-If you used the setup scripts from `docs/ENTRA_SETUP.md`, your `EWS_CLIENT_ID` is already appended to your `~/.config/m365-agent-cli/.env` file. 
+If you used the setup scripts from `docs/ENTRA_SETUP.md`, your `EWS_CLIENT_ID` is already appended to your `~/.config/m365-agent-cli/.env` file.
 
 The easiest way to obtain your refresh tokens is to run the interactive login command:
 
@@ -135,7 +134,7 @@ When read-only mode is on (`READ_ONLY_MODE=true` in env / `~/.config/m365-agent-
 The table below matches **`checkReadOnly` in the source** (search the repo for `checkReadOnly(` to verify after changes). Anything **not** listed here is either read-only or not wired to read-only yet.
 
 | Command | Blocked actions (read-only on) |
-|---------|--------------------------------|
+| --- | --- |
 | `create-event` | Entire command |
 | `update-event` | Entire command |
 | `delete-event` | Entire command |
@@ -147,11 +146,11 @@ The table below matches **`checkReadOnly` in the source** (search the repo for `
 | `drafts` | `--create`, `--edit`, `--send`, `--delete` (plain list/read allowed) |
 | `folders` | `--create`, `--rename` (with `--to`), `--delete` (listing folders allowed) |
 | `files` | `upload`, `upload-large`, `delete`, `share`, `restore`, `checkin` |
-| `planner` | `create-task`, `update-task` |
+| `planner` | `create-task`, `update-task`, `delete-task`, `create-plan`, `update-plan`, `delete-plan`, `create-bucket`, `update-bucket`, `delete-bucket`, `update-task-details`, `update-plan-details`, `add-checklist-item`, `update-checklist-item`, `remove-checklist-item`, `add-reference`, `remove-reference`, `update-task-board`, `add-favorite`, `remove-favorite` |
 | `sharepoint` / `sp` | `create-item`, `update-item` |
 | `pages` | `update`, `publish` |
 | `rules` | `create`, `update`, `delete` |
-| `todo` | `create`, `update`, `complete`, `delete`, `add-checklist` |
+| `todo` | `create`, `update`, `complete`, `delete`, `add-checklist`, `update-checklist`, `delete-checklist`, `create-list`, `update-list`, `delete-list`, `add-attachment`, `delete-attachment`, `add-reference-attachment`, `add-linked-resource`, `remove-linked-resource`, `upload-attachment-large`, `linked-resource` (`create`, `update`, `delete`), `extension` (`set`, `update`, `delete`), `list-extension` (`set`, `update`, `delete`) |
 | `subscribe` | Creating a subscription; `subscribe cancel <id>` |
 | `delegates` | `add`, `update`, `remove` |
 | `oof` | Write path only (when `--status`, `--internal-message`, `--external-message`, `--start`, or `--end` is used to change settings) |
@@ -162,13 +161,15 @@ The table below matches **`checkReadOnly` in the source** (search the repo for `
 
 You can enable Read-Only mode in two ways:
 
-1. **Global Flag**: Pass `--read-only` to any command.
+1. **Global flag**: Pass **`--read-only` immediately after** `m365-agent-cli` (before the subcommand). Commander treats this as a root option; placing it after the subcommand will not enable read-only mode.
+
    ```bash
-   m365-agent-cli create-event "Test" 09:00 10:00 --read-only
+   m365-agent-cli --read-only create-event "Test" 09:00 10:00
    # Error: Command blocked. The CLI is running in read-only mode.
    ```
 
-2. **Environment Variable**: Set `READ_ONLY_MODE=true` in your environment or `~/.config/m365-agent-cli/.env` file.
+2. **Environment variable**: Set `READ_ONLY_MODE=true` in your environment or `~/.config/m365-agent-cli/.env` file.
+
    ```bash
    export READ_ONLY_MODE=true
    m365-agent-cli planner update-task <taskId> --title "New"
@@ -670,6 +671,7 @@ m365-agent-cli files checkin <fileId> --comment "Updated Q1 numbers"
 Legacy Office formats such as `.doc`, `.xls`, and `.ppt` must be converted first.
 
 **Important clarification:**
+
 - m365-agent-cli does **not** participate in the real-time editing session
 - Office Online handles the actual co-authoring once the user opens the returned URL
 - m365-agent-cli handles the file lifecycle around that workflow
@@ -767,6 +769,26 @@ m365-agent-cli find "smith" --people
 
 ---
 
+## Additional commands
+
+These commands are not expanded step-by-step above; use **`m365-agent-cli <command> --help`** for flags and examples.
+
+| Command | What it does |
+| --- | --- |
+| **`forward-event`** (`forward`) | Forward a calendar invitation to more recipients (Graph). |
+| **`counter`** (`propose-new-time`) | Propose a new time for an existing event (Graph). |
+| **`schedule`** | Merged free/busy for one or more people over a time window (`getSchedule`). |
+| **`suggest`** | Meeting-time suggestions via Graph (`findMeetingTimes`). |
+| **`rooms`** | Search and filter room resources (capacity, equipment, floor, etc.). |
+| **`oof`** | Mailbox out-of-office **settings** (Graph mailbox settings API). |
+| **`auto-reply`** | EWS **inbox-rule** based auto-reply templates (distinct from `oof`). |
+| **`rules`** | Inbox message rules (Graph). |
+| **`delegates`** | Calendar/mailbox delegate permissions (EWS). |
+| **`subscribe`** / **`subscriptions`** | Graph **change notifications** (create or list/cancel subscriptions). |
+| **`serve`** | Local **webhook receiver** for subscription callbacks (pair with `subscribe`). |
+
+---
+
 ## Examples
 
 ### Morning Routine Script
@@ -827,14 +849,12 @@ m365-agent-cli mail --reply 1 --message "Done!" --mailbox shared@company.com
 
 ---
 
-## Recent Security Hardening
+## Security practices
 
-Recent commits have strengthened input validation and API security:
-
-- **Graph search queries** and **markdown links** are now properly escaped/validated
-- **Date and email input validation** has been tightened
-- **Token cache file permissions** are secured (readable only by owner)
-- **String pattern replacement** bug fixed (prevents regex injection via malformed `$pattern`)
+- **Graph search queries** and **markdown links** are validated/escaped where applicable
+- **Date and email inputs** are validated before API calls
+- **Token cache files** under `~/.config/m365-agent-cli/` are written with owner-only permissions where supported
+- **String pattern replacement** avoids regex injection from malformed `$pattern` values
 
 ---
 
