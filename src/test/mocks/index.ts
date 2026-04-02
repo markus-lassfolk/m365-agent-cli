@@ -2,6 +2,9 @@
  * Mock fetch setup for CLI integration tests.
  * Intercepts all HTTP calls and returns mock responses based on URL and request body.
  */
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   makeGetCalendarItemDetailResponse,
   mockAddAttachmentResponse,
@@ -43,6 +46,17 @@ import {
   mockUpdateEventResponse,
   mockUpdateMailFolderResponse
 } from './responses.js';
+
+const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '../../..');
+
+function npmRegistryMockLatestVersion(): string {
+  try {
+    const raw = readFileSync(join(REPO_ROOT, 'package.json'), 'utf8');
+    return (JSON.parse(raw) as { version: string }).version;
+  } catch {
+    return '1.0.0';
+  }
+}
 
 type MockFn = (url: string, request: Request) => { status: number; body: string; contentType: string } | null;
 
@@ -105,6 +119,10 @@ export function createMockFetch(): any {
       }
     } catch {
       // Not a valid URL, skip OAuth check
+    }
+
+    if (url.includes('registry.npmjs.org/m365-agent-cli/latest')) {
+      return makeJsonResponse({ version: npmRegistryMockLatestVersion() });
     }
 
     // EWS endpoint

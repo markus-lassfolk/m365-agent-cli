@@ -35,10 +35,21 @@ bun link
 m365-agent-cli <command>
 ```
 
+### Published package (npm)
+
+```bash
+npm install -g m365-agent-cli
+m365-agent-cli update
+```
+
+`update` checks the npm registry and runs `npm install -g m365-agent-cli@latest` (or `bun install -g` when you run the CLI with Bun). Maintainers: versioning, tags, and npm publish are documented in [docs/RELEASE.md](docs/RELEASE.md).
+
 ## Authentication
 > **Need help setting up the Azure AD App?** Follow our [Automated Entra ID App Setup Guide](docs/ENTRA_SETUP.md) for bash and PowerShell scripts that configure the exact permissions you need in seconds.
 
 > **EWS retirement:** Microsoft is phasing out EWS for Exchange Online in favor of Microsoft Graph. Track migration work in [docs/EWS_TO_GRAPH_MIGRATION_EPIC.md](docs/EWS_TO_GRAPH_MIGRATION_EPIC.md) (phased plan, inventory, Graph-primary + EWS-fallback strategy).
+
+> **Optional error reporting:** To receive CLI crashes and unhandled errors in [GlitchTip](https://glitchtip.com/) (Sentry-compatible), set **`GLITCHTIP_DSN`** (or **`SENTRY_DSN`**) in your environment. See [docs/GLITCHTIP.md](docs/GLITCHTIP.md).
 
 
 m365-agent-cli uses OAuth2 with a refresh token to authenticate against Microsoft 365. You need an Azure AD app registration.

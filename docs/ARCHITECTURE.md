@@ -192,6 +192,10 @@ The following are explicitly NOT part of m365-agent-cli's roadmap:
 - **SharePoint / OneDrive business** — separate auth domain
 - **Azure AD B2C guest accounts** — different auth surface
 
+## Optional error reporting (GlitchTip)
+
+When **`GLITCHTIP_DSN`** or **`SENTRY_DSN`** is set, the CLI may initialize **`@sentry/node`** (Sentry-compatible ingest) to report **uncaught exceptions**, **unhandled rejections**, and **Commander parse errors** — only when the install matches the **latest npm release** and the **embedded commit** matches the GitHub **`v{version}`** tag (unless overridden by env); see [GLITCHTIP.md](./GLITCHTIP.md). Events are **scrubbed** (no argv text, user, or breadcrumbs; redacted paths and messages) so reports do not include mail content or usernames. Default `beforeSend` also filters common **network errno** values and **OAuth token** failure messages. No reporting when DSN is unset.
+
 ## Security Considerations
 
 - Tokens are live secrets — never log or print token contents

@@ -1,0 +1,3 @@
+# Tests are not needed in the published package (src is included via package.json "files")
+src/test
+**/*.test.ts

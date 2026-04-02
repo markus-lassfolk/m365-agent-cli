@@ -22,14 +22,23 @@
     "format": "biome format --write .",
     "format:check": "biome format --max-diagnostics=none .",
     "biome:check": "biome check --max-diagnostics=none .",
+    "embed-sha": "node scripts/embed-git-sha.mjs",
     "test": "bun test"
   },
+  "files": [
+    "src",
+    "package.json",
+    "LICENSE"
+  ],
   "dependencies": {
-    "commander": "^12.0.0"
+    "@sentry/node": "^8.55.1",
+    "commander": "^12.0.0",
+    "semver": "^7.7.1"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.10",
     "@types/bun": "latest",
+    "@types/semver": "^7.5.8",
     "typescript": "^5.0.0"
   }
 }

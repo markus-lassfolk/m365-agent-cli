@@ -136,6 +136,7 @@ import { subscribeCommand } from '../commands/subscribe.js';
 import { subscriptionsCommand } from '../commands/subscriptions.js';
 import { suggestCommand } from '../commands/suggest.js';
 import { todoCommand } from '../commands/todo.js';
+import { updateCommand } from '../commands/update.js';
 import { updateEventCommand } from '../commands/update-event.js';
 import { whoamiCommand } from '../commands/whoami.js';
 
@@ -167,6 +168,7 @@ function makeProgram(): Command {
     .version('0.1.0')
     .option('--read-only', 'Run in read-only mode, blocking any mutating operations')
     .addCommand(whoamiCommand);
+  p.addCommand(updateCommand);
   p.addCommand(autoReplyCommand);
   p.addCommand(calendarCommand);
   p.addCommand(findtimeCommand);
@@ -962,6 +964,35 @@ describe('global options', () => {
     //     expect(result.stdout).toContain('calendar');
     //     expect(result.stdout).toContain('mail');
     //     expect(result.stdout).toContain('files');
+  });
+});
+
+describe('update command', () => {
+  test('update --check when up to date (mock npm)', async () => {
+    const result = await runM365AgentCli('update --check');
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('up to date');
+  });
+
+  test('update --check when newer exists on npm', async () => {
+    const { clearMockFetch, setMockFetch } = await import('./mocks/index.js');
+    setMockFetch((url) => {
+      if (url.includes('registry.npmjs.org/m365-agent-cli/latest')) {
+        return {
+          status: 200,
+          body: JSON.stringify({ version: '999.0.0' }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    try {
+      const result = await runM365AgentCli('update --check');
+      expect(result.exitCode).toBe(1);
+      expect(result.stdout).toContain('Update available');
+    } finally {
+      clearMockFetch();
+    }
   });
 });
 
