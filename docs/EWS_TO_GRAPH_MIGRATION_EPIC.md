@@ -1,7 +1,7 @@
 # Epic: Migrate Exchange Web Services (EWS) to Microsoft Graph
 
-**Status:** In progress — **Graph coverage has grown** (parallel commands + shared libs); **no `auto` router** / `M365_*_BACKEND` yet; **primary** mail/calendar/folders flows remain **EWS-first**.  
-**GitHub Epic:** [#204 — EWS → Microsoft Graph migration](https://github.com/markus-lassfolk/m365-agent-cli/issues/204) (17 sub-issues linked under the epic in GitHub)  
+**Status:** In progress — **`dev_v2`** adds **`M365_EXCHANGE_BACKEND`** (`graph` \| `ews` \| `auto`, default **`graph`**) and **`whoami` → Graph `/me`**; other mail/calendar commands still **EWS-primary** until wired. Tracker: **[`docs/GRAPH_V2_STATUS.md`](./GRAPH_V2_STATUS.md)**.  
+**GitHub Epic:** [#204 — EWS → Microsoft Graph migration](https://github.com/markus-lassfolk/m365-agent-cli/issues/204) (sub-issues under the epic)  
 **Driver:** [Exchange Online retirement of EWS](https://learn.microsoft.com/en-us/graph/migrate-exchange-web-services-overview) (phased; confirm dates in Microsoft docs and Message Center).  
 **Strategy:** Phased migration with **Microsoft Graph as the primary implementation** and **EWS as fallback** until each slice is verified; then remove EWS for that slice.
 
@@ -76,7 +76,7 @@ Until a slice is marked **EWS removed**, implementations should follow a consist
 | Phase 0 foundation | Router, env, Azure scopes inventory | — | **Not implemented:** no `M365_*_BACKEND` / `auto` router yet | [#205](https://github.com/markus-lassfolk/m365-agent-cli/issues/205) | 🟡 Epic + issues exist; router TBD |
 | Calendar read | `calendar` | `GET calendarView` / shared calendars | **Default `calendar` still EWS.** **`graph-calendar`** adds Graph list/view/get + invite responses | [#206](https://github.com/markus-lassfolk/m365-agent-cli/issues/206) | 🟡 Graph parallel path ✅; switch default ⬜ |
 | Free-busy / findtime | `findtime`, parts of schedule | `calendar/getSchedule` | **`schedule`** = Graph `getSchedule` ✅. **`suggest`** = `findMeetingTimes` ✅. **`findtime`** still **`getScheduleViaOutlook`** (EWS) | [#207](https://github.com/markus-lassfolk/m365-agent-cli/issues/207) | 🟡 |
-| Whoami | `whoami` | `/me` (+ optional mailboxSettings) | Still **`getOwaUserInfo`** (EWS) | [#208](https://github.com/markus-lassfolk/m365-agent-cli/issues/208) | ⬜ |
+| Whoami | `whoami` | `/me` (+ optional mailboxSettings) | **`dev_v2`:** Graph `/me` when `M365_EXCHANGE_BACKEND=graph` or `auto`; EWS when `ews` | [#208](https://github.com/markus-lassfolk/m365-agent-cli/issues/208) | 🟡 |
 | Mail CRUD + actions | `mail` | Messages, move, patch, send | **`outlook-graph`** implements broad Graph mail REST ✅. **`mail`** still EWS | [#209](https://github.com/markus-lassfolk/m365-agent-cli/issues/209) | 🟡 |
 | Send | `send` | `sendMail` / draft send | EWS `sendEmail` | [#210](https://github.com/markus-lassfolk/m365-agent-cli/issues/210) | ⬜ |
 | Drafts | `drafts` | Graph draft messages | EWS | [#211](https://github.com/markus-lassfolk/m365-agent-cli/issues/211) | ⬜ |
@@ -102,15 +102,15 @@ Legend: ⬜ not started / EWS-only · 🟡 in progress / partial Graph · ✅ do
 ### Phase 0 — Foundation
 
 - [x] Create GitHub Epic + child issues from inventory table ([#204](https://github.com/markus-lassfolk/m365-agent-cli/issues/204), [#205](https://github.com/markus-lassfolk/m365-agent-cli/issues/205)–[#221](https://github.com/markus-lassfolk/m365-agent-cli/issues/221))  
-- [ ] Agree env vars / `auto` fallback behavior (see above)  
-- [ ] Add minimal backend router module stub (no behavior change yet) or document “first PR adds router”  
+- [x] Env var **`M365_EXCHANGE_BACKEND`** + module **`exchange-backend.ts`** (default **`graph`** on `dev_v2`) — see [`GRAPH_V2_STATUS.md`](./GRAPH_V2_STATUS.md)  
+- [ ] Agree default for **`main`** after merge (`graph` vs `auto`)  
 - [ ] Inventory Azure AD app permissions needed for full Graph parity (mail, calendar, mailboxSettings, …)
 
 **Exit:** Epic linked; Phase 1 issue open.
 
 ### Phase 1 — Read-only paths
 
-- [ ] `whoami` → Graph  
+- [x] `whoami` → Graph (`/me`) when backend is `graph` or `auto` — [ ] other read paths  
 - [x] Graph **parallel** calendar read + invite responses (`graph-calendar`) — default `calendar` still EWS  
 - [x] `schedule` / `suggest` on Graph — [ ] `findtime` still EWS (`getScheduleViaOutlook`)  
 - [ ] Read paths keep EWS fallback via `auto` until verified  
@@ -177,4 +177,4 @@ Legend: ⬜ not started / EWS-only · 🟡 in progress / partial Graph · ✅ do
 
 ---
 
-*Last updated: 2026-04-02 — Code review: Graph vs EWS status; inventory + roadmap aligned to current `src/commands` / libs.*
+*Last updated: 2026-04-02 — `dev_v2`: `M365_EXCHANGE_BACKEND` + Graph `whoami`; see [`GRAPH_V2_STATUS.md`](./GRAPH_V2_STATUS.md).*
