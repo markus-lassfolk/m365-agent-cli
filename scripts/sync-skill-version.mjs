@@ -20,7 +20,7 @@ if (!ver || typeof ver !== 'string') {
 }
 
 const skillPath = join(root, 'skills', 'm365-agent-cli', 'SKILL.md');
-let s = readFileSync(skillPath, 'utf8');
+const s = readFileSync(skillPath, 'utf8');
 
 if (!s.startsWith('---')) {
   console.error('sync-skill-version: SKILL.md must start with YAML frontmatter ---');

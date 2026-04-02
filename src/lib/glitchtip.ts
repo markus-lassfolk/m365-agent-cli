@@ -221,9 +221,7 @@ export async function initGlitchTip(): Promise<void> {
 
   const releaseFromEnv = process.env.GLITCHTIP_RELEASE?.trim();
   const release =
-    releaseFromEnv && releaseFromEnv.length > 0
-      ? releaseFromEnv
-      : `m365-agent-cli@${getPackageVersionSync()}`;
+    releaseFromEnv && releaseFromEnv.length > 0 ? releaseFromEnv : `m365-agent-cli@${getPackageVersionSync()}`;
 
   init({
     dsn,
