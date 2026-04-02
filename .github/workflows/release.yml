@@ -72,7 +72,8 @@ jobs:
           npm config set registry https://registry.npmjs.org/
           if [ -n "$NPM_TOKEN" ]; then
             echo "Publishing with repository secret NPM_TOKEN (no --provenance: that path requires OIDC-only auth)."
-            # Store the token in user npmrc (literal value). A project .npmrc with \${NPM_TOKEN} is not always expanded and can send no auth → E404.
+            # Trim accidental newlines from the secret; literal token in user npmrc.
+            NPM_TOKEN="$(printf '%s' "$NPM_TOKEN" | tr -d '\r\n')"
             unset NODE_AUTH_TOKEN || true
             rm -f .npmrc
             npm config set //registry.npmjs.org/:_authToken "$NPM_TOKEN"
