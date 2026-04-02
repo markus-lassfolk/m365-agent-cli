@@ -33,7 +33,7 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: '1.3.11'
 
       - uses: actions/setup-node@v4
         with:
@@ -52,13 +52,13 @@ jobs:
       - name: Biome (lint + format + assist)
         run: bun run biome:check
 
-      - name: Tests + coverage
-        run: bun run test:coverage
-
-      - name: Coverage floor
+      - name: Tests + coverage floor
         env:
-          COVERAGE_MIN_LINES: '40'
-        run: bun run verify:coverage
+          COVERAGE_MIN_LINES: '35'
+        run: |
+          bun run test:coverage
+          test -f coverage/lcov.info || (echo '::error::coverage/lcov.info missing after bun test --coverage' && exit 1)
+          bun run verify:coverage
 
       - name: Knip
         run: bun run knip

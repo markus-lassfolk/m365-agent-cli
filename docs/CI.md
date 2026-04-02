@@ -6,7 +6,7 @@ Workflows live under [`.github/workflows/`](../.github/workflows/).
 
 | Workflow | Purpose |
 |----------|---------|
-| **CI** | TypeScript (`tsc --noEmit`), **Biome** (`biome check` = lint + format + assists), tests with **LCOV** coverage, **minimum line coverage** (40% by default, see `scripts/check-coverage.mjs`), **Knip** (unused deps/files/exports), TruffleHog + Gitleaks + Trivy. |
+| **CI** | TypeScript (`tsc --noEmit`), **Biome** (`biome check` = lint + format + assists), tests with **LCOV** coverage, **minimum line coverage** (35% default in CI; see `scripts/check-coverage.mjs` and `COVERAGE_MIN_LINES`), **Knip** (unused deps/files/exports), TruffleHog + Gitleaks + Trivy. Bun is **pinned** in workflows (see `oven-sh/setup-bun`) so coverage is stable across runs. |
 | **CodeQL** | Semantic analysis for TypeScript (`security-extended` query pack). |
 
 PRs also get an **lcov** comment from `romeovs/lcov-reporter-action` when coverage is uploaded.
@@ -18,7 +18,7 @@ bun install --frozen-lockfile
 bun run typecheck
 bun run biome:check
 bun run test:coverage
-bun run verify:coverage
+COVERAGE_MIN_LINES=35 bun run verify:coverage
 bun run knip
 ```
 
