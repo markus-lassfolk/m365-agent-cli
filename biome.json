@@ -21,7 +21,11 @@
       "complexity": { "noForEach": "off" },
       "suspicious": { "noExplicitAny": "off", "noImplicitAnyLet": "warn" },
       "performance": { "noDelete": "off" },
-      "correctness": { "noUnusedVariables": "error", "noSwitchDeclarations": "warn" },
+      "correctness": {
+        "noUnusedVariables": "error",
+        "noUnusedImports": "error",
+        "noSwitchDeclarations": "warn"
+      },
       "style": { "noNonNullAssertion": "off" }
     }
   },

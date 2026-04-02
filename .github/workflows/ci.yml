@@ -8,9 +8,16 @@ on:
   schedule:
     - cron: '0 0 * * 0' # Weekly run to catch new vulnerabilities
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
-  checks:
-    name: Code Quality & Tests
+  quality:
+    name: Quality gate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,40 +26,42 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Install Dependencies
-        run: bun install
+      - name: Install dependencies (frozen lockfile)
+        run: bun install --frozen-lockfile
 
-      - name: Type Check
+      - name: Typecheck
         run: bun run typecheck
 
-      - name: Lint (Biome)
-        run: bun run lint
+      - name: Biome (lint + format + assist)
+        run: bun run biome:check
 
-      - name: Formatting Check (Biome)
-        run: bun run format:check
+      - name: Tests + LCOV coverage
+        run: bun run test:coverage
 
-      - name: Run Tests with Coverage
-        run: bun test --coverage --coverage-reporter=lcov
+      - name: Coverage floor
+        env:
+          COVERAGE_MIN_LINES: '40'
+        run: bun run verify:coverage
 
-      - name: Upload Coverage
+      - name: Knip (unused files, deps, exports)
+        run: bun run knip
+
+      - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
           path: coverage/
           if-no-files-found: ignore
 
-      - name: Dead Code Analysis (Knip)
-        run: bunx knip --no-exit-code
-
   security:
-    name: Security & Secrets Scanning
+    name: Security & secrets
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: TruffleHog Secret Scanning
+      - name: TruffleHog (verified secrets only)
         uses: trufflesecurity/trufflehog@main
         continue-on-error: true
         with:
@@ -61,12 +70,12 @@ jobs:
           head: HEAD
           extra_args: --only-verified
 
-      - name: Gitleaks Secret Scanning
+      - name: Gitleaks
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Run Trivy vulnerability scanner
+      - name: Trivy (filesystem, HIGH+CRITICAL)
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
@@ -74,35 +83,22 @@ jobs:
           format: 'table'
           severity: 'CRITICAL,HIGH'
 
-  complexity:
-    name: Code Metrics & Quality
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Install Dependencies
-        run: bun install
-
-      - name: Run Biome Analyzer
-        run: bun run biome:check
-
-  coverage:
-    name: Code Coverage
-    needs: checks
+  coverage-pr:
+    name: PR coverage comment
+    needs: [quality]
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
-      - name: Download Coverage Artifact
+      - name: Download coverage artifact
         uses: actions/download-artifact@v4
         with:
           name: coverage-report
           path: coverage/
-      - name: Report Coverage
+      - name: Report coverage on PR
         uses: romeovs/lcov-reporter-action@v0.3.1
         with:
           lcov-file: ./coverage/lcov.info

@@ -49,14 +49,19 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
-      - name: Lint
-        run: bun run lint
+      - name: Biome (lint + format + assist)
+        run: bun run biome:check
 
-      - name: Format check
-        run: bun run format:check
+      - name: Tests + coverage
+        run: bun run test:coverage
 
-      - name: Tests
-        run: bun test
+      - name: Coverage floor
+        env:
+          COVERAGE_MIN_LINES: '40'
+        run: bun run verify:coverage
+
+      - name: Knip
+        run: bun run knip
 
       - name: Publish to npm (OIDC + provenance)
         run: npm publish --access public --provenance
