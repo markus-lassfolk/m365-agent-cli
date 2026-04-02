@@ -75,7 +75,7 @@ jobs:
             # Avoid mixing with any OIDC NODE_AUTH_TOKEN from the runner; use project .npmrc + env substitution (npm CI pattern).
             unset NODE_AUTH_TOKEN || true
             printf '%s\n' '//registry.npmjs.org/:_authToken=${NPM_TOKEN}' > .npmrc
-            npm whoami || { echo "::error::npm whoami failed — NPM_TOKEN must be a publish-capable token for the npm user that owns m365-agent-cli (granular token: include this package with Read and write)."; exit 1; }
+            # Do not run npm whoami here: granular access tokens often return 403 on GET /-/whoami even when publish works.
             npm publish --access public
           else
             echo "Publishing with Trusted Publishing (OIDC) + provenance."
