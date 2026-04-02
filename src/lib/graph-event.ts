@@ -80,3 +80,55 @@ export async function proposeNewTime(options: ProposeNewTimeOptions): Promise<Gr
     return graphError(err instanceof Error ? err.message : 'Failed to propose new time');
   }
 }
+
+export interface EventInvitationResponseOptions {
+  token: string;
+  eventId: string;
+  comment?: string;
+  /** Default true (send response to organizer). */
+  sendResponse?: boolean;
+  user?: string;
+}
+
+export async function acceptEventInvitation(options: EventInvitationResponseOptions): Promise<GraphResponse<void>> {
+  return postEventAction(options, 'accept');
+}
+
+export async function declineEventInvitation(options: EventInvitationResponseOptions): Promise<GraphResponse<void>> {
+  return postEventAction(options, 'decline');
+}
+
+/** Tentatively accept without proposing a new time (Graph POST .../tentativelyAccept). */
+export async function tentativelyAcceptEventInvitation(
+  options: EventInvitationResponseOptions
+): Promise<GraphResponse<void>> {
+  return postEventAction(options, 'tentativelyAccept');
+}
+
+async function postEventAction(
+  options: EventInvitationResponseOptions,
+  action: 'accept' | 'decline' | 'tentativelyAccept'
+): Promise<GraphResponse<void>> {
+  const { token, eventId, comment, user } = options;
+  const sendResponse = options.sendResponse !== false;
+
+  const body: { comment?: string; sendResponse: boolean } = { sendResponse };
+  if (comment) body.comment = comment;
+
+  try {
+    return await callGraph<void>(
+      token,
+      `${graphUserPath(user, `events/${encodeURIComponent(eventId)}/${action}`)}`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body)
+      },
+      false
+    );
+  } catch (err) {
+    if (err instanceof GraphApiError) {
+      return graphError(err.message, err.code, err.status);
+    }
+    return graphError(err instanceof Error ? err.message : 'Failed to respond to event');
+  }
+}

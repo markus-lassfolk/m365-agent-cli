@@ -146,18 +146,20 @@ The table below matches **`checkReadOnly` in the source** (search the repo for `
 | `drafts` | `--create`, `--edit`, `--send`, `--delete` (plain list/read allowed) |
 | `folders` | `--create`, `--rename` (with `--to`), `--delete` (listing folders allowed) |
 | `files` | `upload`, `upload-large`, `delete`, `share`, `restore`, `checkin` |
-| `planner` | `create-task`, `update-task`, `delete-task`, `create-plan`, `update-plan`, `delete-plan`, `create-bucket`, `update-bucket`, `delete-bucket`, `update-task-details`, `update-plan-details`, `add-checklist-item`, `update-checklist-item`, `remove-checklist-item`, `add-reference`, `remove-reference`, `update-task-board`, `add-favorite`, `remove-favorite` |
+| `planner` | `create-task`, `update-task`, `delete-task`, `create-plan` (`--group` or beta `--roster`), `update-plan`, `delete-plan`, `create-bucket`, `update-bucket`, `delete-bucket`, `list-user-tasks`, `list-user-plans`, `update-task-details`, `update-plan-details`, `add-checklist-item`, `update-checklist-item`, `remove-checklist-item`, `add-reference`, `remove-reference`, `update-task-board`, `add-favorite`, `remove-favorite`, `roster` (beta: `create`, `get`, `list-members`, `add-member`, `remove-member`) |
 | `sharepoint` / `sp` | `create-item`, `update-item` |
 | `pages` | `update`, `publish` |
 | `rules` | `create`, `update`, `delete` |
-| `todo` | `create`, `update`, `complete`, `delete`, `add-checklist`, `update-checklist`, `delete-checklist`, `create-list`, `update-list`, `delete-list`, `add-attachment`, `delete-attachment`, `add-reference-attachment`, `add-linked-resource`, `remove-linked-resource`, `upload-attachment-large`, `linked-resource` (`create`, `update`, `delete`), `extension` (`set`, `update`, `delete`), `list-extension` (`set`, `update`, `delete`) |
+| `todo` | `create`, `update`, `complete`, `delete`, `add-checklist`, `update-checklist`, `delete-checklist`, `get-checklist-item`, `create-list`, `update-list`, `delete-list`, `add-attachment`, `get-attachment`, `download-attachment`, `delete-attachment`, `add-reference-attachment`, `add-linked-resource`, `remove-linked-resource`, `upload-attachment-large`, `linked-resource` (`create`, `update`, `delete`), `extension` (`set`, `update`, `delete`), `list-extension` (`set`, `update`, `delete`) |
 | `subscribe` | Creating a subscription; `subscribe cancel <id>` |
 | `delegates` | `add`, `update`, `remove` |
 | `oof` | Write path only (when `--status`, `--internal-message`, `--external-message`, `--start`, or `--end` is used to change settings) |
 | `auto-reply` | Entire command (EWS auto-reply rules) |
 | `outlook-categories` | `create`, `update`, `delete` (not `list`) |
+| `outlook-graph` | `create-folder`, `update-folder`, `delete-folder`, `send-mail`, `patch-message`, `delete-message`, `move-message`, `copy-message`, `create-reply`, `create-reply-all`, `create-forward`, `send-message`, `create-contact`, `update-contact`, `delete-contact` |
+| `graph-calendar` | `accept`, `decline`, `tentative` |
 
-**Intentionally not gated** (no `checkReadOnly` today): read/query helpers such as `schedule`, `suggest`, `findtime`, `calendar`, `subscriptions list`, `rules list` / `rules get`, `todo` list-only usage, **`outlook-categories list`** (mutating `outlook-categories create|update|delete` **are** gated), `files` list/search/meta/download/convert/analytics/versions, etc. Those calls do not use the guard in code; if a new subcommand adds writes, it should call `checkReadOnly` and this table should be updated.
+**Intentionally not gated** (no `checkReadOnly` today): read/query helpers such as `schedule`, `suggest`, `findtime`, `calendar`, `graph-calendar list-calendars` / `get-calendar` / `list-view` / `get-event`, `outlook-graph list-mail` / `list-messages` / `list-message-attachments` / `get-message-attachment` / `download-message-attachment` / `get-message` / `list-folders` / `list-contacts` / `get-contact` / `get-folder`, `subscriptions list`, `rules list` / `rules get`, `todo` list-only usage, **`outlook-categories list`** (mutating `outlook-categories create|update|delete` **are** gated), `files` list/search/meta/download/convert/analytics/versions, etc. Those calls do not use the guard in code; if a new subcommand adds writes, it should call `checkReadOnly` and this table should be updated.
 
 You can enable Read-Only mode in two ways:
 
@@ -690,6 +692,15 @@ m365-agent-cli planner list-my-tasks
 m365-agent-cli planner list-plans
 m365-agent-cli planner list-plans -g <groupId>
 
+# List another user's Planner tasks/plans (Graph may return 403 depending on tenant/token)
+m365-agent-cli planner list-user-tasks --user <azureAdObjectId>
+m365-agent-cli planner list-user-plans --user <azureAdObjectId>
+
+# Beta: roster container (create roster → add members → create-plan --roster <rosterId>)
+m365-agent-cli planner roster create
+m365-agent-cli planner roster add-member -r <rosterId> --user <userId>
+m365-agent-cli planner create-plan --roster <rosterId> -t "Roster plan"
+
 # View plan structure
 m365-agent-cli planner list-buckets --plan <planId>
 m365-agent-cli planner list-tasks --plan <planId>
@@ -716,6 +727,41 @@ m365-agent-cli todo create -t "Buy milk" --category Shopping --category Errands
 # Update fields including categories (see: m365-agent-cli todo update --help)
 m365-agent-cli todo update -l Tasks -t <taskId> --category Work --category Urgent
 m365-agent-cli todo update -l Tasks -t <taskId> --clear-categories
+
+# One checklist row (Graph GET checklistItems/{id}); download file attachment bytes ($value)
+m365-agent-cli todo get-checklist-item -l Tasks -t <taskId> -c <checklistItemId>
+m365-agent-cli todo download-attachment -l Tasks -t <taskId> -a <attachmentId> -o ./file.bin
+```
+
+## Outlook Graph REST (`outlook-graph`)
+
+Microsoft Graph endpoints for **mail folders**, **messages** (folder or mailbox-wide list, **sendMail**, PATCH, move, copy, attachments, reply/reply-all/forward drafts + send), and **personal contacts** (complements EWS **`mail`** / **`folders`**). Requires appropriate **Mail.** and **Contacts.** scopes.
+
+```bash
+m365-agent-cli outlook-graph list-folders
+m365-agent-cli outlook-graph list-messages --folder inbox --top 25
+m365-agent-cli outlook-graph list-mail --top 25
+m365-agent-cli outlook-graph list-mail --search "quarterly report" --all
+m365-agent-cli outlook-graph get-message -i <messageId>
+m365-agent-cli outlook-graph send-mail --json-file mail.json
+m365-agent-cli outlook-graph patch-message <id> --json-file patch.json
+m365-agent-cli outlook-graph list-message-attachments -i <messageId>
+m365-agent-cli outlook-graph download-message-attachment -i <id> -a <attId> -o ./file.bin
+m365-agent-cli outlook-graph create-reply <messageId>
+m365-agent-cli outlook-graph send-message <draftId>
+m365-agent-cli outlook-graph list-contacts
+```
+
+## Graph calendar REST (`graph-calendar`)
+
+Microsoft Graph endpoints for **calendars**, **calendarView** (time-range queries), **single events**, and **invitation responses** (`accept` / `decline` / `tentative`). Complements EWS **`calendar`** and **`respond`** when you need Graph IDs or REST-only flows. Requires **`Calendars.Read`** (read) or **`Calendars.ReadWrite`** (writes / responses).
+
+```bash
+m365-agent-cli graph-calendar list-calendars
+m365-agent-cli graph-calendar list-view --start 2026-04-01T00:00:00Z --end 2026-04-08T00:00:00Z
+m365-agent-cli graph-calendar list-view --start ... --end ... --calendar <calendarId>
+m365-agent-cli graph-calendar get-event <eventId>
+m365-agent-cli graph-calendar accept <eventId> --comment "Will attend"
 ```
 
 ## SharePoint Commands
@@ -776,6 +822,7 @@ These commands are not expanded step-by-step above; use **`m365-agent-cli <comma
 | Command | What it does |
 | --- | --- |
 | **`forward-event`** (`forward`) | Forward a calendar invitation to more recipients (Graph). |
+| **`graph-calendar`** | Graph **calendars**, **calendarView**, **get-event**, **accept** / **decline** / **tentative** (vs EWS `calendar` / `respond`). |
 | **`counter`** (`propose-new-time`) | Propose a new time for an existing event (Graph). |
 | **`schedule`** | Merged free/busy for one or more people over a time window (`getSchedule`). |
 | **`suggest`** | Meeting-time suggestions via Graph (`findMeetingTimes`). |

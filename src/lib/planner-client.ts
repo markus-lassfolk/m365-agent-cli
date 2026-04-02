@@ -165,6 +165,30 @@ export async function listUserPlans(token: string): Promise<GraphResponse<Planne
   return fetchAllPages<PlannerPlan>(token, '/me/planner/plans', 'Failed to list plans');
 }
 
+/**
+ * List Planner tasks for a user (`GET /users/{id}/planner/tasks`).
+ * Graph may return 403 for users other than the signed-in user depending on tenant and token.
+ */
+export async function listPlannerTasksForUser(token: string, userId: string): Promise<GraphResponse<PlannerTask[]>> {
+  return fetchAllPages<PlannerTask>(
+    token,
+    `/users/${encodeURIComponent(userId)}/planner/tasks`,
+    'Failed to list tasks for user'
+  );
+}
+
+/**
+ * List Planner plans for a user (`GET /users/{id}/planner/plans`).
+ * Same permission caveats as {@link listPlannerTasksForUser}.
+ */
+export async function listPlannerPlansForUser(token: string, userId: string): Promise<GraphResponse<PlannerPlan[]>> {
+  return fetchAllPages<PlannerPlan>(
+    token,
+    `/users/${encodeURIComponent(userId)}/planner/plans`,
+    'Failed to list plans for user'
+  );
+}
+
 export async function listGroupPlans(token: string, groupId: string): Promise<GraphResponse<PlannerPlan[]>> {
   return fetchAllPages<PlannerPlan>(
     token,
@@ -1035,4 +1059,168 @@ export async function removePlannerFavoritePlan(
   if (!etag) return graphError('plannerUser missing ETag', 'MISSING_ETAG', 500);
   const favoritePlanReferences: Record<string, unknown> = { [planId]: null };
   return patchPlannerUser(token, etag, { favoritePlanReferences });
+}
+
+/** Beta: security container for roster-backed plans (see Graph `plannerRoster`). */
+export interface PlannerRoster {
+  id: string;
+  '@odata.type'?: string;
+}
+
+/** Beta: one member of a Planner roster. */
+export interface PlannerRosterMember {
+  id: string;
+  userId: string;
+  roles?: string[];
+  '@odata.type'?: string;
+}
+
+/** Beta: `POST /planner/rosters` — create an empty roster (then add members and add a plan). */
+export async function createPlannerRoster(token: string): Promise<GraphResponse<PlannerRoster>> {
+  try {
+    const result = await callGraphAt<PlannerRoster>(GRAPH_BETA_URL, token, '/planner/rosters', {
+      method: 'POST',
+      body: JSON.stringify({ '@odata.type': '#microsoft.graph.plannerRoster' })
+    });
+    if (!result.ok || !result.data) {
+      return graphError(result.error?.message || 'Failed to create roster', result.error?.code, result.error?.status);
+    }
+    return graphResult(result.data);
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to create roster');
+  }
+}
+
+/** Beta: `GET /planner/rosters/{id}`. */
+export async function getPlannerRoster(token: string, rosterId: string): Promise<GraphResponse<PlannerRoster>> {
+  try {
+    const result = await callGraphAt<PlannerRoster>(
+      GRAPH_BETA_URL,
+      token,
+      `/planner/rosters/${encodeURIComponent(rosterId)}`
+    );
+    if (!result.ok || !result.data) {
+      return graphError(result.error?.message || 'Failed to get roster', result.error?.code, result.error?.status);
+    }
+    return graphResult(result.data);
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to get roster');
+  }
+}
+
+/** Beta: `GET /planner/rosters/{id}/members`. */
+export async function listPlannerRosterMembers(
+  token: string,
+  rosterId: string
+): Promise<GraphResponse<PlannerRosterMember[]>> {
+  return fetchAllPages<PlannerRosterMember>(
+    token,
+    `/planner/rosters/${encodeURIComponent(rosterId)}/members`,
+    'Failed to list roster members',
+    GRAPH_BETA_URL
+  );
+}
+
+/** Beta: `POST /planner/rosters/{id}/members`. */
+export async function addPlannerRosterMember(
+  token: string,
+  rosterId: string,
+  userId: string,
+  options?: { tenantId?: string; roles?: string[] }
+): Promise<GraphResponse<PlannerRosterMember>> {
+  try {
+    const body: Record<string, unknown> = {
+      '@odata.type': '#microsoft.graph.plannerRosterMember',
+      userId
+    };
+    if (options?.tenantId !== undefined) body.tenantId = options.tenantId;
+    if (options?.roles !== undefined && options.roles.length > 0) body.roles = options.roles;
+    const result = await callGraphAt<PlannerRosterMember>(
+      GRAPH_BETA_URL,
+      token,
+      `/planner/rosters/${encodeURIComponent(rosterId)}/members`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body)
+      }
+    );
+    if (!result.ok || !result.data) {
+      return graphError(
+        result.error?.message || 'Failed to add roster member',
+        result.error?.code,
+        result.error?.status
+      );
+    }
+    return graphResult(result.data);
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to add roster member');
+  }
+}
+
+/** Beta: `DELETE /planner/rosters/{rosterId}/members/{memberId}` (member id is the roster member resource id). */
+export async function removePlannerRosterMember(
+  token: string,
+  rosterId: string,
+  memberId: string
+): Promise<GraphResponse<void>> {
+  try {
+    const result = await callGraphAt<void>(
+      GRAPH_BETA_URL,
+      token,
+      `/planner/rosters/${encodeURIComponent(rosterId)}/members/${encodeURIComponent(memberId)}`,
+      { method: 'DELETE' },
+      false
+    );
+    if (!result.ok) {
+      return graphError(
+        result.error?.message || 'Failed to remove roster member',
+        result.error?.code,
+        result.error?.status
+      );
+    }
+    return graphResult(undefined as undefined);
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to remove roster member');
+  }
+}
+
+/**
+ * Beta: create a plan contained by a roster (`POST /planner/plans` on beta with `container.type` roster).
+ * @see https://learn.microsoft.com/en-us/graph/api/resources/plannerplancontainer
+ */
+export async function createPlannerPlanInRoster(
+  token: string,
+  rosterId: string,
+  title: string
+): Promise<GraphResponse<PlannerPlan>> {
+  try {
+    const base = GRAPH_BETA_URL.replace(/\/$/, '');
+    const result = await callGraphAt<PlannerPlan>(GRAPH_BETA_URL, token, '/planner/plans', {
+      method: 'POST',
+      headers: { Prefer: 'include-unknown-enum-members' },
+      body: JSON.stringify({
+        title,
+        container: {
+          '@odata.type': '#microsoft.graph.plannerPlanContainer',
+          url: `${base}/planner/rosters/${encodeURIComponent(rosterId)}`,
+          type: 'roster'
+        }
+      })
+    });
+    if (!result.ok || !result.data) {
+      return graphError(
+        result.error?.message || 'Failed to create plan in roster',
+        result.error?.code,
+        result.error?.status
+      );
+    }
+    return graphResult(result.data);
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to create plan in roster');
+  }
 }

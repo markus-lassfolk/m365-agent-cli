@@ -119,6 +119,7 @@ src/
     calendar-range.ts — calendar window helpers (`--days`, `--business-days`, etc. on `calendar`)
     outlook-master-categories.ts — Graph `GET .../outlook/masterCategories`
     planner-client.ts — Planner tasks, plans, buckets, plan details (label names)
+    graph-calendar-client.ts — Graph `GET .../calendars`, `calendarView`, `GET .../events/{id}`
     todo-client.ts    — Microsoft To Do lists/tasks (including `categories`)
     url-utils.ts      — URL sanitization, safe filename handling
   commands/
@@ -128,6 +129,7 @@ src/
     update-event.ts
     delete-event.ts
     respond.ts
+    graph-calendar.ts
     findtime.ts
     find.ts
     mail.ts
@@ -167,20 +169,20 @@ Preferred for new features:
 
 | Resource | Endpoints | Notes |
 |----------|-----------|-------|
-| Calendar | `GET/POST/PATCH/DELETE /me/events` | Full CRUD + recurrence |
+| Calendar | `GET .../calendars`, `GET .../calendar/calendarView`, `GET/POST/PATCH/DELETE .../events`, `POST .../events/{id}/accept|decline|tentativelyAccept` | CLI **`graph-calendar`** for list/view/get + invitation responses; EWS **`calendar`** / **`create-event`** still primary for many flows |
 | Free/busy | `POST /me/calendar/getSchedule` | Preferred over EWS |
 | Room discovery | `GET /places`, `/roomLists`, `/rooms` | Richer than EWS |
-| Mail | `GET/POST/PATCH/DELETE /me/mailFolders` | Full CRUD |
+| Mail | `GET/POST/PATCH/DELETE /me/mailFolders`, folder + `/me/messages`, `POST /sendMail`, `POST .../move|copy|send`, `POST .../createReply|createReplyAll|createForward`, attachments | CLI `outlook-graph` (Graph REST); EWS `mail` / `folders` remains primary for many flows |
 | Message rules | `GET/POST/PATCH/DELETE /me/mailFolders/inbox/rules` | Partial — no template replies |
-| Contacts | `GET/POST/PATCH/DELETE /me/contacts` | Personal contacts |
+| Contacts | `GET/POST/PATCH/DELETE /me/contacts` | Personal contacts; CLI `outlook-graph contacts` |
 | People | `GET /me/people` | Relevance-ranked, not true GAL |
 | Directory | `GET /users`, `/groups/{id}/members` | Requires `Directory.Read.All` |
-| To-Do | `GET/POST/PATCH/DELETE /me/todo/lists/{id}/tasks` | Use To-Do API, NOT Outlook Tasks (deprecated) |
+| To-Do | `GET/POST/PATCH/DELETE /me/todo/lists/{id}/tasks`, checklistItems CRUD, `GET .../attachments/{id}/$value` for file bytes | Use To-Do API, NOT Outlook Tasks (deprecated) |
 | OOF | `PATCH /me/mailboxSettings` | `automaticRepliesSetting` |
 | Mailbox settings | `GET/PATCH /me/mailboxSettings` | timezone, working hours, language |
 | Subscriptions | `POST /subscriptions` | Webhook push notifications |
 | Outlook categories | `GET/POST/PATCH/DELETE .../outlook/masterCategories` | Master list CRUD (names + `preset0`..`preset24`); CLI `outlook-categories list|create|update|delete` |
-| Planner | `GET/PATCH /planner/tasks`, `GET /planner/plans/{id}/details` | Task `appliedCategories` (six slots); plan `categoryDescriptions` for labels |
+| Planner | `GET/PATCH /planner/tasks`, `GET /users/{id}/planner/tasks` (when permitted), `GET /planner/plans/{id}/details`, beta `planner/rosters`, `POST /planner/plans` with roster container | Task `appliedCategories` (six slots); plan `categoryDescriptions` for labels; roster-backed plans use beta Graph |
 
 ## Out of Scope
 

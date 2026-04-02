@@ -13,10 +13,12 @@ import { findCommand } from './commands/find.js';
 import { findtimeCommand } from './commands/findtime.js';
 import { foldersCommand } from './commands/folders.js';
 import { forwardEventCommand } from './commands/forward-event.js';
+import { graphCalendarCommand } from './commands/graph-calendar.js';
 import { loginCommand } from './commands/login.js';
 import { mailCommand } from './commands/mail.js';
 import { oofCommand } from './commands/oof.js';
 import { outlookCategoriesCommand } from './commands/outlook-categories.js';
+import { outlookGraphCommand } from './commands/outlook-graph.js';
 import { plannerCommand } from './commands/planner.js';
 import { respondCommand } from './commands/respond.js';
 import { roomsCommand } from './commands/rooms.js';
@@ -75,6 +77,8 @@ program.addCommand(delegatesCommand);
 program.addCommand(todoCommand);
 
 program.addCommand(outlookCategoriesCommand);
+program.addCommand(outlookGraphCommand);
+program.addCommand(graphCalendarCommand);
 
 program.addCommand(plannerCommand);
 

@@ -4,6 +4,7 @@ import {
   callGraph,
   callGraphAbsolute,
   fetchAllPages,
+  fetchGraphRaw,
   GraphApiError,
   type GraphResponse,
   graphError,
@@ -48,6 +49,8 @@ export interface TodoChecklistItem {
   displayName: string;
   isChecked: boolean;
   createdDateTime?: string;
+  /** Set when `isChecked` is true (Graph). */
+  checkedDateTime?: string;
 }
 
 export interface TodoTask {
@@ -838,6 +841,64 @@ export async function listTaskChecklistItems(
     `${todoRoot(user)}/lists/${encodeURIComponent(listId)}/tasks/${encodeURIComponent(taskId)}/checklistItems`,
     'Failed to list checklist items'
   );
+}
+
+/** `GET .../tasks/{taskId}/checklistItems/{checklistItemId}` (see Graph checklistItem). */
+export async function getChecklistItem(
+  token: string,
+  listId: string,
+  taskId: string,
+  checklistItemId: string,
+  user?: string
+): Promise<GraphResponse<TodoChecklistItem>> {
+  try {
+    const result = await callGraph<TodoChecklistItem>(
+      token,
+      `${todoRoot(user)}/lists/${encodeURIComponent(listId)}/tasks/${encodeURIComponent(taskId)}/checklistItems/${encodeURIComponent(checklistItemId)}`
+    );
+    if (!result.ok || !result.data) {
+      return graphError(
+        result.error?.message || 'Failed to get checklist item',
+        result.error?.code,
+        result.error?.status
+      );
+    }
+    return graphResult(result.data);
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to get checklist item');
+  }
+}
+
+/**
+ * Raw file bytes for a task file attachment (`GET .../attachments/{id}/$value`).
+ * Reference attachments do not support this; use metadata from {@link getTaskAttachment} instead.
+ */
+export async function getTaskAttachmentContent(
+  token: string,
+  listId: string,
+  taskId: string,
+  attachmentId: string,
+  user?: string
+): Promise<GraphResponse<Uint8Array>> {
+  const path = `${todoRoot(user)}/lists/${encodeURIComponent(listId)}/tasks/${encodeURIComponent(taskId)}/attachments/${encodeURIComponent(attachmentId)}/$value`;
+  try {
+    const res = await fetchGraphRaw(token, path);
+    const buf = new Uint8Array(await res.arrayBuffer());
+    if (!res.ok) {
+      try {
+        const text = new TextDecoder().decode(buf);
+        const json = JSON.parse(text) as { error?: { code?: string; message?: string } };
+        return graphError(json.error?.message || `HTTP ${res.status}`, json.error?.code, res.status);
+      } catch {
+        return graphError(`Failed to download attachment: HTTP ${res.status}`, undefined, res.status);
+      }
+    }
+    return graphResult(buf);
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to download attachment');
+  }
 }
 
 function listListExtensionsPath(listId: string, user: string | undefined, extensionName?: string): string {

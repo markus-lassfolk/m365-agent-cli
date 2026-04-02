@@ -5,10 +5,13 @@ import {
   addPlannerChecklistItem,
   addPlannerFavoritePlan,
   addPlannerReference,
+  addPlannerRosterMember,
   buildPlannerAssignments,
   type CreatePlannerTaskExtras,
   createPlannerBucket,
   createPlannerPlan,
+  createPlannerPlanInRoster,
+  createPlannerRoster,
   createTask,
   deletePlannerBucket,
   deletePlannerPlan,
@@ -19,6 +22,7 @@ import {
   getPlannerBucket,
   getPlannerDeltaPage,
   getPlannerPlan,
+  getPlannerRoster,
   getPlannerTaskDetails,
   getPlannerUser,
   getProgressTaskBoardFormat,
@@ -26,6 +30,9 @@ import {
   listFavoritePlans,
   listGroupPlans,
   listPlanBuckets,
+  listPlannerPlansForUser,
+  listPlannerRosterMembers,
+  listPlannerTasksForUser,
   listPlanTasks,
   listRosterPlans,
   listUserPlans,
@@ -39,6 +46,7 @@ import {
   removePlannerChecklistItem,
   removePlannerFavoritePlan,
   removePlannerReference,
+  removePlannerRosterMember,
   type UpdatePlannerPlanDetailsParams,
   type UpdatePlannerTaskDetailsParams,
   updateAssignedToTaskBoardFormat,
@@ -124,6 +132,68 @@ plannerCommand
       process.exit(1);
     }
     const result = opts.group ? await listGroupPlans(auth.token!, opts.group) : await listUserPlans(auth.token!);
+    if (!result.ok || !result.data) {
+      console.error(`Error listing plans: ${result.error?.message}`);
+      process.exit(1);
+    }
+    if (opts.json) {
+      console.log(JSON.stringify(result.data, null, 2));
+    } else {
+      for (const p of result.data) {
+        console.log(`- ${p.title} (ID: ${p.id})`);
+      }
+    }
+  });
+
+plannerCommand
+  .command('list-user-tasks')
+  .description('List Planner tasks for a user (Graph GET /users/{id}/planner/tasks; may 403 if not permitted)')
+  .requiredOption('-u, --user <userId>', 'Azure AD object id of the user')
+  .option('--json', 'Output JSON')
+  .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .action(async (opts: { user: string; json?: boolean; token?: string; identity?: string }) => {
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success) {
+      console.error(`Auth error: ${auth.error}`);
+      process.exit(1);
+    }
+    const result = await listPlannerTasksForUser(auth.token!, opts.user);
+    if (!result.ok || !result.data) {
+      console.error(`Error listing tasks: ${result.error?.message}`);
+      process.exit(1);
+    }
+    if (opts.json) {
+      console.log(JSON.stringify(result.data, null, 2));
+    } else {
+      const planDetailsCache = new Map<string, PlannerPlanDetails['categoryDescriptions']>();
+      for (const t of result.data) {
+        if (!planDetailsCache.has(t.planId)) {
+          const d = await getPlanDetails(auth.token!, t.planId);
+          planDetailsCache.set(t.planId, d.ok ? d.data?.categoryDescriptions : undefined);
+        }
+        const desc = planDetailsCache.get(t.planId);
+        const labels = formatTaskLabels(t, desc);
+        console.log(`- [${t.percentComplete === 100 ? 'x' : ' '}] ${t.title} (ID: ${t.id})`);
+        console.log(`  Plan ID: ${t.planId} | Bucket ID: ${t.bucketId}${labels ? ` | Labels: ${labels}` : ''}`);
+      }
+    }
+  });
+
+plannerCommand
+  .command('list-user-plans')
+  .description('List Planner plans for a user (Graph GET /users/{id}/planner/plans; may 403 if not permitted)')
+  .requiredOption('-u, --user <userId>', 'Azure AD object id of the user')
+  .option('--json', 'Output JSON')
+  .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .action(async (opts: { user: string; json?: boolean; token?: string; identity?: string }) => {
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success) {
+      console.error(`Auth error: ${auth.error}`);
+      process.exit(1);
+    }
+    const result = await listPlannerPlansForUser(auth.token!, opts.user);
     if (!result.ok || !result.data) {
       console.error(`Error listing plans: ${result.error?.message}`);
       process.exit(1);
@@ -654,21 +724,33 @@ plannerCommand
 
 plannerCommand
   .command('create-plan')
-  .description('Create a Planner plan (requires a Microsoft 365 group)')
-  .requiredOption('-g, --group <groupId>', 'Group ID that owns the plan')
+  .description('Create a Planner plan in a group (v1) or in a roster (beta; use --roster)')
+  .option('-g, --group <groupId>', 'Microsoft 365 group that owns the plan')
+  .option('-r, --roster <rosterId>', 'Beta: planner roster id (container); mutually exclusive with --group')
   .requiredOption('-t, --title <title>', 'Plan title')
   .option('--json', 'Output JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
   .action(
-    async (opts: { group: string; title: string; json?: boolean; token?: string; identity?: string }, cmd: any) => {
+    async (
+      opts: { group?: string; roster?: string; title: string; json?: boolean; token?: string; identity?: string },
+      cmd: any
+    ) => {
       checkReadOnly(cmd);
+      const hasGroup = Boolean(opts.group);
+      const hasRoster = Boolean(opts.roster);
+      if (hasGroup === hasRoster) {
+        console.error('Error: specify exactly one of --group or --roster');
+        process.exit(1);
+      }
       const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
       if (!auth.success) {
         console.error(`Auth error: ${auth.error}`);
         process.exit(1);
       }
-      const r = await createPlannerPlan(auth.token!, opts.group, opts.title);
+      const r = hasRoster
+        ? await createPlannerPlanInRoster(auth.token!, opts.roster!, opts.title)
+        : await createPlannerPlan(auth.token!, opts.group!, opts.title);
       if (!r.ok || !r.data) {
         console.error(`Error: ${r.error?.message}`);
         process.exit(1);
@@ -1466,3 +1548,131 @@ plannerCommand
     }
     console.log(`OK: favorite removed for plan ${opts.plan}`);
   });
+
+const plannerRosterCommand = new Command('roster').description(
+  'Planner roster APIs (beta; rosters are alternate plan containers — see planner create-plan --roster)'
+);
+
+plannerRosterCommand
+  .command('create')
+  .description('Create an empty planner roster (beta POST /planner/rosters)')
+  .option('--json', 'Output JSON')
+  .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .action(async (opts: { json?: boolean; token?: string; identity?: string }, cmd: any) => {
+    checkReadOnly(cmd);
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success) {
+      console.error(`Auth error: ${auth.error}`);
+      process.exit(1);
+    }
+    const r = await createPlannerRoster(auth.token!);
+    if (!r.ok || !r.data) {
+      console.error(`Error: ${r.error?.message}`);
+      process.exit(1);
+    }
+    if (opts.json) console.log(JSON.stringify(r.data, null, 2));
+    else console.log(`Created roster (ID: ${r.data.id})`);
+  });
+
+plannerRosterCommand
+  .command('get')
+  .description('Get a planner roster by id (beta)')
+  .requiredOption('-r, --roster <rosterId>', 'Roster ID')
+  .option('--json', 'Output JSON')
+  .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .action(async (opts: { roster: string; json?: boolean; token?: string; identity?: string }) => {
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success) {
+      console.error(`Auth error: ${auth.error}`);
+      process.exit(1);
+    }
+    const r = await getPlannerRoster(auth.token!, opts.roster);
+    if (!r.ok || !r.data) {
+      console.error(`Error: ${r.error?.message}`);
+      process.exit(1);
+    }
+    if (opts.json) console.log(JSON.stringify(r.data, null, 2));
+    else console.log(JSON.stringify(r.data, null, 2));
+  });
+
+plannerRosterCommand
+  .command('list-members')
+  .description('List members of a planner roster (beta)')
+  .requiredOption('-r, --roster <rosterId>', 'Roster ID')
+  .option('--json', 'Output JSON')
+  .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .action(async (opts: { roster: string; json?: boolean; token?: string; identity?: string }) => {
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success) {
+      console.error(`Auth error: ${auth.error}`);
+      process.exit(1);
+    }
+    const r = await listPlannerRosterMembers(auth.token!, opts.roster);
+    if (!r.ok || !r.data) {
+      console.error(`Error: ${r.error?.message}`);
+      process.exit(1);
+    }
+    if (opts.json) console.log(JSON.stringify(r.data, null, 2));
+    else for (const m of r.data) console.log(`- user ${m.userId} (member id: ${m.id})`);
+  });
+
+plannerRosterCommand
+  .command('add-member')
+  .description('Add a user to a planner roster (beta)')
+  .requiredOption('-r, --roster <rosterId>', 'Roster ID')
+  .requiredOption('-u, --user <userId>', 'Azure AD object id of the user')
+  .option('--tenant <tenantId>', 'Tenant id (optional; same-tenant only per Graph)')
+  .option('--json', 'Output JSON')
+  .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .action(
+    async (
+      opts: { roster: string; user: string; tenant?: string; json?: boolean; token?: string; identity?: string },
+      cmd: any
+    ) => {
+      checkReadOnly(cmd);
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!auth.success) {
+        console.error(`Auth error: ${auth.error}`);
+        process.exit(1);
+      }
+      const r = await addPlannerRosterMember(auth.token!, opts.roster, opts.user, {
+        tenantId: opts.tenant
+      });
+      if (!r.ok || !r.data) {
+        console.error(`Error: ${r.error?.message}`);
+        process.exit(1);
+      }
+      if (opts.json) console.log(JSON.stringify(r.data, null, 2));
+      else console.log(`Added member: ${r.data.userId} (member id: ${r.data.id})`);
+    }
+  );
+
+plannerRosterCommand
+  .command('remove-member')
+  .description(
+    'Remove a member from a planner roster (beta; removing last member may delete roster/plan after retention)'
+  )
+  .requiredOption('-r, --roster <rosterId>', 'Roster ID')
+  .requiredOption('-m, --member <memberId>', 'Roster member resource id (from list-members)')
+  .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .action(async (opts: { roster: string; member: string; token?: string; identity?: string }, cmd: any) => {
+    checkReadOnly(cmd);
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success) {
+      console.error(`Auth error: ${auth.error}`);
+      process.exit(1);
+    }
+    const r = await removePlannerRosterMember(auth.token!, opts.roster, opts.member);
+    if (!r.ok) {
+      console.error(`Error: ${r.error?.message}`);
+      process.exit(1);
+    }
+    console.log(`OK: removed roster member ${opts.member}`);
+  });
+
+plannerCommand.addCommand(plannerRosterCommand);

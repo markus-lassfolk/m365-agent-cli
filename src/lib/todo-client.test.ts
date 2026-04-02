@@ -240,3 +240,59 @@ describe('createTask', () => {
     }
   });
 });
+
+describe('getChecklistItem', () => {
+  it('GETs one checklist item by id', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    const urls: string[] = [];
+    const originalFetch = globalThis.fetch;
+
+    try {
+      globalThis.fetch = (async (input: string | URL | Request) => {
+        urls.push(typeof input === 'string' ? input : input.toString());
+        return new Response(
+          JSON.stringify({
+            id: 'ck1',
+            displayName: 'Buy milk',
+            isChecked: false,
+            createdDateTime: '2026-01-01T12:00:00.000Z'
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }) as typeof fetch;
+
+      const { getChecklistItem } = await import('./todo-client.js');
+      const r = await getChecklistItem(token, 'list-1', 'task-1', 'ck1');
+
+      expect(r.ok).toBe(true);
+      expect(r.data?.displayName).toBe('Buy milk');
+      expect(urls[0]).toContain('/checklistItems/ck1');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+describe('getTaskAttachmentContent', () => {
+  it('GETs raw bytes from attachments/$value', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    const originalFetch = globalThis.fetch;
+
+    try {
+      globalThis.fetch = (async (input: string | URL | Request) => {
+        const u = typeof input === 'string' ? input : input.toString();
+        expect(u).toContain('$value');
+        return new Response(new Uint8Array([7, 8, 9]), { status: 200 });
+      }) as typeof fetch;
+
+      const { getTaskAttachmentContent } = await import('./todo-client.js');
+      const r = await getTaskAttachmentContent(token, 'list-1', 'task-1', 'att-1');
+
+      expect(r.ok).toBe(true);
+      expect(r.data?.length).toBe(3);
+      expect(r.data?.[0]).toBe(7);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});

@@ -155,7 +155,8 @@ export async function fetchAllPages<T>(
   token: string,
   initialPath: string,
   errorMessage: string,
-  baseUrl: string = GRAPH_BASE_URL
+  baseUrl: string = GRAPH_BASE_URL,
+  requestInit?: RequestInit
 ): Promise<GraphResponse<T[]>> {
   const items: T[] = [];
   let path = initialPath;
@@ -163,7 +164,7 @@ export async function fetchAllPages<T>(
   while (path) {
     let result: GraphResponse<{ value: T[]; '@odata.nextLink'?: string }>;
     try {
-      result = await callGraphAt<{ value: T[]; '@odata.nextLink'?: string }>(baseUrl, token, path);
+      result = await callGraphAt<{ value: T[]; '@odata.nextLink'?: string }>(baseUrl, token, path, requestInit ?? {});
     } catch (err) {
       if (err instanceof GraphApiError) {
         return graphError(err.message, err.code, err.status) as GraphResponse<T[]>;

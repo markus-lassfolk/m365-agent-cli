@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
@@ -19,8 +19,10 @@ import {
   deleteTaskOpenExtension,
   deleteTodoList,
   deleteTodoListOpenExtension,
+  getChecklistItem,
   getTask,
   getTaskAttachment,
+  getTaskAttachmentContent,
   getTaskLinkedResource,
   getTaskOpenExtension,
   getTasks,
@@ -1155,6 +1157,44 @@ todoCommand
   );
 
 todoCommand
+  .command('download-attachment')
+  .description(
+    'Download file attachment bytes (Graph GET .../attachments/{id}/$value); not for reference/URL attachments'
+  )
+  .requiredOption('-l, --list <name|id>', 'List name or ID')
+  .requiredOption('-t, --task <id>', 'Task ID')
+  .requiredOption('-a, --attachment <attachmentId>', 'Attachment ID')
+  .requiredOption('-o, --output <path>', 'Write file to this path')
+  .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .action(
+    async (opts: {
+      list: string;
+      task: string;
+      attachment: string;
+      output: string;
+      token?: string;
+      identity?: string;
+      user?: string;
+    }) => {
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!auth.success) {
+        console.error(`Auth error: ${auth.error}`);
+        process.exit(1);
+      }
+      const { listId } = await resolveListId(auth.token!, opts.list, opts.user);
+      const r = await getTaskAttachmentContent(auth.token!, listId, opts.task, opts.attachment, opts.user);
+      if (!r.ok || !r.data) {
+        console.error(`Error: ${r.error?.message}`);
+        process.exit(1);
+      }
+      await writeFile(opts.output, r.data);
+      console.log(`Wrote ${r.data.byteLength} bytes to ${opts.output}`);
+    }
+  );
+
+todoCommand
   .command('add-reference-attachment')
   .description('Add a URL reference attachment (not file bytes)')
   .requiredOption('-l, --list <name|id>', 'List name or ID')
@@ -1393,6 +1433,48 @@ todoCommand
         for (const it of r.data) {
           console.log(`${it.isChecked ? '\u2611' : '\u2610'} ${it.displayName} (${it.id})`);
         }
+      }
+    }
+  );
+
+todoCommand
+  .command('get-checklist-item')
+  .description('Get one checklist item by id (Graph GET checklistItems/{id})')
+  .requiredOption('-l, --list <name|id>', 'List name or ID')
+  .requiredOption('-t, --task <id>', 'Task ID')
+  .requiredOption('-c, --checklist-item <id>', 'Checklist item id')
+  .option('--json', 'Output as JSON')
+  .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .action(
+    async (opts: {
+      list: string;
+      task: string;
+      checklistItem: string;
+      json?: boolean;
+      token?: string;
+      identity?: string;
+      user?: string;
+    }) => {
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!auth.success) {
+        console.error(`Auth error: ${auth.error}`);
+        process.exit(1);
+      }
+      const { listId } = await resolveListId(auth.token!, opts.list, opts.user);
+      const r = await getChecklistItem(auth.token!, listId, opts.task, opts.checklistItem, opts.user);
+      if (!r.ok || !r.data) {
+        console.error(`Error: ${r.error?.message}`);
+        process.exit(1);
+      }
+      if (opts.json) console.log(JSON.stringify(r.data, null, 2));
+      else {
+        const it = r.data;
+        console.log(`${it.isChecked ? '\u2611' : '\u2610'} ${it.displayName}`);
+        console.log(`ID: ${it.id}`);
+        if (it.createdDateTime) console.log(`Created: ${it.createdDateTime}`);
+        if (it.checkedDateTime) console.log(`Checked: ${it.checkedDateTime}`);
       }
     }
   );
