@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
 import { getAutoReplyRule, setAutoReplyRule } from '../lib/ews-client.js';
+import { getExchangeBackend } from '../lib/exchange-backend.js';
 import { checkReadOnly } from '../lib/utils.js';
 
 export const autoReplyCommand = new Command('auto-reply')
@@ -18,6 +19,16 @@ export const autoReplyCommand = new Command('auto-reply')
   .option('--identity <name>', 'Use a specific authentication identity (default: default)')
   .action(async (options, cmd: any) => {
     checkReadOnly(cmd);
+    if (getExchangeBackend() === 'graph') {
+      const msg =
+        'auto-reply uses EWS Inbox Rules only. For Microsoft Graph, use `m365-agent-cli oof` (mailbox automatic replies). To run this command, set M365_EXCHANGE_BACKEND=ews or auto.';
+      if (options.json) {
+        console.log(JSON.stringify({ error: msg }, null, 2));
+      } else {
+        console.error(`Error: ${msg}`);
+      }
+      process.exit(1);
+    }
     try {
       const auth = await resolveAuth({ token: options.token, identity: options.identity });
       if (!auth.success || !auth.token) {

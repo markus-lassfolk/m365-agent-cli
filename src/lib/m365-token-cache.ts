@@ -27,6 +27,11 @@ export interface M365TokenCacheV1 {
   refreshToken?: string;
   ews?: TokenSlot;
   graph?: TokenSlot;
+  /**
+   * True when we accepted a Graph access token that still lacks critical delegated scopes
+   * after refresh (tenant may not grant them). Avoids infinite refresh loops.
+   */
+  graphNarrowScopeAccepted?: boolean;
 }
 
 function assertTokenSlot(o: unknown, label: string): TokenSlot {
@@ -100,7 +105,9 @@ export async function loadM365TokenCache(identity: string): Promise<M365TokenCac
         version: 1,
         refreshToken: typeof p.refreshToken === 'string' ? p.refreshToken : undefined,
         ews: p.ews ? assertTokenSlot(p.ews, 'ews') : undefined,
-        graph: p.graph ? assertTokenSlot(p.graph, 'graph') : undefined
+        graph: p.graph ? assertTokenSlot(p.graph, 'graph') : undefined,
+        graphNarrowScopeAccepted:
+          typeof p.graphNarrowScopeAccepted === 'boolean' ? p.graphNarrowScopeAccepted : undefined
       };
       hadPrimary = true;
     } else if (isLegacyFlat(p)) {
@@ -135,7 +142,8 @@ export async function saveM365TokenCache(identity: string, cache: M365TokenCache
     version: 1,
     refreshToken: cache.refreshToken,
     ews: cache.ews,
-    graph: cache.graph
+    graph: cache.graph,
+    graphNarrowScopeAccepted: cache.graphNarrowScopeAccepted
   };
   await mkdir(CONFIG_DIR, { recursive: true, mode: 0o700 });
   await atomicWriteUtf8File(tokenCachePath(identity), JSON.stringify(safe, null, 2), 0o600);

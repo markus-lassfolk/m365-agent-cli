@@ -25,9 +25,31 @@ export const GRAPH_DEVICE_CODE_LOGIN_SCOPES = [
   'Tasks.ReadWrite',
   'Group.ReadWrite.All',
   'Contacts.ReadWrite',
+  'Contacts.Read.Shared',
+  'Contacts.ReadWrite.Shared',
   'OnlineMeetings.ReadWrite',
-  'Notes.ReadWrite.All'
+  'Notes.ReadWrite.All',
+  'Team.ReadBasic.All',
+  'Channel.ReadBasic.All',
+  'ChannelMessage.Read.All',
+  'ChannelMessage.Send',
+  'Presence.Read.All',
+  'Presence.ReadWrite',
+  'Bookings.ReadWrite.All',
+  'Chat.ReadWrite'
 ].join(' ');
+
+/**
+ * If a cached Graph access token is missing any of these short scope names, it may be a **narrow**
+ * token from an older refresh (e.g. Windows vs WSL separate `token-cache-*.json`). Force refresh unless
+ * `graphNarrowScopeAccepted` is set on the cache after a refresh still returned a narrow token.
+ */
+export const GRAPH_CRITICAL_DELEGATED_SCOPES: readonly string[] = [
+  'Mail.Send',
+  'Contacts.ReadWrite',
+  'Notes.ReadWrite.All',
+  'OnlineMeetings.ReadWrite'
+];
 
 /** Primary delegated resource scopes (URL form) for refresh_token grant, without `offline_access` / `User.Read`. */
 const GRAPH_RESOURCE_SCOPES_FULL = [
@@ -47,8 +69,18 @@ const GRAPH_RESOURCE_SCOPES_FULL = [
   G('Tasks.ReadWrite'),
   G('Group.ReadWrite.All'),
   G('Contacts.ReadWrite'),
+  G('Contacts.Read.Shared'),
+  G('Contacts.ReadWrite.Shared'),
   G('OnlineMeetings.ReadWrite'),
-  G('Notes.ReadWrite.All')
+  G('Notes.ReadWrite.All'),
+  G('Team.ReadBasic.All'),
+  G('Channel.ReadBasic.All'),
+  G('ChannelMessage.Read.All'),
+  G('ChannelMessage.Send'),
+  G('Presence.Read.All'),
+  G('Presence.ReadWrite'),
+  G('Bookings.ReadWrite.All'),
+  G('Chat.ReadWrite')
 ].join(' ');
 
 /**
@@ -70,8 +102,18 @@ const GRAPH_RESOURCE_SCOPES_WITHOUT_USER_READ_ALL = [
   G('Tasks.ReadWrite'),
   G('Group.ReadWrite.All'),
   G('Contacts.ReadWrite'),
+  G('Contacts.Read.Shared'),
+  G('Contacts.ReadWrite.Shared'),
   G('OnlineMeetings.ReadWrite'),
-  G('Notes.ReadWrite.All')
+  G('Notes.ReadWrite.All'),
+  G('Team.ReadBasic.All'),
+  G('Channel.ReadBasic.All'),
+  G('ChannelMessage.Read.All'),
+  G('ChannelMessage.Send'),
+  G('Presence.Read.All'),
+  G('Presence.ReadWrite'),
+  G('Bookings.ReadWrite.All'),
+  G('Chat.ReadWrite')
 ].join(' ');
 
 /**

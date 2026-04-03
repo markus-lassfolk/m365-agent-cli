@@ -1,5 +1,11 @@
-import { GRAPH_REFRESH_SCOPE_CANDIDATES } from './graph-oauth-scopes.js';
-import { getJwtExpiration, getMicrosoftTenantPathSegment, isValidJwtStructure } from './jwt-utils.js';
+import { GRAPH_CRITICAL_DELEGATED_SCOPES, GRAPH_REFRESH_SCOPE_CANDIDATES } from './graph-oauth-scopes.js';
+import {
+  getJwtExpiration,
+  getJwtPayloadAppId,
+  getJwtPayloadScopeSet,
+  getMicrosoftTenantPathSegment,
+  isValidJwtStructure
+} from './jwt-utils.js';
 import {
   getUnifiedRefreshTokenFromEnv,
   loadM365TokenCache,
@@ -102,12 +108,31 @@ export async function resolveGraphAuth(options?: { token?: string; identity?: st
     const cached = await loadM365TokenCache(identity);
     if (cached?.graph && cached.graph.expiresAt > Date.now() + 60_000) {
       if (isValidJwtStructure(cached.graph.accessToken)) {
-        return { success: true, token: cached.graph.accessToken };
+        const tokenAppId = getJwtPayloadAppId(cached.graph.accessToken);
+        const expectId = clientId.trim();
+        const mismatch = tokenAppId && expectId && tokenAppId.toLowerCase() !== expectId.toLowerCase();
+        if (mismatch) {
+          console.warn(
+            `[graph-auth] Ignoring cached Graph access token: token app id (${tokenAppId}) does not match EWS_CLIENT_ID (${expectId}). Refreshing.`
+          );
+        } else {
+          const scopeSet = getJwtPayloadScopeSet(cached.graph.accessToken);
+          const missingCritical = GRAPH_CRITICAL_DELEGATED_SCOPES.filter((s) => !scopeSet.has(s));
+          const narrowOk = cached.graphNarrowScopeAccepted === true;
+          if (missingCritical.length > 0 && !narrowOk) {
+            console.warn(
+              `[graph-auth] Ignoring cached Graph access token: missing delegated scopes ${missingCritical.join(', ')} (narrow token — e.g. stale cache from another host). Refreshing.`
+            );
+          } else {
+            return { success: true, token: cached.graph.accessToken };
+          }
+        }
+      } else {
+        console.warn(
+          '[graph-auth] Cached Graph token has an invalid JWT structure — falling back to token refresh. ' +
+            'You may need to re-authenticate if this persists.'
+        );
       }
-      console.warn(
-        '[graph-auth] Cached Graph token has an invalid JWT structure — falling back to token refresh. ' +
-          'You may need to re-authenticate if this persists.'
-      );
     }
 
     const refreshTokens = [...new Set([cached?.refreshToken, envRefreshToken].filter((t): t is string => !!t))];
@@ -115,11 +140,14 @@ export async function resolveGraphAuth(options?: { token?: string; identity?: st
     for (let i = 0; i < refreshTokens.length; i++) {
       try {
         const result = await refreshGraphAccessToken(clientId, refreshTokens[i], tenant);
+        const newScopeSet = getJwtPayloadScopeSet(result.accessToken);
+        const missingAfterRefresh = GRAPH_CRITICAL_DELEGATED_SCOPES.filter((s) => !newScopeSet.has(s));
         const next: M365TokenCacheV1 = {
           version: 1,
           refreshToken: result.refreshToken,
           ews: cached?.ews,
-          graph: { accessToken: result.accessToken, expiresAt: result.expiresAt }
+          graph: { accessToken: result.accessToken, expiresAt: result.expiresAt },
+          graphNarrowScopeAccepted: missingAfterRefresh.length > 0
         };
         await saveM365TokenCache(identity, next);
         return { success: true, token: result.accessToken };
@@ -142,4 +170,13 @@ export async function resolveGraphAuth(options?: { token?: string; identity?: st
       error: err instanceof Error ? err.message : 'Graph authentication failed'
     };
   }
+}
+
+export async function requireGraphAuth(opts: { token?: string; identity?: string }): Promise<string> {
+  const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+  if (!auth.success || !auth.token) {
+    console.error(`Auth error: ${auth.error}`);
+    process.exit(1);
+  }
+  return auth.token;
 }

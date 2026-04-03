@@ -217,6 +217,31 @@ export function isGraphMailPortionEligible(opts: MailGraphCommandOptions): boole
   );
 }
 
+/**
+ * When `tryMailGraphPortion` returns `handled: false`, explains why (Graph path cannot satisfy this flag mix in one invocation).
+ */
+export function describeMailGraphUnhandledCombination(opts: MailGraphCommandOptions): string {
+  if (opts.download && opts.read?.trim()) {
+    return 'On Graph, use separate commands for --read and --download (not both in one invocation), or set M365_EXCHANGE_BACKEND=ews or auto.';
+  }
+  const tags: string[] = [];
+  if (opts.download) tags.push('--download');
+  if (opts.markRead || opts.markUnread) tags.push('--mark-read/--mark-unread');
+  if (opts.setCategories || opts.clearCategories) tags.push('--set-categories/--clear-categories');
+  if (opts.move) tags.push('--move');
+  if (opts.flag || opts.unflag || opts.complete) tags.push('--flag/--unflag/--complete');
+  if (opts.sensitivity) tags.push('--sensitivity');
+  if (opts.reply || opts.replyAll || opts.forward) tags.push('--reply/--reply-all/--forward');
+  if (opts.startDate || opts.due) tags.push('--start-date/--due');
+  if (tags.length >= 2) {
+    return `Graph mail does not combine these in one command: ${tags.join(', ')}. Run one action per invocation, or set M365_EXCHANGE_BACKEND=ews or auto.`;
+  }
+  if (opts.read?.trim() && (opts.unread || opts.flagged || opts.search?.trim())) {
+    return 'On Graph, combine --read with list filters only via separate commands, or set M365_EXCHANGE_BACKEND=ews or auto.';
+  }
+  return 'This mail subcommand or options are not implemented on the Graph mail path in one invocation. Set M365_EXCHANGE_BACKEND=ews or auto, or use outlook-graph.';
+}
+
 function graphUnsupportedForList(opts: MailGraphCommandOptions): boolean {
   return Boolean(
     opts.download ||

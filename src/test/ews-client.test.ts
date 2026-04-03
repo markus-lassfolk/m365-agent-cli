@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
+import { mockResolveNamesResponse } from './mocks/responses.js';
 
 const okUpdateResponse = `<?xml version="1.0" encoding="utf-8"?>
 <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages" xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types">
@@ -119,6 +120,33 @@ describe('ews-client safety and conflict behavior', () => {
     expect(result.ok).toBe(false);
     expect(result.error?.code).toBe('EWS_ERROR');
     expect(result.error?.message).toContain('Failed to resolve OWA user info');
+  });
+
+  it('getOwaUserInfo embeds process.env.EWS_USERNAME at call time in ResolveNames', async () => {
+    const prev = process.env.EWS_USERNAME;
+    const bodies: string[] = [];
+    globalThis.fetch = mock(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      bodies.push(String(init?.body || ''));
+      return new Response(mockResolveNamesResponse, { status: 200, headers: { 'content-type': 'text/xml' } });
+    }) as unknown as typeof fetch;
+
+    try {
+      delete process.env.EWS_USERNAME;
+      const { getOwaUserInfo } = await import('../lib/ews-client.js');
+      await getOwaUserInfo('tok');
+      expect(bodies[0]).toContain('<m:UnresolvedEntry></m:UnresolvedEntry>');
+
+      process.env.EWS_USERNAME = 'alice@contoso.com';
+      await getOwaUserInfo('tok');
+      expect(bodies[1]).toContain('alice@contoso.com');
+      expect(bodies[1]).toContain('<m:UnresolvedEntry>');
+    } finally {
+      if (prev === undefined) {
+        delete process.env.EWS_USERNAME;
+      } else {
+        process.env.EWS_USERNAME = prev;
+      }
+    }
   });
 
   it('parses TimeZone correctly from CalendarItem StartTimeZone and EndTimeZone', async () => {

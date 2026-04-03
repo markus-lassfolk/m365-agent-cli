@@ -5,6 +5,7 @@ Official request/response schemas are defined by Microsoft (OpenAPI / metadata).
 | Resource | Canonical docs |
 | --- | --- |
 | Error JSON (`error.code`, `error.message`, `innerError`) | [Microsoft Graph error responses](https://learn.microsoft.com/en-us/graph/errors) |
+| OAuth2 token endpoint errors (`error`, `error_description`, optional `error_codes`) | [Azure AD OAuth errors](https://learn.microsoft.com/en-us/azure/active-directory/develop/reference-aadsts-error-codes) — e.g. `invalid_grant` when refresh token does not match client |
 | `sendMail` | [sendMail](https://learn.microsoft.com/en-us/graph/api/user-sendmail) — body is `{ message, saveToSentItems }` |
 | OData | [OData protocol](https://learn.microsoft.com/en-us/graph/use-the-api) |
 

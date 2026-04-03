@@ -596,6 +596,7 @@ export const createEventCommand = new Command('create-event')
             const joinUrl = ev.onlineMeeting?.joinUrl;
             const hasPartialSuccess = 'partialSuccess' in gr && gr.partialSuccess;
             if (options.json) {
+              const om = ev.onlineMeeting;
               console.log(
                 JSON.stringify(
                   {
@@ -610,6 +611,16 @@ export const createEventCommand = new Command('create-event')
                       end: ev.end?.dateTime,
                       webLink: ev.webLink,
                       onlineMeetingUrl: joinUrl,
+                      onlineMeeting: om ?? undefined,
+                      teamsMeeting:
+                        joinUrl || om?.conferenceId
+                          ? {
+                              joinUrl: joinUrl,
+                              conferenceId: om?.conferenceId,
+                              quickDial: om?.quickDial,
+                              tollNumber: om?.tollNumber
+                            }
+                          : undefined,
                       recurring: !!recurrence,
                       recurrence: recurrence
                         ? {

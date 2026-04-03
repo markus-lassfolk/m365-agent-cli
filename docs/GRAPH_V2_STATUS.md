@@ -39,12 +39,13 @@ Implementation: `src/lib/exchange-backend.ts` (`shouldTryGraphFirst`, `isAutoMod
 | `calendar` | Graph: **`listCalendarView`** for the resolved range when `graph` / `auto` (range flags include **`--days`**, **`--business-days`** / **`--next-business-days`**, **`--now`** to clip the query start to the current instant); **`--list-attachments` / `--download-attachments`** use Graph **`/events/{id}/attachments`** when `graph` / `auto` (EWS fallback in `auto` if Graph auth fails); `auto` falls back to EWS on list-view failure |
 | `findtime` | Graph: **`findMeetingTimes`**, then **`getSchedule`** + merged `availabilityView`; EWS `GetUserAvailability` only when `ews` or `auto` after both Graph paths fail |
 | `create-event` | Graph: **`POST /me/events`** + attachments; **Places** (`/places/microsoft.graph.room`) for **`--list-rooms`**, **`--find-room`**, **`--room` by name**; calendar free/busy via room `calendarView`; `auto` falls back to EWS for room flows if Graph fails |
-| `delete-event` | Graph: **`listCalendarView`** + organizer filter + `--search`; **`cancel`** vs **`delete`**; occurrence/instance id matching via **`seriesMasterId`**. **`--scope future`:** **EWS** when listing uses EWS (`ews` / `auto` after Graph list failure); **Graph** path still errors until series recurrence PATCH is implemented |
-| `respond` | Graph: **`list`** via calendarView + pending filter; **`accept` / `decline` / `tentative`** via **`POST …/accept|decline|tentativelyAccept`**; organizer guard; `auto` falls back to EWS on Graph failure |
+| `delete-event` | Graph: **`listCalendarView`** + organizer filter + `--search`; **`cancel`** vs **`delete`**; occurrence/instance id matching via **`seriesMasterId`**. **`--scope future`:** **`GET …/instances`** + **PATCH** recurrence on series master (`graph-calendar-recurrence.ts`); EWS uses SOAP `deleteEvent` when listing is EWS |
+| `respond` | Graph: **`list`** via calendarView + pending filter; invitation responses via **`POST …/accept`**, **`…/decline`**, **`…/tentativelyAccept`**; organizer guard; **`auto`** falls back to EWS on Graph failure |
 | `todo create --link` | Graph: **`GET …/messages/{id}`** (`getMessage`); shared mailbox via **`--user`** / **`--mailbox`** |
 | `delegates list` | Graph: **`calendar/calendarPermissions`** when **`graph`**; **`auto`:** Graph then EWS; **`add`/`update`/`remove`:** EWS (blocked when **`graph`**) |
 | `update-event` | Graph: list + **`PATCH …/events/{id}`** + attachments + **`PATCH attendees`** + **`--room` by name** + **`--occurrence` / `--instance`** (`seriesMasterId`); **`auto`** on Graph failure **does not** fall back to EWS if IDs came from Graph |
 | `outlook-graph-client` | `listAllMailFoldersRecursive`; `MessagesQueryOptions.skip`; `OutlookMessage` body / lastModified |
+| **`teams` / `bookings` / `excel` / `graph` / `presence`** | Graph-only commands: Teams (**incl. incoming-channels**), Bookings (**business-get**, **service-get**, **staff-get**), Excel on drive, **`graph invoke`/`batch`**, presence read |
 | Unit tests | `src/lib/exchange-backend.test.ts`; **`graph-calendar-client`**: PATCH/DELETE/cancel; **`graph-event`**: accept/decline/tentativelyAccept |
 | Integration | **`cli.integration.test.ts`**: `Graph backend` describe sets `M365_EXCHANGE_BACKEND=graph` — whoami, `update-event` / `delete-event` list, `update-event` PATCH, `respond list`; global `fetch` mock extended for **`/me`**, **`calendarView`**, event PATCH/DELETE/cancel/respond; **`runM365AgentCli`** clears leaked Commander flags (`--json`, `--id`, `--day`, …) on shared commands before each parse; **EWS** `--json` list-mode tests for `update-event` / `delete-event` re-enabled |
 
@@ -52,8 +53,8 @@ Implementation: `src/lib/exchange-backend.ts` (`shouldTryGraphFirst`, `isAutoMod
 
 ## Next (priority order — aligns with epic phases)
 
-1. **Calendar parity** — Graph **`delete-event --scope future`** (or documented workaround).  
-2. **Phase 6** — Remove EWS client usage when parity is verified — epic Phase 6 (optional: drop duplicate `GRAPH_REFRESH_TOKEN` / `EWS_REFRESH_TOKEN` env names after deprecation window).
+1. **Phase 6** — Remove EWS client usage when parity is verified — epic Phase 6 (optional: drop duplicate `GRAPH_REFRESH_TOKEN` / `EWS_REFRESH_TOKEN` env names after deprecation window).
+2. Remaining **🟡** areas — see [`MIGRATION_TRACKING.md`](./MIGRATION_TRACKING.md) (`update-event` mixed IDs, `login`/auth polish, etc.).
 
 ---
 
@@ -66,4 +67,4 @@ Implementation: `src/lib/exchange-backend.ts` (`shouldTryGraphFirst`, `isAutoMod
 
 ---
 
-*Last updated: 2026-04-02 — **Configuration**: documented **Graph-first `auto`** (EWS only on Graph failure or no Graph path); **`delete-event --scope future`**: EWS unblocked; Graph still in “Next”.*
+*Last updated: 2026-04-03 — **`teams incoming-channels`**; **`bookings` single-resource GETs**; README + **`skills/m365-agent-cli/SKILL.md`** aligned with Graph command surface.*

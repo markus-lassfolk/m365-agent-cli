@@ -11,7 +11,13 @@ import {
 } from '../lib/delegate-client.js';
 import { getExchangeBackend } from '../lib/exchange-backend.js';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
-import { type GraphCalendarPermission, listCalendarPermissions } from '../lib/graph-calendar-client.js';
+import {
+  createCalendarPermission,
+  deleteCalendarPermission,
+  type GraphCalendarPermission,
+  listCalendarPermissions,
+  updateCalendarPermission
+} from '../lib/graph-calendar-client.js';
 import { checkReadOnly } from '../lib/utils.js';
 
 const VALID_PERMISSIONS = [
@@ -53,6 +59,7 @@ function formatGraphCalendarPermission(p: GraphCalendarPermission): string {
   const addr = p.emailAddress?.address || p.emailAddress?.name || '(unknown)';
   const lines: string[] = [];
   lines.push(`  ${addr}`);
+  if (p.id) lines.push(`    id: ${p.id}`);
   if (p.role) lines.push(`    role: ${p.role}`);
   if (p.allowedRoles?.length) lines.push(`    allowedRoles: ${p.allowedRoles.join(', ')}`);
   if (p.isInsideOrganization !== undefined) lines.push(`    insideOrganization: ${p.isInsideOrganization}`);
@@ -63,7 +70,7 @@ function formatGraphCalendarPermission(p: GraphCalendarPermission): string {
 function requireEwsForDelegateMutations(): void {
   if (getExchangeBackend() === 'graph') {
     console.error(
-      'Error: add/update/remove delegates require EWS (EWS SOAP). Set M365_EXCHANGE_BACKEND=ews, or manage calendar sharing in Outlook.\n' +
+      'Error: add/update/remove delegates require EWS (EWS SOAP). Set M365_EXCHANGE_BACKEND=ews, or use `delegates calendar-share` for Graph calendar permissions.\n' +
         'See: https://learn.microsoft.com/en-us/graph/outlook-share-or-delegate-calendar'
     );
     process.exit(1);
@@ -84,7 +91,7 @@ listCommand
     if (backend === 'graph') {
       const ga = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
       if (!ga.success || !ga.token) {
-        console.error('Auth failed:', ga.error);
+        console.error(`Error: ${ga.error || 'Graph authentication failed'}`);
         process.exit(1);
       }
       const result = await listCalendarPermissions(ga.token, opts.mailbox);
@@ -358,14 +365,234 @@ removeCommand
     console.log(`Delegate ${opts.email} removed.`);
   });
 
+/** Microsoft Graph [calendarRoleType](https://learn.microsoft.com/en-us/graph/api/resources/calendarpermission#calendarroletype-values) — not EWS folder matrix. */
+const GRAPH_CALENDAR_SHARE_ROLES = [
+  'freeBusyRead',
+  'limitedRead',
+  'read',
+  'write',
+  'delegateWithoutPrivateEventDetails',
+  'delegateWithPrivateEventDetails',
+  'custom'
+] as const;
+
+async function findCalendarPermissionIdByEmail(
+  token: string,
+  email: string,
+  mailbox?: string
+): Promise<string | undefined> {
+  const r = await listCalendarPermissions(token, mailbox);
+  if (!r.ok || !r.data) return undefined;
+  const lower = email.trim().toLowerCase();
+  const row = r.data.find((p) => p.emailAddress?.address?.toLowerCase() === lower);
+  return row?.id;
+}
+
+// ─── calendar-share (Graph calendarPermissions only) ───
+
+const calendarShareRoot = new Command('calendar-share').description(
+  'Microsoft Graph calendar sharing: create/update/delete [calendarPermission](https://learn.microsoft.com/en-us/graph/api/resources/calendarpermission) on the default calendar. Distinct from EWS `delegates add|update|remove`. Requires Calendars.ReadWrite.'
+);
+
+const calendarShareAdd = new Command('add');
+calendarShareAdd
+  .description('POST calendarPermissions — share calendar with a user by email')
+  .requiredOption('--email <email>', 'Recipient SMTP address')
+  .requiredOption(
+    '--role <role>',
+    `Permission: ${GRAPH_CALENDAR_SHARE_ROLES.join(', ')} (Graph may accept other values)`
+  )
+  .option('--name <name>', 'Display name for emailAddress (optional)')
+  .option('--inside-org', 'Set isInsideOrganization true', false)
+  .option('--mailbox <email>', 'Calendar owner (shared mailbox / user id for Graph)')
+  .option('--json', 'Output as JSON')
+  .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Use a specific authentication identity (default: default)')
+  .action(
+    async (
+      opts: {
+        email: string;
+        role: string;
+        name?: string;
+        insideOrg?: boolean;
+        mailbox?: string;
+        json?: boolean;
+        token?: string;
+        identity?: string;
+      },
+      cmd: any
+    ) => {
+      checkReadOnly(cmd);
+      const ga = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!ga.success || !ga.token) {
+        console.error(`Error: ${ga.error || 'Graph authentication failed'}`);
+        process.exit(1);
+      }
+      const result = await createCalendarPermission(
+        ga.token,
+        {
+          emailAddress: { address: opts.email.trim(), name: opts.name?.trim() || undefined },
+          role: opts.role.trim(),
+          isInsideOrganization: opts.insideOrg === true ? true : undefined
+        },
+        opts.mailbox?.trim() || undefined
+      );
+      if (!result.ok || !result.data) {
+        if (opts.json) {
+          console.log(JSON.stringify({ error: result.error?.message || 'Failed' }, null, 2));
+        } else {
+          console.error(`Error: ${result.error?.message || 'Failed to create calendar permission'}`);
+        }
+        process.exit(1);
+      }
+      if (opts.json) {
+        console.log(JSON.stringify({ backend: 'graph', permission: result.data }, null, 2));
+      } else {
+        console.log('Calendar share created (Graph):');
+        console.log(formatGraphCalendarPermission(result.data));
+      }
+    }
+  );
+
+const calendarShareUpdate = new Command('update');
+calendarShareUpdate
+  .description('PATCH calendarPermissions/{id} — change role')
+  .option('--permission-id <id>', 'Graph calendarPermission id (from `delegates list`)')
+  .option('--email <email>', 'Resolve permission id by recipient email (if unique)')
+  .requiredOption('--role <role>', `New role: ${GRAPH_CALENDAR_SHARE_ROLES.join(', ')}`)
+  .option('--mailbox <email>', 'Calendar owner')
+  .option('--json', 'Output as JSON')
+  .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Use a specific authentication identity (default: default)')
+  .action(
+    async (
+      opts: {
+        permissionId?: string;
+        email?: string;
+        role: string;
+        mailbox?: string;
+        json?: boolean;
+        token?: string;
+        identity?: string;
+      },
+      cmd: any
+    ) => {
+      checkReadOnly(cmd);
+      const ga = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!ga.success || !ga.token) {
+        console.error(`Error: ${ga.error || 'Graph authentication failed'}`);
+        process.exit(1);
+      }
+      let permId = opts.permissionId?.trim();
+      if (!permId && opts.email?.trim()) {
+        permId = await findCalendarPermissionIdByEmail(ga.token, opts.email.trim(), opts.mailbox?.trim());
+        if (!permId) {
+          const msg = `No calendar permission found for ${opts.email.trim()}`;
+          if (opts.json) console.log(JSON.stringify({ error: msg }, null, 2));
+          else console.error(`Error: ${msg}`);
+          process.exit(1);
+        }
+      }
+      if (!permId) {
+        const msg = 'Provide --permission-id or --email';
+        if (opts.json) console.log(JSON.stringify({ error: msg }, null, 2));
+        else console.error(`Error: ${msg}`);
+        process.exit(1);
+      }
+      const result = await updateCalendarPermission(
+        ga.token,
+        permId,
+        { role: opts.role.trim() },
+        opts.mailbox?.trim() || undefined
+      );
+      if (!result.ok || !result.data) {
+        if (opts.json) {
+          console.log(JSON.stringify({ error: result.error?.message || 'Failed' }, null, 2));
+        } else {
+          console.error(`Error: ${result.error?.message || 'Failed to update calendar permission'}`);
+        }
+        process.exit(1);
+      }
+      if (opts.json) {
+        console.log(JSON.stringify({ backend: 'graph', permission: result.data }, null, 2));
+      } else {
+        console.log('Calendar share updated (Graph):');
+        console.log(formatGraphCalendarPermission(result.data));
+      }
+    }
+  );
+
+const calendarShareRemove = new Command('remove');
+calendarShareRemove
+  .description('DELETE calendarPermissions/{id} — remove calendar share')
+  .option('--permission-id <id>', 'Graph calendarPermission id')
+  .option('--email <email>', 'Resolve permission id by recipient email')
+  .option('--mailbox <email>', 'Calendar owner')
+  .option('--json', 'Output as JSON')
+  .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Use a specific authentication identity (default: default)')
+  .action(
+    async (
+      opts: {
+        permissionId?: string;
+        email?: string;
+        mailbox?: string;
+        json?: boolean;
+        token?: string;
+        identity?: string;
+      },
+      cmd: any
+    ) => {
+      checkReadOnly(cmd);
+      const ga = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!ga.success || !ga.token) {
+        console.error(`Error: ${ga.error || 'Graph authentication failed'}`);
+        process.exit(1);
+      }
+      let permId = opts.permissionId?.trim();
+      if (!permId && opts.email?.trim()) {
+        permId = await findCalendarPermissionIdByEmail(ga.token, opts.email.trim(), opts.mailbox?.trim());
+        if (!permId) {
+          const msg = `No calendar permission found for ${opts.email.trim()}`;
+          if (opts.json) console.log(JSON.stringify({ error: msg }, null, 2));
+          else console.error(`Error: ${msg}`);
+          process.exit(1);
+        }
+      }
+      if (!permId) {
+        const msg = 'Provide --permission-id or --email';
+        if (opts.json) console.log(JSON.stringify({ error: msg }, null, 2));
+        else console.error(`Error: ${msg}`);
+        process.exit(1);
+      }
+      const result = await deleteCalendarPermission(ga.token, permId, opts.mailbox?.trim() || undefined);
+      if (!result.ok) {
+        if (opts.json) {
+          console.log(JSON.stringify({ error: result.error?.message || 'Failed' }, null, 2));
+        } else {
+          console.error(`Error: ${result.error?.message || 'Failed to delete calendar permission'}`);
+        }
+        process.exit(1);
+      }
+      if (opts.json) {
+        console.log(JSON.stringify({ success: true, backend: 'graph', removedId: permId }, null, 2));
+      } else {
+        console.log(`Calendar share removed (Graph): ${permId}`);
+      }
+    }
+  );
+
+calendarShareRoot.addCommand(calendarShareAdd).addCommand(calendarShareUpdate).addCommand(calendarShareRemove);
+
 // ─── Root ───
 
 export const delegatesCommand = new Command('delegates');
 delegatesCommand
   .description(
-    'Delegates: list (Graph calendar permissions or EWS); add/update/remove (EWS — set M365_EXCHANGE_BACKEND=ews or auto)'
+    'Delegates: list (Graph calendar permissions or EWS); calendar-share add|update|remove (Graph); add|update|remove (EWS — set M365_EXCHANGE_BACKEND=ews or auto)'
   )
   .addCommand(listCommand)
+  .addCommand(calendarShareRoot)
   .addCommand(addCommand)
   .addCommand(updateCommand)
   .addCommand(removeCommand);

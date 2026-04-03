@@ -65,6 +65,7 @@ az ad app update \
   --set publicClient='{"redirectUris":["http://localhost"]}' isFallbackPublicClient=true
 
 echo "Adding Required Resource Access (API Permissions) for Graph API and Exchange Online..."
+echo "(Graph delegated scopes align with GRAPH_DEVICE_CODE_LOGIN_SCOPES in src/lib/graph-oauth-scopes.ts)"
 
 TEMP_JSON=$(mktemp)
 cat <<EOF > "$TEMP_JSON"
@@ -89,8 +90,18 @@ cat <<EOF > "$TEMP_JSON"
       { "id": "2219042f-cab5-40cc-b0d2-16b1540b4c5f", "type": "Scope" },
       { "id": "4e46008b-f24c-477d-8fff-7bb4ec7aafe0", "type": "Scope" },
       { "id": "d56682ec-c09e-4743-aaf4-1a3aac4caa21", "type": "Scope" },
+      { "id": "242b9d9e-ed24-4d09-9a52-f43769beb9d4", "type": "Scope" },
+      { "id": "afb6c84b-06be-49af-80bb-8f3f77004eab", "type": "Scope" },
       { "id": "a65f2972-a4f8-4f5e-afd7-69ccb046d5dc", "type": "Scope" },
       { "id": "64ac0503-b4fa-45d9-b544-71a463f05da0", "type": "Scope" },
+      { "id": "485be79e-c497-4b35-9400-0e3fa7f2a5d4", "type": "Scope" },
+      { "id": "9d8982ae-4365-4f57-95e9-d6032a4c0b87", "type": "Scope" },
+      { "id": "767156cb-16ae-4d10-8f8b-41b657c8c8c8", "type": "Scope" },
+      { "id": "ebf0f66e-9fb1-49e4-a278-222f76911cf4", "type": "Scope" },
+      { "id": "9c7a330d-35b3-4aa1-963d-cb2b9f927841", "type": "Scope" },
+      { "id": "8d3c54a7-cf58-4773-bf81-c0cd6ad522bb", "type": "Scope" },
+      { "id": "948eb538-f19d-4ec5-9ccc-f059e1ea4c72", "type": "Scope" },
+      { "id": "9ff7295e-131b-4d94-90e1-69fde507ac11", "type": "Scope" },
       { "id": "7427e0e9-2fba-42fe-b0c0-848c9e6a8182", "type": "Scope" }
     ]
   },

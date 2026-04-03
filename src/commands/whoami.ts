@@ -200,12 +200,16 @@ export const whoamiCommand = new Command('whoami')
       identity: options.identity
     });
     if (graphAuth.success && graphAuth.token) {
-      const userInfo = await fetchGraphMe(graphAuth.token);
-      if (userInfo.ok && userInfo.data) {
-        const displayName = userInfo.data.displayName || '(unknown)';
-        const email = userInfo.data.mail || userInfo.data.userPrincipalName || '';
-        outputGraph(displayName, email, options);
-        return;
+      try {
+        const userInfo = await fetchGraphMe(graphAuth.token);
+        if (userInfo.ok && userInfo.data) {
+          const displayName = userInfo.data.displayName || '(unknown)';
+          const email = userInfo.data.mail || userInfo.data.userPrincipalName || '';
+          outputGraph(displayName, email, options);
+          return;
+        }
+      } catch {
+        // Any Graph /me failure (GraphApiError from callGraph, network errors, etc.) — fall back to EWS in auto mode
       }
     }
 

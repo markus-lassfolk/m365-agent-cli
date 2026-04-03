@@ -6,7 +6,7 @@ import { Command } from 'commander';
 import { atomicWriteUtf8File } from '../lib/atomic-write.js';
 import { GRAPH_DEVICE_CODE_LOGIN_SCOPES } from '../lib/graph-oauth-scopes.js';
 import { getMicrosoftTenantPathSegment } from '../lib/jwt-utils.js';
-import { getGlobalEnvFilePath } from '../lib/utils.js';
+import { applyEnvFileOverrides, getGlobalEnvFilePath, resolveEnvFilePathArgument } from '../lib/utils.js';
 
 async function performDeviceCodeFlow(
   clientId: string,
@@ -127,10 +127,18 @@ async function performDeviceCodeFlow(
 
 export const loginCommand = new Command('login')
   .description('Interactive login to obtain refresh tokens via OAuth2 Device Code flow')
-  .action(async () => {
-    let clientId = process.env.EWS_CLIENT_ID;
+  .option(
+    '--env-file <path>',
+    'Load/save EWS_CLIENT_ID and refresh tokens in this file (e.g. ~/.config/m365-agent-cli/.env.beta). Overrides vars from the default .env loaded at startup.'
+  )
+  .action(async (opts: { envFile?: string }) => {
+    let envPath = getGlobalEnvFilePath();
+    if (opts.envFile) {
+      envPath = resolveEnvFilePathArgument(opts.envFile);
+      applyEnvFileOverrides(envPath);
+    }
 
-    const envPath = getGlobalEnvFilePath();
+    let clientId = process.env.EWS_CLIENT_ID;
     mkdirSync(dirname(envPath), { recursive: true, mode: 0o700 });
     let envContent = '';
     if (existsSync(envPath)) {
@@ -161,6 +169,16 @@ export const loginCommand = new Command('login')
       envContent += `\nEWS_CLIENT_ID=${clientId}\n`;
       await atomicWriteUtf8File(envPath, `${envContent.trim()}\n`, 0o600);
     }
+
+    console.log('');
+    console.log(`Configuration file: ${envPath}`);
+    if (!process.env.M365_AGENT_ENV_FILE?.trim() && !opts.envFile) {
+      console.log(
+        'Tip: For a second app (e.g. beta), use --env-file ~/.config/m365-agent-cli/.env.beta or export M365_AGENT_ENV_FILE to that path before running the CLI.'
+      );
+    }
+    console.log(`Application (client) ID: ${clientId}`);
+    console.log('');
 
     const tenant = getMicrosoftTenantPathSegment();
 

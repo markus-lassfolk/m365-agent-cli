@@ -157,33 +157,77 @@ if (-not (Get-MgContext -ErrorAction SilentlyContinue)) {
 }
 
 # Define the API permissions (Required Resource Access)
+# Microsoft Graph delegated scopes: mirror GRAPH_DEVICE_CODE_LOGIN_SCOPES in src/lib/graph-oauth-scopes.ts
+# (each Id is the oauth2PermissionScopes id on the Microsoft Graph service principal).
+# offline_access is listed last in this block; Exchange Online (EWS) is a separate resource below.
 # Microsoft Graph API (00000003-0000-0000-c000-000000000000)
 $GraphResourceAccess = @(
-    @{ Id = "e1fe6dd8-ba31-4d61-89e7-88639da4683d"; Type = "Scope" }, # User.Read
-    @{ Id = "1ec239c2-d7c9-4623-a91a-a9775856bb36"; Type = "Scope" }, # Calendars.ReadWrite
-    @{ Id = "2b9c4092-424d-4249-948d-b43879977640"; Type = "Scope" }, # Calendars.Read.Shared
-    @{ Id = "12466101-c9b8-439a-8589-dd09ee67e8e9"; Type = "Scope" }, # Calendars.ReadWrite.Shared
-    @{ Id = "e383f46e-2787-4529-855e-0e479a3ffac0"; Type = "Scope" }, # Mail.Send
-    @{ Id = "024d486e-b451-40bb-833d-3e66d98c5c73"; Type = "Scope" }, # Mail.ReadWrite
-    @{ Id = "7b9103a5-4610-446b-9670-80643382c1fa"; Type = "Scope" }, # Mail.Read.Shared
-    @{ Id = "5df07973-7d5d-46ed-9847-1271055cbd51"; Type = "Scope" }, # Mail.ReadWrite.Shared
-    @{ Id = "818c620a-27a9-40bd-a6a5-d96f7d610b4b"; Type = "Scope" }, # MailboxSettings.ReadWrite
-    @{ Id = "cb8f45a0-5c2e-4ea1-b803-84b870a7d7ec"; Type = "Scope" }, # Place.Read.All
-    @{ Id = "ba47897c-39ec-4d83-8086-ee8256fa737d"; Type = "Scope" }, # People.Read
-    @{ Id = "a154be20-db9c-4678-8ab7-66f6cc099a59"; Type = "Scope" }, # User.Read.All
-    @{ Id = "863451e7-0667-486c-a5d6-d135439485f0"; Type = "Scope" }, # Files.ReadWrite.All
-    @{ Id = "89fe6a52-be36-487e-b7d8-d061c450a026"; Type = "Scope" }, # Sites.ReadWrite.All
-    @{ Id = "2219042f-cab5-40cc-b0d2-16b1540b4c5f"; Type = "Scope" }, # Tasks.ReadWrite
-    @{ Id = "4e46008b-f24c-477d-8fff-7bb4ec7aafe0"; Type = "Scope" }, # Group.ReadWrite.All
-    @{ Id = "d56682ec-c09e-4743-aaf4-1a3aac4caa21"; Type = "Scope" }, # Contacts.ReadWrite
-    @{ Id = "a65f2972-a4f8-4f5e-afd7-69ccb046d5dc"; Type = "Scope" }, # OnlineMeetings.ReadWrite
-    @{ Id = "64ac0503-b4fa-45d9-b544-71a463f05da0"; Type = "Scope" }, # Notes.ReadWrite.All
-    @{ Id = "7427e0e9-2fba-42fe-b0c0-848c9e6a8182"; Type = "Scope" }  # offline_access
+    # User.Read
+    @{ Id = "e1fe6dd8-ba31-4d61-89e7-88639da4683d"; Type = "Scope" },
+    # Calendars.ReadWrite
+    @{ Id = "1ec239c2-d7c9-4623-a91a-a9775856bb36"; Type = "Scope" },
+    # Calendars.Read.Shared
+    @{ Id = "2b9c4092-424d-4249-948d-b43879977640"; Type = "Scope" },
+    # Calendars.ReadWrite.Shared
+    @{ Id = "12466101-c9b8-439a-8589-dd09ee67e8e9"; Type = "Scope" },
+    # Mail.Send
+    @{ Id = "e383f46e-2787-4529-855e-0e479a3ffac0"; Type = "Scope" },
+    # Mail.ReadWrite
+    @{ Id = "024d486e-b451-40bb-833d-3e66d98c5c73"; Type = "Scope" },
+    # Mail.Read.Shared
+    @{ Id = "7b9103a5-4610-446b-9670-80643382c1fa"; Type = "Scope" },
+    # Mail.ReadWrite.Shared
+    @{ Id = "5df07973-7d5d-46ed-9847-1271055cbd51"; Type = "Scope" },
+    # MailboxSettings.ReadWrite
+    @{ Id = "818c620a-27a9-40bd-a6a5-d96f7d610b4b"; Type = "Scope" },
+    # Place.Read.All
+    @{ Id = "cb8f45a0-5c2e-4ea1-b803-84b870a7d7ec"; Type = "Scope" },
+    # People.Read
+    @{ Id = "ba47897c-39ec-4d83-8086-ee8256fa737d"; Type = "Scope" },
+    # User.Read.All
+    @{ Id = "a154be20-db9c-4678-8ab7-66f6cc099a59"; Type = "Scope" },
+    # Files.ReadWrite.All
+    @{ Id = "863451e7-0667-486c-a5d6-d135439485f0"; Type = "Scope" },
+    # Sites.ReadWrite.All
+    @{ Id = "89fe6a52-be36-487e-b7d8-d061c450a026"; Type = "Scope" },
+    # Tasks.ReadWrite
+    @{ Id = "2219042f-cab5-40cc-b0d2-16b1540b4c5f"; Type = "Scope" },
+    # Group.ReadWrite.All
+    @{ Id = "4e46008b-f24c-477d-8fff-7bb4ec7aafe0"; Type = "Scope" },
+    # Contacts.ReadWrite
+    @{ Id = "d56682ec-c09e-4743-aaf4-1a3aac4caa21"; Type = "Scope" },
+    # Contacts.Read.Shared
+    @{ Id = "242b9d9e-ed24-4d09-9a52-f43769beb9d4"; Type = "Scope" },
+    # Contacts.ReadWrite.Shared
+    @{ Id = "afb6c84b-06be-49af-80bb-8f3f77004eab"; Type = "Scope" },
+    # OnlineMeetings.ReadWrite
+    @{ Id = "a65f2972-a4f8-4f5e-afd7-69ccb046d5dc"; Type = "Scope" },
+    # Notes.ReadWrite.All
+    @{ Id = "64ac0503-b4fa-45d9-b544-71a463f05da0"; Type = "Scope" },
+    # Team.ReadBasic.All
+    @{ Id = "485be79e-c497-4b35-9400-0e3fa7f2a5d4"; Type = "Scope" },
+    # Channel.ReadBasic.All
+    @{ Id = "9d8982ae-4365-4f57-95e9-d6032a4c0b87"; Type = "Scope" },
+    # ChannelMessage.Read.All
+    @{ Id = "767156cb-16ae-4d10-8f8b-41b657c8c8c8"; Type = "Scope" },
+    # ChannelMessage.Send
+    @{ Id = "ebf0f66e-9fb1-49e4-a278-222f76911cf4"; Type = "Scope" },
+    # Presence.Read.All
+    @{ Id = "9c7a330d-35b3-4aa1-963d-cb2b9f927841"; Type = "Scope" },
+    # Presence.ReadWrite
+    @{ Id = "8d3c54a7-cf58-4773-bf81-c0cd6ad522bb"; Type = "Scope" },
+    # Bookings.ReadWrite.All
+    @{ Id = "948eb538-f19d-4ec5-9ccc-f059e1ea4c72"; Type = "Scope" },
+    # Chat.ReadWrite
+    @{ Id = "9ff7295e-131b-4d94-90e1-69fde507ac11"; Type = "Scope" },
+    # offline_access
+    @{ Id = "7427e0e9-2fba-42fe-b0c0-848c9e6a8182"; Type = "Scope" }
 )
 
 # Office 365 Exchange Online (00000002-0000-0ff1-ce00-000000000000)
 $ExchangeResourceAccess = @(
-    @{ Id = "3b5f3d61-589b-4a3c-a359-5dd4b5ee5bd5"; Type = "Scope" }  # EWS.AccessAsUser.All
+    # EWS.AccessAsUser.All
+    @{ Id = "3b5f3d61-589b-4a3c-a359-5dd4b5ee5bd5"; Type = "Scope" }
 )
 
 $RequiredResourceAccess = @(

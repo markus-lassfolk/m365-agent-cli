@@ -17,9 +17,7 @@ function graphSendDeniedHint(message: string, code?: string): string | undefined
   const lower = message.toLowerCase();
   const codeMatch = (code || '').toLowerCase().includes('erroraccess') || lower.includes('erroraccessdenied');
   if (codeMatch || lower.includes('access is denied')) {
-    return (
-      'Hint: add delegated Mail.Send (and Mail.ReadWrite) on the Entra app, admin-consent if needed, then `m365-agent-cli login` again. See docs/GRAPH_SCOPES.md. Or set M365_EXCHANGE_BACKEND=ews to use EWS for this send.'
-    );
+    return 'Hint: add delegated Mail.Send (and Mail.ReadWrite) on the Entra app, admin-consent if needed, then `m365-agent-cli login` again. See docs/GRAPH_SCOPES.md. Or set M365_EXCHANGE_BACKEND=ews to use EWS for this send.';
   }
   return undefined;
 }

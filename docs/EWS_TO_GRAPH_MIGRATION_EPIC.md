@@ -66,7 +66,7 @@ Until a slice is marked **EWS removed**, implementations should follow a consist
 | Drafts | `drafts` | Graph draft messages | Graph **list**; other flows EWS | [#211](https://github.com/markus-lassfolk/m365-agent-cli/issues/211) | 🟡 |
 | Folders | `folders` | mailFolders | Graph CRUD + recursive list when `graph`/`auto` | [#212](https://github.com/markus-lassfolk/m365-agent-cli/issues/212) | 🟡 |
 | Todo link | `todo --link` | Graph get message | **`getMessage`** (`outlook-graph-client`) for `todo create --link` | [#213](https://github.com/markus-lassfolk/m365-agent-cli/issues/213) | 🟡 |
-| Calendar write | `create-event`, `update-event`, `delete-event` | Events API + online meetings | Graph paths when `graph`/`auto` (see status doc for unsupported flags) | [#214](https://github.com/markus-lassfolk/m365-agent-cli/issues/214) | 🟡 |
+| Calendar write | `create-event`, `update-event`, `delete-event` | Events API + online meetings | Graph paths when `graph`/`auto` (incl. **`delete-event --scope future`** via instances + PATCH); **`update-event`** still has mixed-ID caveats | [#214](https://github.com/markus-lassfolk/m365-agent-cli/issues/214) | 🟡 |
 | Meeting response | `respond` | Accept/decline/tentative via Graph | Graph when `graph`/`auto` | [#215](https://github.com/markus-lassfolk/m365-agent-cli/issues/215) | 🟡 |
 | Forward / counter | `forward-event`, `counter` | Event forward / propose times | **Graph** (`graph-event`) | [#216](https://github.com/markus-lassfolk/m365-agent-cli/issues/216) | ✅ |
 | Auto-reply (EWS) | `auto-reply` | Deprecate in favor of Graph `oof` / mailboxSettings | **`oof`** Graph; **`auto-reply`** EWS (help text prefers `oof`) | [#217](https://github.com/markus-lassfolk/m365-agent-cli/issues/217) | 🟡 |
@@ -117,7 +117,7 @@ Legend: ⬜ not started / EWS-only · 🟡 in progress / partial Graph · ✅ do
 
 ### Phase 3 — Calendar writes + meeting actions
 
-- [x] `create-event`, `update-event`, `delete-event` (Graph when `graph`/`auto`; see `GRAPH_V2_STATUS.md` for gaps)  
+- [x] `create-event`, `update-event`, `delete-event` (Graph when `graph`/`auto`; **`--scope future`** on Graph; see `MIGRATION_TRACKING.md` for remaining `update-event` id caveats)  
 - [x] `respond` (Graph when `graph`/`auto`)  
 - [x] `forward-event`, `counter` (Graph)  
 

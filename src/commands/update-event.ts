@@ -36,6 +36,10 @@ import { lookupMimeType } from '../lib/mime-type.js';
 import { checkReadOnly } from '../lib/utils.js';
 import { buildGraphUpdatePatch } from './update-event-graph.js';
 
+/** Shown when Graph cannot resolve an event id (often mixed EWS vs Microsoft Graph ids). */
+const GRAPH_EVENT_ID_HINT =
+  'With M365_EXCHANGE_BACKEND=graph, use event ids from Graph-backed listing (`calendar`, `respond list`). EWS-format ids will not load.';
+
 function formatTime(dateStr: string): string {
   const date = new Date(dateStr);
   return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -372,9 +376,12 @@ export const updateEventCommand = new Command('update-event')
         }
         if (!targetGraph) {
           if (options.json) {
-            console.log(JSON.stringify({ error: `Invalid event id: ${options.id}` }, null, 2));
+            console.log(
+              JSON.stringify({ error: `Invalid event id: ${options.id}`, hint: GRAPH_EVENT_ID_HINT }, null, 2)
+            );
           } else {
             console.error(`Invalid event id: ${options.id}`);
+            console.error(GRAPH_EVENT_ID_HINT);
           }
           process.exit(1);
         }
@@ -959,9 +966,21 @@ export const updateEventCommand = new Command('update-event')
             } else {
               if (backend === 'graph') {
                 if (options.json) {
-                  console.log(JSON.stringify({ error: graphGetErr || 'Invalid event id' }, null, 2));
+                  console.log(
+                    JSON.stringify(
+                      {
+                        error: graphGetErr || 'Invalid event id',
+                        id: options.id,
+                        hint: GRAPH_EVENT_ID_HINT
+                      },
+                      null,
+                      2
+                    )
+                  );
                 } else {
-                  console.error(`Invalid event id: ${options.id}`);
+                  const detail = graphGetErr ? `: ${graphGetErr}` : '';
+                  console.error(`Invalid event id: ${options.id}${detail}`);
+                  console.error(GRAPH_EVENT_ID_HINT);
                 }
                 process.exit(1);
               }

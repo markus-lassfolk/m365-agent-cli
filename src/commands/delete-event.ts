@@ -17,6 +17,7 @@ import {
   type GraphCalendarEvent,
   listCalendarView
 } from '../lib/graph-calendar-client.js';
+import { truncateRecurringSeriesBeforeCut } from '../lib/graph-calendar-recurrence.js';
 import { checkReadOnly } from '../lib/utils.js';
 
 function formatTime(dateStr: string): string {
@@ -276,28 +277,6 @@ export const deleteEventCommand = new Command('delete-event')
       let targetGraph: GraphCalendarEvent | undefined;
       let targetEws: CalendarEvent | undefined;
 
-      // EWS supports scope `future` via deleteEvent (SOAP). Graph path still needs series trim (PATCH master recurrence).
-      if (scope === 'future' && useGraph) {
-        if (options.json) {
-          console.log(
-            JSON.stringify(
-              {
-                error:
-                  '--scope future is not implemented for Microsoft Graph yet. Use M365_EXCHANGE_BACKEND=ews, or delete occurrences with --scope this.'
-              },
-              null,
-              2
-            )
-          );
-        } else {
-          console.error('Error: --scope future is not implemented for Microsoft Graph yet.');
-          console.error(
-            'Use M365_EXCHANGE_BACKEND=ews (or auto when the calendar list uses EWS) for this scope, or use --scope this per occurrence.'
-          );
-        }
-        process.exit(1);
-      }
-
       if ((options.occurrence || options.instance) && options.scope === 'all') {
         scope = 'this';
       }
@@ -309,7 +288,7 @@ export const deleteEventCommand = new Command('delete-event')
             | GraphCalendarEvent
             | undefined;
         }
-        if ((options.occurrence || options.instance) && scope === 'this' && targetGraph) {
+        if ((options.occurrence || options.instance) && (scope === 'this' || scope === 'future') && targetGraph) {
           if (options.instance) {
             let instanceDate: Date;
             try {
@@ -360,27 +339,44 @@ export const deleteEventCommand = new Command('delete-event')
             occurrenceItemId = occEvent.id;
             targetGraph = occEvent;
           }
-          console.log(`\nDeleting single occurrence: ${targetGraph.subject ?? '(no subject)'}`);
-          console.log(
-            `  ${formatDate(graphStartDt(targetGraph))} ${formatTime(graphStartDt(targetGraph))} - ${formatTime(targetGraph.end?.dateTime ?? '')}`
-          );
+          if (!options.json) {
+            if (scope === 'future') {
+              console.log(`\nTruncating series from occurrence: ${targetGraph.subject ?? '(no subject)'}`);
+            } else {
+              console.log(`\nDeleting single occurrence: ${targetGraph.subject ?? '(no subject)'}`);
+            }
+            console.log(
+              `  ${formatDate(graphStartDt(targetGraph))} ${formatTime(graphStartDt(targetGraph))} - ${formatTime(targetGraph.end?.dateTime ?? '')}`
+            );
+          }
         } else if (!targetGraph) {
-          console.error(`Invalid event id: ${options.id}`);
+          if (scope === 'future') {
+            console.error(`No occurrence found for event ID: ${options.id} on ${options.day}.`);
+            console.error(
+              `Use --instance <YYYY-MM-DD> to specify the occurrence date, or --day <date> to search a different day.`
+            );
+          } else {
+            console.error(`Invalid event id: ${options.id}`);
+          }
           process.exit(1);
         } else if (scope === 'all') {
-          console.log(`\nDeleting: ${targetGraph.subject ?? '(no subject)'}`);
-          console.log(
-            `  ${formatDate(graphStartDt(targetGraph))} ${formatTime(graphStartDt(targetGraph))} - ${formatTime(targetGraph.end?.dateTime ?? '')}`
-          );
+          if (!options.json) {
+            console.log(`\nDeleting: ${targetGraph.subject ?? '(no subject)'}`);
+            console.log(
+              `  ${formatDate(graphStartDt(targetGraph))} ${formatTime(graphStartDt(targetGraph))} - ${formatTime(targetGraph.end?.dateTime ?? '')}`
+            );
+          }
         } else {
-          console.log(`\nDeleting: ${targetGraph.subject ?? '(no subject)'} (scope: ${scope})`);
-          console.log(
-            `  ${formatDate(graphStartDt(targetGraph))} ${formatTime(graphStartDt(targetGraph))} - ${formatTime(targetGraph.end?.dateTime ?? '')}`
-          );
+          if (!options.json) {
+            console.log(`\nDeleting: ${targetGraph.subject ?? '(no subject)'} (scope: ${scope})`);
+            console.log(
+              `  ${formatDate(graphStartDt(targetGraph))} ${formatTime(graphStartDt(targetGraph))} - ${formatTime(targetGraph.end?.dateTime ?? '')}`
+            );
+          }
         }
       } else {
         targetEws = (events as CalendarEvent[]).find((e) => e.Id === options.id);
-        if ((options.occurrence || options.instance) && scope === 'this') {
+        if ((options.occurrence || options.instance) && (scope === 'this' || scope === 'future')) {
           if (options.instance) {
             let instanceDate: Date;
             try {
@@ -428,27 +424,88 @@ export const deleteEventCommand = new Command('delete-event')
             occurrenceItemId = occEvent.Id;
             targetEws = occEvent;
           }
-          console.log(`\nDeleting single occurrence: ${targetEws!.Subject}`);
-          console.log(
-            `  ${formatDate(targetEws!.Start.DateTime)} ${formatTime(targetEws!.Start.DateTime)} - ${formatTime(targetEws!.End.DateTime)}`
-          );
+          if (!options.json) {
+            if (scope === 'future') {
+              console.log(`\nTruncating series from occurrence: ${targetEws!.Subject}`);
+            } else {
+              console.log(`\nDeleting single occurrence: ${targetEws!.Subject}`);
+            }
+            console.log(
+              `  ${formatDate(targetEws!.Start.DateTime)} ${formatTime(targetEws!.Start.DateTime)} - ${formatTime(targetEws!.End.DateTime)}`
+            );
+          }
         } else if (!targetEws) {
           console.error(`Invalid event id: ${options.id}`);
           process.exit(1);
         } else if (scope !== 'all') {
-          console.log(`\nDeleting: ${targetEws.Subject} (scope: ${scope})`);
-          console.log(
-            `  ${formatDate(targetEws.Start.DateTime)} ${formatTime(targetEws.Start.DateTime)} - ${formatTime(targetEws.End.DateTime)}`
-          );
+          if (!options.json) {
+            console.log(`\nDeleting: ${targetEws.Subject} (scope: ${scope})`);
+            console.log(
+              `  ${formatDate(targetEws.Start.DateTime)} ${formatTime(targetEws.Start.DateTime)} - ${formatTime(targetEws.End.DateTime)}`
+            );
+          }
         } else {
-          console.log(`\nDeleting: ${targetEws.Subject}`);
-          console.log(
-            `  ${formatDate(targetEws.Start.DateTime)} ${formatTime(targetEws.Start.DateTime)} - ${formatTime(targetEws.End.DateTime)}`
-          );
+          if (!options.json) {
+            console.log(`\nDeleting: ${targetEws.Subject}`);
+            console.log(
+              `  ${formatDate(targetEws.Start.DateTime)} ${formatTime(targetEws.Start.DateTime)} - ${formatTime(targetEws.End.DateTime)}`
+            );
+          }
         }
       }
 
       const deletionId = useGraph ? occurrenceItemId || targetGraph!.id : occurrenceItemId || targetEws!.Id;
+
+      if (useGraph && graphToken && scope === 'future') {
+        if (!options.occurrence && !options.instance && targetGraph!.type === 'seriesMaster') {
+          const msg =
+            'Cannot truncate from series master directly. Use --occurrence or --instance to specify which occurrence to start the truncation from.';
+          if (options.json) {
+            console.log(JSON.stringify({ error: msg }, null, 2));
+          } else {
+            console.error(`Error: ${msg}`);
+          }
+          process.exit(1);
+        }
+        const tr = await truncateRecurringSeriesBeforeCut(graphToken, options.mailbox, targetGraph!, {
+          forceDelete: options.forceDelete,
+          message: options.message
+        });
+        if (!tr.ok) {
+          if (options.json) {
+            console.log(JSON.stringify({ error: tr.error?.message || 'Failed to truncate series' }, null, 2));
+          } else {
+            console.error(`\nError: ${tr.error?.message || 'Failed to truncate series'}`);
+          }
+          process.exit(1);
+        }
+        const seriesAction = tr.data!.action;
+        const attendeesNotified = tr.data!.attendeesNotified ?? 0;
+        if (options.json) {
+          console.log(
+            JSON.stringify(
+              {
+                success: true,
+                backend: 'graph',
+                action: seriesAction,
+                event: targetGraph!.subject,
+                attendeesNotified
+              },
+              null,
+              2
+            )
+          );
+        } else {
+          if (seriesAction === 'truncated') {
+            console.log('\n\u2713 Recurring series updated: this and future occurrences were removed.\n');
+          } else if (seriesAction === 'cancelled') {
+            console.log('\n\u2713 Event cancelled. Attendees were notified.\n');
+          } else {
+            console.log('\n\u2713 Event deleted.\n');
+          }
+        }
+        return;
+      }
 
       if (useGraph && graphToken) {
         const hasAttendees = graphNonResourceAttendeeCount(targetGraph!) > 0;
