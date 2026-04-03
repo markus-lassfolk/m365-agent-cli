@@ -289,6 +289,7 @@ function validateGraphUrl(absoluteUrl: string): { valid: boolean; error?: string
   const allowedDomains = [
     'graph.microsoft.com',
     'graph.microsoft.us',
+    'dod-graph.microsoft.us',
     'microsoftgraph.chinacloudapi.cn',
     'graph.microsoft.de'
   ];

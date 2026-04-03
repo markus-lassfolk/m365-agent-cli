@@ -115,6 +115,80 @@ describe('getEvent', () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it('sends Prefer outlook.timezone=UTC when preferOutlookTimezoneUtc', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    const headers: Headers[] = [];
+    const originalFetch = globalThis.fetch;
+
+    try {
+      globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+        headers.push(new Headers(init?.headers as HeadersInit));
+        return new Response(JSON.stringify({ id: 'evt-1' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as typeof fetch;
+
+      const { getEvent } = await import('./graph-calendar-client.js');
+      await getEvent(token, 'evt-1', undefined, 'id', { preferOutlookTimezoneUtc: true });
+
+      expect(headers[0].get('Prefer')).toBe('outlook.timezone="UTC"');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+describe('normalizeGraphCalendarRangeInstant', () => {
+  it('adds Z to local-style instant without zone', async () => {
+    const { normalizeGraphCalendarRangeInstant } = await import('./graph-calendar-client.js');
+    expect(normalizeGraphCalendarRangeInstant('2026-01-15T10:00:00')).toBe('2026-01-15T10:00:00Z');
+    expect(normalizeGraphCalendarRangeInstant('2026-01-15T10:00:00.0000000')).toBe('2026-01-15T10:00:00Z');
+  });
+
+  it('passes through values that already have Z or offset', async () => {
+    const { normalizeGraphCalendarRangeInstant } = await import('./graph-calendar-client.js');
+    expect(normalizeGraphCalendarRangeInstant('2026-01-15T10:00:00Z')).toBe('2026-01-15T10:00:00Z');
+    expect(normalizeGraphCalendarRangeInstant('2026-01-15T11:00:00+01:00')).toBe('2026-01-15T11:00:00+01:00');
+  });
+
+  it('expands date-only to UTC midnight', async () => {
+    const { normalizeGraphCalendarRangeInstant } = await import('./graph-calendar-client.js');
+    expect(normalizeGraphCalendarRangeInstant('2026-03-01')).toBe('2026-03-01T00:00:00.000Z');
+  });
+});
+
+describe('listEventInstances', () => {
+  it('normalizes start/end query params and optional Prefer header', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    const captured: Array<{ url: string; prefer?: string | null }> = [];
+    const originalFetch = globalThis.fetch;
+
+    try {
+      globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input.toString();
+        const h = new Headers(init?.headers as HeadersInit);
+        captured.push({ url, prefer: h.get('Prefer') });
+        return new Response(JSON.stringify({ value: [] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as typeof fetch;
+
+      const { listEventInstances } = await import('./graph-calendar-client.js');
+      const r = await listEventInstances(token, 'master-1', '2026-01-01', '2026-01-02T12:00:00', {
+        preferOutlookTimezoneUtc: true
+      });
+
+      expect(r.ok).toBe(true);
+      expect(captured[0].url).toContain('startDateTime=2026-01-01T00%3A00%3A00.000Z');
+      expect(captured[0].url).toContain('endDateTime=2026-01-02T12%3A00%3A00Z');
+      expect(captured[0].prefer).toBe('outlook.timezone="UTC"');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });
 
 describe('updateCalendarEvent', () => {

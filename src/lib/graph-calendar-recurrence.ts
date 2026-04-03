@@ -10,16 +10,27 @@ import {
   type GraphPatternedRecurrence,
   getEvent,
   listEventInstances,
+  normalizeGraphCalendarRangeInstant,
   updateCalendarEvent
 } from './graph-calendar-client.js';
 import type { GraphResponse } from './graph-client.js';
 import { graphError, graphResult } from './graph-client.js';
 
-/** Compare two Graph event starts for ordering; treats all timezones as UTC for consistency. */
+/**
+ * Compare two Graph event starts for ordering.
+ * Prefer `Prefer: outlook.timezone="UTC"` on calendar GETs used for truncation (`getEvent` / `listEventInstances`)
+ * so `dateTime` includes `Z` or an offset. Without that, wall times without a suffix are interpreted as UTC only
+ * when `timeZone` is UTC/GMT; other Windows/IANA zones need Graph to return an offset (use Prefer UTC).
+ */
 export function graphEventStartMs(st?: { dateTime?: string; timeZone?: string }): number {
   if (!st?.dateTime) return NaN;
   const raw = st.dateTime.trim();
-  if (/[zZ]$|[+-]\d{2}:\d{2}$/.test(raw)) return Date.parse(raw);
+  if (/[zZ]$|[+-]\d{2}:\d{2}$|[+-]\d{2}\d{2}$/.test(raw)) return Date.parse(raw);
+  const tz = st.timeZone?.trim().toUpperCase();
+  if (tz === 'UTC' || tz === 'GMT' || tz === 'ETC/UTC') {
+    const base = raw.replace(/\.\d+$/, '');
+    return Date.parse(`${base}Z`);
+  }
   const base = raw.replace(/\.\d+$/, '');
   return Date.parse(`${base}Z`);
 }
@@ -35,9 +46,10 @@ function isoInstantBeforeCut(cut: GraphCalendarEvent): string {
 function recurrenceRangeStartIso(master: GraphCalendarEvent, rec: GraphPatternedRecurrence): string {
   const sd = rec.range?.startDate;
   if (sd?.match(/^\d{4}-\d{2}-\d{2}$/)) {
-    return `${sd}T00:00:00.0000000`;
+    return `${sd}T00:00:00.000Z`;
   }
-  return master.start?.dateTime ?? sd ?? new Date(0).toISOString();
+  const fallback = master.start?.dateTime ?? sd ?? new Date(0).toISOString();
+  return normalizeGraphCalendarRangeInstant(fallback);
 }
 
 function endDateFromLastKeptOccurrence(last: GraphCalendarEvent): string {
@@ -68,7 +80,8 @@ export async function truncateRecurringSeriesBeforeCut(
     token,
     masterId,
     user,
-    'recurrence,start,end,type,subject,isAllDay,organizer,attendees'
+    'recurrence,start,end,type,subject,isAllDay,organizer,attendees',
+    { preferOutlookTimezoneUtc: true }
   );
   if (!masterRes.ok || !masterRes.data) {
     return { ok: false, error: masterRes.error };
@@ -98,7 +111,8 @@ export async function truncateRecurringSeriesBeforeCut(
 
   const instRes = await listEventInstances(token, masterId, startBound, endBound, {
     user,
-    select: 'start,end,type,isCancelled'
+    select: 'start,end,type,isCancelled',
+    preferOutlookTimezoneUtc: true
   });
   if (!instRes.ok || !instRes.data) {
     return { ok: false, error: instRes.error };

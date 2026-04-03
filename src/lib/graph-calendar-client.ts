@@ -4,11 +4,27 @@ import {
   fetchAllPages,
   fetchGraphRaw,
   GraphApiError,
+  GRAPH_BASE_URL,
   type GraphResponse,
   graphError,
   graphResult
 } from './graph-client.js';
 import { graphUserPath } from './graph-user-path.js';
+
+/**
+ * `event list instances` requires `startDateTime` / `endDateTime` in ISO 8601 with offset or `Z`.
+ * Normalizes values we construct (e.g. recurrence range) and passes through values that already have a zone.
+ */
+export function normalizeGraphCalendarRangeInstant(value: string): string {
+  const v = value.trim();
+  if (!v) return new Date(0).toISOString();
+  if (/[zZ]$|[+-]\d{2}:\d{2}$|[+-]\d{2}\d{2}$/.test(v)) return v;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return `${v}T00:00:00.000Z`;
+  const base = v.replace(/\.\d+$/, '');
+  return `${base}Z`;
+}
+
+const PREFER_OUTLOOK_TIMEZONE_UTC = 'outlook.timezone="UTC"';
 
 /** Graph [calendar](https://learn.microsoft.com/en-us/graph/api/resources/calendar) (subset). */
 export interface GraphCalendarResource {
@@ -249,31 +265,45 @@ export async function listEventInstances(
   seriesMasterId: string,
   startDateTime: string,
   endDateTime: string,
-  options?: { user?: string; select?: string }
+  options?: { user?: string; select?: string; preferOutlookTimezoneUtc?: boolean }
 ): Promise<GraphResponse<GraphCalendarEvent[]>> {
   const params = new URLSearchParams();
-  params.set('startDateTime', startDateTime);
-  params.set('endDateTime', endDateTime);
+  params.set('startDateTime', normalizeGraphCalendarRangeInstant(startDateTime));
+  params.set('endDateTime', normalizeGraphCalendarRangeInstant(endDateTime));
   if (options?.select?.trim()) {
     params.set('$select', options.select.trim());
   }
   const qs = `?${params.toString()}`;
   const path = `${graphUserPath(options?.user, `events/${encodeURIComponent(seriesMasterId)}/instances`)}${qs}`;
-  return fetchAllPages<GraphCalendarEvent>(token, path, 'Failed to list event instances');
+  const requestInit: RequestInit | undefined = options?.preferOutlookTimezoneUtc
+    ? { headers: { Prefer: PREFER_OUTLOOK_TIMEZONE_UTC } }
+    : undefined;
+  return fetchAllPages<GraphCalendarEvent>(
+    token,
+    path,
+    'Failed to list event instances',
+    GRAPH_BASE_URL,
+    requestInit
+  );
 }
 
 export async function getEvent(
   token: string,
   eventId: string,
   user?: string,
-  select?: string
+  select?: string,
+  requestOpts?: { preferOutlookTimezoneUtc?: boolean }
 ): Promise<GraphResponse<GraphCalendarEvent>> {
   let path = `${graphUserPath(user, `events/${encodeURIComponent(eventId)}`)}`;
   if (select?.trim()) {
     path += `?$select=${encodeURIComponent(select.trim())}`;
   }
   try {
-    const result = await callGraph<GraphCalendarEvent>(token, path);
+    const result = await callGraph<GraphCalendarEvent>(
+      token,
+      path,
+      requestOpts?.preferOutlookTimezoneUtc ? { headers: { Prefer: PREFER_OUTLOOK_TIMEZONE_UTC } } : {}
+    );
     if (!result.ok || !result.data) {
       return graphError(result.error?.message || 'Failed to get event', result.error?.code, result.error?.status);
     }

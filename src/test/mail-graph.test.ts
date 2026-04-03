@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import { describeMailGraphUnhandledCombination } from '../commands/mail-graph.js';
 
 test('describeMailGraphUnhandledCombination: download + read', () => {
