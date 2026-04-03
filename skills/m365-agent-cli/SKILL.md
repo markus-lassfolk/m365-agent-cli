@@ -1,6 +1,6 @@
 ---
 name: m365-agent-cli
-version: 1.2.4
+version: 2.0.0-beta.0
 description: Microsoft 365 CLI (EWS + Graph) for calendar, mail, OneDrive, Planner, SharePoint, To Do, inbox rules, delegates, and subscriptions. Use when the user needs Outlook/Exchange, Graph, or M365 automation from the terminal.
 # `version` matches the npm CLI release; run `npm run sync-skill` after bumping package.json.
 metadata:
@@ -64,10 +64,11 @@ The **`calendar`** command accepts a start day (and optional end day) plus **mut
 
 - **`--days <n>`** — **N consecutive calendar days** forward from the start day (includes the start day). No end-date argument.
 - **`--previous-days <n>`** — **N consecutive calendar days** ending on the start day.
-- **`--business-days <n>`** or **`--busness-days <n>`** (typo alias) — **N weekdays (Mon–Fri)** forward from the start anchor; if the anchor falls on a weekend, the first counted weekday is the next Monday (see implementation in `calendar-range.ts`).
+- **`--business-days <n>`**, **`--next-business-days <n>`** (alias), or **`--busness-days <n>`** (typo alias) — **N weekdays (Mon–Fri)** forward from the start anchor; if the anchor falls on a weekend, the first counted weekday is the next Monday (see implementation in `calendar-range.ts`). Only one of these three may be set; conflicting values error.
 - **`--previous-business-days <n>`** — **N weekdays** backward ending on the last weekday on or before the start anchor.
+- **`--now`** — After the range is computed, **raise the API query start to the current instant** so the list omits meetings that **already ended** and only shows what is **ongoing or upcoming** within the window. Combine with e.g. **`calendar today --business-days 5 --now`**. Not valid with **`--previous-days`** or **`--previous-business-days`**.
 
-Do **not** combine these flags with each other or with an explicit **`[end]`** date argument. Do **not** combine them with week keywords **`week` / `thisweek` / `lastweek` / `nextweek`** — use a single day (e.g. `today`) as the start when using `--business-days` / `--days` / etc.
+Do **not** combine the span modes (`--days` / `--previous-days` / `--business-days` / …) with each other or with an explicit **`[end]`** date argument. Do **not** combine them with week keywords **`week` / `thisweek` / `lastweek` / `nextweek`** — use a single day (e.g. `today`) as the start when using `--business-days` / `--days` / etc.
 
 ## Command map (high level)
 

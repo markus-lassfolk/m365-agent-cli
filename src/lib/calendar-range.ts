@@ -101,3 +101,30 @@ export function businessDaysBackward(anchor: Date, n: number): { start: Date; en
   endExclusive.setHours(0, 0, 0, 0);
   return { start, endExclusive };
 }
+
+/**
+ * Raise the query window start to `at` (default: current time) when it would otherwise begin earlier,
+ * so calendar APIs only return events overlapping [start, end) — omitting meetings that already ended
+ * while keeping ongoing and future items.
+ */
+export function clipCalendarRangeStartToNow(
+  range: { start: string; end: string; label: string },
+  at: Date = new Date()
+): { start: string; end: string; label: string } {
+  const now = at.getTime();
+  const rangeStart = new Date(range.start).getTime();
+  const rangeEnd = new Date(range.end).getTime();
+  if (now >= rangeEnd) {
+    throw new Error('The selected time range already ended; nothing to show.');
+  }
+  const apiStart = Math.max(now, rangeStart);
+  if (apiStart >= rangeEnd) {
+    throw new Error('Nothing remaining in this range from the current time.');
+  }
+  const moved = apiStart > rangeStart;
+  return {
+    start: new Date(apiStart).toISOString(),
+    end: range.end,
+    label: moved ? `${range.label} (from now)` : range.label
+  };
+}

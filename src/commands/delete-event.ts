@@ -277,10 +277,25 @@ export const deleteEventCommand = new Command('delete-event')
       let targetGraph: GraphCalendarEvent | undefined;
       let targetEws: CalendarEvent | undefined;
 
-      if (scope === 'future') {
-        console.error('Error: --scope future is not supported.');
-        console.error('EWS does not provide a native operation to delete "this and future" occurrences.');
-        console.error('Use --scope this to delete a single occurrence, or --scope all to delete the entire series.');
+      // EWS supports scope `future` via deleteEvent (SOAP). Graph path still needs series trim (PATCH master recurrence).
+      if (scope === 'future' && useGraph) {
+        if (options.json) {
+          console.log(
+            JSON.stringify(
+              {
+                error:
+                  '--scope future is not implemented for Microsoft Graph yet. Use M365_EXCHANGE_BACKEND=ews, or delete occurrences with --scope this.'
+              },
+              null,
+              2
+            )
+          );
+        } else {
+          console.error('Error: --scope future is not implemented for Microsoft Graph yet.');
+          console.error(
+            'Use M365_EXCHANGE_BACKEND=ews (or auto when the calendar list uses EWS) for this scope, or use --scope this per occurrence.'
+          );
+        }
         process.exit(1);
       }
 

@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { DEFAULT_EXCHANGE_BACKEND, getExchangeBackend, mayUseEws, shouldTryGraphFirst } from './exchange-backend.js';
+import {
+  DEFAULT_EXCHANGE_BACKEND,
+  getExchangeBackend,
+  isAutoMode,
+  isEwsExclusiveMode,
+  isGraphOnlyMode,
+  mayUseEws,
+  shouldTryGraphFirst
+} from './exchange-backend.js';
 
 describe('exchange-backend', () => {
   let originalEnv: NodeJS.ProcessEnv;
@@ -44,5 +52,22 @@ describe('exchange-backend', () => {
     process.env.M365_EXCHANGE_BACKEND = 'ews';
     expect(shouldTryGraphFirst()).toBe(false);
     expect(mayUseEws()).toBe(true);
+  });
+
+  test('isAutoMode / isGraphOnlyMode / isEwsExclusiveMode', () => {
+    delete process.env.M365_EXCHANGE_BACKEND;
+    expect(isGraphOnlyMode()).toBe(true);
+    expect(isAutoMode()).toBe(false);
+    expect(isEwsExclusiveMode()).toBe(false);
+
+    process.env.M365_EXCHANGE_BACKEND = 'auto';
+    expect(isAutoMode()).toBe(true);
+    expect(isGraphOnlyMode()).toBe(false);
+    expect(isEwsExclusiveMode()).toBe(false);
+
+    process.env.M365_EXCHANGE_BACKEND = 'ews';
+    expect(isEwsExclusiveMode()).toBe(true);
+    expect(isAutoMode()).toBe(false);
+    expect(isGraphOnlyMode()).toBe(false);
   });
 });

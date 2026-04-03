@@ -7,6 +7,7 @@ import {
   businessDaysForward,
   calendarDaysBackward,
   calendarDaysForward,
+  clipCalendarRangeStartToNow,
   isWeekRangeKeyword
 } from '../lib/calendar-range.js';
 import { parseDay, parseLocalDate } from '../lib/dates.js';
@@ -153,6 +154,25 @@ function parseCalendarRangeInt(v: string | boolean | undefined, flag: string): n
   return n;
 }
 
+/** Merge --business-days, --busness-days, and --next-business-days (same meaning; error if conflicting values). */
+function parseBusinessDaysOption(options: {
+  businessDays?: string;
+  busnessDays?: string;
+  nextBusinessDays?: string;
+}): number | undefined {
+  const a = parseCalendarRangeInt(options.businessDays, '--business-days');
+  const b = parseCalendarRangeInt(options.busnessDays, '--busness-days');
+  const c = parseCalendarRangeInt(options.nextBusinessDays, '--next-business-days');
+  const vals = [a, b, c].filter((x): x is number => x !== undefined);
+  if (vals.length === 0) {
+    return undefined;
+  }
+  if (new Set(vals).size !== 1) {
+    throw new Error('Conflicting values: use only one of --business-days, --busness-days, --next-business-days');
+  }
+  return vals[0];
+}
+
 function parseAnchorDateForDynamicRange(startDay: string): Date {
   const startDate = parseDay(startDay, { weekdayDirection: 'previous' });
   startDate.setHours(0, 0, 0, 0);
@@ -181,7 +201,7 @@ function resolveCalendarQueryRange(
 
   if (modeCount > 1) {
     throw new Error(
-      'Use only one of: --days, --previous-days, --business-days (--busness-days), --previous-business-days'
+      'Use only one of: --days, --previous-days, --business-days (--busness-days, --next-business-days), --previous-business-days'
     );
   }
 
@@ -393,8 +413,13 @@ export const calendarCommand = new Command('calendar')
     '--business-days <n>',
     'Show N weekdays (Mon–Fri) forward from start (skip weekend; use for “next N working days”)'
   )
+  .option('--next-business-days <n>', 'Same as --business-days (alias)')
   .option('--busness-days <n>', 'Same as --business-days (common typo)')
   .option('--previous-business-days <n>', 'Show N weekdays backward ending on the last weekday on or before start')
+  .option(
+    '--now',
+    'After the range is computed, start the API window at the current time (hide events that already ended today)'
+  )
   .action(
     async (
       startDay: string,
@@ -413,7 +438,9 @@ export const calendarCommand = new Command('calendar')
         previousDays?: string;
         businessDays?: string;
         busnessDays?: string;
+        nextBusinessDays?: string;
         previousBusinessDays?: string;
+        now?: boolean;
       }
     ) => {
       const backend = getExchangeBackend();
@@ -780,15 +807,21 @@ export const calendarCommand = new Command('calendar')
       let end: string;
       let label: string;
       try {
+        const previousDays = parseCalendarRangeInt(options.previousDays, '--previous-days');
+        const previousBusinessDays = parseCalendarRangeInt(options.previousBusinessDays, '--previous-business-days');
+        if (options.now && (previousDays !== undefined || previousBusinessDays !== undefined)) {
+          throw new Error('Cannot use --now with --previous-days or --previous-business-days');
+        }
         const resolved = resolveCalendarQueryRange(startDay, endDay, {
           days: parseCalendarRangeInt(options.days, '--days'),
-          previousDays: parseCalendarRangeInt(options.previousDays, '--previous-days'),
-          businessDays: parseCalendarRangeInt(options.businessDays ?? options.busnessDays, '--business-days'),
-          previousBusinessDays: parseCalendarRangeInt(options.previousBusinessDays, '--previous-business-days')
+          previousDays,
+          businessDays: parseBusinessDaysOption(options),
+          previousBusinessDays
         });
-        start = resolved.start;
-        end = resolved.end;
-        label = resolved.label;
+        const clipped = options.now ? clipCalendarRangeStartToNow(resolved) : resolved;
+        start = clipped.start;
+        end = clipped.end;
+        label = clipped.label;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         if (options.json) {

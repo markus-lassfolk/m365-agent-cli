@@ -125,7 +125,11 @@ listCommand
             }
             return;
           }
-        } else if (!result.ok) {
+          // Graph succeeded: empty sharing list — do not substitute EWS delegates (different model).
+          console.log('No calendar permissions (Graph) — only free/busy or default entries.');
+          return;
+        }
+        if (!result.ok) {
           console.warn(`[delegates list] Graph failed (${result.error?.message}); falling back to EWS.`);
         }
       }

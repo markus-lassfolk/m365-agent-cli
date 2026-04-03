@@ -3,7 +3,8 @@ import {
   businessDaysBackward,
   businessDaysForward,
   calendarDaysBackward,
-  calendarDaysForward
+  calendarDaysForward,
+  clipCalendarRangeStartToNow
 } from './calendar-range.js';
 
 describe('calendar-range', () => {
@@ -37,5 +38,29 @@ describe('calendar-range', () => {
     const last = new Date(endExclusive);
     last.setDate(last.getDate() - 1);
     expect(last.getDate()).toBe(8);
+  });
+
+  test('clipCalendarRangeStartToNow: moves start to at when range began at midnight', () => {
+    const at = new Date(2026, 3, 2, 14, 30, 0, 0); // Apr 2 2026 14:30 local
+    const range = {
+      start: new Date(2026, 3, 2, 0, 0, 0, 0).toISOString(),
+      end: new Date(2026, 3, 3, 0, 0, 0, 0).toISOString(),
+      label: 'Today'
+    };
+    const out = clipCalendarRangeStartToNow(range, at);
+    expect(out.start).toBe(at.toISOString());
+    expect(out.end).toBe(range.end);
+    expect(out.label).toContain('(from now)');
+  });
+
+  test('clipCalendarRangeStartToNow: no label change when range already starts at or after at', () => {
+    const at = new Date(2026, 3, 2, 9, 0, 0, 0);
+    const range = {
+      start: new Date(2026, 3, 3, 0, 0, 0, 0).toISOString(),
+      end: new Date(2026, 3, 4, 0, 0, 0, 0).toISOString(),
+      label: 'Tomorrow'
+    };
+    const out = clipCalendarRangeStartToNow(range, at);
+    expect(out.label).toBe('Tomorrow');
   });
 });

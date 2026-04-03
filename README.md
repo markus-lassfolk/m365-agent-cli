@@ -224,11 +224,18 @@ m365-agent-cli calendar today --previous-days 3
 # (if anchor is Sat/Sun, counting starts from the next Monday)
 m365-agent-cli calendar today --business-days 10
 
+# Same as --business-days (readable alias)
+m365-agent-cli calendar today --next-business-days 5
+
 # Typo-tolerant alias for --business-days
 m365-agent-cli calendar today --busness-days 5
 
 # 5 weekdays backward ending on or before the anchor
 m365-agent-cli calendar today --previous-business-days 5
+
+# From the current time onward within the range (hide meetings that already ended today)
+m365-agent-cli calendar today --now
+m365-agent-cli calendar today --business-days 5 --now
 ```
 
 ### Create Events
@@ -842,6 +849,9 @@ These commands are not expanded step-by-step above; use **`m365-agent-cli <comma
 #!/bin/bash
 echo "=== Today's Calendar ==="
 m365-agent-cli calendar
+
+# Only ongoing and upcoming (hide items that already ended today):
+# m365-agent-cli calendar today --now
 
 echo -e "=== Unread Emails ==="
 m365-agent-cli mail --unread -n 5

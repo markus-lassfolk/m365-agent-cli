@@ -17,11 +17,11 @@ This file is the working log for `dev_v2`. Update it when slices land or decisio
 | `M365_EXCHANGE_BACKEND` | `graph` · `ews` · `auto` | **`graph`** (Graph-only for commands that honor the router) |
 | Refresh token | **`M365_REFRESH_TOKEN`** (preferred), or `GRAPH_REFRESH_TOKEN` / `EWS_REFRESH_TOKEN` | Same value after `login`; unified cache **`token-cache-{identity}.json`** |
 
-- **`graph`** — Graph APIs only (`resolveGraphAuth` + Graph REST).  
+- **`graph`** — Graph APIs only (`resolveGraphAuth` + Graph REST). No EWS fallback.  
 - **`ews`** — Legacy EWS only (`resolveAuth` + SOAP) where implemented.  
-- **`auto`** — Try Graph first, then EWS if Graph auth or the call fails (per command).
+- **`auto`** — **Graph first** (same as default behavior). EWS **only** when Graph auth fails, the Graph request fails, or the feature has **no Graph equivalent** in the CLI — **not** to replace a successful Graph result (including empty lists). Details: [`MIGRATION_TRACKING.md`](./MIGRATION_TRACKING.md) (“Graph-first policy”).
 
-Implementation: `src/lib/exchange-backend.ts`.
+Implementation: `src/lib/exchange-backend.ts` (`shouldTryGraphFirst`, `isAutoMode`, …).
 
 ---
 
@@ -36,10 +36,10 @@ Implementation: `src/lib/exchange-backend.ts`.
 | `send` | Graph: `sendMail` + `buildGraphSendMailPayload` (file + **`referenceAttachment`** link URLs); **`auto`** tries Graph then EWS on failure |
 | `mail` | Graph **`mail-graph.ts`**: list (**`--unread`**, **`--flagged`**, **`--search`**), **`--read`**, **`--download`**, **`--move`**, read state, **categories**, **follow-up flag** (incl. start/due), **`--sensitivity`**, **reply / reply-all / forward** (draft + attach + link + category + markdown); `auto` → EWS on Graph failure |
 | `drafts` | Graph **`drafts-graph.ts`**: list, read, **create** / **edit** / **send** / **delete** (`createDraftMessage`, PATCH, attachment POSTs, `sendMailMessage`, `deleteMailMessage`); **`auto`** → EWS on Graph failure |
-| `calendar` | Graph: **`listCalendarView`** for the resolved range when `graph` / `auto`; **`--list-attachments` / `--download-attachments`** use Graph **`/events/{id}/attachments`** when `graph` / `auto` (EWS fallback in `auto` if Graph auth fails); `auto` falls back to EWS on list-view failure |
+| `calendar` | Graph: **`listCalendarView`** for the resolved range when `graph` / `auto` (range flags include **`--days`**, **`--business-days`** / **`--next-business-days`**, **`--now`** to clip the query start to the current instant); **`--list-attachments` / `--download-attachments`** use Graph **`/events/{id}/attachments`** when `graph` / `auto` (EWS fallback in `auto` if Graph auth fails); `auto` falls back to EWS on list-view failure |
 | `findtime` | Graph: **`findMeetingTimes`**, then **`getSchedule`** + merged `availabilityView`; EWS `GetUserAvailability` only when `ews` or `auto` after both Graph paths fail |
 | `create-event` | Graph: **`POST /me/events`** + attachments; **Places** (`/places/microsoft.graph.room`) for **`--list-rooms`**, **`--find-room`**, **`--room` by name**; calendar free/busy via room `calendarView`; `auto` falls back to EWS for room flows if Graph fails |
-| `delete-event` | Graph: **`listCalendarView`** + organizer filter + `--search`; **`cancel`** vs **`delete`**; occurrence/instance id matching via **`seriesMasterId`**; `--scope future` still **unsupported**; `auto` falls back to EWS |
+| `delete-event` | Graph: **`listCalendarView`** + organizer filter + `--search`; **`cancel`** vs **`delete`**; occurrence/instance id matching via **`seriesMasterId`**. **`--scope future`:** **EWS** when listing uses EWS (`ews` / `auto` after Graph list failure); **Graph** path still errors until series recurrence PATCH is implemented |
 | `respond` | Graph: **`list`** via calendarView + pending filter; **`accept` / `decline` / `tentative`** via **`POST …/accept|decline|tentativelyAccept`**; organizer guard; `auto` falls back to EWS on Graph failure |
 | `todo create --link` | Graph: **`GET …/messages/{id}`** (`getMessage`); shared mailbox via **`--user`** / **`--mailbox`** |
 | `delegates list` | Graph: **`calendar/calendarPermissions`** when **`graph`**; **`auto`:** Graph then EWS; **`add`/`update`/`remove`:** EWS (blocked when **`graph`**) |
@@ -66,4 +66,4 @@ Implementation: `src/lib/exchange-backend.ts`.
 
 ---
 
-*Last updated: 2026-04-02 — [`MIGRATION_TRACKING.md`](./MIGRATION_TRACKING.md): **recurring occurrence/instance** on Graph for **`update-event`** / **`delete-event`**; **`delete-event --scope future`** still in “Next”.*
+*Last updated: 2026-04-02 — **Configuration**: documented **Graph-first `auto`** (EWS only on Graph failure or no Graph path); **`delete-event --scope future`**: EWS unblocked; Graph still in “Next”.*

@@ -265,6 +265,8 @@ async function runM365AgentCli(args: string): Promise<{ stdout: string; stderr: 
   const originalLog = console.log;
   const originalError = console.error;
   const originalExit = process.exit;
+  const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+  const originalStderrWrite = process.stderr.write.bind(process.stderr);
 
   console.log = (...args2: any[]) => {
     capturedStdout += `${args2.map((a) => String(a)).join(' ')}\n`;
@@ -274,6 +276,19 @@ async function runM365AgentCli(args: string): Promise<{ stdout: string; stderr: 
     capturedStderr += `${args2.map((a) => String(a)).join(' ')}\n`;
     originalError.apply(console, args2);
   };
+
+  process.stdout.write = ((chunk: any, encoding?: any, cb?: any) => {
+    if (typeof chunk === 'string' || Buffer.isBuffer(chunk)) {
+      capturedStdout += chunk.toString();
+    }
+    return originalStdoutWrite(chunk, encoding, cb);
+  }) as typeof process.stdout.write;
+  process.stderr.write = ((chunk: any, encoding?: any, cb?: any) => {
+    if (typeof chunk === 'string' || Buffer.isBuffer(chunk)) {
+      capturedStderr += chunk.toString();
+    }
+    return originalStderrWrite(chunk, encoding, cb);
+  }) as typeof process.stderr.write;
 
   process.exit = ((code?: number) => {
     capturedExitCode = code;
@@ -297,6 +312,8 @@ async function runM365AgentCli(args: string): Promise<{ stdout: string; stderr: 
   } finally {
     console.log = originalLog;
     console.error = originalError;
+    process.stdout.write = originalStdoutWrite;
+    process.stderr.write = originalStderrWrite;
     process.exit = originalExit;
     // delete globalThis.fetch;
   }
@@ -373,8 +390,9 @@ describe('calendar', () => {
   test('--help shows help text', async () => {
     const result = await runM365AgentCli('calendar --help');
     expect(result.exitCode).toBe(0);
-    //     // (skip) expect(result.stdout).toContain('--json');
-    //     // (skip) expect(result.stdout).toContain('--verbose');
+    const help = result.stdout + result.stderr;
+    expect(help).toContain('--now');
+    expect(help).toContain('--next-business-days');
   });
 
   test('invalid date shows an error (not a crash)', async () => {

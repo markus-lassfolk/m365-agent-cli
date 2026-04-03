@@ -112,7 +112,7 @@ src/
     xml-utils.ts      — XML escape, SOAP envelope builders
     date-utils.ts     — date parsing, formatting (locale-aware)
     dates.ts          — shared date parsing (`parseDay`, weekday-relative resolution)
-    calendar-range.ts — calendar window helpers (`--days`, `--business-days`, etc. on `calendar`)
+    calendar-range.ts — calendar window helpers (`--days`, `--business-days`, `clipCalendarRangeStartToNow` for `--now`, etc. on `calendar`)
     outlook-master-categories.ts — Graph `GET .../outlook/masterCategories`
     planner-client.ts — Planner tasks, plans, buckets, plan details (label names)
     graph-calendar-client.ts — Graph `GET .../calendars`, `calendarView`, `GET .../events/{id}`
