@@ -589,7 +589,7 @@ bookingsCommand
       console.error(`Error: ${r.error?.message}`);
       process.exit(1);
     }
-    console.log(opts.json ? JSON.stringify(r.data, null, 2) : JSON.stringify(r.data, null, 2));
+    console.log(opts.json ? JSON.stringify(r.data, null, 2) : `${(r.data as any).id ?? ''}`);
   });
 
 function jsonFileAction(
@@ -618,7 +618,7 @@ function jsonFileAction(
       console.error(`Error: ${r.error?.message}`);
       process.exit(1);
     }
-    console.log(opts.json ? JSON.stringify(r.data, null, 2) : JSON.stringify(r.data, null, 2));
+    console.log(opts.json ? JSON.stringify(r.data, null, 2) : `${(r.data as any).id ?? ''}`);
   };
 }
 
