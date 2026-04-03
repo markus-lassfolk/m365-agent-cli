@@ -30,7 +30,7 @@ These commands **branch** on `getExchangeBackend()` in code (see `src/commands/*
 | `calendar` | `calendarView` / Graph helpers | Graph first; EWS in `auto` if Graph fails | EWS `FindItem` calendar | **Event IDs:** Graph `id` vs EWS `ItemId` — not interchangeable. Recurrence/instance handling differs (`seriesMasterId` vs EWS calendar patterns). |
 | `create-event` | `POST /me/events`, Places for rooms | Graph first; EWS fallback for some room paths in `auto` | EWS `CreateItem` | **Teams:** Graph `isOnlineMeeting` + `onlineMeetingProvider`; EWS `IsOnlineMeeting`. **Attachments** metadata may differ. |
 | `update-event` | Graph PATCH + attachments | Same; **no EWS fallback** after Graph-backed listing when `graph` | EWS `UpdateItem` | **🟡 Mixed IDs:** If you loaded events via Graph, you must use Graph IDs — CLI errors if you try EWS fallback with Graph-only data. |
-| `delete-event` | Graph cancel/delete | Graph first; EWS in `auto` when appropriate | EWS `DeleteItem` | **`--scope future`:** **EWS only** today — no Graph implementation for “delete future occurrences” in this CLI. |
+| `delete-event` | Graph cancel/delete | Graph first; EWS in `auto` when appropriate | EWS `DeleteItem` | **`--scope future`:** Graph **PATCH** on series master after **`…/instances`** (truncate recurrence); EWS uses SOAP `deleteEvent`. |
 | `respond` | `calendarView` + invitation APIs | Graph first; EWS in `auto` if Graph fails | EWS respond | Same **event ID** caveats as calendar. |
 | `findtime` | `findMeetingTimes` / `getSchedule` (Graph) | Graph strategies first; EWS `GetSchedule` in `auto` if both fail | EWS-only path | **Availability strings** may differ in formatting; merged free/busy logic is aligned in code but underlying data source differs. |
 | `delegates` **list** | `calendarPermissions` (Graph) | Graph first; EWS `GetDelegates` **only if Graph request fails** (not if empty) | EWS | **Semantics:** Graph “calendar permissions” ≠ EWS “delegates” matrix — **different products**; empty Graph list is **not** supplemented from EWS. |
@@ -50,7 +50,7 @@ Commands that **do not** read `M365_EXCHANGE_BACKEND` for mail/calendar (always 
 | **Item/event IDs** | OData IDs, often long base64-like strings | EWS `ItemId` + `ChangeKey` — **never mix** across backends for the same operation sequence. |
 | **Empty lists** | `[]` from Graph is authoritative in `auto` | EWS is **not** queried to “double-check” emptiness. |
 | **Delegates vs calendar sharing** | Graph calendar permissions | EWS delegates — different permission models. |
-| **`delete-event --scope future`** | Not implemented | EWS implements series trim — use `ews` or `auto` with EWS listing path. |
+| **`delete-event --scope future`** | `GET /events/{seriesMasterId}/instances` + `PATCH` recurrence `endDate` | EWS `deleteEvent` with scope — same CLI flag. |
 | **`auto-reply` command** | Not this CLI’s Graph UX | EWS inbox-rule template model — use **`oof`** / **`rules`** for Graph-native behavior. |
 | **Token / cache** | Graph access token `scp` must match app + consent | Stale `token-cache-*.json` can show wrong scopes until refresh — see [`ENTRA_SETUP.md`](./ENTRA_SETUP.md). |
 

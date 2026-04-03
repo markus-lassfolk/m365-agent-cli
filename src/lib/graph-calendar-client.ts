@@ -56,6 +56,10 @@ export interface GraphCalendarEvent {
   responseStatus?: { response?: string };
   /** Present on expanded instances — id of the recurring series master */
   seriesMasterId?: string;
+  /** From calendarView / get event — `occurrence` | `seriesMaster` | `exception` | `singleInstance` */
+  type?: 'singleInstance' | 'occurrence' | 'seriesMaster' | 'exception';
+  /** Present on series master from GET event */
+  recurrence?: GraphPatternedRecurrence | null;
 }
 
 /** Subset of [event resource](https://learn.microsoft.com/en-us/graph/api/resources/event) for POST /me/events. */
@@ -234,6 +238,27 @@ export async function cancelCalendarEvent(
     }
     return graphError(err instanceof Error ? err.message : 'Failed to cancel event');
   }
+}
+
+/**
+ * List [event instances](https://learn.microsoft.com/en-us/graph/api/event-list-instances) for a **series master** in a time range.
+ */
+export async function listEventInstances(
+  token: string,
+  seriesMasterId: string,
+  startDateTime: string,
+  endDateTime: string,
+  options?: { user?: string; select?: string }
+): Promise<GraphResponse<GraphCalendarEvent[]>> {
+  const params = new URLSearchParams();
+  params.set('startDateTime', startDateTime);
+  params.set('endDateTime', endDateTime);
+  if (options?.select?.trim()) {
+    params.set('$select', options.select.trim());
+  }
+  const qs = `?${params.toString()}`;
+  const path = `${graphUserPath(options?.user, `events/${encodeURIComponent(seriesMasterId)}/instances`)}${qs}`;
+  return fetchAllPages<GraphCalendarEvent>(token, path, 'Failed to list event instances');
 }
 
 export async function getEvent(

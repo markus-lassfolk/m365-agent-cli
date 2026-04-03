@@ -1208,6 +1208,99 @@ describe('Graph backend (M365_EXCHANGE_BACKEND=graph)', () => {
     expect(data.events[0].id).toBe('graph-cal-event-1');
   });
 
+  test('delete-event --scope future truncates recurring series via Graph (PATCH master)', async () => {
+    setMockFetch((url, request) => {
+      const method = (request.method || 'GET').toUpperCase();
+      if (!url.includes('graph.microsoft.com/v1.0')) return null;
+      try {
+        const path = new URL(url).pathname;
+        if (path.includes('/calendar/calendarView')) {
+          return {
+            status: 200,
+            body: JSON.stringify({
+              value: [
+                {
+                  id: 'graph-occ-cut',
+                  seriesMasterId: 'graph-series-master-id',
+                  type: 'occurrence',
+                  subject: 'Weekly',
+                  isOrganizer: true,
+                  isCancelled: false,
+                  start: { dateTime: '2026-04-15T09:00:00.0000000', timeZone: 'UTC' },
+                  end: { dateTime: '2026-04-15T09:30:00.0000000', timeZone: 'UTC' },
+                  organizer: { emailAddress: { address: 'graph.user@example.com', name: 'Graph Test User' } }
+                }
+              ]
+            }),
+            contentType: 'application/json'
+          };
+        }
+        if (method === 'GET' && path === '/v1.0/me/events/graph-series-master-id' && !path.includes('/instances')) {
+          return {
+            status: 200,
+            body: JSON.stringify({
+              id: 'graph-series-master-id',
+              subject: 'Weekly',
+              type: 'seriesMaster',
+              recurrence: {
+                pattern: { type: 'weekly', interval: 1, daysOfWeek: ['monday'] },
+                range: { type: 'noEnd', startDate: '2026-04-01' }
+              },
+              start: { dateTime: '2026-04-01T09:00:00.0000000', timeZone: 'UTC' },
+              end: { dateTime: '2026-04-01T09:30:00.0000000', timeZone: 'UTC' },
+              organizer: { emailAddress: { address: 'graph.user@example.com' } }
+            }),
+            contentType: 'application/json'
+          };
+        }
+        if (method === 'GET' && path.includes('/events/graph-series-master-id/instances')) {
+          return {
+            status: 200,
+            body: JSON.stringify({
+              value: [
+                {
+                  id: 'prev-occ',
+                  type: 'occurrence',
+                  isCancelled: false,
+                  start: { dateTime: '2026-04-08T09:00:00.0000000', timeZone: 'UTC' },
+                  end: { dateTime: '2026-04-08T09:30:00.0000000', timeZone: 'UTC' }
+                }
+              ]
+            }),
+            contentType: 'application/json'
+          };
+        }
+        if (method === 'PATCH' && path === '/v1.0/me/events/graph-series-master-id') {
+          return {
+            status: 200,
+            body: JSON.stringify({
+              id: 'graph-series-master-id',
+              subject: 'Weekly',
+              changeKey: 'ck2'
+            }),
+            contentType: 'application/json'
+          };
+        }
+      } catch {
+        return null;
+      }
+      return null;
+    });
+    const result = await runM365AgentCli(
+      'delete-event --id graph-occ-cut --scope future --day today --token test-graph-token'
+    );
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toMatch(/truncated|Recurring series updated/i);
+    const jsonResult = await runM365AgentCli(
+      'delete-event --id graph-occ-cut --scope future --day today --json --token test-graph-token'
+    );
+    expect(jsonResult.exitCode).toBe(0);
+    const data = JSON.parse(jsonResult.stdout.trim()) as { success: boolean; action: string; backend: string };
+    expect(data.success).toBe(true);
+    expect(data.backend).toBe('graph');
+    expect(data.action).toBe('truncated');
+  });
+
   test('update-event --id --title patches event via Graph', async () => {
     const result = await runM365AgentCli(
       'update-event --id graph-cal-event-1 --title "Updated title" --token test-graph-token'
