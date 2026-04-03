@@ -29,6 +29,7 @@ import {
   patchMailMessage,
   sendMailMessage
 } from '../lib/outlook-graph-client.js';
+import { safeAttachmentFileName, safeHttpUrlForInternetShortcut } from '../lib/safe-filename.js';
 
 export interface MailGraphCommandOptions {
   limit: string;
@@ -393,7 +394,12 @@ export async function tryMailGraphPortion(
           console.error(`  Failed to resolve link: ${att.name || att.id}`);
           continue;
         }
-        const safeBase = ((att.name || 'link').replace(/[/\\?%*:|"<>]/g, '_').trim() || 'link') as string;
+        const safeUrl = safeHttpUrlForInternetShortcut(url);
+        if (!safeUrl) {
+          console.error(`  Refusing unsafe or invalid link URL: ${att.name || att.id}`);
+          continue;
+        }
+        const safeBase = safeAttachmentFileName(att.name || 'link', 'link');
         let filePath = join(outDir, `${safeBase}.url`);
         let counter = 1;
         while (usedPaths.has(filePath)) {
@@ -412,7 +418,7 @@ export async function tryMailGraphPortion(
           }
         }
         usedPaths.add(filePath);
-        const shortcut = `[InternetShortcut]\r\nURL=${url}\r\n`;
+        const shortcut = `[InternetShortcut]\r\nURL=${safeUrl}\r\n`;
         await writeFile(filePath, shortcut, 'utf8');
         console.log(`  \u2713 ${filePath.split(/[\\/]/).pop()} (link)`);
         continue;
@@ -425,12 +431,13 @@ export async function tryMailGraphPortion(
       }
       const content = Buffer.from(dl.data);
 
-      let filePath = join(outDir, att.name || 'attachment');
+      const safeFileName = safeAttachmentFileName(att.name || 'attachment', 'attachment');
+      let filePath = join(outDir, safeFileName);
       let counter = 1;
       while (true) {
         if (usedPaths.has(filePath)) {
-          const ext = extname(att.name || '');
-          const base = (att.name || 'file').slice(0, (att.name || 'file').length - ext.length);
+          const ext = extname(safeFileName);
+          const base = safeFileName.slice(0, safeFileName.length - ext.length);
           filePath = join(outDir, `${base} (${counter})${ext}`);
           counter++;
           continue;
@@ -438,8 +445,8 @@ export async function tryMailGraphPortion(
         if (!force) {
           try {
             await access(filePath);
-            const ext = extname(att.name || '');
-            const base = (att.name || 'file').slice(0, (att.name || 'file').length - ext.length);
+            const ext = extname(safeFileName);
+            const base = safeFileName.slice(0, safeFileName.length - ext.length);
             filePath = join(outDir, `${base} (${counter})${ext}`);
             counter++;
             continue;
@@ -453,7 +460,7 @@ export async function tryMailGraphPortion(
       usedPaths.add(filePath);
       await writeFile(filePath, content);
       const sizeKB = Math.round(content.length / 1024);
-      const written = filePath.endsWith(att.name || '') ? att.name : filePath.split(/[\\/]/).pop();
+      const written = filePath.endsWith(safeFileName) ? safeFileName : filePath.split(/[\\/]/).pop();
       console.log(`  \u2713 ${written} (${sizeKB} KB)`);
     }
 

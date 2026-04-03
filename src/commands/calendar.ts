@@ -30,11 +30,7 @@ import {
   listCalendarView,
   listEventAttachments
 } from '../lib/graph-calendar-client.js';
-
-function sanitizeFileComponent(name: string): string {
-  const s = name.replace(/[/\\?%*:|"<>]/g, '_').trim();
-  return s.length > 0 ? s : 'attachment';
-}
+import { safeAttachmentFileName, safeHttpUrlForInternetShortcut } from '../lib/safe-filename.js';
 
 async function pathExists(p: string): Promise<boolean> {
   try {
@@ -51,10 +47,11 @@ async function resolveUniqueFilePath(
   usedPaths: Set<string>,
   force: boolean
 ): Promise<string> {
-  let filePath = join(outputDir, fileName);
+  const safeName = safeAttachmentFileName(fileName, 'attachment');
+  let filePath = join(outputDir, safeName);
   let counter = 1;
-  const ext = extname(fileName);
-  const base = fileName.slice(0, fileName.length - ext.length);
+  const ext = extname(safeName);
+  const base = safeName.slice(0, safeName.length - ext.length);
 
   while (true) {
     if (usedPaths.has(filePath)) {
@@ -83,8 +80,13 @@ async function writeLinkFile(
   url: string,
   usedPaths: Set<string>,
   force: boolean
-): Promise<string> {
-  const base = sanitizeFileComponent(baseName);
+): Promise<string | null> {
+  const safeUrl = safeHttpUrlForInternetShortcut(url);
+  if (!safeUrl) {
+    console.error('  Refusing unsafe or invalid link URL (only http/https allowed).');
+    return null;
+  }
+  const base = safeAttachmentFileName(baseName, 'link');
   let filePath = join(outputDir, `${base}.url`);
   let counter = 1;
   while (usedPaths.has(filePath) || (!force && (await pathExists(filePath)))) {
@@ -92,7 +94,7 @@ async function writeLinkFile(
     counter++;
   }
   usedPaths.add(filePath);
-  const content = `[InternetShortcut]\r\nURL=${url}\r\n`;
+  const content = `[InternetShortcut]\r\nURL=${safeUrl}\r\n`;
   await writeFile(filePath, content, 'utf8');
   return filePath;
 }
@@ -688,6 +690,9 @@ export const calendarCommand = new Command('calendar')
                   usedPaths,
                   options.force ?? false
                 );
+                if (!filePath) {
+                  continue;
+                }
                 console.log(`  ✓ ${filePath.split(/[\\/]/).pop()} (link)`);
                 continue;
               }
@@ -701,7 +706,7 @@ export const calendarCommand = new Command('calendar')
                 continue;
               }
               const content = Buffer.from(dl.data);
-              const safeName = att.name || `attachment-${att.id}`;
+              const safeName = safeAttachmentFileName(att.name || `attachment-${att.id}`, 'attachment');
               const filePath = await resolveUniqueFilePath(options.output, safeName, usedPaths, options.force ?? false);
               usedPaths.add(filePath);
               await writeFile(filePath, content);
@@ -783,6 +788,9 @@ export const calendarCommand = new Command('calendar')
               usedPaths,
               options.force ?? false
             );
+            if (!filePath) {
+              continue;
+            }
             console.log(`  ✓ ${filePath.split(/[\\/]/).pop()} (link)`);
             continue;
           }
