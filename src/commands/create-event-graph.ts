@@ -36,9 +36,13 @@ function graphStartEnd(opts: { start: Date; end: Date; allDay: boolean; timezone
         end: { dateTime: toLocalUnzonedISOString(e), timeZone: tz }
       };
     }
+    const sUtc = new Date(opts.start);
+    sUtc.setUTCHours(0, 0, 0, 0);
+    const eUtc = new Date(sUtc);
+    eUtc.setUTCDate(eUtc.getUTCDate() + 1);
     return {
-      start: { dateTime: toGraphUtcDateTime(s), timeZone: 'UTC' },
-      end: { dateTime: toGraphUtcDateTime(e), timeZone: 'UTC' }
+      start: { dateTime: toGraphUtcDateTime(sUtc), timeZone: 'UTC' },
+      end: { dateTime: toGraphUtcDateTime(eUtc), timeZone: 'UTC' }
     };
   }
   if (opts.timezoneName?.trim()) {

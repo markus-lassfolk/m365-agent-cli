@@ -295,12 +295,6 @@ export const deleteEventCommand = new Command('delete-event')
             | GraphCalendarEvent
             | undefined;
         }
-        if (!targetGraph && graphToken) {
-          const fetched = await getEvent(graphToken, options.id!, options.mailbox);
-          if (fetched.ok && fetched.data) {
-            targetGraph = fetched.data;
-          }
-        }
         if ((options.occurrence || options.instance) && scope === 'this' && targetGraph) {
           if (options.instance) {
             let instanceDate: Date;
@@ -444,7 +438,15 @@ export const deleteEventCommand = new Command('delete-event')
 
       if (useGraph && graphToken) {
         const hasAttendees = graphNonResourceAttendeeCount(targetGraph!) > 0;
-        const attendees = targetGraph!.attendees?.filter((a) => a.emailAddress?.address) ?? [];
+        const org = targetGraph!.organizer?.emailAddress?.address?.toLowerCase();
+        const attendees =
+          targetGraph!.attendees?.filter((a) => {
+            const addr = a.emailAddress?.address;
+            if (!addr) return false;
+            if ((a as { type?: string }).type === 'resource') return false;
+            if (addr.toLowerCase() === org) return false;
+            return true;
+          }) ?? [];
 
         let graphRes: { ok: boolean; error?: { message?: string } };
         let action: string;
