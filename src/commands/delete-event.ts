@@ -462,6 +462,7 @@ export const deleteEventCommand = new Command('delete-event')
           process.exit(1);
         }
         const seriesAction = tr.data!.action;
+        const attendeesNotified = tr.data!.attendeesNotified ?? 0;
         if (options.json) {
           console.log(
             JSON.stringify(
@@ -470,7 +471,7 @@ export const deleteEventCommand = new Command('delete-event')
                 backend: 'graph',
                 action: seriesAction,
                 event: targetGraph!.subject,
-                attendeesNotified: 0
+                attendeesNotified
               },
               null,
               2

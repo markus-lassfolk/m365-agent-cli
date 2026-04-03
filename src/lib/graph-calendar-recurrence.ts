@@ -50,7 +50,10 @@ function endDateFromLastKeptOccurrence(last: GraphCalendarEvent): string {
   return new Date(graphEventStartMs(last.start)).toISOString().slice(0, 10);
 }
 
-export type TruncateSeriesResult = { action: 'truncated' | 'deleted' | 'cancelled' };
+export type TruncateSeriesResult = {
+  action: 'truncated' | 'deleted' | 'cancelled';
+  attendeesNotified?: number;
+};
 
 /**
  * Delete “this and all future” for a recurring series: PATCH master recurrence to end before the cut occurrence,
@@ -76,12 +79,16 @@ export async function truncateRecurringSeriesBeforeCut(
   const rec = master.recurrence;
   const cutMs = graphEventStartMs(target.start);
 
+  if (!Number.isFinite(cutMs)) {
+    return graphError('Target event has invalid or missing start date');
+  }
+
   if (!rec?.pattern) {
-    const hasAtt = graphNonResourceAttendeeCount(master) > 0;
-    if (hasAtt && !options.forceDelete) {
+    const attCount = graphNonResourceAttendeeCount(master);
+    if (attCount > 0 && !options.forceDelete) {
       const c = await cancelCalendarEvent(token, masterId, { user, comment: '' });
       if (!c.ok) return { ok: false, error: c.error };
-      return graphResult({ action: 'cancelled' });
+      return graphResult({ action: 'cancelled', attendeesNotified: attCount });
     }
     const d = await deleteCalendarEvent(token, masterId, user);
     if (!d.ok) return { ok: false, error: d.error };
@@ -105,11 +112,11 @@ export async function truncateRecurringSeriesBeforeCut(
   const lastKept = beforeCut[beforeCut.length - 1];
 
   if (!lastKept) {
-    const hasAtt = graphNonResourceAttendeeCount(master) > 0;
-    if (hasAtt && !options.forceDelete) {
+    const attCount = graphNonResourceAttendeeCount(master);
+    if (attCount > 0 && !options.forceDelete) {
       const c = await cancelCalendarEvent(token, masterId, { user, comment: '' });
       if (!c.ok) return { ok: false, error: c.error };
-      return graphResult({ action: 'cancelled' });
+      return graphResult({ action: 'cancelled', attendeesNotified: attCount });
     }
     const d = await deleteCalendarEvent(token, masterId, user);
     if (!d.ok) return { ok: false, error: d.error };
