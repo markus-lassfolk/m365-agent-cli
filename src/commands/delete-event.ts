@@ -104,6 +104,13 @@ export const deleteEventCommand = new Command('delete-event')
               }
               eventsGraph = evs;
               graphToken = ga.token;
+            } else if (backend === 'graph') {
+              if (options.json) {
+                console.log(JSON.stringify({ error: 'Failed to determine user email' }, null, 2));
+              } else {
+                console.error('Error: Failed to determine user email');
+              }
+              process.exit(1);
             }
           } else if (backend === 'graph') {
             if (options.json) {
@@ -284,9 +291,9 @@ export const deleteEventCommand = new Command('delete-event')
       if (useGraph) {
         targetGraph = events.find((e) => (e as GraphCalendarEvent).id === options.id) as GraphCalendarEvent | undefined;
         if (!targetGraph && options.id) {
-          targetGraph = events.find((e) =>
-            graphEventMatchesOccurrenceFilter(e as GraphCalendarEvent, options.id!)
-          ) as GraphCalendarEvent | undefined;
+          targetGraph = events.find((e) => graphEventMatchesOccurrenceFilter(e as GraphCalendarEvent, options.id!)) as
+            | GraphCalendarEvent
+            | undefined;
         }
         if (!targetGraph && graphToken) {
           const fetched = await getEvent(graphToken, options.id!, options.mailbox);
@@ -314,8 +321,7 @@ export const deleteEventCommand = new Command('delete-event')
               const eventDate = new Date(graphStartDt(ge));
               eventDate.setHours(0, 0, 0, 0);
               return (
-                eventDate.getTime() === instanceDate.getTime() &&
-                graphEventMatchesOccurrenceFilter(ge, options.id!)
+                eventDate.getTime() === instanceDate.getTime() && graphEventMatchesOccurrenceFilter(ge, options.id!)
               );
             }) as GraphCalendarEvent | undefined;
             if (!occEvent) {

@@ -184,11 +184,6 @@ export function buildGraphCreateEventRequest(opts: {
   return body;
 }
 
-/** Reserved for flags that still have no Graph path (currently none for create-event). */
-export function graphCreateEventUnsupportedReason(_options?: Record<string, unknown>): string | null {
-  return null;
-}
-
 export async function createEventViaGraph(opts: {
   token: string;
   mailbox?: string;
