@@ -1,0 +1,8 @@
+{
+  "message": {
+    "subject": "Example",
+    "body": { "contentType": "Text", "content": "Hello" },
+    "toRecipients": [{ "emailAddress": { "address": "recipient@example.com" } }]
+  },
+  "saveToSentItems": true
+}

@@ -34,7 +34,7 @@ EWS delegate access does **not** imply the same Microsoft Graph token scopes. Ca
 | --- | --- | --- |
 | `whoami` | 🟢 | Graph: `GET /me` when `graph` or when `auto` succeeds on Graph. **`ews`:** EWS user info only. **`auto`:** tries Graph first, then EWS if Graph auth or `/me` fails. |
 | `mail` | 🟢 | Graph: **primary path** in `mail-graph.ts` for supported flag combinations — list (**`--unread`**, **`--flagged`**, **`--search`**), **`--read`**, **`--download`**, **`--move`**, **`--mark-read` / `--mark-unread`**, **flag / unflag / complete**, **`--sensitivity`**, **`--set-categories` / `--clear-categories`**, **reply / reply-all / forward** (incl. `--draft`, `--attach`, `--attach-link`, `--with-category`, `--markdown`). **`graph`:** unsupported combinations error (use EWS or `outlook-graph`). **`auto`:** falls back to EWS when Graph does not handle the request or fails. |
-| `send` | 🟢 | Graph: `sendMail` + file + **`--attach-link`** (`graph-send-mail.ts`); `auto` tries Graph then EWS on failure. |
+| `send` | 🟢 | Graph: `sendMail` + file + **`--attach-link`** (`graph-send-mail.ts`); `auto` tries Graph then EWS on failure. Entra must include delegated **`Mail.Send`** (plus `Mail.ReadWrite`); tokens from before that addition need **`login`** again. |
 | `folders` | 🟢 | Graph mail folders when `graph` / `auto`. |
 | `drafts` | 🟢 | Graph: **list**, **read**, **`--create`** / **`--edit`** / **`--send`** / **`--delete`** (`createDraftMessage`, `patchMailMessage`, attachments, `sendMailMessage`, `deleteMailMessage` in `drafts-graph.ts`). `auto` falls back to EWS if Graph fails. |
 | `calendar` (list range) | 🟢 | Graph `calendarView` when `graph` / `auto`. Rolling ranges (`--days`, `--business-days` / `--next-business-days`, …) and **`--now`** (clip window start to “now”) apply before the view; EWS uses the same resolved window. |
@@ -54,6 +54,9 @@ EWS delegate access does **not** imply the same Microsoft Graph token scopes. Ca
 | `graph-calendar` | 🟢 | Graph calendar helpers (parallel surface). |
 | `rules` | 🟢 | Graph inbox rules. |
 | `todo` (core) | 🟢 | Graph To Do. `create --link` uses Graph **get message**. |
+| `contacts` | 🟢 | Graph **`/me/contacts`** / **`/me/contactFolders`** (`Contacts.ReadWrite`). |
+| `meeting` | 🟢 | Graph **`/me/onlineMeetings`** (`OnlineMeetings.ReadWrite`). Distinct from **`create-event --teams`** (calendar + Teams on the event). |
+| `onenote` | 🟢 | Graph OneNote (`Notes.ReadWrite.All`). |
 | `planner`, `files`, `sharepoint`, `find`, `rooms`, `subscribe`, … | 🟢 | Graph (no EWS in path). |
 
 ---
@@ -73,4 +76,10 @@ EWS delegate access does **not** imply the same Microsoft Graph token scopes. Ca
 2. **🔴** — decide product direction (drop feature, new Graph-native UX, or document “use Outlook”).
 3. After each migration, update this file and [`GRAPH_V2_STATUS.md`](./GRAPH_V2_STATUS.md).
 
-*Last updated: 2026-04-03 — **`docs/GRAPH_SCOPES.md`** + `graph-oauth-scopes.ts`: full delegated scope list (Place, People, `User.Read.All`, \*.Shared).*
+*Last updated: 2026-04-03 — **`Contacts.ReadWrite`**, **`OnlineMeetings.ReadWrite`**, **`Notes.ReadWrite.All`** in `graph-oauth-scopes.ts` + Entra scripts; **`contacts`**, **`meeting`**, **`onenote`** commands.*
+
+---
+
+## Graph response fixtures (tests)
+
+See [`src/test/fixtures/graph/README.md`](../src/test/fixtures/graph/README.md). Canonical schemas remain Microsoft’s OpenAPI/docs; our JSON examples anchor unit tests for **error envelopes** and **sendMail** bodies.

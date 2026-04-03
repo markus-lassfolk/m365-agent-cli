@@ -17,6 +17,7 @@ Configure the same permissions on your **Entra ID app registration** (API permis
 | `Calendars.ReadWrite` | Own calendar read/write |
 | `Calendars.Read.Shared` | Delegated / shared calendars (`/users/{upn}/calendar/...`) |
 | `Calendars.ReadWrite.Shared` | Same, with write |
+| `Mail.Send` | **`POST /me/sendMail`** and sending mail via Graph (explicit; use with `Mail.ReadWrite` for full mail UX) |
 | `Mail.ReadWrite` | Own mailbox mail APIs |
 | `Mail.Read.Shared` | Mail in mailboxes the user can access (delegated/shared) |
 | `Mail.ReadWrite.Shared` | Same, with write (where applicable) |
@@ -28,6 +29,9 @@ Configure the same permissions on your **Entra ID app registration** (API permis
 | `Sites.ReadWrite.All` | SharePoint / site pages |
 | `Tasks.ReadWrite` | Microsoft To Do |
 | `Group.ReadWrite.All` | Planner (groups), group-related Graph calls |
+| `Contacts.ReadWrite` | **`contacts`** command — `/me/contacts`, `/me/contactFolders` (also `outlook-graph` contact subcommands) |
+| `OnlineMeetings.ReadWrite` | **`meeting create` / `meeting get`** — `POST/GET /me/onlineMeetings` (standalone Teams meeting link). Calendar events with Teams use **`create-event --teams`** (`Calendars.ReadWrite`). |
+| `Notes.ReadWrite.All` | **`onenote`** — notebooks, sections, pages, HTML content, create page |
 
 **Note:** `Group.ReadWrite.All` implies broad group read/write. For **`find`** group listing, this is sufficient; a narrower `Group.Read.All` is **not** requested separately to avoid redundant consent alongside `Group.ReadWrite.All`.
 
@@ -51,4 +55,4 @@ These commonly require **admin consent** in tenant consent policies (especially 
 - [README](../README.md) — authentication overview  
 - [`MIGRATION_TRACKING.md`](./MIGRATION_TRACKING.md) — Graph vs EWS, `--mailbox` behavior  
 
-_Last updated: 2026-04-03 — aligned with `graph-oauth-scopes.ts`._
+_Last updated: 2026-04-03 — added Contacts, Online Meetings, OneNote scopes; aligned with `graph-oauth-scopes.ts`._

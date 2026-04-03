@@ -12,6 +12,18 @@ import { lookupMimeType } from '../lib/mime-type.js';
 import { sendMail as graphSendMail } from '../lib/outlook-graph-client.js';
 import { checkReadOnly } from '../lib/utils.js';
 
+/** Graph sendMail often returns access denied without Mail.Send on the app registration + refreshed token. */
+function graphSendDeniedHint(message: string, code?: string): string | undefined {
+  const lower = message.toLowerCase();
+  const codeMatch = (code || '').toLowerCase().includes('erroraccess') || lower.includes('erroraccessdenied');
+  if (codeMatch || lower.includes('access is denied')) {
+    return (
+      'Hint: add delegated Mail.Send (and Mail.ReadWrite) on the Entra app, admin-consent if needed, then `m365-agent-cli login` again. See docs/GRAPH_SCOPES.md. Or set M365_EXCHANGE_BACKEND=ews to use EWS for this send.'
+    );
+  }
+  return undefined;
+}
+
 export const sendCommand = new Command('send')
   .description('Send an email (EWS or Microsoft Graph per M365_EXCHANGE_BACKEND)')
   .requiredOption('--to <emails>', 'Recipient email(s), comma-separated')
@@ -255,11 +267,17 @@ export const sendCommand = new Command('send')
           return;
         }
         if (options.json) {
-          console.log(
-            JSON.stringify({ error: result.error?.message || 'Failed to send email', backend: 'graph' }, null, 2)
-          );
+          const payload: Record<string, unknown> = {
+            error: result.error?.message || 'Failed to send email',
+            backend: 'graph'
+          };
+          const hint = graphSendDeniedHint(result.error?.message || '', result.error?.code);
+          if (hint) payload.hint = hint;
+          console.log(JSON.stringify(payload, null, 2));
         } else {
           console.error(`Error: ${result.error?.message || 'Failed to send email'}`);
+          const hint = graphSendDeniedHint(result.error?.message || '', result.error?.code);
+          if (hint) console.error(hint);
         }
         process.exit(1);
       }

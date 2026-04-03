@@ -12,6 +12,7 @@ export const GRAPH_DEVICE_CODE_LOGIN_SCOPES = [
   'Calendars.ReadWrite',
   'Calendars.Read.Shared',
   'Calendars.ReadWrite.Shared',
+  'Mail.Send',
   'Mail.ReadWrite',
   'Mail.Read.Shared',
   'Mail.ReadWrite.Shared',
@@ -22,11 +23,15 @@ export const GRAPH_DEVICE_CODE_LOGIN_SCOPES = [
   'Files.ReadWrite.All',
   'Sites.ReadWrite.All',
   'Tasks.ReadWrite',
-  'Group.ReadWrite.All'
+  'Group.ReadWrite.All',
+  'Contacts.ReadWrite',
+  'OnlineMeetings.ReadWrite',
+  'Notes.ReadWrite.All'
 ].join(' ');
 
 /** Primary delegated resource scopes (URL form) for refresh_token grant, without `offline_access` / `User.Read`. */
 const GRAPH_RESOURCE_SCOPES_FULL = [
+  G('Mail.Send'),
   G('Mail.ReadWrite'),
   G('Mail.Read.Shared'),
   G('Mail.ReadWrite.Shared'),
@@ -40,13 +45,17 @@ const GRAPH_RESOURCE_SCOPES_FULL = [
   G('Files.ReadWrite.All'),
   G('Sites.ReadWrite.All'),
   G('Tasks.ReadWrite'),
-  G('Group.ReadWrite.All')
+  G('Group.ReadWrite.All'),
+  G('Contacts.ReadWrite'),
+  G('OnlineMeetings.ReadWrite'),
+  G('Notes.ReadWrite.All')
 ].join(' ');
 
 /**
  * Same as full but omits `User.Read.All` (often requires admin consent) so refresh can succeed with user-only consent.
  */
 const GRAPH_RESOURCE_SCOPES_WITHOUT_USER_READ_ALL = [
+  G('Mail.Send'),
   G('Mail.ReadWrite'),
   G('Mail.Read.Shared'),
   G('Mail.ReadWrite.Shared'),
@@ -59,7 +68,10 @@ const GRAPH_RESOURCE_SCOPES_WITHOUT_USER_READ_ALL = [
   G('Files.ReadWrite.All'),
   G('Sites.ReadWrite.All'),
   G('Tasks.ReadWrite'),
-  G('Group.ReadWrite.All')
+  G('Group.ReadWrite.All'),
+  G('Contacts.ReadWrite'),
+  G('OnlineMeetings.ReadWrite'),
+  G('Notes.ReadWrite.All')
 ].join(' ');
 
 /**
@@ -70,11 +82,12 @@ export const GRAPH_REFRESH_SCOPE_CANDIDATES: readonly string[] = [
   `${G('.default')} offline_access`,
   `${GRAPH_RESOURCE_SCOPES_FULL} offline_access User.Read`,
   `${GRAPH_RESOURCE_SCOPES_WITHOUT_USER_READ_ALL} offline_access User.Read`,
-  `${G('Mail.ReadWrite')} ${G('Mail.Read.Shared')} ${G('Mail.ReadWrite.Shared')} ${G('Calendars.ReadWrite')} ${G('Calendars.Read.Shared')} ${G('Calendars.ReadWrite.Shared')} ${G('Files.ReadWrite')} offline_access User.Read`,
+  `${G('Mail.Send')} ${G('Mail.ReadWrite')} ${G('Mail.Read.Shared')} ${G('Mail.ReadWrite.Shared')} ${G('Calendars.ReadWrite')} ${G('Calendars.Read.Shared')} ${G('Calendars.ReadWrite.Shared')} ${G('Files.ReadWrite')} offline_access User.Read`,
   `${G('Files.ReadWrite')} offline_access User.Read`,
   `${G('Files.ReadWrite.All')} offline_access User.Read`,
   `${G('Sites.ReadWrite.All')} offline_access User.Read`,
   `${G('Tasks.ReadWrite')} offline_access User.Read`,
   `${G('Group.ReadWrite.All')} offline_access User.Read`,
+  `${G('Contacts.ReadWrite')} ${G('OnlineMeetings.ReadWrite')} ${G('Notes.ReadWrite.All')} offline_access User.Read`,
   `${G('Files.Read')} offline_access User.Read`
 ];

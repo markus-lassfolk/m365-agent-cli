@@ -1,12 +1,30 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+
+/**
+ * Path to the CLI env file. Override with `M365_AGENT_ENV_FILE` (e.g. `~/.config/m365-agent-cli/.env.beta`).
+ * Must be set in the shell before starting the process (not from inside `.env`).
+ */
+export function getGlobalEnvFilePath(): string {
+  const raw = process.env.M365_AGENT_ENV_FILE?.trim();
+  if (!raw) {
+    return join(homedir(), '.config', 'm365-agent-cli', '.env');
+  }
+  if (raw === '~') {
+    return homedir();
+  }
+  if (raw.startsWith('~/') || raw.startsWith('~\\')) {
+    return join(homedir(), raw.slice(2));
+  }
+  return resolve(raw);
+}
 
 export function loadGlobalEnv() {
-  const globalEnvPath = join(homedir(), '.config', 'm365-agent-cli', '.env');
+  const globalEnvPath = getGlobalEnvFilePath();
   if (existsSync(globalEnvPath)) {
     const content = readFileSync(globalEnvPath, 'utf8');
-    for (const line of content.split('\n')) {
+    for (const line of content.split(/\r?\n/)) {
       const match = line.match(/^\s*([^#\s=]+)\s*=\s*(.*)$/);
       if (match) {
         const key = match[1];

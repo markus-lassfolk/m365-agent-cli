@@ -17,6 +17,10 @@ function contactsRoot(user?: string): string {
   return graphUserPath(user, 'contacts');
 }
 
+function contactFoldersRoot(user?: string): string {
+  return graphUserPath(user, 'contactFolders');
+}
+
 /** Graph [mailFolder](https://learn.microsoft.com/en-us/graph/api/resources/mailfolder) (subset). */
 export interface OutlookMailFolder {
   id: string;
@@ -50,6 +54,13 @@ export interface OutlookMessage {
     startDateTime?: { dateTime?: string; timeZone?: string };
     dueDateTime?: { dateTime?: string; timeZone?: string };
   };
+}
+
+/** Graph [contactFolder](https://learn.microsoft.com/en-us/graph/api/resources/contactfolder) (subset). */
+export interface OutlookContactFolder {
+  id: string;
+  displayName?: string;
+  parentFolderId?: string;
 }
 
 /** Graph [contact](https://learn.microsoft.com/en-us/graph/api/resources/contact) (subset). */
@@ -743,8 +754,24 @@ export async function createMailForwardDraft(
   }
 }
 
+export async function listContactFolders(token: string, user?: string): Promise<GraphResponse<OutlookContactFolder[]>> {
+  return fetchAllPages<OutlookContactFolder>(token, contactFoldersRoot(user), 'Failed to list contact folders');
+}
+
 export async function listContacts(token: string, user?: string): Promise<GraphResponse<OutlookContact[]>> {
   return fetchAllPages<OutlookContact>(token, contactsRoot(user), 'Failed to list contacts');
+}
+
+export async function listContactsInFolder(
+  token: string,
+  folderId: string,
+  user?: string
+): Promise<GraphResponse<OutlookContact[]>> {
+  return fetchAllPages<OutlookContact>(
+    token,
+    `${contactFoldersRoot(user)}/${encodeURIComponent(folderId)}/contacts`,
+    'Failed to list contacts in folder'
+  );
 }
 
 export async function getContact(

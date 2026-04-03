@@ -1,14 +1,20 @@
 import { existsSync, mkdirSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { dirname } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { Command } from 'commander';
 import { atomicWriteUtf8File } from '../lib/atomic-write.js';
 import { GRAPH_DEVICE_CODE_LOGIN_SCOPES } from '../lib/graph-oauth-scopes.js';
 import { getMicrosoftTenantPathSegment } from '../lib/jwt-utils.js';
+import { getGlobalEnvFilePath } from '../lib/utils.js';
 
-async function performDeviceCodeFlow(clientId: string, tenant: string, scope: string, label: string): Promise<string> {
+async function performDeviceCodeFlow(
+  clientId: string,
+  tenant: string,
+  scope: string,
+  label: string,
+  envPath: string
+): Promise<string> {
   console.log(`\nInitiating Device Code flow for ${label}...`);
 
   const deviceCodeRes = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/devicecode`, {
@@ -78,9 +84,7 @@ async function performDeviceCodeFlow(clientId: string, tenant: string, scope: st
           if (username) {
             let envContent = '';
 
-            const configDir = join(homedir(), '.config', 'm365-agent-cli');
-            mkdirSync(configDir, { recursive: true, mode: 0o700 });
-            const envPath = join(configDir, '.env');
+            mkdirSync(dirname(envPath), { recursive: true, mode: 0o700 });
 
             try {
               envContent = await readFile(envPath, 'utf8');
@@ -126,10 +130,8 @@ export const loginCommand = new Command('login')
   .action(async () => {
     let clientId = process.env.EWS_CLIENT_ID;
 
-    // Read existing .env if present
-    const configDir = join(homedir(), '.config', 'm365-agent-cli');
-    mkdirSync(configDir, { recursive: true, mode: 0o700 });
-    const envPath = join(configDir, '.env');
+    const envPath = getGlobalEnvFilePath();
+    mkdirSync(dirname(envPath), { recursive: true, mode: 0o700 });
     let envContent = '';
     if (existsSync(envPath)) {
       envContent = await readFile(envPath, 'utf8');
@@ -163,7 +165,13 @@ export const loginCommand = new Command('login')
     const tenant = getMicrosoftTenantPathSegment();
 
     // Use a single Graph Device Code flow to obtain a multi-resource refresh token (see src/lib/graph-oauth-scopes.ts)
-    const rawToken = await performDeviceCodeFlow(clientId, tenant, GRAPH_DEVICE_CODE_LOGIN_SCOPES, 'Microsoft 365');
+    const rawToken = await performDeviceCodeFlow(
+      clientId,
+      tenant,
+      GRAPH_DEVICE_CODE_LOGIN_SCOPES,
+      'Microsoft 365',
+      envPath
+    );
     const refreshToken = rawToken.replace(/[\r\n]/g, '');
 
     // Save tokens immediately
