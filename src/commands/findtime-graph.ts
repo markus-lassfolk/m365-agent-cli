@@ -158,8 +158,8 @@ export async function runFindTimeGraphSchedule(opts: {
   json?: boolean;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const intervalMinutes = Math.min(30, Math.max(5, opts.durationMinutes));
-  const startIso = opts.start.toISOString().replace(/\.\d{3}Z$/, 'Z');
-  const endIso = opts.end.toISOString().replace(/\.\d{3}Z$/, 'Z');
+  const startIso = opts.start.toISOString().replace(/\.\d{3}Z$/, '');
+  const endIso = opts.end.toISOString().replace(/\.\d{3}Z$/, '');
 
   const sched = await getSchedule(
     opts.token,
@@ -248,8 +248,16 @@ export async function runFindTimeGraphSchedule(opts: {
       const dayLabel = new Date(day).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
       console.log(`  ${dayLabel}:`);
       for (const slot of slots) {
-        const st = new Date(slot.start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
-        const en = new Date(slot.end).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+        const st = new Date(slot.start).toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        });
+        const en = new Date(slot.end).toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        });
         console.log(`    🟢 ${st} - ${en}`);
       }
     }
