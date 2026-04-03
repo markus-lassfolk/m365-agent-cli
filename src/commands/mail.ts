@@ -289,7 +289,11 @@ export const mailCommand = new Command('mail')
             process.exit(1);
           }
           const detail = describeMailGraphUnhandledCombination(mailGraphOpts);
-          console.error(detail);
+          if (options.json) {
+            console.log(JSON.stringify({ error: detail }, null, 2));
+          } else {
+            console.error(detail);
+          }
           process.exit(1);
         }
       }

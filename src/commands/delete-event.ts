@@ -457,6 +457,16 @@ export const deleteEventCommand = new Command('delete-event')
       const deletionId = useGraph ? occurrenceItemId || targetGraph!.id : occurrenceItemId || targetEws!.Id;
 
       if (useGraph && graphToken && scope === 'future') {
+        if (!options.occurrence && !options.instance && targetGraph!.type === 'seriesMaster') {
+          const msg =
+            'Cannot truncate from series master directly. Use --occurrence or --instance to specify which occurrence to start the truncation from.';
+          if (options.json) {
+            console.log(JSON.stringify({ error: msg }, null, 2));
+          } else {
+            console.error(`Error: ${msg}`);
+          }
+          process.exit(1);
+        }
         const tr = await truncateRecurringSeriesBeforeCut(graphToken, options.mailbox, targetGraph!, {
           forceDelete: options.forceDelete,
           message: options.message
