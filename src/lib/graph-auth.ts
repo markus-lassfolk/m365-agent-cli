@@ -13,12 +13,13 @@ export interface GraphAuthResult {
 }
 
 const GRAPH_SCOPES = [
-  // Mail + calendar first so refresh does not return a Files-only token when Exchange commands need Graph mail/calendar.
+  // `.default` and Mail/Calendar early so refresh does not stop at a Files-only scope string.
+  'https://graph.microsoft.com/.default offline_access',
+  'https://graph.microsoft.com/Mail.ReadWrite https://graph.microsoft.com/Calendars.ReadWrite https://graph.microsoft.com/MailboxSettings.ReadWrite https://graph.microsoft.com/Files.ReadWrite offline_access User.Read',
   'https://graph.microsoft.com/Mail.ReadWrite https://graph.microsoft.com/Calendars.ReadWrite https://graph.microsoft.com/Files.ReadWrite offline_access User.Read',
   'https://graph.microsoft.com/Files.ReadWrite offline_access User.Read',
   'https://graph.microsoft.com/Files.ReadWrite.All offline_access User.Read',
   'https://graph.microsoft.com/Sites.ReadWrite.All offline_access User.Read',
-  'https://graph.microsoft.com/.default offline_access',
   'https://graph.microsoft.com/Tasks.ReadWrite offline_access User.Read',
   'https://graph.microsoft.com/Group.ReadWrite.All offline_access User.Read',
   'https://graph.microsoft.com/Files.Read offline_access User.Read'

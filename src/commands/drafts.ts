@@ -219,7 +219,9 @@ export const draftsCommand = new Command('drafts')
           return;
         }
         if (backend === 'graph') {
-          console.error('Error: Graph authentication failed. Set EWS_CLIENT_ID and GRAPH_REFRESH_TOKEN.');
+          console.error(
+            'Error: Graph authentication failed. Set EWS_CLIENT_ID and M365_REFRESH_TOKEN, or run `m365-agent-cli login`.'
+          );
           process.exit(1);
         }
       }
@@ -232,7 +234,9 @@ export const draftsCommand = new Command('drafts')
           if (graphDone) return;
         }
         if (backend === 'graph') {
-          console.error('Error: Graph authentication failed. Set EWS_CLIENT_ID and GRAPH_REFRESH_TOKEN.');
+          console.error(
+            'Error: Graph authentication failed. Set EWS_CLIENT_ID and M365_REFRESH_TOKEN, or run `m365-agent-cli login`.'
+          );
           process.exit(1);
         }
       }

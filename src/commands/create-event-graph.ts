@@ -3,7 +3,7 @@
  */
 
 import { toLocalUnzonedISOString } from '../lib/dates.js';
-import type { Recurrence } from '../lib/ews-client.js';
+import type { Recurrence, RecurrencePattern } from '../lib/ews-client.js';
 import {
   addCalendarEventAttachmentsGraph,
   createCalendarEvent,
@@ -57,6 +57,19 @@ function graphStartEnd(opts: { start: Date; end: Date; allDay: boolean; timezone
   };
 }
 
+function mapEwsDayOfWeekIndex(
+  idx: RecurrencePattern['Index'] | undefined
+): 'first' | 'second' | 'third' | 'fourth' | 'last' {
+  const m: Record<string, 'first' | 'second' | 'third' | 'fourth' | 'last'> = {
+    First: 'first',
+    Second: 'second',
+    Third: 'third',
+    Fourth: 'fourth',
+    Last: 'last'
+  };
+  return m[idx || 'First'] ?? 'first';
+}
+
 function mapEwsRecurrenceToGraph(r: Recurrence): GraphPatternedRecurrence | undefined {
   const p = r.Pattern;
   const rng = r.Range;
@@ -72,8 +85,14 @@ function mapEwsRecurrenceToGraph(r: Recurrence): GraphPatternedRecurrence | unde
     case 'AbsoluteMonthly':
       patternType = 'absoluteMonthly';
       break;
+    case 'RelativeMonthly':
+      patternType = 'relativeMonthly';
+      break;
     case 'AbsoluteYearly':
       patternType = 'absoluteYearly';
+      break;
+    case 'RelativeYearly':
+      patternType = 'relativeYearly';
       break;
     default:
       return undefined;
@@ -93,6 +112,15 @@ function mapEwsRecurrenceToGraph(r: Recurrence): GraphPatternedRecurrence | unde
   if (p.Type === 'AbsoluteYearly') {
     if (p.Month !== undefined) pattern.month = p.Month;
     if (p.DayOfMonth !== undefined) pattern.dayOfMonth = p.DayOfMonth;
+  }
+  if (p.Type === 'RelativeMonthly' || p.Type === 'RelativeYearly') {
+    if (p.DaysOfWeek && p.DaysOfWeek.length > 0) {
+      pattern.daysOfWeek = p.DaysOfWeek.map((d) => d.toLowerCase());
+    }
+    pattern.index = mapEwsDayOfWeekIndex(p.Index);
+    if (p.Type === 'RelativeYearly' && p.Month !== undefined) {
+      pattern.month = p.Month;
+    }
   }
 
   let rangeType: GraphPatternedRecurrence['range']['type'];
@@ -182,6 +210,11 @@ function buildGraphCreateEventRequest(opts: {
     const gr = mapEwsRecurrenceToGraph(opts.recurrence);
     if (gr) {
       body.recurrence = gr;
+    } else {
+      console.warn(
+        '[create-event] Unsupported or unknown EWS recurrence pattern for Graph; creating a single occurrence. ' +
+          `Pattern type: ${opts.recurrence.Pattern.Type}`
+      );
     }
   }
 

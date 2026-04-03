@@ -33,6 +33,7 @@ import {
   mockGraphGetFileMetadataResponse,
   mockGraphListFilesResponse,
   mockGraphMeResponse,
+  mockGraphRoomCalendarViewResponse,
   mockGraphSearchFilesResponse,
   mockGraphShareResponse,
   mockGraphUploadResponse,
@@ -323,7 +324,10 @@ export function createMockFetch(): any {
         if (path === '/v1.0/me') {
           return makeJsonResponse(mockGraphMeResponse);
         }
-        if (path.includes('/calendar/calendarView')) {
+        if (/^\/v1\.0\/users\/[^/]+\/calendar\/calendarView$/.test(path)) {
+          return makeJsonResponse(mockGraphRoomCalendarViewResponse);
+        }
+        if (path.includes('/calendar/calendarView') && !path.includes('/users/')) {
           return makeJsonResponse(mockGraphCalendarViewResponse);
         }
         if (method === 'GET' && /^\/v1\.0\/me\/events\/[^/]+$/.test(path)) {

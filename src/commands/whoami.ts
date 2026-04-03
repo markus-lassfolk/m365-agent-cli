@@ -151,7 +151,9 @@ export const whoamiCommand = new Command('whoami')
           );
         } else {
           console.error(`Error: ${authResult.error || 'Graph authentication failed'}`);
-          console.error('\nFor Graph, set EWS_CLIENT_ID and GRAPH_REFRESH_TOKEN (Microsoft Graph scopes).');
+          console.error(
+            '\nFor Graph, set EWS_CLIENT_ID and M365_REFRESH_TOKEN (Microsoft Graph scopes), or run `m365-agent-cli login`.'
+          );
         }
         process.exit(1);
       }

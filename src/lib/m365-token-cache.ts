@@ -12,6 +12,8 @@ const TOKEN_CACHE_TEMPLATE = join(CONFIG_DIR, 'token-cache-{identity}.json');
 const GRAPH_TOKEN_CACHE_TEMPLATE = join(CONFIG_DIR, 'graph-token-cache-{identity}.json');
 const LEGACY_GRAPH_TOKEN_CACHE_FILE = join(CONFIG_DIR, 'graph-token-cache.json');
 const OLD_GRAPH_TOKEN_CACHE_FILE = join(homedir(), '.config', 'clippy', 'graph-token-cache.json');
+/** Legacy EWS-only cache from the `clippy` package name (`auth.ts` previously wrote here). */
+const LEGACY_EWS_TOKEN_CACHE_TEMPLATE = join(homedir(), '.config', 'clippy', 'token-cache-{identity}.json');
 
 export interface TokenSlot {
   accessToken: string;
@@ -52,6 +54,10 @@ function graphTokenCachePath(identity: string): string {
   return GRAPH_TOKEN_CACHE_TEMPLATE.replace('{identity}', identity);
 }
 
+function legacyEwsTokenCachePath(identity: string): string {
+  return LEGACY_EWS_TOKEN_CACHE_TEMPLATE.replace('{identity}', identity);
+}
+
 /** Single refresh token: prefer M365_*, then legacy env names (same value after `login`). */
 export function getUnifiedRefreshTokenFromEnv(): string | undefined {
   const m365 = process.env.M365_REFRESH_TOKEN?.trim();
@@ -78,6 +84,7 @@ async function readJsonFile(path: string): Promise<unknown | null> {
  */
 export async function loadM365TokenCache(identity: string): Promise<M365TokenCacheV1 | null> {
   await migrateLegacyGraphRootFiles();
+  await migrateLegacyEwsClippyCache(identity);
 
   const primaryPath = tokenCachePath(identity);
   const graphPath = graphTokenCachePath(identity);
@@ -157,6 +164,24 @@ async function migrateLegacyGraphRootFiles(): Promise<void> {
         await rename(OLD_GRAPH_TOKEN_CACHE_FILE, defaultPath);
       }
     }
+  } catch {
+    // ignore
+  }
+}
+
+/** One-time: move `~/.config/clippy/token-cache-{id}.json` into the unified cache path when the latter is absent. */
+async function migrateLegacyEwsClippyCache(identity: string): Promise<void> {
+  try {
+    const dest = tokenCachePath(identity);
+    const destStats = await stat(dest).catch(() => null);
+    if (destStats) return;
+
+    const legacy = legacyEwsTokenCachePath(identity);
+    const legacyStats = await stat(legacy).catch(() => null);
+    if (!legacyStats) return;
+
+    await mkdir(CONFIG_DIR, { recursive: true, mode: 0o700 });
+    await rename(legacy, dest);
   } catch {
     // ignore
   }

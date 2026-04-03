@@ -77,6 +77,8 @@ export interface GraphPatternedRecurrence {
     month?: number;
     dayOfMonth?: number;
     daysOfWeek?: string[];
+    /** Week of month for relative patterns (Graph `index`). */
+    index?: 'first' | 'second' | 'third' | 'fourth' | 'last';
     firstDayOfWeek?: 'sunday' | 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday';
   };
   range: {

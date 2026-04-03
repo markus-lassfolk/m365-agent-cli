@@ -12,6 +12,7 @@ import { getExchangeBackend } from '../lib/exchange-backend.js';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
 import { type GraphCalendarEvent, getEvent, listCalendarView } from '../lib/graph-calendar-client.js';
 import type { GraphResponse } from '../lib/graph-client.js';
+import { normalizeGraphDateTimeForParsing } from '../lib/graph-datetime.js';
 import { acceptEventInvitation, declineEventInvitation, tentativelyAcceptEventInvitation } from '../lib/graph-event.js';
 import { checkReadOnly } from '../lib/utils.js';
 
@@ -51,7 +52,7 @@ function graphResponseToIconKey(graphRaw: string | undefined): string {
 }
 
 function graphStartStr(e: GraphCalendarEvent): string {
-  return e.start?.dateTime ?? '';
+  return normalizeGraphDateTimeForParsing(e.start?.dateTime, e.start?.timeZone);
 }
 
 export const respondCommand = new Command('respond')

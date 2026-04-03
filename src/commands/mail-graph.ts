@@ -29,7 +29,7 @@ import {
   patchMailMessage,
   sendMailMessage
 } from '../lib/outlook-graph-client.js';
-import { safeAttachmentFileName, safeHttpUrlForInternetShortcut } from '../lib/safe-filename.js';
+import { safeAttachmentFileName, writeInternetShortcutUtf8File } from '../lib/safe-filename.js';
 
 export interface MailGraphCommandOptions {
   limit: string;
@@ -394,11 +394,6 @@ export async function tryMailGraphPortion(
           console.error(`  Failed to resolve link: ${att.name || att.id}`);
           continue;
         }
-        const safeUrl = safeHttpUrlForInternetShortcut(url);
-        if (!safeUrl) {
-          console.error(`  Refusing unsafe or invalid link URL: ${att.name || att.id}`);
-          continue;
-        }
         const safeBase = safeAttachmentFileName(att.name || 'link', 'link');
         let filePath = join(outDir, `${safeBase}.url`);
         let counter = 1;
@@ -418,8 +413,12 @@ export async function tryMailGraphPortion(
           }
         }
         usedPaths.add(filePath);
-        const shortcut = `[InternetShortcut]\r\nURL=${safeUrl}\r\n`;
-        await writeFile(filePath, shortcut, 'utf8');
+        const wrote = await writeInternetShortcutUtf8File(filePath, url);
+        if (!wrote) {
+          usedPaths.delete(filePath);
+          console.error(`  Refusing unsafe or invalid link URL: ${att.name || att.id}`);
+          continue;
+        }
         console.log(`  \u2713 ${filePath.split(/[\\/]/).pop()} (link)`);
         continue;
       }

@@ -1,3 +1,4 @@
+import { writeFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 
 const INVALID_CHARS = /[/\\?%*:|"<>]/g;
@@ -16,7 +17,7 @@ export function safeAttachmentFileName(raw: string | undefined | null, fallback:
 }
 
 /** HTTP(S) URL safe for `.url` InternetShortcut content (blocks CRLF / scheme injection). */
-export function safeHttpUrlForInternetShortcut(url: string): string | null {
+function safeHttpUrlForInternetShortcut(url: string): string | null {
   const u = url.trim();
   if (!u || u.includes('\r') || u.includes('\n') || u.includes('\0')) {
     return null;
@@ -30,4 +31,15 @@ export function safeHttpUrlForInternetShortcut(url: string): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Writes a `.url` shortcut only after {@link safeHttpUrlForInternetShortcut} validation (mitigates taint/CodeQL).
+ */
+export async function writeInternetShortcutUtf8File(filePath: string, rawUrlFromNetwork: string): Promise<boolean> {
+  const safeUrl = safeHttpUrlForInternetShortcut(rawUrlFromNetwork);
+  if (!safeUrl) return false;
+  // codeql[js/file-access-to-http]: URL is validated to http(s) before any file write; content is fixed prefix + href.
+  await writeFile(filePath, `[InternetShortcut]\r\nURL=${safeUrl}\r\n`, 'utf8');
+  return true;
 }

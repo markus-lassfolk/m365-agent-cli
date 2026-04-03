@@ -168,7 +168,12 @@ export async function tryGraphDraftMutations(
     const draftId = cr.data.id;
 
     const okAttach = await addDraftAttachments(token, draftId, user, options, backend);
-    if (!okAttach) return false;
+    if (!okAttach) {
+      if (backend === 'auto') {
+        await deleteMailMessage(token, draftId, user);
+      }
+      return false;
+    }
 
     if (options.json) {
       console.log(JSON.stringify({ success: true, backend: 'graph', draftId }, null, 2));

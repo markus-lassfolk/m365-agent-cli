@@ -228,7 +228,7 @@ export const sendCommand = new Command('send')
             console.log(JSON.stringify({ error: graphAuth.error || 'Graph auth failed' }, null, 2));
           } else {
             console.error(`Error: ${graphAuth.error || 'Graph authentication failed'}`);
-            console.error('\nSet EWS_CLIENT_ID and GRAPH_REFRESH_TOKEN for Graph.');
+            console.error('\nSet EWS_CLIENT_ID and M365_REFRESH_TOKEN for Graph, or run `m365-agent-cli login`.');
           }
           process.exit(1);
         }

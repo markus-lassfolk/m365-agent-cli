@@ -112,7 +112,7 @@ export const createEventCommand = new Command('create-event')
           });
           if (ga.success && ga.token) {
             const lr = await listGraphRooms(ga.token);
-            if (lr.ok && lr.data && lr.data.length > 0) {
+            if (lr.ok && lr.data !== undefined) {
               const sorted = [...lr.data].sort((a, b) =>
                 (a.displayName || '').localeCompare(b.displayName || '', undefined, { sensitivity: 'base' })
               );
@@ -132,10 +132,15 @@ export const createEventCommand = new Command('create-event')
                 );
               } else {
                 console.log('\nFetching available meeting rooms (Microsoft Graph)...\n');
-                console.log('Available rooms:');
-                for (const room of sorted) {
-                  const em = room.emailAddress?.trim();
-                  console.log(em ? `  - ${room.displayName} (${em})` : `  - ${room.displayName}`);
+                if (sorted.length === 0) {
+                  console.log('No meeting rooms returned by Places API (empty list).');
+                  console.log('You can still specify a room by email address with --room <email>');
+                } else {
+                  console.log('Available rooms:');
+                  for (const room of sorted) {
+                    const em = room.emailAddress?.trim();
+                    console.log(em ? `  - ${room.displayName} (${em})` : `  - ${room.displayName}`);
+                  }
                 }
               }
               return;

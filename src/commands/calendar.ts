@@ -30,7 +30,8 @@ import {
   listCalendarView,
   listEventAttachments
 } from '../lib/graph-calendar-client.js';
-import { safeAttachmentFileName, safeHttpUrlForInternetShortcut } from '../lib/safe-filename.js';
+import { normalizeGraphDateTimeForParsing } from '../lib/graph-datetime.js';
+import { safeAttachmentFileName, writeInternetShortcutUtf8File } from '../lib/safe-filename.js';
 
 async function pathExists(p: string): Promise<boolean> {
   try {
@@ -81,11 +82,6 @@ async function writeLinkFile(
   usedPaths: Set<string>,
   force: boolean
 ): Promise<string | null> {
-  const safeUrl = safeHttpUrlForInternetShortcut(url);
-  if (!safeUrl) {
-    console.error('  Refusing unsafe or invalid link URL (only http/https allowed).');
-    return null;
-  }
   const base = safeAttachmentFileName(baseName, 'link');
   let filePath = join(outputDir, `${base}.url`);
   let counter = 1;
@@ -94,8 +90,12 @@ async function writeLinkFile(
     counter++;
   }
   usedPaths.add(filePath);
-  const content = `[InternetShortcut]\r\nURL=${safeUrl}\r\n`;
-  await writeFile(filePath, content, 'utf8');
+  const ok = await writeInternetShortcutUtf8File(filePath, url);
+  if (!ok) {
+    usedPaths.delete(filePath);
+    console.error('  Refusing unsafe or invalid link URL (only http/https allowed).');
+    return null;
+  }
   return filePath;
 }
 
@@ -325,8 +325,8 @@ function graphAttendeeResponseKey(response: string | undefined): string {
 }
 
 function displayGraphCalendarEvent(event: GraphCalendarEvent, verbose: boolean): void {
-  const startStr = event.start?.dateTime ?? '';
-  const endStr = event.end?.dateTime ?? '';
+  const startStr = normalizeGraphDateTimeForParsing(event.start?.dateTime, event.start?.timeZone);
+  const endStr = normalizeGraphDateTimeForParsing(event.end?.dateTime, event.end?.timeZone);
   const startTime = startStr ? formatTime(startStr) : '?';
   const endTime = endStr ? formatTime(endStr) : '?';
   const location = event.location?.displayName || '';
@@ -863,7 +863,7 @@ export const calendarCommand = new Command('calendar')
             } else {
               const eventsByDate = new Map<string, GraphCalendarEvent[]>();
               for (const event of graphEvents) {
-                const startDt = event.start?.dateTime;
+                const startDt = normalizeGraphDateTimeForParsing(event.start?.dateTime, event.start?.timeZone);
                 if (!startDt) continue;
                 const localDate = parseLocalDate(startDt);
                 const dateKey = `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, '0')}-${String(localDate.getDate()).padStart(2, '0')}`;

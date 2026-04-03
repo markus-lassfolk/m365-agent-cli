@@ -803,6 +803,19 @@ export const mockGraphCalendarViewResponse = {
   ]
 };
 
+/** Room mailbox calendarView: include `showAs` so `isRoomFree` heuristics match production Graph. */
+export const mockGraphRoomCalendarViewResponse = {
+  value: [
+    {
+      id: 'room-block-1',
+      subject: 'Hold',
+      showAs: 'busy',
+      start: { dateTime: '2026-04-01T10:00:00.0000000', timeZone: 'UTC' },
+      end: { dateTime: '2026-04-01T11:00:00.0000000', timeZone: 'UTC' }
+    }
+  ]
+};
+
 export const mockGraphEventDetailResponse = {
   id: 'graph-cal-event-1',
   subject: 'Standup',
