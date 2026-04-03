@@ -2,7 +2,7 @@
 
 **Purpose:** Single place to see **🟢 migrated**, **🟡 partial**, and **🔴 no Graph path** (or no 1:1 parity) for Exchange-related CLI behavior when `M365_EXCHANGE_BACKEND=graph` (default in [`exchange-backend.ts`](../src/lib/exchange-backend.ts); was introduced on `dev_v2`).
 
-**Related:** [`GRAPH_EWS_PARITY_MATRIX.md`](./GRAPH_EWS_PARITY_MATRIX.md) (Graph vs EWS differences, `auto` verification, manual checklist), [`GRAPH_V2_STATUS.md`](./GRAPH_V2_STATUS.md) (branch status log), [`EWS_TO_GRAPH_MIGRATION_EPIC.md`](./EWS_TO_GRAPH_MIGRATION_EPIC.md) (epic).
+**Related:** [`GRAPH_EWS_PARITY_MATRIX.md`](./GRAPH_EWS_PARITY_MATRIX.md) (Graph vs EWS differences, `auto` verification, manual checklist), [`GRAPH_API_GAPS.md`](./GRAPH_API_GAPS.md) (Graph API vs CLI coverage), [`GRAPH_V2_STATUS.md`](./GRAPH_V2_STATUS.md) (branch status log), [`EWS_TO_GRAPH_MIGRATION_EPIC.md`](./EWS_TO_GRAPH_MIGRATION_EPIC.md) (epic).
 
 ### Graph-first policy and `M365_EXCHANGE_BACKEND=auto`
 
@@ -48,7 +48,8 @@ EWS delegate access does **not** imply the same Microsoft Graph token scopes. Ca
 | `auto-reply` | 🔴 | EWS **Inbox Rules**–based templates (this command’s SOAP model). **`M365_EXCHANGE_BACKEND=graph`:** command exits with a hint to use **`oof`** or set **`ews`/`auto`**. **Graph** also offers **`rules`** (inbox rules), but **not** this CLI’s template UX — **no 1:1 replacement**. Prefer **`oof`** for OOF-style mail; use **`rules`** for Graph mail rules. |
 | `oof` | 🟢 | Graph mailboxSettings. |
 | `delegates` **list** | 🟢 | Graph **`calendarPermissions`** when `graph`. **`auto`:** Graph first; an **empty** Graph result is final (same message as `graph`). EWS **`GetDelegates`** only if the Graph **request fails** (auth/call error), not to “supplement” Graph. **`ews`:** EWS only. |
-| `delegates` **add / update / remove** | 🔴 | EWS **delegate matrix** (folder permissions + deliver options) has **no 1:1 Graph API** — Graph uses **calendar sharing / permissions** with a different model. Use Outlook or a future redesigned CLI. |
+| `delegates` **calendar-share** **add / update / remove** | 🟢 | **Graph only:** `POST` / `PATCH` / `DELETE` **[calendarPermission](https://learn.microsoft.com/en-us/graph/api/resources/calendarpermission)** on the default calendar (`delegates calendar-share …`). Not the same as EWS per-folder delegates. |
+| `delegates` **add / update / remove** (EWS) | 🔴 | EWS **delegate matrix** (folder permissions + deliver options). **`M365_EXCHANGE_BACKEND=graph`:** blocked — use **`calendar-share`** for Graph calendar sharing or set **`ews`/`auto`**. |
 | `login` / `auth` | 🟡 | Unified `token-cache-{identity}.json`; dual refresh slots (**EWS** + **Graph** scopes) for mixed-backend and migration. |
 | `outlook-graph` | 🟢 | Graph REST mail (parallel surface). |
 | `graph-calendar` | 🟢 | Graph calendar helpers (parallel surface). |
@@ -76,7 +77,7 @@ EWS delegate access does **not** imply the same Microsoft Graph token scopes. Ca
 2. **🔴** — decide product direction (drop feature, new Graph-native UX, or document “use Outlook”).
 3. After each migration, update this file and [`GRAPH_V2_STATUS.md`](./GRAPH_V2_STATUS.md).
 
-*Last updated: 2026-04-03 — `auto-reply` fails fast when `graph`; `update-event` Graph id hint; mail/drafts Graph error UX.*
+*Last updated: 2026-04-03 — **`delegates calendar-share`** (Graph calendarPermission); **`onenote resource-download`** + content **`--include-ids`**; [`GRAPH_API_GAPS.md`](./GRAPH_API_GAPS.md).*
 
 ---
 

@@ -308,6 +308,104 @@ export async function listCalendarPermissions(
   );
 }
 
+/** Body for [POST calendarPermissions](https://learn.microsoft.com/en-us/graph/api/calendar-post-calendarpermissions). */
+export interface CreateCalendarPermissionBody {
+  emailAddress: { address: string; name?: string };
+  role: string;
+  isInsideOrganization?: boolean;
+  isRemovable?: boolean;
+}
+
+/**
+ * [Create calendarPermission](https://learn.microsoft.com/en-us/graph/api/calendar-post-calendarpermissions)
+ * — share or delegate calendar access (Graph model; not EWS GetDelegates).
+ */
+export async function createCalendarPermission(
+  token: string,
+  body: CreateCalendarPermissionBody,
+  user?: string
+): Promise<GraphResponse<GraphCalendarPermission>> {
+  try {
+    const result = await callGraph<GraphCalendarPermission>(
+      token,
+      graphUserPath(user, 'calendar/calendarPermissions'),
+      {
+        method: 'POST',
+        body: JSON.stringify(body)
+      }
+    );
+    if (!result.ok || !result.data) {
+      return graphError(
+        result.error?.message || 'Failed to create calendar permission',
+        result.error?.code,
+        result.error?.status
+      );
+    }
+    return graphResult(result.data);
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to create calendar permission');
+  }
+}
+
+/**
+ * [Update calendarPermission](https://learn.microsoft.com/en-us/graph/api/calendarpermission-update)
+ * — `permissionId` is the Graph id (see `delegates list` or listCalendarPermissions).
+ */
+export async function updateCalendarPermission(
+  token: string,
+  permissionId: string,
+  patch: { role: string },
+  user?: string
+): Promise<GraphResponse<GraphCalendarPermission>> {
+  const id = encodeURIComponent(permissionId);
+  try {
+    const result = await callGraph<GraphCalendarPermission>(
+      token,
+      graphUserPath(user, `calendar/calendarPermissions/${id}`),
+      {
+        method: 'PATCH',
+        body: JSON.stringify(patch)
+      }
+    );
+    if (!result.ok || !result.data) {
+      return graphError(
+        result.error?.message || 'Failed to update calendar permission',
+        result.error?.code,
+        result.error?.status
+      );
+    }
+    return graphResult(result.data);
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to update calendar permission');
+  }
+}
+
+/**
+ * [Delete calendarPermission](https://learn.microsoft.com/en-us/graph/api/calendarpermission-delete).
+ */
+export async function deleteCalendarPermission(
+  token: string,
+  permissionId: string,
+  user?: string
+): Promise<GraphResponse<void>> {
+  const id = encodeURIComponent(permissionId);
+  try {
+    return await callGraph<void>(
+      token,
+      graphUserPath(user, `calendar/calendarPermissions/${id}`),
+      { method: 'DELETE' },
+      false
+    );
+  } catch (err) {
+    if (err instanceof GraphApiError) {
+      return graphError(err.message, err.code, err.status);
+    }
+    return graphError(err instanceof Error ? err.message : 'Failed to delete calendar permission');
+  }
+}
+
 /** Graph [attachment](https://learn.microsoft.com/en-us/graph/api/resources/attachment) on an event (subset). */
 export interface GraphEventAttachment {
   id: string;

@@ -19,6 +19,7 @@ import {
   getOneNoteOperation,
   getOneNotePage,
   getOneNotePageContentHtml,
+  getOneNoteResourceContent,
   getOneNotePagePreview,
   getOneNoteSection,
   getOneNoteSectionGroup,
@@ -71,7 +72,7 @@ function addOneNoteRootOptions(cmd: Command): Command {
 }
 
 export const onenoteCommand = new Command('onenote').description(
-  'OneNote via Microsoft Graph (`Notes.ReadWrite.All`): notebooks (incl. resolve by web URL), section groups, sections (copy to notebook / section group), pages, copy, operations'
+  'OneNote via Microsoft Graph (`Notes.ReadWrite.All`): notebooks (incl. resolve by web URL), section groups, sections (copy to notebook / section group), pages, embedded resource download, copy, operations'
 );
 
 // ─── Legacy / primary list commands (unchanged names) ─────────────────────
@@ -252,14 +253,27 @@ addOneNoteRootOptions(
     .command('content')
     .description('Print page HTML content to stdout')
     .argument('<pageId>', 'Page id')
+    .option('--include-ids', 'Request includeIDs=true (for PATCH targeting; see MS OneNote page content docs)')
     .option('--token <token>', 'Use a specific token')
     .option('--identity <name>', 'Graph token cache identity (default: default)')
     .option('--user <email>', 'Target user (Graph delegation)')
 ).action(
-  async (pageId: string, opts: { token?: string; identity?: string; user?: string; group?: string; site?: string }) => {
+  async (
+    pageId: string,
+    opts: {
+      includeIds?: boolean;
+      token?: string;
+      identity?: string;
+      user?: string;
+      group?: string;
+      site?: string;
+    }
+  ) => {
     const token = await requireGraphAuth(opts);
     const { user, scope } = parseOneNoteRoot(opts);
-    const r = await getOneNotePageContentHtml(token, pageId, user, scope);
+    const r = await getOneNotePageContentHtml(token, pageId, user, scope, {
+      includeIds: opts.includeIds ?? false
+    });
     if (!r.ok || !r.data) {
       console.error(`Error: ${r.error?.message}`);
       process.exit(1);
@@ -275,23 +289,62 @@ addOneNoteRootOptions(
     .description('Download page HTML to a file')
     .argument('<pageId>', 'Page id')
     .requiredOption('-o, --output <path>', 'Output file path')
+    .option('--include-ids', 'Request includeIDs=true in content export')
     .option('--token <token>', 'Use a specific token')
     .option('--identity <name>', 'Graph token cache identity (default: default)')
     .option('--user <email>', 'Target user (Graph delegation)')
 ).action(
   async (
     pageId: string,
-    opts: { output: string; token?: string; identity?: string; user?: string; group?: string; site?: string }
+    opts: {
+      output: string;
+      includeIds?: boolean;
+      token?: string;
+      identity?: string;
+      user?: string;
+      group?: string;
+      site?: string;
+    }
   ) => {
     const token = await requireGraphAuth(opts);
     const { user, scope } = parseOneNoteRoot(opts);
-    const r = await getOneNotePageContentHtml(token, pageId, user, scope);
+    const r = await getOneNotePageContentHtml(token, pageId, user, scope, {
+      includeIds: opts.includeIds ?? false
+    });
     if (!r.ok || !r.data) {
       console.error(`Error: ${r.error?.message}`);
       process.exit(1);
     }
     await writeFile(opts.output, r.data, 'utf-8');
     console.log(`Wrote ${opts.output}`);
+  }
+);
+
+addOneNoteRootOptions(
+  onenoteCommand
+    .command('resource-download')
+    .description(
+      'Download embedded resource bytes (image/file) by id — GET …/onenote/resources/{id}/content (ids from page HTML data-fullres-src / object tags)'
+    )
+    .argument('<resourceId>', 'OneNote resource id (from page HTML)')
+    .requiredOption('-o, --output <path>', 'Output file path')
+    .option('--token <token>', 'Use a specific token')
+    .option('--identity <name>', 'Graph token cache identity (default: default)')
+    .option('--user <email>', 'Target user (Graph delegation)')
+).action(
+  async (
+    resourceId: string,
+    opts: { output: string; token?: string; identity?: string; user?: string; group?: string; site?: string }
+  ) => {
+    const token = await requireGraphAuth(opts);
+    const { user, scope } = parseOneNoteRoot(opts);
+    const r = await getOneNoteResourceContent(token, resourceId, user, scope);
+    if (!r.ok || !r.data) {
+      console.error(`Error: ${r.error?.message || 'Failed to download resource'}`);
+      process.exit(1);
+    }
+    await writeFile(opts.output, r.data);
+    console.log(`Wrote ${opts.output} (${r.data.length} bytes)`);
   }
 );
 

@@ -40,6 +40,10 @@ function pagesPath(user?: string, scope?: OneNoteGraphScope): string {
   return `${oneNoteRoot(user, scope)}/pages`;
 }
 
+function resourcesPath(user?: string, scope?: OneNoteGraphScope): string {
+  return `${oneNoteRoot(user, scope)}/resources`;
+}
+
 /** Graph [notebook](https://learn.microsoft.com/en-us/graph/api/resources/notebook) (subset). */
 export interface OneNoteNotebook {
   id: string;
@@ -540,9 +544,13 @@ export async function getOneNotePageContentHtml(
   token: string,
   pageId: string,
   user?: string,
-  scope?: OneNoteGraphScope
+  scope?: OneNoteGraphScope,
+  options?: { includeIds?: boolean }
 ): Promise<GraphResponse<string>> {
-  const path = `${pagesPath(user, scope)}/${encodeURIComponent(pageId)}/content`;
+  let path = `${pagesPath(user, scope)}/${encodeURIComponent(pageId)}/content`;
+  if (options?.includeIds) {
+    path += '?includeIDs=true';
+  }
   try {
     const res = await fetchGraphRaw(token, path, { headers: { Accept: 'text/html, application/json' } });
     const text = await res.text();
@@ -560,6 +568,38 @@ export async function getOneNotePageContentHtml(
   } catch (err) {
     if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
     return graphError(err instanceof Error ? err.message : 'Failed to get page content');
+  }
+}
+
+/**
+ * Download binary content for an embedded OneNote resource (image, file)
+ * ([GET …/resources/{id}/content](https://learn.microsoft.com/en-us/graph/api/resource-get)).
+ * Resource ids appear in page HTML (`data-fullres-src`, `object data`, etc.).
+ */
+export async function getOneNoteResourceContent(
+  token: string,
+  resourceId: string,
+  user?: string,
+  scope?: OneNoteGraphScope
+): Promise<GraphResponse<Uint8Array>> {
+  const path = `${resourcesPath(user, scope)}/${encodeURIComponent(resourceId)}/content`;
+  try {
+    const res = await fetchGraphRaw(token, path);
+    if (!res.ok) {
+      let message = `Failed to download resource: HTTP ${res.status}`;
+      try {
+        const j = (await res.json()) as { error?: { message?: string } };
+        if (j.error?.message) message = j.error.message;
+      } catch {
+        /* ignore */
+      }
+      return graphError(message, undefined, res.status);
+    }
+    const buf = new Uint8Array(await res.arrayBuffer());
+    return graphResult(buf);
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to download OneNote resource');
   }
 }
 
