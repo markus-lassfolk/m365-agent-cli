@@ -180,3 +180,54 @@ describe('createDraftMessage', () => {
     }
   });
 });
+
+describe('mailMessagesDeltaPage', () => {
+  it('GETs /me/messages/delta when no folder', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    const urls: string[] = [];
+    const originalFetch = globalThis.fetch;
+
+    try {
+      globalThis.fetch = (async (input: string | URL | Request) => {
+        urls.push(typeof input === 'string' ? input : input.toString());
+        return new Response(JSON.stringify({ value: [{ id: 'm1' }] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as typeof fetch;
+
+      const { mailMessagesDeltaPage } = await import('./outlook-graph-client.js');
+      const r = await mailMessagesDeltaPage(token, {});
+
+      expect(r.ok).toBe(true);
+      expect(r.data?.value?.[0]?.id).toBe('m1');
+      expect(urls[0]).toContain('/me/messages/delta');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('GETs .../mailFolders/{id}/messages/delta when folder set', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    const urls: string[] = [];
+    const originalFetch = globalThis.fetch;
+
+    try {
+      globalThis.fetch = (async (input: string | URL | Request) => {
+        urls.push(typeof input === 'string' ? input : input.toString());
+        return new Response(JSON.stringify({ value: [] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as typeof fetch;
+
+      const { mailMessagesDeltaPage } = await import('./outlook-graph-client.js');
+      const r = await mailMessagesDeltaPage(token, { folderId: 'inbox' });
+
+      expect(r.ok).toBe(true);
+      expect(urls[0]).toContain('/me/mailFolders/inbox/messages/delta');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});

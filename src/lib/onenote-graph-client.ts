@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+import { basename, resolve } from 'node:path';
 import {
   callGraph,
   callGraphAbsolute,
@@ -8,7 +10,9 @@ import {
   graphError,
   graphResult
 } from './graph-client.js';
+import { GRAPH_BASE_URL } from './graph-constants.js';
 import { graphUserPath } from './graph-user-path.js';
+import { lookupMimeType } from './mime-type.js';
 
 /**
  * Optional group or site root for OneNote (`/groups/{id}/onenote`, `/sites/{id}/onenote`).
@@ -600,6 +604,154 @@ export async function getOneNoteResourceContent(
   } catch (err) {
     if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
     return graphError(err instanceof Error ? err.message : 'Failed to download OneNote resource');
+  }
+}
+
+/** [oneNoteResource](https://learn.microsoft.com/en-us/graph/api/resources/onenoteresource) metadata (GET without `/content`). */
+export interface OneNoteResourceInfo {
+  id?: string;
+  contentUrl?: string;
+  self?: string;
+  [key: string]: unknown;
+}
+
+/**
+ * [Get resource](https://learn.microsoft.com/en-us/graph/api/resource-get) — metadata (not binary bytes).
+ */
+export async function getOneNoteResource(
+  token: string,
+  resourceId: string,
+  user?: string,
+  scope?: OneNoteGraphScope
+): Promise<GraphResponse<OneNoteResourceInfo>> {
+  try {
+    const result = await callGraph<OneNoteResourceInfo>(
+      token,
+      `${resourcesPath(user, scope)}/${encodeURIComponent(resourceId)}`
+    );
+    if (!result.ok || !result.data) {
+      return graphError(result.error?.message || 'Failed to get resource', result.error?.code, result.error?.status);
+    }
+    return graphResult(result.data);
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to get OneNote resource');
+  }
+}
+
+/** Binary part for multipart create/PATCH (`name:partName` in HTML / `src="name:partName"`). */
+export interface OneNoteMultipartBinaryPart {
+  partName: string;
+  absolutePath: string;
+}
+
+/**
+ * [Create page with images/files](https://learn.microsoft.com/en-us/graph/api/section-post-pages) —
+ * multipart/form-data with a **Presentation** (HTML) part and named binary parts referenced in HTML as `src="name:partName"` or `data="name:partName"`.
+ */
+export async function createOneNotePageMultipart(
+  token: string,
+  sectionId: string,
+  presentationHtml: string,
+  binaryParts: OneNoteMultipartBinaryPart[],
+  user?: string,
+  scope?: OneNoteGraphScope
+): Promise<GraphResponse<OneNotePage>> {
+  const path = `${sectionsPath(user, scope)}/${encodeURIComponent(sectionId)}/pages`;
+  try {
+    const form = new FormData();
+    form.append(
+      'Presentation',
+      new Blob([presentationHtml], { type: 'text/html' }),
+      'presentation.html'
+    );
+    const wd = process.cwd();
+    for (const p of binaryParts) {
+      const abs = resolve(wd, p.absolutePath);
+      const buf = await readFile(abs);
+      const fileName = basename(abs);
+      const mime = lookupMimeType(fileName) || 'application/octet-stream';
+      form.append(p.partName, new Blob([buf], { type: mime }), fileName);
+    }
+
+    const res = await fetch(`${GRAPH_BASE_URL}${path}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: form
+    });
+
+    const text = await res.text();
+    if (!res.ok) {
+      let message = text || `HTTP ${res.status}`;
+      try {
+        const j = JSON.parse(text) as { error?: { message?: string } };
+        if (j.error?.message) message = j.error.message;
+      } catch {
+        /* ignore */
+      }
+      return graphError(message, undefined, res.status);
+    }
+    if (!text.trim()) {
+      return graphError('Empty response from create page');
+    }
+    const data = JSON.parse(text) as OneNotePage;
+    return graphResult(data);
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to create page (multipart)');
+  }
+}
+
+/**
+ * [PATCH page content with binary parts](https://learn.microsoft.com/en-us/graph/onenote-update-page) —
+ * multipart with **Commands** (JSON array) and image/file parts referenced as `src="name:partName"` in command content.
+ */
+export async function patchOneNotePageContentMultipart(
+  token: string,
+  pageId: string,
+  commands: unknown[],
+  binaryParts: OneNoteMultipartBinaryPart[],
+  user?: string,
+  scope?: OneNoteGraphScope
+): Promise<GraphResponse<void>> {
+  const path = `${pagesPath(user, scope)}/${encodeURIComponent(pageId)}/content`;
+  try {
+    const form = new FormData();
+    form.append(
+      'Commands',
+      new Blob([JSON.stringify(commands)], { type: 'application/json' }),
+      'commands.json'
+    );
+    const wd = process.cwd();
+    for (const p of binaryParts) {
+      const abs = resolve(wd, p.absolutePath);
+      const buf = await readFile(abs);
+      const fileName = basename(abs);
+      const mime = lookupMimeType(fileName) || 'application/octet-stream';
+      form.append(p.partName, new Blob([buf], { type: mime }), fileName);
+    }
+
+    const res = await fetch(`${GRAPH_BASE_URL}${path}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}` },
+      body: form
+    });
+
+    if (res.status === 204 || res.ok) {
+      return graphResult(undefined as void);
+    }
+    const text = await res.text();
+    let message = text || `HTTP ${res.status}`;
+    try {
+      const j = JSON.parse(text) as { error?: { message?: string } };
+      if (j.error?.message) message = j.error.message;
+    } catch {
+      /* ignore */
+    }
+    return graphError(message, undefined, res.status);
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to patch page (multipart)');
   }
 }
 

@@ -4,7 +4,7 @@
 
 **Related:** [`GRAPH_EWS_PARITY_MATRIX.md`](./GRAPH_EWS_PARITY_MATRIX.md) (Graph vs EWS differences, `auto` verification, manual checklist), [`GRAPH_API_GAPS.md`](./GRAPH_API_GAPS.md) (Graph API vs CLI coverage), [`GRAPH_V2_STATUS.md`](./GRAPH_V2_STATUS.md) (branch status log), [`EWS_TO_GRAPH_MIGRATION_EPIC.md`](./EWS_TO_GRAPH_MIGRATION_EPIC.md) (epic).
 
-### Graph-first policy and `M365_EXCHANGE_BACKEND=auto`
+## Graph-first policy and `M365_EXCHANGE_BACKEND=auto`
 
 | Value | Behavior |
 | --- | --- |
@@ -14,11 +14,11 @@
 
 Helpers in [`exchange-backend.ts`](../src/lib/exchange-backend.ts): `shouldTryGraphFirst()`, `isAutoMode()`, `isGraphOnlyMode()`, `isEwsExclusiveMode()`, `mayUseEws()`.
 
-### Delegated / shared mailbox (`--mailbox`) on Graph
+## Delegated / shared mailbox (`--mailbox`) on Graph
 
 EWS delegate access does **not** imply the same Microsoft Graph token scopes. Calling `GET /users/{other}/...` requires **delegated** Graph permissions including **`Mail.Read.Shared`**, **`Mail.ReadWrite.Shared`**, **`Calendars.Read.Shared`**, and **`Calendars.ReadWrite.Shared`** on the Entra app, then **`m365-agent-cli login`** again. Without them, Graph may return **Access is denied** for another user’s mailbox while the primary mailbox still works. Full scope list and CLI features: **[`GRAPH_SCOPES.md`](./GRAPH_SCOPES.md)**; portal setup: [`ENTRA_SETUP.md`](./ENTRA_SETUP.md).
 
-### Legend
+## Legend
 
 | Marker | Meaning |
 | --- | --- |
@@ -57,8 +57,14 @@ EWS delegate access does **not** imply the same Microsoft Graph token scopes. Ca
 | `todo` (core) | 🟢 | Graph To Do. `create --link` uses Graph **get message**. |
 | `contacts` | 🟢 | Graph contacts + folders CRUD, **`$search`**, **delta**, **photo**, file attachments + **`attachments add-link`** (referenceAttachment), **`$filter`** on list; shared mailbox: **`Contacts.Read.Shared`** / **`Contacts.ReadWrite.Shared`** + **`--user`**. |
 | `meeting` | 🟢 | Graph **`/me/onlineMeetings`**: **create** (simple or **`--json-file`**), **get**, **update**, **delete** (`OnlineMeetings.ReadWrite`). **Invitations on the user’s calendar with Teams:** use **`create-event … --teams`** — `--json` includes **`event.onlineMeeting`**, **`event.teamsMeeting`**, **`onlineMeetingUrl`**. |
-| `onenote` | 🟢 | **Graph only** — Exchange Web Services has **no OneNote API**; there is nothing to merge from EWS. Graph: **notebook** CRUD + **`notebook from-web-url`** (GetNotebookFromWebUrl), **section-group** / **section** CRUD (**copy-to-notebook**, **copy-to-section-group**), **list-pages** (global `GET …/onenote/pages`), **page-preview**, legacy **notebooks|sections|pages|page|content|export|create-page**, **delete-page**, **patch-page-content**, **copy-page** + **operation**, optional **`--group`** / **`--site`** roots (`/groups/{id}/onenote`, `/sites/{id}/onenote`). |
+| `onenote` | 🟢 | **Graph only** — Exchange Web Services has **no OneNote API**; there is nothing to merge from EWS. Graph: **notebook** CRUD + **`notebook from-web-url`** (GetNotebookFromWebUrl), **section-group** / **section** CRUD (**copy-to-notebook**, **copy-to-section-group**), **list-pages** (global `GET …/onenote/pages`), **page-preview**, legacy **notebooks**, **sections**, **pages**, **page**, **content**, **export**, **create-page**, **delete-page**, **patch-page-content**, **copy-page** + **operation**, optional **`--group`** / **`--site`** roots (`/groups/{id}/onenote`, `/sites/{id}/onenote`). |
 | `planner`, `files`, `sharepoint`, `find`, `rooms`, `subscribe`, … | 🟢 | Graph (no EWS in path). |
+| `teams` | 🟢 | **Graph only** — joined teams, channels (**incl. all-channels, incoming-channels**), messages, chats, tabs, members, apps (`graph-teams-client.ts`). |
+| `bookings` | 🟢 | **Graph only** — businesses, **business-get**, appointments, customers, services (**service-get**), staff (**staff-get**), calendar view (`graph-bookings-client.ts`). |
+| `excel` | 🟢 | **Graph only** — worksheets, range, tables, used range on a drive item (`graph-excel-client.ts`). |
+| `graph` (`invoke`, `batch`) | 🟢 | **Graph only** — arbitrary JSON REST + `$batch` (`graph-advanced-client.ts`). |
+| `presence` | 🟢 | **Graph only** — `/me/presence` and `/users/{id}/presence` (`graph-presence-client.ts`). |
+| `graph-search` | 🟢 | **Graph only** — `POST /search/query`. |
 
 ---
 
@@ -77,7 +83,7 @@ EWS delegate access does **not** imply the same Microsoft Graph token scopes. Ca
 2. **🔴** — decide product direction (drop feature, new Graph-native UX, or document “use Outlook”).
 3. After each migration, update this file and [`GRAPH_V2_STATUS.md`](./GRAPH_V2_STATUS.md).
 
-*Last updated: 2026-04-03 — **`delegates calendar-share`** (Graph calendarPermission); **`onenote resource-download`** + content **`--include-ids`**; [`GRAPH_API_GAPS.md`](./GRAPH_API_GAPS.md).*
+*Last updated: 2026-04-03 — **`teams incoming-channels`**; **`bookings` business-get / service-get / staff-get**; skill + README command tables aligned with Graph surface; [`GRAPH_API_GAPS.md`](./GRAPH_API_GAPS.md).*
 
 ---
 

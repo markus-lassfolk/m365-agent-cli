@@ -2,7 +2,7 @@
 
 > **Credits:** This repository is heavily extended from the original project by [foeken/clippy](https://github.com/foeken/clippy).
 
-A powerful command-line interface for Microsoft 365 using Exchange Web Services (EWS) and Microsoft Graph. Manage your calendar, email, OneDrive files, Microsoft Planner tasks, and SharePoint Sites directly from the terminal.
+A powerful command-line interface for Microsoft 365 using Exchange Web Services (EWS) and Microsoft Graph. Manage your calendar, email, OneDrive files, Microsoft Planner tasks, SharePoint Sites, Microsoft Teams, Bookings, Excel workbooks on drives, presence, and more from the terminal—including **`graph invoke`** / **`graph batch`** for paths not wrapped as dedicated commands.
 
 ## The Ultimate AI Personal Assistant (PA)
 
@@ -786,6 +786,16 @@ m365-agent-cli graph-calendar get-event <eventId>
 m365-agent-cli graph-calendar accept <eventId> --comment "Will attend"
 ```
 
+## Microsoft Graph Search (`graph-search`)
+
+Cross-workload search via **`POST /search/query`** (messages, events, drive items, list items, people, etc.). Uses **entity-specific** Graph delegated permissions (e.g. mail, files, calendars) — see [Microsoft Graph Search](https://learn.microsoft.com/en-us/graph/api/resources/search-api-overview) and [`docs/GRAPH_SCOPES.md`](docs/GRAPH_SCOPES.md). This is distinct from directory **`find`** (people/groups).
+
+```bash
+m365-agent-cli graph-search "project alpha"
+m365-agent-cli graph-search "subject:invoice" --types message,event --size 50
+m365-agent-cli graph-search "contoso" --json
+```
+
 ## SharePoint Commands
 
 Manage SharePoint lists and Site Pages.
@@ -848,6 +858,12 @@ These commands are not expanded step-by-step above; use **`m365-agent-cli <comma
 | **`meeting`** | **Graph** standalone Teams meetings (`/me/onlineMeetings`): create (simple or **`--json-file`**), get, update, delete. Calendar invitations with Teams: use **`create-event … --teams`**. |
 | **`forward-event`** (`forward`) | Forward a calendar invitation to more recipients (Graph). |
 | **`graph-calendar`** | Graph **calendars**, **calendarView**, **get-event**, **accept** / **decline** / **tentative** (vs EWS `calendar` / `respond`). |
+| **`graph-search`** | Microsoft Graph **Search** (`/search/query`) — mail, calendar, files, lists, people (entity-specific scopes). |
+| **`teams`** | **Graph-only** Microsoft Teams: joined teams, team get, **channels** / **all-channels** / **incoming-channels** / **primary-channel** / **channel-get**, **channel-members**, **messages** / **message-replies**, **tabs**, **members**, **apps**, **chats** / **chat-get** / **chat-messages** / **chat-members** / **chat-pinned** ([`GRAPH_SCOPES.md`](docs/GRAPH_SCOPES.md)). |
+| **`bookings`** | **Graph-only** Microsoft Bookings: **businesses**, **business-get**, **currencies**, appointments list + **appointment** get, customers + **customer** get, **custom-questions**, **services** + **service-get**, **staff** + **staff-get**, **calendar-view** (`--start` / `--end`). |
+| **`excel`** | **Graph-only** Excel on a drive item: **worksheets**, **range**, **tables**, **used-range** (`--values-only`). |
+| **`graph`** | **Graph-only** escape hatch: **`graph invoke`** (any JSON path/method) and **`graph batch`** (JSON `$batch` file); respects **`--read-only`** for non-GET. |
+| **`presence`** | **Graph-only** user presence: **`me`**, **`user <id>`** (`Presence.Read`). |
 | **`counter`** (`propose-new-time`) | Propose a new time for an existing event (Graph). |
 | **`schedule`** | Merged free/busy for one or more people over a time window (`getSchedule`). |
 | **`suggest`** | Meeting-time suggestions via Graph (`findMeetingTimes`). |

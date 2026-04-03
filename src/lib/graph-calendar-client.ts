@@ -1,5 +1,6 @@
 import {
   callGraph,
+  callGraphAbsolute,
   fetchAllPages,
   fetchGraphRaw,
   GraphApiError,
@@ -571,4 +572,46 @@ export async function addCalendarEventAttachmentsGraph(
     }
   }
   return { ok: true, data: undefined } as GraphResponse<void>;
+}
+
+/** One page of event delta sync ([delta](https://learn.microsoft.com/en-us/graph/delta-query-events)). */
+export interface EventsDeltaPage {
+  value?: GraphCalendarEvent[];
+  '@odata.nextLink'?: string;
+  '@odata.deltaLink'?: string;
+}
+
+export async function eventsDeltaPage(
+  token: string,
+  options?: { user?: string; calendarId?: string; nextLink?: string }
+): Promise<GraphResponse<EventsDeltaPage>> {
+  try {
+    if (options?.nextLink?.trim()) {
+      const result = await callGraphAbsolute<EventsDeltaPage>(token, options.nextLink.trim());
+      if (!result.ok || !result.data) {
+        return graphError(
+          result.error?.message || 'Failed to fetch events delta page',
+          result.error?.code,
+          result.error?.status
+        );
+      }
+      return graphResult(result.data);
+    }
+    const calId = options?.calendarId?.trim();
+    const path = calId
+      ? `${calendarsRoot(options?.user)}/${encodeURIComponent(calId)}/events/delta`
+      : `${graphUserPath(options?.user, 'events')}/delta`;
+    const result = await callGraph<EventsDeltaPage>(token, path);
+    if (!result.ok || !result.data) {
+      return graphError(
+        result.error?.message || 'Failed to start events delta',
+        result.error?.code,
+        result.error?.status
+      );
+    }
+    return graphResult(result.data);
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to fetch events delta');
+  }
 }

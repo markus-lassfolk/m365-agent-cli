@@ -1,4 +1,5 @@
 import { readFile, writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { Command } from 'commander';
 import { requireGraphAuth } from '../lib/graph-auth.js';
 import {
@@ -7,6 +8,7 @@ import {
   copyOneNoteSectionToSectionGroup,
   createOneNoteNotebook,
   createOneNotePageFromHtml,
+  createOneNotePageMultipart,
   createSectionGroupInNotebook,
   createSectionInNotebook,
   createSectionInSectionGroup,
@@ -19,6 +21,7 @@ import {
   getOneNoteOperation,
   getOneNotePage,
   getOneNotePageContentHtml,
+  getOneNoteResource,
   getOneNoteResourceContent,
   getOneNotePagePreview,
   getOneNoteSection,
@@ -29,6 +32,7 @@ import {
   listOneNoteNotebooks,
   listSectionPages,
   listSectionsInSectionGroup,
+  patchOneNotePageContentMultipart,
   type OneNoteGraphScope,
   updateOneNoteNotebook,
   updateOneNotePageContent,
@@ -58,6 +62,27 @@ function parseOneNoteRoot(opts: { user?: string; group?: string; site?: string }
   return { user };
 }
 
+/** Parses `--attach name:path` for multipart page create/PATCH (part names match `src="name:…"` in HTML). */
+function parseOneNoteAttachSpecs(specs: string[]): Array<{ partName: string; absolutePath: string }> {
+  const out: Array<{ partName: string; absolutePath: string }> = [];
+  const wd = process.cwd();
+  for (const spec of specs) {
+    const idx = spec.indexOf(':');
+    if (idx < 1) {
+      console.error(`Invalid --attach: expected form name:path, got: ${spec}`);
+      process.exit(1);
+    }
+    const partName = spec.slice(0, idx).trim();
+    const rel = spec.slice(idx + 1).trim();
+    if (!partName || !rel) {
+      console.error(`Invalid --attach: expected form name:path, got: ${spec}`);
+      process.exit(1);
+    }
+    out.push({ partName, absolutePath: resolve(wd, rel) });
+  }
+  return out;
+}
+
 /** Options repeated on OneNote subcommands (group/site roots). */
 const optGroupSite = [
   ['--group <id>', 'OneNote root: /groups/{id}/onenote'],
@@ -72,7 +97,7 @@ function addOneNoteRootOptions(cmd: Command): Command {
 }
 
 export const onenoteCommand = new Command('onenote').description(
-  'OneNote via Microsoft Graph (`Notes.ReadWrite.All`): notebooks (incl. resolve by web URL), section groups, sections (copy to notebook / section group), pages, embedded resource download, copy, operations'
+  'OneNote via Microsoft Graph (`Notes.ReadWrite.All`): notebooks, sections, pages (HTML, multipart images/files, PATCH JSON or multipart), resource get/download, copy, operations'
 );
 
 // ─── Legacy / primary list commands (unchanged names) ─────────────────────
@@ -345,6 +370,84 @@ addOneNoteRootOptions(
     }
     await writeFile(opts.output, r.data);
     console.log(`Wrote ${opts.output} (${r.data.length} bytes)`);
+  }
+);
+
+addOneNoteRootOptions(
+  onenoteCommand
+    .command('get-resource')
+    .description('Get OneNote embedded resource metadata (GET …/resources/{id}, not binary — use resource-download for bytes)')
+    .argument('<resourceId>', 'Resource id from page HTML')
+    .option('--json', 'Output as JSON')
+    .option('--token <token>', 'Use a specific token')
+    .option('--identity <name>', 'Graph token cache identity (default: default)')
+    .option('--user <email>', 'Target user (Graph delegation)')
+).action(
+  async (
+    resourceId: string,
+    opts: { json?: boolean; token?: string; identity?: string; user?: string; group?: string; site?: string }
+  ) => {
+    const token = await requireGraphAuth(opts);
+    const { user, scope } = parseOneNoteRoot(opts);
+    const r = await getOneNoteResource(token, resourceId, user, scope);
+    if (!r.ok || !r.data) {
+      console.error(`Error: ${r.error?.message || 'Failed to get resource'}`);
+      process.exit(1);
+    }
+    console.log(opts.json ? JSON.stringify(r.data) : JSON.stringify(r.data, null, 2));
+  }
+);
+
+addOneNoteRootOptions(
+  onenoteCommand
+    .command('create-page-multipart')
+    .description(
+      'Create a page with embedded files/images (multipart/form-data; HTML references parts as src="name:partName" — see Graph onenote-create-page)'
+    )
+    .requiredOption('--section <sectionId>', 'Section id')
+    .requiredOption('--file <path>', 'HTML file (Presentation part)')
+    .option(
+      '--attach <spec>',
+      'Multipart part: blockName:path/to/file (repeatable; names must match name:… in HTML)',
+      (v: string, prev: string[]) => [...prev, v],
+      [] as string[]
+    )
+    .option('--json', 'Echo created page as JSON')
+    .option('--token <token>', 'Use a specific token')
+    .option('--identity <name>', 'Graph token cache identity (default: default)')
+    .option('--user <email>', 'Target user (Graph delegation)')
+).action(
+  async (
+    opts: {
+      section: string;
+      file: string;
+      attach?: string[];
+      json?: boolean;
+      token?: string;
+      identity?: string;
+      user?: string;
+      group?: string;
+      site?: string;
+    },
+    cmd: any
+  ) => {
+    checkReadOnly(cmd);
+    const token = await requireGraphAuth(opts);
+    const { user, scope } = parseOneNoteRoot(opts);
+    const wd = process.cwd();
+    const html = await readFile(resolve(wd, opts.file), 'utf-8');
+    const parts = parseOneNoteAttachSpecs(opts.attach ?? []);
+    const r = await createOneNotePageMultipart(token, opts.section, html, parts, user, scope);
+    if (!r.ok || !r.data) {
+      console.error(`Error: ${r.error?.message || 'Failed to create page'}`);
+      process.exit(1);
+    }
+    if (opts.json) console.log(JSON.stringify(r.data, null, 2));
+    else {
+      console.log(`Created page: ${r.data.title ?? r.data.id} (${r.data.id})`);
+      const url = r.data.links?.oneNoteWebUrl?.href;
+      if (url) console.log(url);
+    }
   }
 );
 
@@ -1126,6 +1229,56 @@ addOneNoteRootOptions(
       process.exit(1);
     }
     console.log('Page content updated.');
+  }
+);
+
+addOneNoteRootOptions(
+  onenoteCommand
+    .command('patch-page-content-multipart')
+    .description(
+      'PATCH page with binary images/files (multipart: Commands + parts; use with `src="name:partName"` in command JSON — see Graph onenote-update-page)'
+    )
+    .argument('<pageId>', 'Page id')
+    .requiredOption('--json-file <path>', 'JSON array of patch commands (same shape as patch-page-content)')
+    .option(
+      '--attach <spec>',
+      'Part name:file path for binary data referenced in commands (repeatable)',
+      (v: string, prev: string[]) => [...prev, v],
+      [] as string[]
+    )
+    .option('--token <token>', 'Use a specific token')
+    .option('--identity <name>', 'Graph token cache identity (default: default)')
+    .option('--user <email>', 'Target user')
+).action(
+  async (
+    pageId: string,
+    opts: {
+      jsonFile: string;
+      attach?: string[];
+      token?: string;
+      identity?: string;
+      user?: string;
+      group?: string;
+      site?: string;
+    },
+    cmd: any
+  ) => {
+    checkReadOnly(cmd);
+    const token = await requireGraphAuth(opts);
+    const { user, scope } = parseOneNoteRoot(opts);
+    const wd = process.cwd();
+    const commands = JSON.parse(await readFile(resolve(wd, opts.jsonFile), 'utf-8')) as unknown[];
+    if (!Array.isArray(commands)) {
+      console.error('Error: --json-file must contain a JSON array of patch commands');
+      process.exit(1);
+    }
+    const parts = parseOneNoteAttachSpecs(opts.attach ?? []);
+    const r = await patchOneNotePageContentMultipart(token, pageId, commands, parts, user, scope);
+    if (!r.ok) {
+      console.error(`Error: ${r.error?.message}`);
+      process.exit(1);
+    }
+    console.log('Page content updated (multipart).');
   }
 );
 

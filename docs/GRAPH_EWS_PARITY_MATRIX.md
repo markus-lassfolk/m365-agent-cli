@@ -38,7 +38,7 @@ These commands **branch** on `getExchangeBackend()` in code (see `src/commands/*
 | `delegates` **calendar-share** **add/update/remove** | **Graph** `calendarPermissions` | **Graph** (same) | **Graph** | **Calendar sharing** model — distinct from EWS delegates; see [`GRAPH_API_GAPS.md`](./GRAPH_API_GAPS.md). |
 
 Commands that **do not** read `M365_EXCHANGE_BACKEND` for mail/calendar (always Microsoft Graph or other APIs):  
-`contacts`, `meeting`, `onenote`, `todo`, `planner`, `files`, `sharepoint`, `find`, `rooms`, `rules`, `oof`, `outlook-graph`, `graph-calendar`, `forward-event`, `counter`, `subscribe`, …
+`contacts`, `meeting`, `onenote`, `todo`, `planner`, `files`, `sharepoint`, `find`, `graph-search`, `rooms`, `rules`, `oof`, `outlook-graph`, `graph-calendar`, `forward-event`, `counter`, `subscribe`, …
 
 **OneNote:** Implemented exclusively via **Microsoft Graph** OneNote APIs (notebooks including **GetNotebookFromWebUrl**, section groups, sections, pages, HTML create/read, content PATCH, global page list, preview, page **copyToSection**, section **copyToNotebook** and **copyToSectionGroup**, async **onenoteOperation** poll, optional `/groups` and `/sites` roots). **Embedded resource binaries:** `onenote resource-download` (`GET …/resources/{id}/content`); page HTML with optional **`includeIDs`**: `onenote content` / `export --include-ids`. **EWS does not expose OneNote** — there is no EWS parity row or fallback. Advanced ink / multipart upload scenarios may still need Graph directly — see [`GRAPH_API_GAPS.md`](./GRAPH_API_GAPS.md).
 

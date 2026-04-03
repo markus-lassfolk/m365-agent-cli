@@ -22,6 +22,7 @@ import {
   listMailFolders,
   listMailMessageAttachments,
   listMessagesInFolder,
+  mailMessagesDeltaPage,
   type MessagesQueryOptions,
   moveMailMessage,
   patchMailMessage,
@@ -259,6 +260,49 @@ outlookGraphCommand
           const sub = m.subject ?? '(no subject)';
           console.log(`${m.receivedDateTime ?? ''}\t${from}\t${sub}\t${m.id}`);
         }
+      }
+    }
+  );
+
+outlookGraphCommand
+  .command('messages-delta')
+  .description(
+    'One page of messages delta sync (use @odata.nextLink as --next for more pages; @odata.deltaLink for baseline)'
+  )
+  .option('-f, --folder <folderId>', 'Delta for messages in this mail folder only (omit for all messages)')
+  .option('--next <url>', 'Full @odata.nextLink URL from a previous response')
+  .option('--json', 'Output raw page JSON (value, nextLink, deltaLink)')
+  .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .option('--user <email>', 'Target user (Graph delegation)')
+  .action(
+    async (opts: {
+      folder?: string;
+      next?: string;
+      json?: boolean;
+      token?: string;
+      identity?: string;
+      user?: string;
+    }) => {
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!auth.success) {
+        console.error(`Auth error: ${auth.error}`);
+        process.exit(1);
+      }
+      const r = await mailMessagesDeltaPage(auth.token!, {
+        user: opts.user,
+        folderId: opts.folder,
+        nextLink: opts.next
+      });
+      if (!r.ok || !r.data) {
+        console.error(`Error: ${r.error?.message}`);
+        process.exit(1);
+      }
+      if (opts.json) console.log(JSON.stringify(r.data, null, 2));
+      else {
+        console.log(`Changes: ${r.data.value?.length ?? 0} item(s)`);
+        if (r.data['@odata.nextLink']) console.log(`nextLink: ${r.data['@odata.nextLink']}`);
+        if (r.data['@odata.deltaLink']) console.log(`deltaLink: ${r.data['@odata.deltaLink']}`);
       }
     }
   );

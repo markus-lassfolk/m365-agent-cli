@@ -253,3 +253,54 @@ describe('addFileAttachmentToCalendarEvent', () => {
     }
   });
 });
+
+describe('eventsDeltaPage', () => {
+  it('GETs /me/events/delta when no calendar id', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    const urls: string[] = [];
+    const originalFetch = globalThis.fetch;
+
+    try {
+      globalThis.fetch = (async (input: string | URL | Request) => {
+        urls.push(typeof input === 'string' ? input : input.toString());
+        return new Response(JSON.stringify({ value: [{ id: 'e1', subject: 'X' }] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as typeof fetch;
+
+      const { eventsDeltaPage } = await import('./graph-calendar-client.js');
+      const r = await eventsDeltaPage(token, {});
+
+      expect(r.ok).toBe(true);
+      expect(r.data?.value?.[0]?.id).toBe('e1');
+      expect(urls[0]).toContain('/me/events/delta');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('GETs /calendars/{id}/events/delta when calendar set', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    const urls: string[] = [];
+    const originalFetch = globalThis.fetch;
+
+    try {
+      globalThis.fetch = (async (input: string | URL | Request) => {
+        urls.push(typeof input === 'string' ? input : input.toString());
+        return new Response(JSON.stringify({ value: [] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as typeof fetch;
+
+      const { eventsDeltaPage } = await import('./graph-calendar-client.js');
+      const r = await eventsDeltaPage(token, { calendarId: 'cal-99' });
+
+      expect(r.ok).toBe(true);
+      expect(urls[0]).toContain('/me/calendars/cal-99/events/delta');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});

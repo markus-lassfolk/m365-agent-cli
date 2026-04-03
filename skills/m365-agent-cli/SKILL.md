@@ -1,7 +1,7 @@
 ---
 name: m365-agent-cli
 version: 2.0.0-beta.0
-description: Microsoft 365 CLI (EWS + Graph) for calendar, mail, OneDrive, Planner, SharePoint, To Do, inbox rules, delegates, and subscriptions. Use when the user needs Outlook/Exchange, Graph, or M365 automation from the terminal.
+description: Microsoft 365 CLI (EWS + Graph) for calendar, mail, OneDrive, Planner, SharePoint, To Do, Teams, Bookings, Excel-on-drive, presence, inbox rules, delegates, subscriptions, Graph Search, and raw `graph invoke`/`graph batch`. Use when the user needs Outlook/Exchange, Graph, or M365 automation from the terminal.
 # `version` matches the npm CLI release; run `npm run sync-skill` after bumping package.json.
 metadata:
   openclaw:
@@ -26,7 +26,7 @@ CLI for Microsoft 365: **Exchange Web Services (EWS)** and **Microsoft Graph**. 
 ## Delegation and shared access
 
 - **EWS shared mailbox:** `--mailbox <email>` on calendar, mail, send, folders, drafts, respond, findtime, delegates, auto-reply (and similar) to act as that mailbox where supported.
-- **Graph delegation:** **`--user <upn-or-id>`** on supported commands (e.g. inbox **rules**, **oof**, **todo**, **outlook-categories**, **contacts**, **schedule** / meeting-time helpers, **`graph-calendar`**, **`outlook-graph`**, **subscribe**, **rooms**/places, **files** where implemented) — calls Graph as `/users/{id}/...` instead of `/me/...`. Requires app permissions + admin consent where applicable (**`Contacts.Read*.Shared`** for delegated contacts).
+- **Graph delegation:** **`--user <upn-or-id>`** on supported commands (e.g. inbox **rules**, **oof**, **todo**, **outlook-categories**, **contacts**, **schedule** / meeting-time helpers, **`graph-calendar`**, **`outlook-graph`**, **subscribe**, **rooms**/places, **files** where implemented) — calls Graph as `/users/{id}/...` instead of `/me/...`. Requires app permissions + admin consent where applicable (**`Contacts.Read*.Shared`** for delegated contacts). **`teams`**, **`bookings`**, **`excel`**, **`presence`**, **`graph invoke`/`batch`** today target **`/me/...`** or fixed paths only—use **`graph invoke`** with an explicit **`/users/{id}/...`** path if you need another user and the API allows it.
 
 ## Safety
 
@@ -84,6 +84,12 @@ Do **not** combine the span modes (`--days` / `--previous-days` / `--business-da
 | Planner | `planner` (tasks, plans, buckets; **labels** on tasks) |
 | SharePoint | `sharepoint` / `sp`, `pages` (site pages) |
 | Directory / rooms | `find`, `rooms` |
+| Teams (Graph) | **`teams`** — **list** (joined teams), **get**, **channels** / **all-channels** (**`--filter`**) / **incoming-channels** / **primary-channel** / **channel-get**, **channel-members**, **messages** / **message-replies**, **tabs**, **members**, **apps**, **chats** / **chat-get** / **chat-messages** / **chat-members** / **chat-pinned** |
+| Bookings (Graph) | **`bookings`** — **businesses**, **business-get**, **currencies**, **appointments** / **appointment**, **customers** / **customer**, **custom-questions**, **services** / **service-get**, **staff** / **staff-get**, **calendar-view** |
+| Excel on drive (Graph) | **`excel`** — **worksheets**, **range**, **tables**, **used-range** |
+| Presence (Graph) | **`presence`** — **me**, **user** |
+| Raw Graph | **`graph`** — **invoke**, **batch** (JSON `$batch`); pair with scopes for the target API |
+| Graph Search | **`graph-search`** — `POST /search/query` (entity types + KQL-style query) |
 | Graph mail extras | `rules` (inbox message rules), `oof` (automatic replies), `todo` (Microsoft To Do) |
 | EWS admin-style | `delegates`, `auto-reply` |
 | Push | `subscribe`, `subscriptions` |

@@ -28,7 +28,15 @@ export const GRAPH_DEVICE_CODE_LOGIN_SCOPES = [
   'Contacts.Read.Shared',
   'Contacts.ReadWrite.Shared',
   'OnlineMeetings.ReadWrite',
-  'Notes.ReadWrite.All'
+  'Notes.ReadWrite.All',
+  'Team.ReadBasic.All',
+  'Channel.ReadBasic.All',
+  'ChannelMessage.Read.All',
+  'ChannelMessage.Send',
+  'Presence.Read.All',
+  'Presence.ReadWrite',
+  'Bookings.ReadWrite.All',
+  'Chat.ReadWrite'
 ].join(' ');
 
 /**
@@ -64,7 +72,15 @@ const GRAPH_RESOURCE_SCOPES_FULL = [
   G('Contacts.Read.Shared'),
   G('Contacts.ReadWrite.Shared'),
   G('OnlineMeetings.ReadWrite'),
-  G('Notes.ReadWrite.All')
+  G('Notes.ReadWrite.All'),
+  G('Team.ReadBasic.All'),
+  G('Channel.ReadBasic.All'),
+  G('ChannelMessage.Read.All'),
+  G('ChannelMessage.Send'),
+  G('Presence.Read.All'),
+  G('Presence.ReadWrite'),
+  G('Bookings.ReadWrite.All'),
+  G('Chat.ReadWrite')
 ].join(' ');
 
 /**
@@ -89,7 +105,15 @@ const GRAPH_RESOURCE_SCOPES_WITHOUT_USER_READ_ALL = [
   G('Contacts.Read.Shared'),
   G('Contacts.ReadWrite.Shared'),
   G('OnlineMeetings.ReadWrite'),
-  G('Notes.ReadWrite.All')
+  G('Notes.ReadWrite.All'),
+  G('Team.ReadBasic.All'),
+  G('Channel.ReadBasic.All'),
+  G('ChannelMessage.Read.All'),
+  G('ChannelMessage.Send'),
+  G('Presence.Read.All'),
+  G('Presence.ReadWrite'),
+  G('Bookings.ReadWrite.All'),
+  G('Chat.ReadWrite')
 ].join(' ');
 
 /**

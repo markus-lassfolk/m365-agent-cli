@@ -1010,6 +1010,48 @@ export async function searchContacts(
   });
 }
 
+/** One page of message delta sync ([delta](https://learn.microsoft.com/en-us/graph/delta-query-messages)). */
+export interface MailMessagesDeltaPage {
+  value?: OutlookMessage[];
+  '@odata.nextLink'?: string;
+  '@odata.deltaLink'?: string;
+}
+
+export async function mailMessagesDeltaPage(
+  token: string,
+  options?: { user?: string; folderId?: string; nextLink?: string }
+): Promise<GraphResponse<MailMessagesDeltaPage>> {
+  try {
+    if (options?.nextLink?.trim()) {
+      const result = await callGraphAbsolute<MailMessagesDeltaPage>(token, options.nextLink.trim());
+      if (!result.ok || !result.data) {
+        return graphError(
+          result.error?.message || 'Failed to fetch messages delta page',
+          result.error?.code,
+          result.error?.status
+        );
+      }
+      return graphResult(result.data);
+    }
+    const fid = options?.folderId?.trim();
+    const path = fid
+      ? `${mailFoldersRoot(options?.user)}/${encodeURIComponent(fid)}/messages/delta`
+      : `${graphUserPath(options?.user, 'messages')}/delta`;
+    const result = await callGraph<MailMessagesDeltaPage>(token, path);
+    if (!result.ok || !result.data) {
+      return graphError(
+        result.error?.message || 'Failed to start messages delta',
+        result.error?.code,
+        result.error?.status
+      );
+    }
+    return graphResult(result.data);
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to fetch messages delta');
+  }
+}
+
 /** One page of delta sync ([delta](https://learn.microsoft.com/en-us/graph/delta-query-contacts)). Pass `nextLink` from a previous response to continue. */
 export interface ContactsDeltaPage {
   value: OutlookContact[];
