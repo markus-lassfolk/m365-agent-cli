@@ -231,9 +231,13 @@ export const draftsCommand = new Command('drafts')
           }
         }
         if (backend === 'graph') {
-          console.error(
-            'Error: Graph authentication failed. Set EWS_CLIENT_ID and M365_REFRESH_TOKEN, or run `m365-agent-cli login`.'
-          );
+          const msg = ga.error || 'Graph authentication failed';
+          if (options.json) {
+            console.log(JSON.stringify({ error: msg }, null, 2));
+          } else {
+            console.error(`Error: ${msg}`);
+            console.error('\nSet EWS_CLIENT_ID and M365_REFRESH_TOKEN for Graph, or run `m365-agent-cli login`.');
+          }
           process.exit(1);
         }
       }
@@ -246,9 +250,19 @@ export const draftsCommand = new Command('drafts')
           if (graphDone) return;
         }
         if (backend === 'graph') {
-          console.error(
-            'Error: Graph authentication failed. Set EWS_CLIENT_ID and M365_REFRESH_TOKEN, or run `m365-agent-cli login`.'
-          );
+          if (!ga.success || !ga.token) {
+            const msg = ga.error || 'Graph authentication failed';
+            if (options.json) {
+              console.log(JSON.stringify({ error: msg }, null, 2));
+            } else {
+              console.error(`Error: ${msg}`);
+              console.error('\nSet EWS_CLIENT_ID and M365_REFRESH_TOKEN for Graph, or run `m365-agent-cli login`.');
+            }
+          } else {
+            console.error(
+              'Error: Draft operation could not be completed via Microsoft Graph. Set M365_EXCHANGE_BACKEND=auto to try EWS, or check Graph errors above.'
+            );
+          }
           process.exit(1);
         }
       }

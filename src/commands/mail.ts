@@ -28,7 +28,12 @@ import { resolveGraphAuth } from '../lib/graph-auth.js';
 import { markdownToHtml } from '../lib/markdown.js';
 import { lookupMimeType } from '../lib/mime-type.js';
 import { checkReadOnly } from '../lib/utils.js';
-import { isGraphMailPortionEligible, type MailGraphCommandOptions, tryMailGraphPortion } from './mail-graph.js';
+import {
+  describeMailGraphUnhandledCombination,
+  isGraphMailPortionEligible,
+  type MailGraphCommandOptions,
+  tryMailGraphPortion
+} from './mail-graph.js';
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
@@ -283,9 +288,8 @@ export const mailCommand = new Command('mail')
             }
             process.exit(1);
           }
-          console.error(
-            'This mail subcommand or options require EWS. Set M365_EXCHANGE_BACKEND=ews or auto, or use outlook-graph for Graph mail REST.'
-          );
+          const detail = describeMailGraphUnhandledCombination(mailGraphOpts);
+          console.error(detail);
           process.exit(1);
         }
       }
