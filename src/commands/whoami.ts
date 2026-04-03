@@ -3,7 +3,7 @@ import { resolveAuth } from '../lib/auth.js';
 import { getOwaUserInfo } from '../lib/ews-client.js';
 import { getExchangeBackend } from '../lib/exchange-backend.js';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
-import { callGraph, GraphApiError, type GraphResponse } from '../lib/graph-client.js';
+import { callGraph, type GraphResponse } from '../lib/graph-client.js';
 
 interface GraphMe {
   displayName?: string;
@@ -208,11 +208,8 @@ export const whoamiCommand = new Command('whoami')
           outputGraph(displayName, email, options);
           return;
         }
-      } catch (err) {
-        if (!(err instanceof GraphApiError)) {
-          throw err;
-        }
-        // Graph /me failed (e.g. HTTP 401) — fall back to EWS in auto mode
+      } catch (_err) {
+        // Any Graph failure (GraphApiError, network errors, etc.) — fall back to EWS in auto mode
       }
     }
 

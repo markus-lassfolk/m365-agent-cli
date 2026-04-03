@@ -242,7 +242,7 @@ contactsCommand
       const token = await requireGraphAuth(opts);
       let odata: string | undefined;
       if (opts.filter?.trim()) {
-        odata = `$filter=${encodeURIComponent(opts.filter.trim())}`;
+        odata = `$filter=${opts.filter.trim()}`;
       }
       const r = opts.folder
         ? await listContactsInFolder(token, opts.folder, opts.user, odata)
