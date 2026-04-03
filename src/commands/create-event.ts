@@ -613,9 +613,9 @@ export const createEventCommand = new Command('create-event')
                       onlineMeetingUrl: joinUrl,
                       onlineMeeting: om ?? undefined,
                       teamsMeeting:
-                        joinUrl || om?.joinUrl || om?.conferenceId
+                        joinUrl || om?.conferenceId
                           ? {
-                              joinUrl: joinUrl ?? om?.joinUrl,
+                              joinUrl: joinUrl,
                               conferenceId: om?.conferenceId,
                               quickDial: om?.quickDial,
                               tollNumber: om?.tollNumber
