@@ -274,6 +274,34 @@ export async function callGraph<T>(
   return callGraphAt(GRAPH_BASE_URL, token, path, options, expectJson);
 }
 
+function validateGraphUrl(absoluteUrl: string): { valid: boolean; error?: string } {
+  let url: URL;
+  try {
+    url = new URL(absoluteUrl);
+  } catch {
+    return { valid: false, error: 'Invalid URL format' };
+  }
+
+  if (url.protocol !== 'https:') {
+    return { valid: false, error: 'Only HTTPS URLs are allowed' };
+  }
+
+  const allowedDomains = [
+    'graph.microsoft.com',
+    'graph.microsoft.us',
+    'microsoftgraph.chinacloudapi.cn',
+    'graph.microsoft.de'
+  ];
+
+  const isAllowedHost = allowedDomains.some((domain) => url.hostname === domain || url.hostname.endsWith(`.${domain}`));
+
+  if (!isAllowedHost) {
+    return { valid: false, error: `URL hostname '${url.hostname}' is not a Microsoft Graph endpoint` };
+  }
+
+  return { valid: true };
+}
+
 /** GET/PATCH a full Graph URL (e.g. `@odata.nextLink` / `@odata.deltaLink`). */
 export async function callGraphAbsolute<T>(
   token: string,
@@ -281,6 +309,11 @@ export async function callGraphAbsolute<T>(
   options: RequestInit = {},
   expectJson: boolean = true
 ): Promise<GraphResponse<T>> {
+  const validation = validateGraphUrl(absoluteUrl);
+  if (!validation.valid) {
+    throw new GraphApiError(validation.error || 'Invalid Graph URL', 'InvalidUrl', 400);
+  }
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), GRAPH_TIMEOUT_MS);
 

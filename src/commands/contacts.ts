@@ -1,6 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { Command } from 'commander';
-import { resolveGraphAuth } from '../lib/graph-auth.js';
+import { requireGraphAuth } from '../lib/graph-auth.js';
 import {
   addFileAttachmentToContact,
   contactsDeltaPage,
@@ -31,15 +31,6 @@ const contactsDesc =
   'Outlook contacts via Microsoft Graph (Contacts.ReadWrite; shared mailboxes: Contacts.Read.Shared / Contacts.ReadWrite.Shared — see docs/GRAPH_SCOPES.md)';
 
 export const contactsCommand = new Command('contacts').description(contactsDesc);
-
-async function requireGraphAuth(opts: { token?: string; identity?: string }) {
-  const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
-  if (!auth.success || !auth.token) {
-    console.error(`Auth error: ${auth.error}`);
-    process.exit(1);
-  }
-  return auth.token;
-}
 
 // ─── folders (list — backward compatible) ───────────────────────────────────
 

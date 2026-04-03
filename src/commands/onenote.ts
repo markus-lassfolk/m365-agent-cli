@@ -1,6 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { Command } from 'commander';
-import { resolveGraphAuth } from '../lib/graph-auth.js';
+import { requireGraphAuth } from '../lib/graph-auth.js';
 import {
   copyOneNotePageToSection,
   copyOneNoteSectionToNotebook,
@@ -33,15 +33,6 @@ import {
   updateOneNoteSectionGroup
 } from '../lib/onenote-graph-client.js';
 import { checkReadOnly } from '../lib/utils.js';
-
-async function requireToken(opts: { token?: string; identity?: string }): Promise<string> {
-  const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
-  if (!auth.success || !auth.token) {
-    console.error(`Auth error: ${auth.error}`);
-    process.exit(1);
-  }
-  return auth.token;
-}
 
 /** Resolves `--user` vs `--group` / `--site` OneNote roots (mutually exclusive). */
 function parseOneNoteRoot(opts: { user?: string; group?: string; site?: string }): {
@@ -93,7 +84,7 @@ addOneNoteRootOptions(
     .option('--user <email>', 'Target user (Graph delegation)')
 ).action(
   async (opts: { json?: boolean; token?: string; identity?: string; user?: string; group?: string; site?: string }) => {
-    const token = await requireToken(opts);
+    const token = await requireGraphAuth(opts);
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await listOneNoteNotebooks(token, user, scope);
     if (!r.ok || !r.data) {
@@ -124,7 +115,7 @@ addOneNoteRootOptions(
     notebookId: string,
     opts: { json?: boolean; token?: string; identity?: string; user?: string; group?: string; site?: string }
   ) => {
-    const token = await requireToken(opts);
+    const token = await requireGraphAuth(opts);
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await listNotebookSections(token, notebookId, user, scope);
     if (!r.ok || !r.data) {
@@ -154,7 +145,7 @@ addOneNoteRootOptions(
     sectionId: string,
     opts: { json?: boolean; token?: string; identity?: string; user?: string; group?: string; site?: string }
   ) => {
-    const token = await requireToken(opts);
+    const token = await requireGraphAuth(opts);
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await listSectionPages(token, sectionId, user, scope);
     if (!r.ok || !r.data) {
@@ -190,7 +181,7 @@ addOneNoteRootOptions(
     group?: string;
     site?: string;
   }) => {
-    const token = await requireToken(opts);
+    const token = await requireGraphAuth(opts);
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await listAllOneNotePages(token, user, opts.query, scope);
     if (!r.ok || !r.data) {
@@ -221,7 +212,7 @@ addOneNoteRootOptions(
     pageId: string,
     opts: { json?: boolean; token?: string; identity?: string; user?: string; group?: string; site?: string }
   ) => {
-    const token = await requireToken(opts);
+    const token = await requireGraphAuth(opts);
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await getOneNotePagePreview(token, pageId, user, scope);
     if (!r.ok || !r.data) {
@@ -243,7 +234,7 @@ addOneNoteRootOptions(
     .option('--user <email>', 'Target user (Graph delegation)')
 ).action(
   async (pageId: string, opts: { token?: string; identity?: string; user?: string; group?: string; site?: string }) => {
-    const token = await requireToken(opts);
+    const token = await requireGraphAuth(opts);
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await getOneNotePage(token, pageId, user, scope);
     if (!r.ok || !r.data) {
@@ -264,7 +255,7 @@ addOneNoteRootOptions(
     .option('--user <email>', 'Target user (Graph delegation)')
 ).action(
   async (pageId: string, opts: { token?: string; identity?: string; user?: string; group?: string; site?: string }) => {
-    const token = await requireToken(opts);
+    const token = await requireGraphAuth(opts);
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await getOneNotePageContentHtml(token, pageId, user, scope);
     if (!r.ok || !r.data) {
@@ -290,7 +281,7 @@ addOneNoteRootOptions(
     pageId: string,
     opts: { output: string; token?: string; identity?: string; user?: string; group?: string; site?: string }
   ) => {
-    const token = await requireToken(opts);
+    const token = await requireGraphAuth(opts);
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await getOneNotePageContentHtml(token, pageId, user, scope);
     if (!r.ok || !r.data) {
@@ -327,7 +318,7 @@ addOneNoteRootOptions(
     cmd: any
   ) => {
     checkReadOnly(cmd);
-    const token = await requireToken(opts);
+    const token = await requireGraphAuth(opts);
     const { user, scope } = parseOneNoteRoot(opts);
     const html = await readFile(opts.file, 'utf-8');
     const r = await createOneNotePageFromHtml(token, opts.section, html, user, scope);
@@ -358,7 +349,7 @@ addOneNoteRootOptions(
     .option('--user <email>', 'Target user')
 ).action(
   async (opts: { json?: boolean; token?: string; identity?: string; user?: string; group?: string; site?: string }) => {
-    const token = await requireToken(opts);
+    const token = await requireGraphAuth(opts);
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await listOneNoteNotebooks(token, user, scope);
     if (!r.ok || !r.data) {
@@ -389,7 +380,7 @@ addOneNoteRootOptions(
     notebookId: string,
     opts: { json?: boolean; token?: string; identity?: string; user?: string; group?: string; site?: string }
   ) => {
-    const token = await requireToken(opts);
+    const token = await requireGraphAuth(opts);
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await getOneNoteNotebook(token, notebookId, user, scope);
     if (!r.ok || !r.data) {
@@ -427,7 +418,7 @@ addOneNoteRootOptions(
     cmd: any
   ) => {
     checkReadOnly(cmd);
-    const token = await requireToken(opts);
+    const token = await requireGraphAuth(opts);
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await createOneNoteNotebook(token, opts.name, user, scope);
     if (!r.ok || !r.data) {
@@ -464,7 +455,7 @@ addOneNoteRootOptions(
     cmd: any
   ) => {
     checkReadOnly(cmd);
-    const token = await requireToken(opts);
+    const token = await requireGraphAuth(opts);
     const { user, scope } = parseOneNoteRoot(opts);
     const patch = JSON.parse(await readFile(opts.jsonFile, 'utf-8')) as Record<string, unknown>;
     const r = await updateOneNoteNotebook(token, notebookId, patch, user, scope);
@@ -504,7 +495,7 @@ addOneNoteRootOptions(
       console.error('Refusing to delete without --confirm');
       process.exit(1);
     }
-    const token = await requireToken(opts);
+    const token = await requireGraphAuth(opts);
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await deleteOneNoteNotebook(token, notebookId, user, scope);
     if (!r.ok) {
@@ -540,7 +531,7 @@ addOneNoteRootOptions(
     group?: string;
     site?: string;
   }) => {
-    const token = await requireToken(opts);
+    const token = await requireGraphAuth(opts);
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await listNotebookSectionGroups(token, opts.notebook, user, scope);
     if (!r.ok || !r.data) {
@@ -570,7 +561,7 @@ addOneNoteRootOptions(
     sectionGroupId: string,
     opts: { json?: boolean; token?: string; identity?: string; user?: string; group?: string; site?: string }
   ) => {
-    const token = await requireToken(opts);
+    const token = await requireGraphAuth(opts);
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await getOneNoteSectionGroup(token, sectionGroupId, user, scope);
     if (!r.ok || !r.data) {
@@ -607,7 +598,7 @@ addOneNoteRootOptions(
     cmd: any
   ) => {
     checkReadOnly(cmd);
-    const token = await requireToken(opts);
+    const token = await requireGraphAuth(opts);
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await createSectionGroupInNotebook(token, opts.notebook, opts.name, user, scope);
     if (!r.ok || !r.data) {
@@ -644,7 +635,7 @@ addOneNoteRootOptions(
     cmd: any
   ) => {
     checkReadOnly(cmd);
-    const token = await requireToken(opts);
+    const token = await requireGraphAuth(opts);
     const { user, scope } = parseOneNoteRoot(opts);
     const patch = JSON.parse(await readFile(opts.jsonFile, 'utf-8')) as Record<string, unknown>;
     const r = await updateOneNoteSectionGroup(token, sectionGroupId, patch, user, scope);
@@ -677,7 +668,7 @@ addOneNoteRootOptions(
       console.error('Refusing to delete without --confirm');
       process.exit(1);
     }
-    const token = await requireToken(opts);
+    const token = await requireGraphAuth(opts);
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await deleteOneNoteSectionGroup(token, sectionGroupId, user, scope);
     if (!r.ok) {
@@ -715,7 +706,7 @@ addOneNoteRootOptions(
     group?: string;
     site?: string;
   }) => {
-    const token = await requireToken(opts);
+    const token = await requireGraphAuth(opts);
     const { user, scope } = parseOneNoteRoot(opts);
     const nb = opts.notebook?.trim();
     const sg = opts.sectionGroup?.trim();
@@ -753,7 +744,7 @@ addOneNoteRootOptions(
     sectionId: string,
     opts: { json?: boolean; token?: string; identity?: string; user?: string; group?: string; site?: string }
   ) => {
-    const token = await requireToken(opts);
+    const token = await requireGraphAuth(opts);
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await getOneNoteSection(token, sectionId, user, scope);
     if (!r.ok || !r.data) {
@@ -798,7 +789,7 @@ addOneNoteRootOptions(
       console.error('Error: specify exactly one of --notebook or --section-group');
       process.exit(1);
     }
-    const token = await requireToken(opts);
+    const token = await requireGraphAuth(opts);
     const { user, scope } = parseOneNoteRoot(opts);
     const r = nb
       ? await createSectionInNotebook(token, nb, opts.name, user, scope)
@@ -837,7 +828,7 @@ addOneNoteRootOptions(
     cmd: any
   ) => {
     checkReadOnly(cmd);
-    const token = await requireToken(opts);
+    const token = await requireGraphAuth(opts);
     const { user, scope } = parseOneNoteRoot(opts);
     const patch = JSON.parse(await readFile(opts.jsonFile, 'utf-8')) as Record<string, unknown>;
     const r = await updateOneNoteSection(token, sectionId, patch, user, scope);
@@ -870,7 +861,7 @@ addOneNoteRootOptions(
       console.error('Refusing to delete without --confirm');
       process.exit(1);
     }
-    const token = await requireToken(opts);
+    const token = await requireGraphAuth(opts);
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await deleteOneNoteSection(token, sectionId, user, scope);
     if (!r.ok) {
@@ -910,7 +901,7 @@ addOneNoteRootOptions(
     cmd: any
   ) => {
     checkReadOnly(cmd);
-    const token = await requireToken(opts);
+    const token = await requireGraphAuth(opts);
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await copyOneNoteSectionToNotebook(token, sectionId, opts.notebook, user, scope, {
       copyToNotebookGroupId: opts.groupId,
@@ -956,7 +947,7 @@ addOneNoteRootOptions(
       console.error('Refusing to delete without --confirm');
       process.exit(1);
     }
-    const token = await requireToken(opts);
+    const token = await requireGraphAuth(opts);
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await deleteOneNotePage(token, pageId, user, scope);
     if (!r.ok) {
@@ -983,7 +974,7 @@ addOneNoteRootOptions(
     cmd: any
   ) => {
     checkReadOnly(cmd);
-    const token = await requireToken(opts);
+    const token = await requireGraphAuth(opts);
     const { user, scope } = parseOneNoteRoot(opts);
     const commands = JSON.parse(await readFile(opts.jsonFile, 'utf-8'));
     const r = await updateOneNotePageContent(token, pageId, commands, user, scope);
@@ -1025,7 +1016,7 @@ addOneNoteRootOptions(
     cmd: any
   ) => {
     checkReadOnly(cmd);
-    const token = await requireToken(opts);
+    const token = await requireGraphAuth(opts);
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await copyOneNotePageToSection(token, pageId, opts.section, user, scope, opts.groupId);
     if (!r.ok || !r.data) {
@@ -1052,7 +1043,7 @@ onenoteCommand
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
   .action(async (operationLocationUrl: string, opts: { json?: boolean; token?: string; identity?: string }) => {
-    const token = await requireToken(opts);
+    const token = await requireGraphAuth(opts);
     const r = await getOneNoteOperation(token, operationLocationUrl);
     if (!r.ok || !r.data) {
       console.error(`Error: ${r.error?.message}`);

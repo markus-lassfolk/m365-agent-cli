@@ -171,3 +171,12 @@ export async function resolveGraphAuth(options?: { token?: string; identity?: st
     };
   }
 }
+
+export async function requireGraphAuth(opts: { token?: string; identity?: string }): Promise<string> {
+  const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+  if (!auth.success || !auth.token) {
+    console.error(`Auth error: ${auth.error}`);
+    process.exit(1);
+  }
+  return auth.token;
+}
