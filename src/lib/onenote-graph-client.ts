@@ -162,6 +162,36 @@ export async function createOneNoteNotebook(
   }
 }
 
+/**
+ * [getNotebookFromWebUrl](https://learn.microsoft.com/en-us/graph/api/notebook-getnotebookfromweburl) —
+ * resolve a notebook by its OneNote web URL.
+ */
+export async function getOneNoteNotebookFromWebUrl(
+  token: string,
+  webUrl: string,
+  user?: string,
+  scope?: OneNoteGraphScope
+): Promise<GraphResponse<OneNoteNotebook>> {
+  const path = `${notebooksPath(user, scope)}/GetNotebookFromWebUrl`;
+  try {
+    const result = await callGraph<OneNoteNotebook>(token, path, {
+      method: 'POST',
+      body: JSON.stringify({ webUrl: webUrl.trim() })
+    });
+    if (!result.ok || !result.data) {
+      return graphError(
+        result.error?.message || 'Failed to resolve notebook from URL',
+        result.error?.code,
+        result.error?.status
+      );
+    }
+    return graphResult(result.data);
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to resolve notebook from URL');
+  }
+}
+
 export async function updateOneNoteNotebook(
   token: string,
   notebookId: string,
@@ -689,6 +719,49 @@ export async function copyOneNoteSectionToNotebook(
   } catch (err) {
     if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
     return graphError(err instanceof Error ? err.message : 'Failed to copy section to notebook');
+  }
+}
+
+/**
+ * [copyToSectionGroup](https://learn.microsoft.com/en-us/graph/api/section-copytosectiongroup) —
+ * copy a section into a section group (async; poll `Operation-Location`).
+ */
+export async function copyOneNoteSectionToSectionGroup(
+  token: string,
+  sectionId: string,
+  targetSectionGroupId: string,
+  user?: string,
+  scope?: OneNoteGraphScope,
+  opts?: { copyToGroupId?: string; renameAs?: string }
+): Promise<GraphResponse<OneNoteCopyToSectionResult>> {
+  const path = `${sectionsPath(user, scope)}/${encodeURIComponent(sectionId)}/copyToSectionGroup`;
+  const body: Record<string, string> = { id: targetSectionGroupId };
+  if (opts?.copyToGroupId?.trim()) body.groupId = opts.copyToGroupId.trim();
+  if (opts?.renameAs?.trim()) body.renameAs = opts.renameAs.trim();
+  try {
+    const res = await fetchGraphRaw(token, path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const op = res.headers.get('Operation-Location') ?? undefined;
+    if (res.status === 202) {
+      return graphResult({ status: 202, operationLocation: op });
+    }
+    if (!res.ok) {
+      let msg = `HTTP ${res.status}`;
+      try {
+        const j = (await res.json()) as { error?: { message?: string } };
+        msg = j.error?.message || msg;
+      } catch {
+        /* ignore */
+      }
+      return graphError(msg, undefined, res.status);
+    }
+    return graphResult({ status: res.status, operationLocation: op });
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to copy section to section group');
   }
 }
 

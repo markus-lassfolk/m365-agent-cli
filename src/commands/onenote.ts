@@ -4,6 +4,7 @@ import { requireGraphAuth } from '../lib/graph-auth.js';
 import {
   copyOneNotePageToSection,
   copyOneNoteSectionToNotebook,
+  copyOneNoteSectionToSectionGroup,
   createOneNoteNotebook,
   createOneNotePageFromHtml,
   createSectionGroupInNotebook,
@@ -14,6 +15,7 @@ import {
   deleteOneNoteSection,
   deleteOneNoteSectionGroup,
   getOneNoteNotebook,
+  getOneNoteNotebookFromWebUrl,
   getOneNoteOperation,
   getOneNotePage,
   getOneNotePageContentHtml,
@@ -69,7 +71,7 @@ function addOneNoteRootOptions(cmd: Command): Command {
 }
 
 export const onenoteCommand = new Command('onenote').description(
-  'OneNote via Microsoft Graph (`Notes.ReadWrite.All`): notebooks, section groups, sections (incl. copy-to-notebook), pages, copy, operations'
+  'OneNote via Microsoft Graph (`Notes.ReadWrite.All`): notebooks (incl. resolve by web URL), section groups, sections (copy to notebook / section group), pages, copy, operations'
 );
 
 // ─── Legacy / primary list commands (unchanged names) ─────────────────────
@@ -338,6 +340,40 @@ addOneNoteRootOptions(
 // ─── Notebook CRUD ──────────────────────────────────────────────────────────
 
 const notebookCmd = new Command('notebook').description('Notebook get, create, update, delete');
+
+addOneNoteRootOptions(
+  notebookCmd
+    .command('from-web-url')
+    .description('Resolve a notebook by OneNote web URL (Graph notebook getNotebookFromWebUrl)')
+    .requiredOption('--url <webUrl>', 'Notebook web URL (https://… or onenote:…)')
+    .option('--json', 'Output notebook JSON')
+    .option('--token <token>', 'Use a specific token')
+    .option('--identity <name>', 'Graph token cache identity (default: default)')
+    .option('--user <email>', 'Target user')
+).action(
+  async (opts: {
+    url: string;
+    json?: boolean;
+    token?: string;
+    identity?: string;
+    user?: string;
+    group?: string;
+    site?: string;
+  }) => {
+    const token = await requireGraphAuth(opts);
+    const { user, scope } = parseOneNoteRoot(opts);
+    const r = await getOneNoteNotebookFromWebUrl(token, opts.url, user, scope);
+    if (!r.ok || !r.data) {
+      console.error(`Error: ${r.error?.message}`);
+      process.exit(1);
+    }
+    if (opts.json) console.log(JSON.stringify(r.data, null, 2));
+    else {
+      const url = r.data.links?.oneNoteWebUrl?.href ?? '';
+      console.log(`${r.data.displayName ?? '(notebook)'}\t${r.data.id}${url ? `\t${url}` : ''}`);
+    }
+  }
+);
 
 addOneNoteRootOptions(
   notebookCmd
@@ -908,6 +944,57 @@ addOneNoteRootOptions(
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await copyOneNoteSectionToNotebook(token, sectionId, opts.notebook, user, scope, {
       copyToNotebookGroupId: opts.groupId,
+      renameAs: opts.renameAs
+    });
+    if (!r.ok || !r.data) {
+      console.error(`Error: ${r.error?.message}`);
+      process.exit(1);
+    }
+    if (opts.json) {
+      console.log(JSON.stringify(r.data, null, 2));
+    } else {
+      console.log(`Copy accepted (HTTP ${r.data.status}).`);
+      if (r.data.operationLocation) {
+        console.log(`Operation-Location: ${r.data.operationLocation}`);
+        console.log('Poll with: m365-agent-cli onenote operation "<url>"');
+      }
+    }
+  }
+);
+
+addOneNoteRootOptions(
+  sectionCmd
+    .command('copy-to-section-group')
+    .description('Copy a section into a section group (async — poll Operation-Location with `onenote operation`)')
+    .argument('<sectionId>', 'Source section id')
+    .requiredOption('--section-group <sectionGroupId>', 'Destination section group id')
+    .option('--group-id <id>', 'Request body `groupId` when the destination is a Microsoft 365 group notebook')
+    .option('--rename-as <name>', 'Optional name for the copied section')
+    .option('--json', 'Print operation status JSON')
+    .option('--token <token>', 'Use a specific token')
+    .option('--identity <name>', 'Graph token cache identity (default: default)')
+    .option('--user <email>', 'Target user')
+).action(
+  async (
+    sectionId: string,
+    opts: {
+      sectionGroup: string;
+      groupId?: string;
+      renameAs?: string;
+      json?: boolean;
+      token?: string;
+      identity?: string;
+      user?: string;
+      group?: string;
+      site?: string;
+    },
+    cmd: any
+  ) => {
+    checkReadOnly(cmd);
+    const token = await requireGraphAuth(opts);
+    const { user, scope } = parseOneNoteRoot(opts);
+    const r = await copyOneNoteSectionToSectionGroup(token, sectionId, opts.sectionGroup, user, scope, {
+      copyToGroupId: opts.groupId,
       renameAs: opts.renameAs
     });
     if (!r.ok || !r.data) {

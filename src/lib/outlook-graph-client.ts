@@ -1164,6 +1164,39 @@ export async function addFileAttachmentToContact(
   }
 }
 
+/** `POST …/contacts/{id}/attachments` — add a link ([referenceAttachment](https://learn.microsoft.com/en-us/graph/api/contact-post-attachments)). */
+export async function addReferenceAttachmentToContact(
+  token: string,
+  contactId: string,
+  attachment: { name: string; sourceUrl: string },
+  user?: string
+): Promise<GraphResponse<GraphContactAttachment>> {
+  const body = JSON.stringify({
+    '@odata.type': '#microsoft.graph.referenceAttachment',
+    name: attachment.name,
+    sourceUrl: attachment.sourceUrl
+  });
+  try {
+    const result = await callGraph<GraphContactAttachment>(
+      token,
+      `${contactsRoot(user)}/${encodeURIComponent(contactId)}/attachments`,
+      { method: 'POST', body },
+      true
+    );
+    if (!result.ok || !result.data) {
+      return graphError(
+        result.error?.message || 'Failed to add link attachment',
+        result.error?.code,
+        result.error?.status
+      );
+    }
+    return graphResult(result.data);
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to add link attachment');
+  }
+}
+
 export async function getContactAttachment(
   token: string,
   contactId: string,

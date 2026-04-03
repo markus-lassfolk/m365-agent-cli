@@ -3,6 +3,7 @@ import { Command } from 'commander';
 import { requireGraphAuth } from '../lib/graph-auth.js';
 import {
   addFileAttachmentToContact,
+  addReferenceAttachmentToContact,
   contactsDeltaPage,
   createContact,
   createContactFolder,
@@ -610,6 +611,49 @@ attachCmd
       }
       if (opts.json) console.log(JSON.stringify(r.data, null, 2));
       else console.log(`Added attachment: ${r.data.name ?? r.data.id} (${r.data.id})`);
+    }
+  );
+
+attachCmd
+  .command('add-link')
+  .description('Add a link attachment (Graph `referenceAttachment`)')
+  .argument('<contactId>', 'Contact id')
+  .requiredOption('--name <title>', 'Link title / attachment name')
+  .requiredOption('--url <httpsUrl>', 'Target URL')
+  .option('--json', 'Echo attachment metadata as JSON')
+  .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .option('--user <email>', 'Target user')
+  .action(
+    async (
+      contactId: string,
+      opts: {
+        name: string;
+        url: string;
+        json?: boolean;
+        token?: string;
+        identity?: string;
+        user?: string;
+      },
+      cmd: any
+    ) => {
+      checkReadOnly(cmd);
+      const token = await requireGraphAuth(opts);
+      const r = await addReferenceAttachmentToContact(
+        token,
+        contactId,
+        {
+          name: opts.name,
+          sourceUrl: opts.url
+        },
+        opts.user
+      );
+      if (!r.ok || !r.data) {
+        console.error(`Error: ${r.error?.message}`);
+        process.exit(1);
+      }
+      if (opts.json) console.log(JSON.stringify(r.data, null, 2));
+      else console.log(`Added link attachment: ${r.data.name ?? r.data.id} (${r.data.id})`);
     }
   );
 
