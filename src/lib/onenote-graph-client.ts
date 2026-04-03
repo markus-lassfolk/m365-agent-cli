@@ -116,8 +116,7 @@ export async function listAllOneNotePages(
   scope?: OneNoteGraphScope
 ): Promise<GraphResponse<OneNotePage[]>> {
   const base = pagesPath(user, scope);
-  const path =
-    odataQuery?.trim() ? `${base}?${odataQuery.trim().replace(/^\?/, '')}` : base;
+  const path = odataQuery?.trim() ? `${base}?${odataQuery.trim().replace(/^\?/, '')}` : base;
   return fetchAllPages<OneNotePage>(token, path, 'Failed to list OneNote pages');
 }
 
@@ -230,7 +229,11 @@ export async function getOneNoteSectionGroup(
       `${sectionGroupsPath(user, scope)}/${encodeURIComponent(sectionGroupId)}`
     );
     if (!result.ok || !result.data) {
-      return graphError(result.error?.message || 'Failed to get section group', result.error?.code, result.error?.status);
+      return graphError(
+        result.error?.message || 'Failed to get section group',
+        result.error?.code,
+        result.error?.status
+      );
     }
     return graphResult(result.data);
   } catch (err) {
@@ -467,10 +470,7 @@ export async function getOneNotePage(
   scope?: OneNoteGraphScope
 ): Promise<GraphResponse<OneNotePage>> {
   try {
-    const result = await callGraph<OneNotePage>(
-      token,
-      `${pagesPath(user, scope)}/${encodeURIComponent(pageId)}`
-    );
+    const result = await callGraph<OneNotePage>(token, `${pagesPath(user, scope)}/${encodeURIComponent(pageId)}`);
     if (!result.ok || !result.data) {
       return graphError(result.error?.message || 'Failed to get page', result.error?.code, result.error?.status);
     }
@@ -493,7 +493,11 @@ export async function getOneNotePagePreview(
       `${pagesPath(user, scope)}/${encodeURIComponent(pageId)}/preview`
     );
     if (!result.ok || !result.data) {
-      return graphError(result.error?.message || 'Failed to get page preview', result.error?.code, result.error?.status);
+      return graphError(
+        result.error?.message || 'Failed to get page preview',
+        result.error?.code,
+        result.error?.status
+      );
     }
     return graphResult(result.data);
   } catch (err) {
@@ -544,11 +548,7 @@ export async function createOneNotePageFromHtml(
       headers: { 'Content-Type': 'text/html' }
     });
     if (!result.ok || !result.data) {
-      return graphError(
-        result.error?.message || 'Failed to create page',
-        result.error?.code,
-        result.error?.status
-      );
+      return graphError(result.error?.message || 'Failed to create page', result.error?.code, result.error?.status);
     }
     return graphResult(result.data);
   } catch (err) {

@@ -38,11 +38,11 @@ export function resolveEnvFilePathArgument(raw: string): string {
 }
 
 /**
- * Parse a `.env` file and set `process.env` (overwrites existing keys).
- * Use with `login --env-file` / `verify-token --env-file` so the beta app id and tokens apply
- * even when `M365_AGENT_ENV_FILE` was not exported before starting the process.
+ * Parse a `.env` file and set `process.env`.
+ * @param envPath Path to the .env file
+ * @param overwrite If true, overwrites existing keys; if false, only sets undefined keys
  */
-export function applyEnvFileOverrides(envPath: string): void {
+function parseEnvFile(envPath: string, overwrite: boolean): void {
   if (!existsSync(envPath)) {
     return;
   }
@@ -55,29 +55,27 @@ export function applyEnvFileOverrides(envPath: string): void {
       if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
         val = val.slice(1, -1);
       }
-      process.env[key] = val;
+      if (overwrite) {
+        process.env[key] = val;
+      } else if (process.env[key] === undefined) {
+        process.env[key] = val;
+      }
     }
   }
 }
 
+/**
+ * Parse a `.env` file and set `process.env` (overwrites existing keys).
+ * Use with `login --env-file` / `verify-token --env-file` so the beta app id and tokens apply
+ * even when `M365_AGENT_ENV_FILE` was not exported before starting the process.
+ */
+export function applyEnvFileOverrides(envPath: string): void {
+  parseEnvFile(envPath, true);
+}
+
 export function loadGlobalEnv() {
   const globalEnvPath = getGlobalEnvFilePath();
-  if (existsSync(globalEnvPath)) {
-    const content = readFileSync(globalEnvPath, 'utf8');
-    for (const line of content.split(/\r?\n/)) {
-      const match = line.match(/^\s*([^#\s=]+)\s*=\s*(.*)$/);
-      if (match) {
-        const key = match[1];
-        let val = match[2].trim();
-        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
-          val = val.slice(1, -1);
-        }
-        if (process.env[key] === undefined) {
-          process.env[key] = val;
-        }
-      }
-    }
-  }
+  parseEnvFile(globalEnvPath, false);
 }
 
 export function checkReadOnly(cmdOrOptions?: any) {

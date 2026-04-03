@@ -110,10 +110,7 @@ export async function resolveGraphAuth(options?: { token?: string; identity?: st
       if (isValidJwtStructure(cached.graph.accessToken)) {
         const tokenAppId = getJwtPayloadAppId(cached.graph.accessToken);
         const expectId = clientId.trim();
-        const mismatch =
-          tokenAppId &&
-          expectId &&
-          tokenAppId.toLowerCase() !== expectId.toLowerCase();
+        const mismatch = tokenAppId && expectId && tokenAppId.toLowerCase() !== expectId.toLowerCase();
         if (mismatch) {
           console.warn(
             `[graph-auth] Ignoring cached Graph access token: token app id (${tokenAppId}) does not match EWS_CLIENT_ID (${expectId}). Refreshing.`

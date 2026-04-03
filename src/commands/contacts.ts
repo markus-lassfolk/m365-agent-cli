@@ -234,7 +234,7 @@ contactsCommand
   .command('list')
   .description('List contacts (default folder or --folder)')
   .option('-f, --folder <folderId>', 'Contact folder id (omit for default contacts)')
-  .option('--filter <odata>', 'OData fragment for $filter=… (e.g. `startswith(displayName,\\\'A\\\')`)')
+  .option('--filter <odata>', "OData fragment for $filter=… (e.g. `startswith(displayName,\\'A\\')`)")
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
@@ -424,7 +424,9 @@ contactsCommand
 
 contactsCommand
   .command('delta')
-  .description('Delta sync page (use @odata.nextLink from JSON as --next for more pages; @odata.deltaLink for baseline)')
+  .description(
+    'Delta sync page (use @odata.nextLink from JSON as --next for more pages; @odata.deltaLink for baseline)'
+  )
   .option('-f, --folder <folderId>', 'Delta for contacts in this folder')
   .option('--next <url>', 'Full @odata.nextLink URL from a previous response')
   .option('--json', 'Output raw page JSON (value, nextLink, deltaLink)')
@@ -471,18 +473,16 @@ photoCmd
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
   .option('--user <email>', 'Target user')
-  .action(
-    async (contactId: string, opts: { out: string; token?: string; identity?: string; user?: string }) => {
-      const token = await requireGraphAuth(opts);
-      const r = await getContactPhotoBytes(token, contactId, opts.user);
-      if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
-      }
-      await writeFile(opts.out, r.data);
-      console.log(`Wrote ${r.data.byteLength} bytes to ${opts.out}`);
+  .action(async (contactId: string, opts: { out: string; token?: string; identity?: string; user?: string }) => {
+    const token = await requireGraphAuth(opts);
+    const r = await getContactPhotoBytes(token, contactId, opts.user);
+    if (!r.ok || !r.data) {
+      console.error(`Error: ${r.error?.message}`);
+      process.exit(1);
     }
-  );
+    await writeFile(opts.out, r.data);
+    console.log(`Wrote ${r.data.byteLength} bytes to ${opts.out}`);
+  });
 
 photoCmd
   .command('set')
@@ -603,7 +603,12 @@ attachCmd
       const baseName = pathParts[pathParts.length - 1] ?? 'attachment';
       const name = opts.name ?? baseName;
       const contentType = opts.contentType ?? 'application/octet-stream';
-      const r = await addFileAttachmentToContact(token, contactId, { name, contentType, contentBytes: base64 }, opts.user);
+      const r = await addFileAttachmentToContact(
+        token,
+        contactId,
+        { name, contentType, contentBytes: base64 },
+        opts.user
+      );
       if (!r.ok || !r.data) {
         console.error(`Error: ${r.error?.message}`);
         process.exit(1);

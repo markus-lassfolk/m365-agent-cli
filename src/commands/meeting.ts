@@ -95,30 +95,25 @@ meetingCommand
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
   .option('--user <email>', 'Target user (Graph delegation)')
-  .action(
-    async (
-      meetingId: string,
-      opts: { json?: boolean; token?: string; identity?: string; user?: string }
-    ) => {
-      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
-      if (!auth.success) {
-        console.error(`Auth error: ${auth.error}`);
-        process.exit(1);
-      }
-      const r = await getOnlineMeeting(auth.token!, meetingId, opts.user);
-      if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
-      }
-      if (opts.json) console.log(JSON.stringify(r.data, null, 2));
-      else {
-        const join = r.data.joinWebUrl ?? r.data.joinUrl;
-        if (r.data.subject) console.log(`Subject: ${r.data.subject}`);
-        if (join) console.log(`Join: ${join}`);
-        if (r.data.id) console.log(`Meeting id: ${r.data.id}`);
-      }
+  .action(async (meetingId: string, opts: { json?: boolean; token?: string; identity?: string; user?: string }) => {
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success) {
+      console.error(`Auth error: ${auth.error}`);
+      process.exit(1);
     }
-  );
+    const r = await getOnlineMeeting(auth.token!, meetingId, opts.user);
+    if (!r.ok || !r.data) {
+      console.error(`Error: ${r.error?.message}`);
+      process.exit(1);
+    }
+    if (opts.json) console.log(JSON.stringify(r.data, null, 2));
+    else {
+      const join = r.data.joinWebUrl ?? r.data.joinUrl;
+      if (r.data.subject) console.log(`Subject: ${r.data.subject}`);
+      if (join) console.log(`Join: ${join}`);
+      if (r.data.id) console.log(`Meeting id: ${r.data.id}`);
+    }
+  });
 
 meetingCommand
   .command('update')

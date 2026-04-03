@@ -84,7 +84,11 @@ export async function updateOnlineMeeting(
 }
 
 /** `DELETE /me/onlineMeetings/{id}` ([delete](https://learn.microsoft.com/en-us/graph/api/onlinemeeting-delete)). */
-export async function deleteOnlineMeeting(token: string, meetingId: string, user?: string): Promise<GraphResponse<void>> {
+export async function deleteOnlineMeeting(
+  token: string,
+  meetingId: string,
+  user?: string
+): Promise<GraphResponse<void>> {
   try {
     return await callGraph<void>(
       token,

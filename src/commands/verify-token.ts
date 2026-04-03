@@ -36,9 +36,7 @@ export const verifyTokenCommand = new Command('verify-token')
         return;
       }
 
-      const envPath = options.envFile
-        ? resolveEnvFilePathArgument(options.envFile)
-        : getGlobalEnvFilePath();
+      const envPath = options.envFile ? resolveEnvFilePathArgument(options.envFile) : getGlobalEnvFilePath();
       console.log(`Configuration file: ${envPath}`);
       if (process.env.EWS_CLIENT_ID) {
         console.log(`EWS_CLIENT_ID (Entra app): ${process.env.EWS_CLIENT_ID}`);

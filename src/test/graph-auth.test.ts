@@ -10,7 +10,12 @@ const mockFetch = mock(() =>
 
 mock.module('../lib/graph-oauth-scopes.js', () => ({
   GRAPH_REFRESH_SCOPE_CANDIDATES: ['https://graph.microsoft.com/.default offline_access'],
-  GRAPH_CRITICAL_DELEGATED_SCOPES: ['Mail.Send', 'Contacts.ReadWrite', 'Notes.ReadWrite.All', 'OnlineMeetings.ReadWrite']
+  GRAPH_CRITICAL_DELEGATED_SCOPES: [
+    'Mail.Send',
+    'Contacts.ReadWrite',
+    'Notes.ReadWrite.All',
+    'OnlineMeetings.ReadWrite'
+  ]
 }));
 
 mock.module('../lib/jwt-utils.js', () => ({

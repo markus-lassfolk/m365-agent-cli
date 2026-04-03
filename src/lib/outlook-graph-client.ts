@@ -782,11 +782,7 @@ export async function listContacts(
   user?: string,
   odataQuery?: string
 ): Promise<GraphResponse<OutlookContact[]>> {
-  const q = odataQuery?.trim()
-    ? odataQuery.startsWith('?')
-      ? odataQuery
-      : `?${odataQuery}`
-    : '';
+  const q = odataQuery?.trim() ? (odataQuery.startsWith('?') ? odataQuery : `?${odataQuery}`) : '';
   return fetchAllPages<OutlookContact>(token, `${contactsRoot(user)}${q}`, 'Failed to list contacts');
 }
 
@@ -796,11 +792,7 @@ export async function listContactsInFolder(
   user?: string,
   odataQuery?: string
 ): Promise<GraphResponse<OutlookContact[]>> {
-  const q = odataQuery?.trim()
-    ? odataQuery.startsWith('?')
-      ? odataQuery
-      : `?${odataQuery}`
-    : '';
+  const q = odataQuery?.trim() ? (odataQuery.startsWith('?') ? odataQuery : `?${odataQuery}`) : '';
   return fetchAllPages<OutlookContact>(
     token,
     `${contactFoldersRoot(user)}/${encodeURIComponent(folderId)}/contacts${q}`,
@@ -903,7 +895,11 @@ export async function getContactFolder(
       `${contactFoldersRoot(user)}/${encodeURIComponent(folderId)}`
     );
     if (!result.ok || !result.data) {
-      return graphError(result.error?.message || 'Failed to get contact folder', result.error?.code, result.error?.status);
+      return graphError(
+        result.error?.message || 'Failed to get contact folder',
+        result.error?.code,
+        result.error?.status
+      );
     }
     return graphResult(result.data);
   } catch (err) {
@@ -919,14 +915,21 @@ export async function createContactFolder(
   parentFolderId?: string
 ): Promise<GraphResponse<OutlookContactFolder>> {
   const payload: Record<string, unknown> = { displayName };
-  if (parentFolderId?.trim()) payload.parentFolderId = parentFolderId.trim();
+  const trimmedParentId = parentFolderId?.trim();
+  const endpoint = trimmedParentId
+    ? `${contactFoldersRoot(user)}/${encodeURIComponent(trimmedParentId)}/childFolders`
+    : contactFoldersRoot(user);
   try {
-    const result = await callGraph<OutlookContactFolder>(token, contactFoldersRoot(user), {
+    const result = await callGraph<OutlookContactFolder>(token, endpoint, {
       method: 'POST',
       body: JSON.stringify(payload)
     });
     if (!result.ok || !result.data) {
-      return graphError(result.error?.message || 'Failed to create contact folder', result.error?.code, result.error?.status);
+      return graphError(
+        result.error?.message || 'Failed to create contact folder',
+        result.error?.code,
+        result.error?.status
+      );
     }
     return graphResult(result.data);
   } catch (err) {
@@ -948,7 +951,11 @@ export async function updateContactFolder(
       { method: 'PATCH', body: JSON.stringify(patch) }
     );
     if (!result.ok || !result.data) {
-      return graphError(result.error?.message || 'Failed to update contact folder', result.error?.code, result.error?.status);
+      return graphError(
+        result.error?.message || 'Failed to update contact folder',
+        result.error?.code,
+        result.error?.status
+      );
     }
     return graphResult(result.data);
   } catch (err) {
@@ -957,7 +964,11 @@ export async function updateContactFolder(
   }
 }
 
-export async function deleteContactFolder(token: string, folderId: string, user?: string): Promise<GraphResponse<void>> {
+export async function deleteContactFolder(
+  token: string,
+  folderId: string,
+  user?: string
+): Promise<GraphResponse<void>> {
   try {
     return await callGraph<void>(
       token,
@@ -1028,7 +1039,11 @@ export async function contactsDeltaPage(
       : `${contactsRoot(options?.user)}/delta`;
     const result = await callGraph<ContactsDeltaPage>(token, path);
     if (!result.ok || !result.data) {
-      return graphError(result.error?.message || 'Failed to start contacts delta', result.error?.code, result.error?.status);
+      return graphError(
+        result.error?.message || 'Failed to start contacts delta',
+        result.error?.code,
+        result.error?.status
+      );
     }
     return graphResult(result.data);
   } catch (err) {
@@ -1089,7 +1104,11 @@ export async function setContactPhoto(
   }
 }
 
-export async function deleteContactPhoto(token: string, contactId: string, user?: string): Promise<GraphResponse<void>> {
+export async function deleteContactPhoto(
+  token: string,
+  contactId: string,
+  user?: string
+): Promise<GraphResponse<void>> {
   try {
     return await callGraph<void>(
       token,

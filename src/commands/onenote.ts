@@ -61,7 +61,7 @@ function parseOneNoteRoot(opts: { user?: string; group?: string; site?: string }
   }
   if (site) return { scope: { siteId: site } };
   if (group) return { scope: { groupId: group } };
-  return { user: opts.user };
+  return { user };
 }
 
 /** Options repeated on OneNote subcommands (group/site roots). */
@@ -92,14 +92,7 @@ addOneNoteRootOptions(
     .option('--identity <name>', 'Graph token cache identity (default: default)')
     .option('--user <email>', 'Target user (Graph delegation)')
 ).action(
-  async (opts: {
-    json?: boolean;
-    token?: string;
-    identity?: string;
-    user?: string;
-    group?: string;
-    site?: string;
-  }) => {
+  async (opts: { json?: boolean; token?: string; identity?: string; user?: string; group?: string; site?: string }) => {
     const token = await requireToken(opts);
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await listOneNoteNotebooks(token, user, scope);
@@ -364,14 +357,7 @@ addOneNoteRootOptions(
     .option('--identity <name>', 'Graph token cache identity (default: default)')
     .option('--user <email>', 'Target user')
 ).action(
-  async (opts: {
-    json?: boolean;
-    token?: string;
-    identity?: string;
-    user?: string;
-    group?: string;
-    site?: string;
-  }) => {
+  async (opts: { json?: boolean; token?: string; identity?: string; user?: string; group?: string; site?: string }) => {
     const token = await requireToken(opts);
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await listOneNoteNotebooks(token, user, scope);
@@ -426,7 +412,15 @@ addOneNoteRootOptions(
     .option('--user <email>', 'Target user')
 ).action(
   async (
-    opts: { name: string; json?: boolean; token?: string; identity?: string; user?: string; group?: string; site?: string },
+    opts: {
+      name: string;
+      json?: boolean;
+      token?: string;
+      identity?: string;
+      user?: string;
+      group?: string;
+      site?: string;
+    },
     cmd: any
   ) => {
     checkReadOnly(cmd);
@@ -890,10 +884,7 @@ addOneNoteRootOptions(
     .description('Copy a section into another notebook (async — poll Operation-Location with `onenote operation get`)')
     .argument('<sectionId>', 'Source section id')
     .requiredOption('--notebook <notebookId>', 'Destination notebook id')
-    .option(
-      '--group-id <id>',
-      'Request body `groupId` when the destination is a Microsoft 365 group notebook'
-    )
+    .option('--group-id <id>', 'Request body `groupId` when the destination is a Microsoft 365 group notebook')
     .option('--rename-as <name>', 'Optional name for the copied section')
     .option('--json', 'Print operation status JSON')
     .option('--token <token>', 'Use a specific token')
@@ -1057,20 +1048,18 @@ onenoteCommand
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .action(
-    async (operationLocationUrl: string, opts: { json?: boolean; token?: string; identity?: string }) => {
-      const token = await requireToken(opts);
-      const r = await getOneNoteOperation(token, operationLocationUrl);
-      if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
-      }
-      if (opts.json) console.log(JSON.stringify(r.data, null, 2));
-      else {
-        console.log(`status: ${r.data.status ?? '?'}`);
-        if (r.data.percentComplete) console.log(`percentComplete: ${r.data.percentComplete}`);
-        if (r.data.resourceLocation) console.log(`resourceLocation: ${r.data.resourceLocation}`);
-        if (r.data.error?.message) console.error(`error: ${r.data.error.message}`);
-      }
+  .action(async (operationLocationUrl: string, opts: { json?: boolean; token?: string; identity?: string }) => {
+    const token = await requireToken(opts);
+    const r = await getOneNoteOperation(token, operationLocationUrl);
+    if (!r.ok || !r.data) {
+      console.error(`Error: ${r.error?.message}`);
+      process.exit(1);
     }
-  );
+    if (opts.json) console.log(JSON.stringify(r.data, null, 2));
+    else {
+      console.log(`status: ${r.data.status ?? '?'}`);
+      if (r.data.percentComplete) console.log(`percentComplete: ${r.data.percentComplete}`);
+      if (r.data.resourceLocation) console.log(`resourceLocation: ${r.data.resourceLocation}`);
+      if (r.data.error?.message) console.error(`error: ${r.data.error.message}`);
+    }
+  });
