@@ -21,10 +21,7 @@ export const graphSearchCommand = new Command('graph-search').description(
 
 graphSearchCommand
   .argument('<query>', 'Search query string (KQL-style per Graph docs)')
-  .option(
-    '-t, --types <list>',
-    `Comma-separated entity types (default: ${DEFAULT_ENTITY_TYPES.join(',')})`
-  )
+  .option('-t, --types <list>', `Comma-separated entity types (default: ${DEFAULT_ENTITY_TYPES.join(',')})`)
   .option('--from <n>', 'Result offset', '0')
   .option('--size <n>', 'Page size (1–1000)', '25')
   .option('--json', 'Output raw JSON response')
@@ -51,8 +48,7 @@ graphSearchCommand
         ?.split(',')
         .map((s) => s.trim())
         .filter(Boolean);
-      const entityTypes =
-        parsedTypes && parsedTypes.length > 0 ? parsedTypes : [...DEFAULT_ENTITY_TYPES];
+      const entityTypes = parsedTypes && parsedTypes.length > 0 ? parsedTypes : [...DEFAULT_ENTITY_TYPES];
       const from = Math.max(0, parseInt(opts.from ?? '0', 10) || 0);
       const size = Math.min(1000, Math.max(1, parseInt(opts.size ?? '25', 10) || 25));
 
@@ -97,7 +93,8 @@ graphSearchCommand
               if (oneLine) console.log(`      ${oneLine}`);
             }
           }
-          if (c.moreResultsAvailable) console.log('    … more results available (increase --size or paginate with --from)');
+          if (c.moreResultsAvailable)
+            console.log('    … more results available (increase --size or paginate with --from)');
         }
       }
     }

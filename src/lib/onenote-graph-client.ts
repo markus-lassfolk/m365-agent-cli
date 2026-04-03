@@ -660,11 +660,7 @@ export async function createOneNotePageMultipart(
   const path = `${sectionsPath(user, scope)}/${encodeURIComponent(sectionId)}/pages`;
   try {
     const form = new FormData();
-    form.append(
-      'Presentation',
-      new Blob([presentationHtml], { type: 'text/html' }),
-      'presentation.html'
-    );
+    form.append('Presentation', new Blob([presentationHtml], { type: 'text/html' }), 'presentation.html');
     const wd = process.cwd();
     for (const p of binaryParts) {
       const abs = resolve(wd, p.absolutePath);
@@ -717,11 +713,7 @@ export async function patchOneNotePageContentMultipart(
   const path = `${pagesPath(user, scope)}/${encodeURIComponent(pageId)}/content`;
   try {
     const form = new FormData();
-    form.append(
-      'Commands',
-      new Blob([JSON.stringify(commands)], { type: 'application/json' }),
-      'commands.json'
-    );
+    form.append('Commands', new Blob([JSON.stringify(commands)], { type: 'application/json' }), 'commands.json');
     const wd = process.cwd();
     for (const p of binaryParts) {
       const abs = resolve(wd, p.absolutePath);
@@ -738,7 +730,7 @@ export async function patchOneNotePageContentMultipart(
     });
 
     if (res.status === 204 || res.ok) {
-      return graphResult(undefined as void);
+      return graphResult(undefined as undefined);
     }
     const text = await res.text();
     let message = text || `HTTP ${res.status}`;

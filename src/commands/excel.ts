@@ -27,34 +27,29 @@ excelCommand
   .command('worksheets')
   .description('List worksheets in a drive item workbook (drive item id from files list)')
   .argument('<itemId>', 'Drive item id of the Excel file')
-  .option('--user <upn>', 'Mailbox UPN when reading another user\'s drive (optional)')
+  .option('--user <upn>', "Mailbox UPN when reading another user's drive (optional)")
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Graph access token')
   .option('--identity <name>', 'Graph token cache identity')
-  .action(
-    async (
-      itemId: string,
-      opts: { user?: string; json?: boolean; token?: string; identity?: string }
-    ) => {
-      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
-      if (!auth.success || !auth.token) {
-        console.error(`Auth error: ${auth.error}`);
-        process.exit(1);
-      }
-      const r = await listExcelWorksheets(auth.token, itemId, opts.user);
-      if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
-      }
-      if (opts.json) {
-        console.log(JSON.stringify(r.data, null, 2));
-        return;
-      }
-      for (const w of r.data) {
-        console.log(`${w.name ?? '(sheet)'}\t${w.id ?? ''}`);
-      }
+  .action(async (itemId: string, opts: { user?: string; json?: boolean; token?: string; identity?: string }) => {
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success || !auth.token) {
+      console.error(`Auth error: ${auth.error}`);
+      process.exit(1);
     }
-  );
+    const r = await listExcelWorksheets(auth.token, itemId, opts.user);
+    if (!r.ok || !r.data) {
+      console.error(`Error: ${r.error?.message}`);
+      process.exit(1);
+    }
+    if (opts.json) {
+      console.log(JSON.stringify(r.data, null, 2));
+      return;
+    }
+    for (const w of r.data) {
+      console.log(`${w.name ?? '(sheet)'}\t${w.id ?? ''}`);
+    }
+  });
 
 excelCommand
   .command('worksheet-get')
@@ -181,24 +176,19 @@ excelCommand
   .option('--token <token>', 'Graph access token')
   .option('--identity <name>', 'Graph token cache identity')
   .action(
-    async (
-      itemId: string,
-      sheet: string,
-      opts: { user?: string; token?: string; identity?: string },
-      cmd: Command
-    ) => {
-    checkReadOnly(cmd);
-    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
-    if (!auth.success || !auth.token) {
-      console.error(`Auth error: ${auth.error}`);
-      process.exit(1);
-    }
-    const r = await deleteExcelWorksheet(auth.token, itemId, sheet, opts.user);
-    if (!r.ok) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
-    }
-    console.log('Deleted.');
+    async (itemId: string, sheet: string, opts: { user?: string; token?: string; identity?: string }, cmd: Command) => {
+      checkReadOnly(cmd);
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!auth.success || !auth.token) {
+        console.error(`Auth error: ${auth.error}`);
+        process.exit(1);
+      }
+      const r = await deleteExcelWorksheet(auth.token, itemId, sheet, opts.user);
+      if (!r.ok) {
+        console.error(`Error: ${r.error?.message}`);
+        process.exit(1);
+      }
+      console.log('Deleted.');
     }
   );
 
@@ -208,7 +198,7 @@ excelCommand
   .argument('<itemId>', 'Drive item id of the Excel file')
   .argument('<sheet>', 'Worksheet name or id')
   .argument('<address>', 'Range address e.g. A1:D10')
-  .option('--user <upn>', 'Mailbox UPN when reading another user\'s drive (optional)')
+  .option('--user <upn>', "Mailbox UPN when reading another user's drive (optional)")
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Graph access token')
   .option('--identity <name>', 'Graph token cache identity')
@@ -274,7 +264,7 @@ excelCommand
   .argument('<itemId>', 'Drive item id of the Excel file')
   .argument('<sheet>', 'Worksheet name or id')
   .option('--values-only', 'valuesOnly=true (ignore format-only cells)')
-  .option('--user <upn>', 'Mailbox UPN when reading another user\'s drive (optional)')
+  .option('--user <upn>', "Mailbox UPN when reading another user's drive (optional)")
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Graph access token')
   .option('--identity <name>', 'Graph token cache identity')
@@ -309,7 +299,7 @@ excelCommand
   .description('List Excel tables (whole workbook, or one worksheet with --sheet)')
   .argument('<itemId>', 'Drive item id of the Excel file')
   .option('--sheet <name>', 'Worksheet name or id (omit to list all workbook tables)')
-  .option('--user <upn>', 'Mailbox UPN when reading another user\'s drive (optional)')
+  .option('--user <upn>', "Mailbox UPN when reading another user's drive (optional)")
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Graph access token')
   .option('--identity <name>', 'Graph token cache identity')
@@ -439,21 +429,19 @@ excelCommand
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Graph access token')
   .option('--identity <name>', 'Graph token cache identity')
-  .action(
-    async (itemId: string, opts: { user?: string; json?: boolean; token?: string; identity?: string }) => {
-      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
-      if (!auth.success || !auth.token) {
-        console.error(`Auth error: ${auth.error}`);
-        process.exit(1);
-      }
-      const r = await listExcelWorkbookNames(auth.token, itemId, opts.user);
-      if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
-      }
-      console.log(opts.json ? JSON.stringify(r.data, null, 2) : JSON.stringify(r.data, null, 2));
+  .action(async (itemId: string, opts: { user?: string; json?: boolean; token?: string; identity?: string }) => {
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success || !auth.token) {
+      console.error(`Auth error: ${auth.error}`);
+      process.exit(1);
     }
-  );
+    const r = await listExcelWorkbookNames(auth.token, itemId, opts.user);
+    if (!r.ok || !r.data) {
+      console.error(`Error: ${r.error?.message}`);
+      process.exit(1);
+    }
+    console.log(opts.json ? JSON.stringify(r.data, null, 2) : JSON.stringify(r.data, null, 2));
+  });
 
 excelCommand
   .command('charts')

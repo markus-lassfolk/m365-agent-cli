@@ -1,5 +1,5 @@
-import { GRAPH_BETA_URL, GRAPH_BASE_URL } from './graph-constants.js';
 import { callGraphAt, GraphApiError, type GraphResponse, graphError } from './graph-client.js';
+import { GRAPH_BASE_URL, GRAPH_BETA_URL } from './graph-constants.js';
 
 /** Reject path traversal and non-relative Graph paths (must be under v1.0/beta root). */
 export function assertSafeGraphRelativePath(path: string): string {
@@ -28,10 +28,7 @@ export interface GraphInvokeOptions {
 /**
  * Single request against Microsoft Graph (v1.0 or beta). Path is relative to the API root, e.g. `/me`, `/me/messages?$top=1`.
  */
-export async function graphInvoke<T = unknown>(
-  token: string,
-  opts: GraphInvokeOptions
-): Promise<GraphResponse<T>> {
+export async function graphInvoke<T = unknown>(token: string, opts: GraphInvokeOptions): Promise<GraphResponse<T>> {
   try {
     const path = assertSafeGraphRelativePath(opts.path);
     const method = (opts.method || 'GET').toUpperCase();

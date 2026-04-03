@@ -1,10 +1,4 @@
-import {
-  callGraph,
-  GraphApiError,
-  type GraphResponse,
-  graphError,
-  graphResult
-} from './graph-client.js';
+import { callGraph, GraphApiError, type GraphResponse, graphError, graphResult } from './graph-client.js';
 import { graphUserPath } from './graph-user-path.js';
 
 export interface ExcelWorksheet {
@@ -133,9 +127,7 @@ export async function listExcelTables(
 ): Promise<GraphResponse<ExcelTable[]>> {
   try {
     const base = driveItemWorkbookPrefix(user, itemId);
-    const path = worksheet
-      ? `${base}/worksheets/${encodeURIComponent(worksheet.trim())}/tables`
-      : `${base}/tables`;
+    const path = worksheet ? `${base}/worksheets/${encodeURIComponent(worksheet.trim())}/tables` : `${base}/tables`;
     const r = await callGraph<{ value: ExcelTable[] }>(token, path);
     if (!r.ok || !r.data) {
       return graphError(r.error?.message || 'Failed to list tables', r.error?.code, r.error?.status);

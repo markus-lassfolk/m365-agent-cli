@@ -1,12 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { Command } from 'commander';
+import { type GraphBatchRequestBody, graphInvoke, graphPostBatch } from '../lib/graph-advanced-client.js';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
-import {
-  graphInvoke,
-  graphPostBatch,
-  type GraphBatchRequestBody
-} from '../lib/graph-advanced-client.js';
 import { checkReadOnly } from '../lib/utils.js';
 
 function batchHasMutations(body: GraphBatchRequestBody): boolean {
@@ -86,28 +82,23 @@ graphCommand
   .option('--beta', 'Use GRAPH_BETA_URL')
   .option('--token <token>', 'Graph access token')
   .option('--identity <name>', 'Graph token cache identity')
-  .action(
-    async (
-      opts: { file: string; beta?: boolean; token?: string; identity?: string },
-      cmd
-    ) => {
-      const raw = await readFile(resolve(process.cwd(), opts.file.trim()), 'utf8');
-      const body = JSON.parse(raw) as GraphBatchRequestBody;
-      if (batchHasMutations(body)) {
-        checkReadOnly(cmd);
-      }
-
-      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
-      if (!auth.success || !auth.token) {
-        console.error(`Auth error: ${auth.error}`);
-        process.exit(1);
-      }
-
-      const r = await graphPostBatch(auth.token, body, opts.beta);
-      if (!r.ok) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
-      }
-      console.log(JSON.stringify(r.data, null, 2));
+  .action(async (opts: { file: string; beta?: boolean; token?: string; identity?: string }, cmd) => {
+    const raw = await readFile(resolve(process.cwd(), opts.file.trim()), 'utf8');
+    const body = JSON.parse(raw) as GraphBatchRequestBody;
+    if (batchHasMutations(body)) {
+      checkReadOnly(cmd);
     }
-  );
+
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success || !auth.token) {
+      console.error(`Auth error: ${auth.error}`);
+      process.exit(1);
+    }
+
+    const r = await graphPostBatch(auth.token, body, opts.beta);
+    if (!r.ok) {
+      console.error(`Error: ${r.error?.message}`);
+      process.exit(1);
+    }
+    console.log(JSON.stringify(r.data, null, 2));
+  });

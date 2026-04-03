@@ -1,10 +1,4 @@
-import {
-  callGraph,
-  GraphApiError,
-  type GraphResponse,
-  graphError,
-  graphResult
-} from './graph-client.js';
+import { callGraph, GraphApiError, type GraphResponse, graphError, graphResult } from './graph-client.js';
 
 /**
  * Microsoft Graph [search query](https://learn.microsoft.com/en-us/graph/api/search-query) (v1.0).

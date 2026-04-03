@@ -2,6 +2,7 @@
 import './lib/global-env.js';
 import { Command } from 'commander';
 import { autoReplyCommand } from './commands/auto-reply.js';
+import { bookingsCommand } from './commands/bookings.js';
 import { calendarCommand } from './commands/calendar.js';
 import { contactsCommand } from './commands/contacts.js';
 import { counterCommand } from './commands/counter.js';
@@ -9,7 +10,6 @@ import { createEventCommand } from './commands/create-event.js';
 import { delegatesCommand } from './commands/delegates.js';
 import { deleteEventCommand } from './commands/delete-event.js';
 import { draftsCommand } from './commands/drafts.js';
-import { bookingsCommand } from './commands/bookings.js';
 import { excelCommand } from './commands/excel.js';
 import { filesCommand } from './commands/files.js';
 import { findCommand } from './commands/find.js';

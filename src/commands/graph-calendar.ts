@@ -1,8 +1,8 @@
 import { Command } from 'commander';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
 import {
-  type GraphCalendarEvent,
   eventsDeltaPage,
+  type GraphCalendarEvent,
   getCalendar,
   getEvent,
   listCalendars,

@@ -21,9 +21,9 @@ import {
   getOneNoteOperation,
   getOneNotePage,
   getOneNotePageContentHtml,
+  getOneNotePagePreview,
   getOneNoteResource,
   getOneNoteResourceContent,
-  getOneNotePagePreview,
   getOneNoteSection,
   getOneNoteSectionGroup,
   listAllOneNotePages,
@@ -32,8 +32,8 @@ import {
   listOneNoteNotebooks,
   listSectionPages,
   listSectionsInSectionGroup,
-  patchOneNotePageContentMultipart,
   type OneNoteGraphScope,
+  patchOneNotePageContentMultipart,
   updateOneNoteNotebook,
   updateOneNotePageContent,
   updateOneNoteSection,
@@ -376,7 +376,9 @@ addOneNoteRootOptions(
 addOneNoteRootOptions(
   onenoteCommand
     .command('get-resource')
-    .description('Get OneNote embedded resource metadata (GET …/resources/{id}, not binary — use resource-download for bytes)')
+    .description(
+      'Get OneNote embedded resource metadata (GET …/resources/{id}, not binary — use resource-download for bytes)'
+    )
     .argument('<resourceId>', 'Resource id from page HTML')
     .option('--json', 'Output as JSON')
     .option('--token <token>', 'Use a specific token')
