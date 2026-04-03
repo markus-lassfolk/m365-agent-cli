@@ -144,3 +144,39 @@ describe('sendMail', () => {
     }
   });
 });
+
+describe('createDraftMessage', () => {
+  it('POSTs /me/messages with isDraft', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    const urls: string[] = [];
+    const bodies: string[] = [];
+    const originalFetch = globalThis.fetch;
+
+    try {
+      globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+        urls.push(typeof input === 'string' ? input : input.toString());
+        if (init?.body && typeof init.body === 'string') bodies.push(init.body);
+        return new Response(JSON.stringify({ id: 'draft-1', isDraft: true }), {
+          status: 201,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as typeof fetch;
+
+      const { createDraftMessage } = await import('./outlook-graph-client.js');
+      const r = await createDraftMessage(token, {
+        subject: 'S',
+        bodyContent: 'hello',
+        bodyContentType: 'Text',
+        toAddresses: ['a@b.com']
+      });
+
+      expect(r.ok).toBe(true);
+      expect(r.data?.id).toBe('draft-1');
+      expect(urls[0]).toContain('/me/messages');
+      expect(bodies[0]).toContain('"isDraft":true');
+      expect(bodies[0]).toContain('a@b.com');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});

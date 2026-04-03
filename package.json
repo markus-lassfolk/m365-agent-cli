@@ -1,6 +1,6 @@
 {
   "name": "m365-agent-cli",
-  "version": "1.2.4",
+  "version": "2.0.0-beta.0",
   "description": "CLI for Microsoft 365/EWS using OAuth2 refresh token authentication",
   "repository": {
     "type": "git",
@@ -28,7 +28,8 @@
     "knip": "knip",
     "verify:coverage": "node scripts/check-coverage.mjs",
     "test": "bun test",
-    "test:coverage": "bun test --coverage --coverage-reporter=lcov --coverage-reporter=text"
+    "test:coverage": "bun test --coverage --coverage-reporter=lcov --coverage-reporter=text",
+    "publish:beta": "npm publish --tag beta"
   },
   "files": [
     "src",

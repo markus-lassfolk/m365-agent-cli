@@ -23,7 +23,7 @@ export const sendCommand = new Command('send')
   .option('--attach <files>', 'Attach file(s), comma-separated paths')
   .option(
     '--attach-link <spec>',
-    'Attach link: "Title|https://url" or bare https URL (repeatable; EWS or auto — not Graph-only)',
+    'Attach link: "Title|https://url" or bare https URL (repeatable; Graph `referenceAttachment` or EWS)',
     (v: string, prev: string[]) => [...prev, v],
     [] as string[]
   )
@@ -56,14 +56,6 @@ export const sendCommand = new Command('send')
       checkReadOnly(cmd);
       const backend = getExchangeBackend();
       const linkSpecs = options.attachLink ?? [];
-
-      if (backend === 'graph' && linkSpecs.length > 0) {
-        console.error(
-          'Error: --attach-link is not supported with M365_EXCHANGE_BACKEND=graph. Use ews, or auto with Graph-capable send.'
-        );
-        console.error('Tip: set M365_EXCHANGE_BACKEND=auto to fall back to EWS when link attachments are needed.');
-        process.exit(1);
-      }
 
       const toList = options.to
         .split(',')
@@ -220,7 +212,7 @@ export const sendCommand = new Command('send')
         }
       }
 
-      if (backend === 'ews' || (backend === 'auto' && linkSpecs.length > 0)) {
+      if (backend === 'ews') {
         await sendEws();
         return;
       }
@@ -252,7 +244,8 @@ export const sendCommand = new Command('send')
         body,
         html,
         categories,
-        fileAttachments: attachments
+        fileAttachments: attachments,
+        referenceAttachments: referenceAttachments?.map((a) => ({ name: a.name, sourceUrl: a.url }))
       });
 
       const result = await graphSendMail(graphAuth.token, payload, user);
@@ -279,7 +272,8 @@ export const sendCommand = new Command('send')
               backend: 'graph',
               to: toList,
               subject: options.subject,
-              attachments: attachments?.map((a) => a.name)
+              attachments: attachments?.map((a) => a.name),
+              attachLinks: referenceAttachments?.map((a) => a.name)
             },
             null,
             2
@@ -288,8 +282,10 @@ export const sendCommand = new Command('send')
       } else {
         console.log(`\n\u2713 Email sent (Graph) to ${toList.join(', ')}`);
         console.log(`  Subject: ${options.subject}`);
-        if (attachments?.length) {
-          console.log(`  Attachments: ${attachments.length} file(s)`);
+        const nFile = attachments?.length ?? 0;
+        const nLink = referenceAttachments?.length ?? 0;
+        if (nFile + nLink > 0) {
+          console.log(`  Attachments: ${nFile} file(s), ${nLink} link(s)`);
         }
         console.log();
       }

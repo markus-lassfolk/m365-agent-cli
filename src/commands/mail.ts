@@ -28,7 +28,7 @@ import { resolveGraphAuth } from '../lib/graph-auth.js';
 import { markdownToHtml } from '../lib/markdown.js';
 import { lookupMimeType } from '../lib/mime-type.js';
 import { checkReadOnly } from '../lib/utils.js';
-import { type MailGraphCommandOptions, tryMailGraphPortion } from './mail-graph.js';
+import { isGraphMailPortionEligible, type MailGraphCommandOptions, tryMailGraphPortion } from './mail-graph.js';
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
@@ -248,15 +248,14 @@ export const mailCommand = new Command('mail')
       }
 
       const backend = getExchangeBackend();
-      if (!isMutating && (backend === 'graph' || backend === 'auto')) {
+      const mailGraphOpts = options as unknown as MailGraphCommandOptions;
+      const tryGraphMail =
+        (!isMutating || isGraphMailPortionEligible(mailGraphOpts)) && (backend === 'graph' || backend === 'auto');
+
+      if (tryGraphMail) {
         const ga = await resolveGraphAuth({ token: options.token, identity: options.identity });
         if (ga.success && ga.token) {
-          const { handled } = await tryMailGraphPortion(
-            ga.token,
-            folder,
-            options as unknown as MailGraphCommandOptions,
-            cmd
-          );
+          const { handled } = await tryMailGraphPortion(ga.token, folder, mailGraphOpts, cmd);
           if (handled) return;
         }
         if (backend === 'graph') {

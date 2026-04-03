@@ -25,11 +25,14 @@ import {
   mockGetRoomsFromListResponse,
   mockGetRoomsResponse,
   mockGetScheduleResponse,
+  mockGraphCalendarViewResponse,
   mockGraphCheckinResponse,
   mockGraphCreateUploadSessionResponse,
   mockGraphDeleteResponse,
+  mockGraphEventDetailResponse,
   mockGraphGetFileMetadataResponse,
   mockGraphListFilesResponse,
+  mockGraphMeResponse,
   mockGraphSearchFilesResponse,
   mockGraphShareResponse,
   mockGraphUploadResponse,
@@ -310,8 +313,42 @@ export function createMockFetch(): any {
       return makeResponse(mockCalendarEventsEmptyResponse);
     }
 
-    // Microsoft Graph API (files commands)
+    // Microsoft Graph API (files commands + calendar / whoami when backend=graph)
     if (url.includes('graph.microsoft.com/v1.0')) {
+      try {
+        const u = new URL(url);
+        const path = u.pathname;
+        const method = (init?.method ?? 'GET').toUpperCase();
+
+        if (path === '/v1.0/me') {
+          return makeJsonResponse(mockGraphMeResponse);
+        }
+        if (path.includes('/calendar/calendarView')) {
+          return makeJsonResponse(mockGraphCalendarViewResponse);
+        }
+        if (method === 'GET' && /^\/v1\.0\/me\/events\/[^/]+$/.test(path)) {
+          return makeJsonResponse(mockGraphEventDetailResponse);
+        }
+        if (method === 'PATCH' && /^\/v1\.0\/me\/events\/[^/]+$/.test(path)) {
+          return makeJsonResponse({
+            ...mockGraphEventDetailResponse,
+            subject: 'Updated title',
+            changeKey: 'ck2'
+          });
+        }
+        if (method === 'DELETE' && /^\/v1\.0\/me\/events\/[^/]+$/.test(path)) {
+          return new Response(null, { status: 204 });
+        }
+        if (method === 'POST' && /^\/v1\.0\/me\/events\/[^/]+\/cancel$/.test(path)) {
+          return new Response(null, { status: 204 });
+        }
+        if (method === 'POST' && /^\/v1\.0\/me\/events\/[^/]+\/(accept|decline|tentativelyAccept)$/.test(path)) {
+          return new Response(null, { status: 204 });
+        }
+      } catch {
+        // fall through to drive and default handlers
+      }
+
       // List files
       if (url.includes('/me/drive/root/children') || (url.includes('/me/drive/items') && url.includes('/children'))) {
         return makeJsonResponse(mockGraphListFilesResponse);

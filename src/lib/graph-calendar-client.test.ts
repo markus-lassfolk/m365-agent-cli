@@ -116,3 +116,140 @@ describe('getEvent', () => {
     }
   });
 });
+
+describe('updateCalendarEvent', () => {
+  it('PATCHes /events/{id} with JSON body and returns updated event', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    const requests: Array<{ url: string; method?: string; body?: string }> = [];
+    const originalFetch = globalThis.fetch;
+
+    try {
+      globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input.toString();
+        requests.push({
+          url,
+          method: init?.method,
+          body: typeof init?.body === 'string' ? init.body : undefined
+        });
+        return new Response(JSON.stringify({ id: 'evt-1', subject: 'Patched' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as typeof fetch;
+
+      const { updateCalendarEvent } = await import('./graph-calendar-client.js');
+      const r = await updateCalendarEvent(token, 'evt-1', { subject: 'Patched' }, undefined);
+
+      expect(r.ok).toBe(true);
+      expect(r.data?.subject).toBe('Patched');
+      expect(requests[0].method).toBe('PATCH');
+      expect(requests[0].url).toContain('/me/events/evt-1');
+      expect(requests[0].body).toBe(JSON.stringify({ subject: 'Patched' }));
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+describe('deleteCalendarEvent', () => {
+  it('DELETEs /events/{id} and succeeds on 204', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    const requests: Array<{ url: string; method?: string }> = [];
+    const originalFetch = globalThis.fetch;
+
+    try {
+      globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input.toString();
+        requests.push({ url, method: init?.method });
+        return new Response(null, { status: 204 });
+      }) as typeof fetch;
+
+      const { deleteCalendarEvent } = await import('./graph-calendar-client.js');
+      const r = await deleteCalendarEvent(token, 'evt-del', undefined);
+
+      expect(r.ok).toBe(true);
+      expect(requests[0].method).toBe('DELETE');
+      expect(requests[0].url).toContain('/me/events/evt-del');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+describe('cancelCalendarEvent', () => {
+  it('POSTs /events/{id}/cancel with lowercase comment field', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    const requests: Array<{ url: string; body?: string }> = [];
+    const originalFetch = globalThis.fetch;
+
+    try {
+      globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input.toString();
+        requests.push({
+          url,
+          body: typeof init?.body === 'string' ? init.body : undefined
+        });
+        return new Response(null, { status: 204 });
+      }) as typeof fetch;
+
+      const { cancelCalendarEvent } = await import('./graph-calendar-client.js');
+      const r = await cancelCalendarEvent(token, 'evt-can', { comment: 'Sorry' });
+
+      expect(r.ok).toBe(true);
+      expect(requests[0].url).toContain('/me/events/evt-can/cancel');
+      expect(requests[0].body).toBe(JSON.stringify({ comment: 'Sorry' }));
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('sends empty comment when omitted', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    let body = '';
+    const originalFetch = globalThis.fetch;
+
+    try {
+      globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+        body = typeof init?.body === 'string' ? init.body : '';
+        return new Response(null, { status: 204 });
+      }) as typeof fetch;
+
+      const { cancelCalendarEvent } = await import('./graph-calendar-client.js');
+      const r = await cancelCalendarEvent(token, 'evt-x', {});
+      expect(r.ok).toBe(true);
+      expect(body).toBe(JSON.stringify({ comment: '' }));
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+describe('addFileAttachmentToCalendarEvent', () => {
+  it('POSTs to /events/{id}/attachments', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    const urls: string[] = [];
+    const originalFetch = globalThis.fetch;
+
+    try {
+      globalThis.fetch = (async (input: string | URL | Request) => {
+        urls.push(typeof input === 'string' ? input : input.toString());
+        return new Response(JSON.stringify({ id: 'att-1', name: 'f.txt' }), {
+          status: 201,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as typeof fetch;
+
+      const { addFileAttachmentToCalendarEvent } = await import('./graph-calendar-client.js');
+      const r = await addFileAttachmentToCalendarEvent(token, 'evt-1', {
+        name: 'f.txt',
+        contentType: 'text/plain',
+        contentBytes: 'aGk='
+      });
+
+      expect(r.ok).toBe(true);
+      expect(urls[0]).toContain('/me/events/evt-1/attachments');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});

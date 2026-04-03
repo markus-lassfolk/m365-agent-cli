@@ -163,7 +163,7 @@ export const loginCommand = new Command('login')
 
     // Use a single Graph Device Code flow to obtain a multi-resource refresh token
     const graphScope =
-      'offline_access User.Read Calendars.ReadWrite Mail.ReadWrite Files.ReadWrite.All Sites.ReadWrite.All Tasks.ReadWrite Group.ReadWrite.All';
+      'offline_access User.Read Calendars.ReadWrite Mail.ReadWrite MailboxSettings.ReadWrite Files.ReadWrite.All Sites.ReadWrite.All Tasks.ReadWrite Group.ReadWrite.All';
     const rawToken = await performDeviceCodeFlow(clientId, tenant, graphScope, 'Microsoft 365');
     const refreshToken = rawToken.replace(/[\r\n]/g, '');
 
@@ -174,22 +174,21 @@ export const loginCommand = new Command('login')
       if (err.code !== 'ENOENT') throw err;
     }
 
-    // Update or append EWS_REFRESH_TOKEN
-    if (/^EWS_REFRESH_TOKEN=.*$/m.test(envContent)) {
-      envContent = envContent.replace(/^EWS_REFRESH_TOKEN=.*$/m, () => `EWS_REFRESH_TOKEN=${refreshToken}`);
-    } else {
-      envContent += `\nEWS_REFRESH_TOKEN=${refreshToken}\n`;
-    }
+    const upsertEnvLine = (key: string, value: string) => {
+      const re = new RegExp(`^${key}=.*$`, 'm');
+      if (re.test(envContent)) {
+        envContent = envContent.replace(re, () => `${key}=${value}`);
+      } else {
+        envContent += `\n${key}=${value}\n`;
+      }
+    };
 
-    // Update or append GRAPH_REFRESH_TOKEN
-    if (/^GRAPH_REFRESH_TOKEN=.*$/m.test(envContent)) {
-      envContent = envContent.replace(/^GRAPH_REFRESH_TOKEN=.*$/m, () => `GRAPH_REFRESH_TOKEN=${refreshToken}`);
-    } else {
-      envContent += `\nGRAPH_REFRESH_TOKEN=${refreshToken}\n`;
-    }
+    upsertEnvLine('M365_REFRESH_TOKEN', refreshToken);
+    upsertEnvLine('EWS_REFRESH_TOKEN', refreshToken);
+    upsertEnvLine('GRAPH_REFRESH_TOKEN', refreshToken);
 
     envContent = envContent.replace(/\n{3,}/g, '\n\n');
     await atomicWriteUtf8File(envPath, `${envContent.trim()}\n`, 0o600);
 
-    console.log(`Saved GRAPH_REFRESH_TOKEN and EWS_REFRESH_TOKEN to ${envPath}`);
+    console.log(`Saved M365_REFRESH_TOKEN (and legacy GRAPH_REFRESH_TOKEN / EWS_REFRESH_TOKEN) to ${envPath}`);
   });

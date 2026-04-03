@@ -63,13 +63,13 @@ The easiest way to obtain your refresh tokens is to run the interactive login co
 m365-agent-cli login
 ```
 
-This will initiate the Microsoft Device Code flow and automatically save `EWS_REFRESH_TOKEN` and `GRAPH_REFRESH_TOKEN` into your `~/.config/m365-agent-cli/.env` file upon successful authentication.
+This will initiate the Microsoft Device Code flow and automatically save **`M365_REFRESH_TOKEN`** (preferred single name) plus legacy `EWS_REFRESH_TOKEN` and `GRAPH_REFRESH_TOKEN` (same value) into your `~/.config/m365-agent-cli/.env` file upon successful authentication.
 
 Alternatively, you can manually create a `~/.config/m365-agent-cli/.env` file (or set environment variables):
 
 ```bash
 EWS_CLIENT_ID=your-azure-app-client-id
-EWS_REFRESH_TOKEN=your-refresh-token
+M365_REFRESH_TOKEN=your-refresh-token
 EWS_USERNAME=your@email.com
 EWS_ENDPOINT=https://outlook.office365.com/EWS/Exchange.asmx
 EWS_TENANT_ID=common  # or your tenant ID
@@ -89,9 +89,7 @@ Or pass `--mailbox` per-command (see examples below).
 
 1. m365-agent-cli uses the refresh token to obtain a short-lived access token via Microsoft's OAuth2 endpoint
 2. Access tokens are cached under `~/.config/m365-agent-cli/`:
-   - **EWS:** `token-cache-{identity}.json` (default identity: `default`)
-   - **Microsoft Graph:** `graph-token-cache-{identity}.json` (same identity name; default `default`)
-   - A legacy `graph-token-cache.json` (no identity suffix) is migrated once to `graph-token-cache-default.json` when present.
+   - **Unified OAuth cache:** `token-cache-{identity}.json` (default identity: `default`) holds separate **EWS** and **Microsoft Graph** access tokens and refresh token metadata. Legacy `graph-token-cache-{identity}.json` is merged on load and removed after save.
    Tokens are refreshed automatically when expired.
 3. Microsoft may rotate the refresh token on each use — the latest one is cached automatically in the same directory
 

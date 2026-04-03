@@ -17,8 +17,7 @@ CLI for Microsoft 365: **Exchange Web Services (EWS)** and **Microsoft Graph**. 
 ## Authentication and profiles
 
 - Config directory: `~/.config/m365-agent-cli/` (`.env`, token caches).
-- **EWS** cache: `token-cache-{identity}.json` — default identity name: `default`.
-- **Graph** cache: `graph-token-cache-{identity}.json` — same identity string as EWS for that “profile”.
+- **Unified OAuth cache:** `token-cache-{identity}.json` — holds both EWS and Graph access-token slots (default identity: `default`). Env: **`M365_REFRESH_TOKEN`** preferred, or `GRAPH_REFRESH_TOKEN` / `EWS_REFRESH_TOKEN` (legacy aliases).
 - **`--identity <name>`** — use a named cache profile (Graph- and EWS-backed commands that expose the flag). Default is `default`.
 - **`--token <token>`** — override cached access token for that request (advanced).
 - Interactive login: `m365-agent-cli login` (device code); tokens land in `.env` / caches.

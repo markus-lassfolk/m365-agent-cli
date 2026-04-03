@@ -6,7 +6,7 @@
  * argument parsing (Commander.js), auth resolution, API calls, and output formatting.
  */
 import '../lib/global-env.js';
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { clearMockFetch, createMockFetch } from '../test/mocks/index.js';
 
 // Track console output to assert on it
@@ -104,9 +104,21 @@ afterAll(() => {
   globalThis.fetch = undefined;
 });
 
+let savedExchangeBackend: string | undefined;
+
 beforeEach(() => {
   clearMockFetch();
   globalThis.fetch = createMockFetch();
+  savedExchangeBackend = process.env.M365_EXCHANGE_BACKEND;
+  process.env.M365_EXCHANGE_BACKEND = 'ews';
+});
+
+afterEach(() => {
+  if (savedExchangeBackend === undefined) {
+    delete process.env.M365_EXCHANGE_BACKEND;
+  } else {
+    process.env.M365_EXCHANGE_BACKEND = savedExchangeBackend;
+  }
 });
 
 // ─── Import commands ───────────────────────────────────────────────────────
@@ -224,7 +236,27 @@ function tokenizeArgs(args: string): string[] {
   return result;
 }
 
+/**
+ * Commander reuses imported command instances across `parseAsync` calls; omitted flags can leave
+ * stale values (e.g. `--json`, `--id`). Clear leak-prone options before each CLI parse in tests.
+ */
+function resetSharedCommandOptionLeaks() {
+  whoamiCommand.setOptionValue('json', false);
+  updateEventCommand.setOptionValue('json', false);
+  updateEventCommand.setOptionValue('id', undefined);
+  updateEventCommand.setOptionValue('title', undefined);
+  updateEventCommand.setOptionValue('search', undefined);
+  updateEventCommand.setOptionValue('day', 'today');
+  deleteEventCommand.setOptionValue('json', false);
+  deleteEventCommand.setOptionValue('id', undefined);
+  deleteEventCommand.setOptionValue('day', 'today');
+  respondCommand.setOptionValue('json', false);
+  respondCommand.setOptionValue('id', undefined);
+}
+
 async function runM365AgentCli(args: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  resetSharedCommandOptionLeaks();
+
   // Set up mocks INSIDE runM365AgentCli so each call is independent
   let capturedStdout = '';
   let capturedStderr = '';
@@ -513,10 +545,12 @@ describe('delete-event', () => {
     expect(result.stderr + result.stdout).toMatch(/invalid|not found/i);
   });
 
-  // NOTE: this test has state leakage in full suite; verified passing in isolation
-  test.skip('--json in list mode shows events [SKIP: state leakage]', async () => {
+  test('--json in list mode returns EWS-shaped JSON', async () => {
     const result = await runM365AgentCli('delete-event --json --token test-token-12345');
     expect(result.exitCode).toBe(0);
+    const data = JSON.parse(result.stdout.trim()) as { backend?: string; events?: unknown[] };
+    expect(data.backend).toBe('ews');
+    expect(Array.isArray(data.events)).toBe(true);
   });
 
   test('--help shows help text', async () => {
@@ -578,10 +612,12 @@ describe('update-event', () => {
     expect(isUsefulError(result.stderr + result.stdout)).toBe(true);
   });
 
-  // NOTE: this test has state leakage in full suite; verified passing in isolation
-  test.skip('--json in list mode shows events [SKIP: state leakage]', async () => {
+  test('--json in list mode returns EWS-shaped JSON', async () => {
     const result = await runM365AgentCli('update-event --json --token test-token-12345');
     expect(result.exitCode).toBe(0);
+    const data = JSON.parse(result.stdout.trim()) as { backend?: string; events?: unknown[] };
+    expect(data.backend).toBe('ews');
+    expect(Array.isArray(data.events)).toBe(true);
   });
 
   test('--help shows help text', async () => {
@@ -1079,5 +1115,74 @@ describe('read-only mode', () => {
         delete process.env.READ_ONLY_MODE;
       }
     }
+  });
+});
+
+describe('Graph backend (M365_EXCHANGE_BACKEND=graph)', () => {
+  let prevBackend: string | undefined;
+
+  beforeEach(() => {
+    prevBackend = process.env.M365_EXCHANGE_BACKEND;
+    process.env.M365_EXCHANGE_BACKEND = 'graph';
+  });
+
+  afterEach(() => {
+    if (prevBackend === undefined) {
+      delete process.env.M365_EXCHANGE_BACKEND;
+    } else {
+      process.env.M365_EXCHANGE_BACKEND = prevBackend;
+    }
+  });
+
+  test('whoami shows user from Graph GET /me', async () => {
+    const result = await runM365AgentCli('whoami --token test-graph-token');
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('Microsoft Graph');
+    expect(result.stdout).toContain('Graph Test User');
+    expect(result.stdout).toContain('graph.user@example.com');
+  });
+
+  test('whoami --json includes backend graph', async () => {
+    const result = await runM365AgentCli('whoami --json --token test-graph-token');
+    expect(result.exitCode).toBe(0);
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.backend).toBe('graph');
+    expect(data.email).toBe('graph.user@example.com');
+  });
+
+  test('update-event --json lists organizer events from calendarView', async () => {
+    const result = await runM365AgentCli('update-event --json --day today --token test-graph-token');
+    expect(result.exitCode).toBe(0);
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.backend).toBe('graph');
+    expect(data.events).toHaveLength(1);
+    expect(data.events[0].id).toBe('graph-cal-event-1');
+    expect(data.events[0].subject).toBe('Standup');
+  });
+
+  test('delete-event --json lists organizer events from calendarView', async () => {
+    const result = await runM365AgentCli('delete-event --json --day today --token test-graph-token');
+    expect(result.exitCode).toBe(0);
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.backend).toBe('graph');
+    expect(data.events).toHaveLength(1);
+    expect(data.events[0].id).toBe('graph-cal-event-1');
+  });
+
+  test('update-event --id --title patches event via Graph', async () => {
+    const result = await runM365AgentCli(
+      'update-event --id graph-cal-event-1 --title "Updated title" --token test-graph-token'
+    );
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('Updated title');
+    expect(result.stdout).toContain('Event updated successfully');
+  });
+
+  test('respond --json list uses Graph calendarView', async () => {
+    const result = await runM365AgentCli('respond list --json --token test-graph-token');
+    expect(result.exitCode).toBe(0);
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.backend).toBe('graph');
+    expect(Array.isArray(data.pendingEvents)).toBe(true);
   });
 });

@@ -4,7 +4,9 @@ import { getAutoReplyRule, setAutoReplyRule } from '../lib/ews-client.js';
 import { checkReadOnly } from '../lib/utils.js';
 
 export const autoReplyCommand = new Command('auto-reply')
-  .description('Manage server-side out-of-office (OOF) auto-reply templates via EWS Inbox Rules')
+  .description(
+    'Manage OOF-style auto-reply via EWS Inbox Rules (legacy). Prefer `oof` for Graph mailboxSettings automatic replies.'
+  )
   .option('--message <text>', 'The message text for the auto-reply template')
   .option('--enable', 'Enable the auto-reply rule')
   .option('--disable', 'Disable the auto-reply rule')

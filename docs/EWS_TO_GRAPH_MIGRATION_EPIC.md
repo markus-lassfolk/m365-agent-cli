@@ -1,6 +1,6 @@
 # Epic: Migrate Exchange Web Services (EWS) to Microsoft Graph
 
-**Status:** In progress — **`dev_v2`** adds **`M365_EXCHANGE_BACKEND`** (`graph` \| `ews` \| `auto`, default **`graph`**) and **`whoami` → Graph `/me`**; other mail/calendar commands still **EWS-primary** until wired. Tracker: **[`docs/GRAPH_V2_STATUS.md`](./GRAPH_V2_STATUS.md)**.  
+**Status:** In progress — **`dev_v2`** uses **`M365_EXCHANGE_BACKEND`** (`graph` \| `ews` \| `auto`, default **`graph`**) and Graph-first mail/calendar flows per **[`docs/GRAPH_V2_STATUS.md`](./GRAPH_V2_STATUS.md)** (EWS remains for gaps and `ews` / `auto` fallback). **🟢 / 🟡 / 🔴 command matrix:** **[`docs/MIGRATION_TRACKING.md`](./MIGRATION_TRACKING.md)**.  
 **GitHub Epic:** [#204 — EWS → Microsoft Graph migration](https://github.com/markus-lassfolk/m365-agent-cli/issues/204) (sub-issues under the epic)  
 **Driver:** [Exchange Online retirement of EWS](https://learn.microsoft.com/en-us/graph/migrate-exchange-web-services-overview) (phased; confirm dates in Microsoft docs and Message Center).  
 **Strategy:** Phased migration with **Microsoft Graph as the primary implementation** and **EWS as fallback** until each slice is verified; then remove EWS for that slice.
@@ -9,27 +9,11 @@
 
 ## Code review snapshot (2026-04-02)
 
-**Already on Microsoft Graph (REST / SDK paths)** — these commands use **`resolveGraphAuth`** and Graph clients, not EWS SOAP:
+**`M365_EXCHANGE_BACKEND`** (`graph` \| `ews` \| `auto`, default **`graph`** on `dev_v2`) is implemented in **`src/lib/exchange-backend.ts`**. See **[`GRAPH_V2_STATUS.md`](./GRAPH_V2_STATUS.md)** for the live matrix.
 
-- **Calendar (parallel surface):** `graph-calendar` — calendars, `calendarView`, get event, accept/decline/tentative (`graph-calendar-client`, `graph-event`).
-- **Mail (parallel surface):** `outlook-graph` — mail folders, mailbox-wide `list-mail`, sendMail, patch/move/copy/delete, attachments, reply/reply-all/forward drafts, send-message, contacts (`outlook-graph-client`).
-- **Schedule / meetings:** `schedule` (`getSchedule`), `suggest` (`findMeetingTimes`); **`forward-event`**, **`counter`** (event forward / propose new time).
-- **Mailbox / org:** `oof`, `rules`, `outlook-categories`, `verify-token` (Graph token check).
-- **Directory / places:** `find`, `rooms`.
-- **Drive / SharePoint / pages:** `files`, `sharepoint`, `site-pages`.
-- **Planner:** `planner` (`planner-client` — Graph + beta roster).
-- **To Do:** `todo` — almost entirely Graph (`todo-client`); **still uses EWS `getEmail`** for one **link-to-message** style path (see inventory).
-- **Subscriptions:** `subscribe`, `subscriptions` (`graph-subscriptions`).
+**Graph-first when backend is `graph` or `auto` (non-exhaustive):** `whoami` (`/me`), `calendar` (calendarView), `findtime` (findMeetingTimes), `mail` (list + read), `send`, `folders`, `drafts` (list), `create-event` / `update-event` / `delete-event`, `respond`, `todo create --link` (GET message), `delegates list` (calendarPermissions). **`auto-reply`** remains EWS; **`oof`** is the Graph path for automatic replies (help text on `auto-reply` points to Graph).
 
-**Still EWS-primary for the “main” product commands** (user-facing `calendar`, `mail`, `send`, `drafts`, `folders`, `create-event`, `update-event`, `delete-event`, `respond`, etc.):
-
-- **`ews-client.ts`** remains the implementation for those flows; **`resolveAuth`** + refresh token cache.
-- **`findtime`** — still **`getScheduleViaOutlook`** (EWS), not Graph (use **`schedule`** / **`suggest`** for Graph scheduling).
-- **`whoami`** — **`getOwaUserInfo`** (EWS); not `/me` Graph.
-- **`delegates`**, **`auto-reply`** — EWS-only commands today.
-- **No unified `graph` | `ews` | `auto` backend switch** — users pick **EWS commands** vs **Graph commands** (`outlook-graph`, `graph-calendar`) explicitly.
-
-**Quality / ops:** GlitchTip uses Sentry SDK with release from package version; eligibility gate ties npm + git tag (see `docs/GLITCHTIP.md`).
+**EWS still used** where noted in `GRAPH_V2_STATUS.md` (e.g. some `mail` / `drafts` mutations, `delegates` add/update/remove, `auto-reply`, full `calendar` attachment download paths, optional `auto` fallback).
 
 ---
 
@@ -73,23 +57,23 @@ Until a slice is marked **EWS removed**, implementations should follow a consist
 
 | Area | Commands / modules | Graph direction | Notes | Issue | Status |
 | --- | --- | --- | --- | --- | --- |
-| Phase 0 foundation | Router, env, Azure scopes inventory | — | **Not implemented:** no `M365_*_BACKEND` / `auto` router yet | [#205](https://github.com/markus-lassfolk/m365-agent-cli/issues/205) | 🟡 Epic + issues exist; router TBD |
-| Calendar read | `calendar` | `GET calendarView` / shared calendars | **Default `calendar` still EWS.** **`graph-calendar`** adds Graph list/view/get + invite responses | [#206](https://github.com/markus-lassfolk/m365-agent-cli/issues/206) | 🟡 Graph parallel path ✅; switch default ⬜ |
-| Free-busy / findtime | `findtime`, parts of schedule | `calendar/getSchedule` | **`schedule`** = Graph `getSchedule` ✅. **`suggest`** = `findMeetingTimes` ✅. **`findtime`** still **`getScheduleViaOutlook`** (EWS) | [#207](https://github.com/markus-lassfolk/m365-agent-cli/issues/207) | 🟡 |
-| Whoami | `whoami` | `/me` (+ optional mailboxSettings) | **`dev_v2`:** Graph `/me` when `M365_EXCHANGE_BACKEND=graph` or `auto`; EWS when `ews` | [#208](https://github.com/markus-lassfolk/m365-agent-cli/issues/208) | 🟡 |
-| Mail CRUD + actions | `mail` | Messages, move, patch, send | **`dev_v2`:** Graph **list + read** when `M365_EXCHANGE_BACKEND=graph`/`auto`; other subcommands EWS | [#209](https://github.com/markus-lassfolk/m365-agent-cli/issues/209) | 🟡 |
-| Send | `send` | `sendMail` / draft send | **`dev_v2`:** Graph `sendMail` (+ file attach); link attach → EWS or `auto` | [#210](https://github.com/markus-lassfolk/m365-agent-cli/issues/210) | 🟡 |
-| Drafts | `drafts` | Graph draft messages | **`dev_v2`:** Graph **list**; create/edit/send/read still EWS | [#211](https://github.com/markus-lassfolk/m365-agent-cli/issues/211) | 🟡 |
-| Folders | `folders` | mailFolders | **`dev_v2`:** Graph CRUD + recursive list | [#212](https://github.com/markus-lassfolk/m365-agent-cli/issues/212) | 🟡 |
-| Todo link | `todo --link` | `getEmail` → Graph get message | **`getEmail`** still EWS in `todo.ts` | [#213](https://github.com/markus-lassfolk/m365-agent-cli/issues/213) | 🟡 |
-| Calendar write | `create-event`, `update-event`, `delete-event` | Events API + online meetings | EWS | [#214](https://github.com/markus-lassfolk/m365-agent-cli/issues/214) | ⬜ |
-| Meeting response | `respond` | Accept/decline/tentative via Graph | **`respond`** EWS. **`graph-calendar` accept\|decline\|tentative** Graph ✅ | [#215](https://github.com/markus-lassfolk/m365-agent-cli/issues/215) | 🟡 |
-| Forward / counter | `forward-event`, `counter` | Event forward / propose times | **Graph** (`graph-event`) ✅ | [#216](https://github.com/markus-lassfolk/m365-agent-cli/issues/216) | ✅ |
-| Auto-reply (EWS) | `auto-reply` | Deprecate in favor of Graph `oof` / mailboxSettings | **`oof`** Graph ✅; **`auto-reply`** EWS | [#217](https://github.com/markus-lassfolk/m365-agent-cli/issues/217) | 🟡 |
-| Delegates | `delegates`, `delegate-client.ts` | Calendar permission / share APIs | EWS only | [#218](https://github.com/markus-lassfolk/m365-agent-cli/issues/218) | ⬜ |
-| Auth | `auth.ts`, env `EWS_*` | Single token + Graph scopes | Dual **EWS** + **Graph** caches; `graph-auth` | [#219](https://github.com/markus-lassfolk/m365-agent-cli/issues/219) | 🟡 |
-| Tests / mocks | `src/test/mocks`, integration tests | Graph-shaped mocks | Mixed | [#220](https://github.com/markus-lassfolk/m365-agent-cli/issues/220) | 🟡 |
-| Docs | README, ENTRA_SETUP, SKILL | Remove EWS setup when cut over | Updated for Graph commands; full cutover TBD | [#221](https://github.com/markus-lassfolk/m365-agent-cli/issues/221) | 🟡 |
+| Phase 0 foundation | Router, env, Azure scopes inventory | — | **`M365_EXCHANGE_BACKEND`** + `exchange-backend.ts`; scopes table under Phase 0 below | [#205](https://github.com/markus-lassfolk/m365-agent-cli/issues/205) | 🟡 |
+| Calendar read | `calendar` | `GET calendarView` / shared calendars | Graph when `graph`/`auto`; EWS fallback / attachment paths per status doc | [#206](https://github.com/markus-lassfolk/m365-agent-cli/issues/206) | 🟡 |
+| Free-busy / findtime | `findtime`, parts of schedule | `findMeetingTimes` / `getSchedule` | **`findtime`** uses Graph `findMeetingTimes` when `graph`/`auto`; EWS `getScheduleViaOutlook` when `ews` | [#207](https://github.com/markus-lassfolk/m365-agent-cli/issues/207) | 🟡 |
+| Whoami | `whoami` | `/me` (+ optional mailboxSettings) | Graph `/me` when `graph`/`auto`; EWS when `ews` | [#208](https://github.com/markus-lassfolk/m365-agent-cli/issues/208) | 🟡 |
+| Mail CRUD + actions | `mail` | Messages, move, patch, send | Graph **list + read** when `graph`/`auto`; other subcommands EWS or error on `graph` | [#209](https://github.com/markus-lassfolk/m365-agent-cli/issues/209) | 🟡 |
+| Send | `send` | `sendMail` / draft send | Graph `sendMail` (+ file attach); `--attach-link` not on Graph | [#210](https://github.com/markus-lassfolk/m365-agent-cli/issues/210) | 🟡 |
+| Drafts | `drafts` | Graph draft messages | Graph **list**; other flows EWS | [#211](https://github.com/markus-lassfolk/m365-agent-cli/issues/211) | 🟡 |
+| Folders | `folders` | mailFolders | Graph CRUD + recursive list when `graph`/`auto` | [#212](https://github.com/markus-lassfolk/m365-agent-cli/issues/212) | 🟡 |
+| Todo link | `todo --link` | Graph get message | **`getMessage`** (`outlook-graph-client`) for `todo create --link` | [#213](https://github.com/markus-lassfolk/m365-agent-cli/issues/213) | 🟡 |
+| Calendar write | `create-event`, `update-event`, `delete-event` | Events API + online meetings | Graph paths when `graph`/`auto` (see status doc for unsupported flags) | [#214](https://github.com/markus-lassfolk/m365-agent-cli/issues/214) | 🟡 |
+| Meeting response | `respond` | Accept/decline/tentative via Graph | Graph when `graph`/`auto` | [#215](https://github.com/markus-lassfolk/m365-agent-cli/issues/215) | 🟡 |
+| Forward / counter | `forward-event`, `counter` | Event forward / propose times | **Graph** (`graph-event`) | [#216](https://github.com/markus-lassfolk/m365-agent-cli/issues/216) | ✅ |
+| Auto-reply (EWS) | `auto-reply` | Deprecate in favor of Graph `oof` / mailboxSettings | **`oof`** Graph; **`auto-reply`** EWS (help text prefers `oof`) | [#217](https://github.com/markus-lassfolk/m365-agent-cli/issues/217) | 🟡 |
+| Delegates | `delegates`, `delegate-client.ts` | Calendar permission / share APIs | **`list`:** Graph `calendarPermissions` when `graph`; **`list`:** Graph then EWS when `auto`; **mutations:** EWS (`graph` mode blocks) | [#218](https://github.com/markus-lassfolk/m365-agent-cli/issues/218) | 🟡 |
+| Auth | `auth.ts`, `graph-auth.ts`, `m365-token-cache.ts` | Unified cache + `M365_REFRESH_TOKEN` | One `token-cache-{identity}.json` (EWS + Graph slots); legacy env names supported | [#219](https://github.com/markus-lassfolk/m365-agent-cli/issues/219) | ✅ |
+| Tests / mocks | `src/test/mocks`, integration tests | Graph-shaped mocks | Mixed; `cli.integration.test` Graph backend cases | [#220](https://github.com/markus-lassfolk/m365-agent-cli/issues/220) | 🟡 |
+| Docs | README, ENTRA_SETUP, SKILL | Remove EWS setup when cut over | [`ENTRA_SETUP.md`](./ENTRA_SETUP.md) lists Graph + EWS; Phase 6 cutover | [#221](https://github.com/markus-lassfolk/m365-agent-cli/issues/221) | 🟡 |
 
 **Other Graph-only domains (not in original rows):** `planner`, `todo` (core), `files`, `sharepoint`, `site-pages`, `find`, `rooms`, `subscribe` / `subscriptions` — **no EWS** in those paths.
 
@@ -104,16 +88,23 @@ Legend: ⬜ not started / EWS-only · 🟡 in progress / partial Graph · ✅ do
 - [x] Create GitHub Epic + child issues from inventory table ([#204](https://github.com/markus-lassfolk/m365-agent-cli/issues/204), [#205](https://github.com/markus-lassfolk/m365-agent-cli/issues/205)–[#221](https://github.com/markus-lassfolk/m365-agent-cli/issues/221))  
 - [x] Env var **`M365_EXCHANGE_BACKEND`** + module **`exchange-backend.ts`** (default **`graph`** on `dev_v2`) — see [`GRAPH_V2_STATUS.md`](./GRAPH_V2_STATUS.md)  
 - [ ] Agree default for **`main`** after merge (`graph` vs `auto`)  
-- [ ] Inventory Azure AD app permissions needed for full Graph parity (mail, calendar, mailboxSettings, …)
+- [x] Inventory Azure AD **delegated** permissions (manual setup — see [`ENTRA_SETUP.md`](./ENTRA_SETUP.md); scripts may add subsets):
+
+| API | Delegated permissions (typical full CLI) |
+| --- | --- |
+| Microsoft Graph | `User.Read`, `Calendars.ReadWrite`, `Mail.ReadWrite`, `MailboxSettings.ReadWrite`, `Files.ReadWrite.All`, `Sites.ReadWrite.All`, `Tasks.ReadWrite`, `Group.ReadWrite.All`, `offline_access` |
+| Office 365 Exchange Online | `EWS.AccessAsUser.All` |
+
+`login` / device-code flows may request a combined scope string; `verify-token` validates granted scopes. `graph-auth` refresh uses Graph resource scopes (see `src/lib/graph-auth.ts`).
 
 **Exit:** Epic linked; Phase 1 issue open.
 
 ### Phase 1 — Read-only paths
 
-- [x] `whoami` → Graph (`/me`) when backend is `graph` or `auto` — [ ] other read paths  
-- [x] Graph **parallel** calendar read + invite responses (`graph-calendar`) — default `calendar` still EWS  
-- [x] `schedule` / `suggest` on Graph — [ ] `findtime` still EWS (`getScheduleViaOutlook`)  
-- [ ] Read paths keep EWS fallback via `auto` until verified  
+- [x] `whoami` → Graph (`/me`) when backend is `graph` or `auto`  
+- [x] `calendar` calendarView on Graph when `graph`/`auto`  
+- [x] `schedule` / `suggest` / `findtime` (Graph paths) — `findtime` uses EWS only when `M365_EXCHANGE_BACKEND=ews`  
+- [x] Read paths: EWS fallback via `auto` where implemented  
 
 **Exit:** Default `auto` uses Graph for reads; EWS fallback tested.
 
@@ -126,31 +117,31 @@ Legend: ⬜ not started / EWS-only · 🟡 in progress / partial Graph · ✅ do
 
 ### Phase 3 — Calendar writes + meeting actions
 
-- [ ] `create-event`, `update-event`, `delete-event`  
-- [ ] `respond` — [x] Graph invitation responses on `graph-calendar`  
+- [x] `create-event`, `update-event`, `delete-event` (Graph when `graph`/`auto`; see `GRAPH_V2_STATUS.md` for gaps)  
+- [x] `respond` (Graph when `graph`/`auto`)  
 - [x] `forward-event`, `counter` (Graph)  
 
-**Exit:** Calendar lifecycle on Graph in `auto`.
+**Exit:** Calendar lifecycle on Graph in `auto` (with documented EWS-only flags).
 
 ### Phase 4 — Rules / OOF consolidation
 
 - [x] Inbox rules Graph-only (`rules` today)  
-- [ ] Merge or deprecate `auto-reply` vs `oof`  
+- [x] `oof` = Graph mailbox settings; `auto-reply` documented as legacy (EWS rules)  
 
-**Exit:** No EWS for OOF/rules.
+**Exit:** Users directed to Graph for automatic replies; `auto-reply` optional until EWS removal.
 
 ### Phase 5 — Delegates (redesign)
 
-- [ ] Spike: Graph calendar delegate/share flows vs current CLI UX  
-- [ ] New subcommands or breaking change doc  
-- [ ] Implement; EWS fallback only if still required for gap (document gap)  
+- [x] Spike: `delegates list` uses Graph **`calendar/calendarPermissions`** when `M365_EXCHANGE_BACKEND=graph`  
+- [ ] Full Graph parity for add/update/remove (or document permanent EWS-only mutations)  
+- [x] EWS mutations when `M365_EXCHANGE_BACKEND=ews` or `auto`; blocked when `graph`  
 
 **Exit:** Documented parity or known limitations.
 
 ### Phase 6 — EWS removal
 
 - [ ] Remove `callEws`, `ews-client` usage, SOAP mocks  
-- [ ] Remove `EWS_REFRESH_TOKEN` / separate EWS cache (single Graph auth)  
+- [ ] Remove legacy **`GRAPH_REFRESH_TOKEN` / `EWS_REFRESH_TOKEN`** env aliases (optional; `M365_REFRESH_TOKEN` only)  
 - [ ] Update Entra scripts, README, skills  
 
 **Exit:** No EWS in repo; CI green.
@@ -177,4 +168,4 @@ Legend: ⬜ not started / EWS-only · 🟡 in progress / partial Graph · ✅ do
 
 ---
 
-*Last updated: 2026-04-02 — `dev_v2`: `M365_EXCHANGE_BACKEND` + Graph `whoami`; see [`GRAPH_V2_STATUS.md`](./GRAPH_V2_STATUS.md).*
+*Last updated: 2026-04-02 — `dev_v2`: `M365_EXCHANGE_BACKEND`, Graph-first commands; see [`GRAPH_V2_STATUS.md`](./GRAPH_V2_STATUS.md).*

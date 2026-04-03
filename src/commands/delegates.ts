@@ -9,6 +9,9 @@ import {
   removeDelegate,
   updateDelegate
 } from '../lib/delegate-client.js';
+import { getExchangeBackend } from '../lib/exchange-backend.js';
+import { resolveGraphAuth } from '../lib/graph-auth.js';
+import { type GraphCalendarPermission, listCalendarPermissions } from '../lib/graph-calendar-client.js';
 import { checkReadOnly } from '../lib/utils.js';
 
 const VALID_PERMISSIONS = [
@@ -46,15 +49,88 @@ function formatDelegate(delegate: DelegateInfo): string {
   return lines.join('\n');
 }
 
+function formatGraphCalendarPermission(p: GraphCalendarPermission): string {
+  const addr = p.emailAddress?.address || p.emailAddress?.name || '(unknown)';
+  const lines: string[] = [];
+  lines.push(`  ${addr}`);
+  if (p.role) lines.push(`    role: ${p.role}`);
+  if (p.allowedRoles?.length) lines.push(`    allowedRoles: ${p.allowedRoles.join(', ')}`);
+  if (p.isInsideOrganization !== undefined) lines.push(`    insideOrganization: ${p.isInsideOrganization}`);
+  if (p.isRemovable !== undefined) lines.push(`    removable: ${p.isRemovable}`);
+  return lines.join('\n');
+}
+
+function requireEwsForDelegateMutations(): void {
+  if (getExchangeBackend() === 'graph') {
+    console.error(
+      'Error: add/update/remove delegates require EWS (EWS SOAP). Set M365_EXCHANGE_BACKEND=ews, or manage calendar sharing in Outlook.\n' +
+        'See: https://learn.microsoft.com/en-us/graph/outlook-share-or-delegate-calendar'
+    );
+    process.exit(1);
+  }
+}
+
 // ─── list ───
 
 const listCommand = new Command('list');
 listCommand
-  .description('List all delegates on the mailbox')
+  .description('List calendar sharing permissions (Graph) or EWS delegates, per M365_EXCHANGE_BACKEND')
   .option('--mailbox <email>', 'mailbox (shared/alternative primary)')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Use a specific authentication identity (default: default)')
   .action(async (opts: { mailbox?: string; token?: string; identity?: string }) => {
+    const backend = getExchangeBackend();
+
+    if (backend === 'graph') {
+      const ga = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!ga.success || !ga.token) {
+        console.error('Auth failed:', ga.error);
+        process.exit(1);
+      }
+      const result = await listCalendarPermissions(ga.token, opts.mailbox);
+      if (!result.ok || !result.data) {
+        console.error('Failed to list calendar permissions:', result.error?.message);
+        process.exit(1);
+      }
+      const rows = result.data.filter((p) => {
+        const role = (p.role || '').toLowerCase();
+        return role !== 'freebusyread' && role !== 'none';
+      });
+      if (rows.length === 0) {
+        console.log('No calendar permissions (Graph) — only free/busy or default entries.');
+        return;
+      }
+      console.log(`Calendar permissions — Microsoft Graph (${rows.length}):\n`);
+      for (const p of rows) {
+        console.log(formatGraphCalendarPermission(p));
+        console.log();
+      }
+      return;
+    }
+
+    if (backend === 'auto') {
+      const ga = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (ga.success && ga.token) {
+        const result = await listCalendarPermissions(ga.token, opts.mailbox);
+        if (result.ok && result.data) {
+          const rows = result.data.filter((p) => {
+            const role = (p.role || '').toLowerCase();
+            return role !== 'freebusyread' && role !== 'none';
+          });
+          if (rows.length > 0) {
+            console.log(`Calendar permissions — Microsoft Graph (${rows.length}):\n`);
+            for (const p of rows) {
+              console.log(formatGraphCalendarPermission(p));
+              console.log();
+            }
+            return;
+          }
+        } else if (!result.ok) {
+          console.warn(`[delegates list] Graph failed (${result.error?.message}); falling back to EWS.`);
+        }
+      }
+    }
+
     const auth = await resolveAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success || !auth.token) {
       console.error('Auth failed:', auth.error);
@@ -69,11 +145,11 @@ listCommand
 
     const delegates = result.data ?? [];
     if (delegates.length === 0) {
-      console.log('No delegates configured.');
+      console.log('No delegates configured (EWS).');
       return;
     }
 
-    console.log(`Delegates (${delegates.length}):\n`);
+    console.log(`Delegates — EWS (${delegates.length}):\n`);
     for (const d of delegates) {
       console.log(formatDelegate(d));
       console.log();
@@ -116,6 +192,7 @@ addCommand
       cmd: any
     ) => {
       checkReadOnly(cmd);
+      requireEwsForDelegateMutations();
       // Validate permission levels
       const perms: DelegatePermissions = {};
       for (const folder of VALID_FOLDERS) {
@@ -196,6 +273,7 @@ updateCommand
       cmd: any
     ) => {
       checkReadOnly(cmd);
+      requireEwsForDelegateMutations();
       const permsOut: DelegatePermissions = {};
       let hasPerms = false;
 
@@ -255,6 +333,7 @@ removeCommand
   .option('--identity <name>', 'Use a specific authentication identity (default: default)')
   .action(async (opts: { email: string; mailbox?: string; token?: string; identity?: string }, cmd: any) => {
     checkReadOnly(cmd);
+    requireEwsForDelegateMutations();
     const auth = await resolveAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success || !auth.token) {
       console.error('Auth failed:', auth.error);
@@ -279,7 +358,7 @@ removeCommand
 
 export const delegatesCommand = new Command('delegates');
 delegatesCommand
-  .description('Manage delegates via EWS SOAP (list, add, update, remove)')
+  .description('Delegates: list (Graph calendar permissions or EWS); add/update/remove (EWS — set M365_EXCHANGE_BACKEND=ews or auto)')
   .addCommand(listCommand)
   .addCommand(addCommand)
   .addCommand(updateCommand)

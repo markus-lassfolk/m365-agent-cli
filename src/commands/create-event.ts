@@ -16,8 +16,16 @@ import {
   SENSITIVITY_MAP,
   searchRooms
 } from '../lib/ews-client.js';
+import { getExchangeBackend } from '../lib/exchange-backend.js';
+import {
+  findFirstAvailableRoomGraph,
+  listGraphRooms,
+  resolveRoomDisplayNameToPlace
+} from '../lib/graph-places-helpers.js';
+import { resolveGraphAuth } from '../lib/graph-auth.js';
 import { lookupMimeType } from '../lib/mime-type.js';
 import { checkReadOnly } from '../lib/utils.js';
+import { createEventViaGraph } from './create-event-graph.js';
 
 function formatTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -93,24 +101,86 @@ export const createEventCommand = new Command('create-event')
       cmd: any
     ) => {
       checkReadOnly(cmd);
-      const authResult = await resolveAuth({
-        token: options.token,
-        identity: options.identity
-      });
+      const backend = getExchangeBackend();
 
-      if (!authResult.success) {
-        if (options.json) {
-          console.log(JSON.stringify({ error: authResult.error }, null, 2));
-        } else {
-          console.error(`Error: ${authResult.error}`);
-          console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
-        }
-        process.exit(1);
-      }
-
-      // Handle --list-rooms
+      // Handle --list-rooms (Graph when graph/auto, else EWS)
       if (options.listRooms) {
-        console.log('\nFetching available meeting rooms...\n');
+        if (backend === 'graph' || backend === 'auto') {
+          const ga = await resolveGraphAuth({
+            token: options.token,
+            identity: options.identity
+          });
+          if (ga.success && ga.token) {
+            const lr = await listGraphRooms(ga.token);
+            if (lr.ok && lr.data && lr.data.length > 0) {
+              const sorted = [...lr.data].sort((a, b) =>
+                (a.displayName || '').localeCompare(b.displayName || '', undefined, { sensitivity: 'base' })
+              );
+              if (options.json) {
+                console.log(
+                  JSON.stringify(
+                    {
+                      backend: 'graph',
+                      rooms: sorted.map((r) => ({
+                        name: r.displayName,
+                        email: r.emailAddress
+                      }))
+                    },
+                    null,
+                    2
+                  )
+                );
+              } else {
+                console.log('\nFetching available meeting rooms (Microsoft Graph)...\n');
+                console.log('Available rooms:');
+                for (const room of sorted) {
+                  const em = room.emailAddress?.trim();
+                  console.log(em ? `  - ${room.displayName} (${em})` : `  - ${room.displayName}`);
+                }
+              }
+              return;
+            }
+            if (backend === 'graph') {
+              if (options.json) {
+                console.log(
+                  JSON.stringify(
+                    { error: lr.error?.message || 'No rooms returned', rooms: [] },
+                    null,
+                    2
+                  )
+                );
+              } else {
+                console.log(lr.error?.message || "No meeting rooms found or Places API returned no data.");
+                console.log('You can still specify a room by email address with --room <email>');
+              }
+              return;
+            }
+          } else if (backend === 'graph') {
+            if (options.json) {
+              console.log(JSON.stringify({ error: ga.error || 'Graph authentication failed' }, null, 2));
+            } else {
+              console.error(`Error: ${ga.error || 'Graph authentication failed'}`);
+            }
+            process.exit(1);
+          }
+        }
+
+        const authResult = await resolveAuth({
+          token: options.token,
+          identity: options.identity
+        });
+
+        if (!authResult.success) {
+          if (options.json) {
+            console.log(JSON.stringify({ error: authResult.error }, null, 2));
+          } else {
+            console.error(`Error: ${authResult.error}`);
+            console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
+          }
+          process.exit(1);
+        }
+
+        console.log('\nFetching available meeting rooms (EWS)...\n');
 
         // Search with multiple queries to find more rooms
         const allRooms = new Map<string, { Name: string; Address: string }>();
@@ -214,55 +284,129 @@ export const createEventCommand = new Command('create-event')
       const attendees: Array<{ email: string; name?: string; type?: 'Required' | 'Optional' | 'Resource' }> =
         options.attendees ? options.attendees.split(',').map((e) => ({ email: e.trim() })) : [];
 
-      // Handle --find-room: find an available room
+      const roomNeedsEwsLookup = Boolean(options.room && !options.room.includes('@'));
+
       let roomEmail: string | undefined;
       let roomName: string | undefined;
+      let ewsToken: string | undefined;
 
-      if (options.findRoom) {
-        console.log('Searching for available rooms...');
-
-        const roomsResult = await getRooms(authResult.token!);
-
-        if (!roomsResult.ok || !roomsResult.data || roomsResult.data.length === 0) {
-          console.error('Could not fetch room list.');
-        } else {
-          // Batch check all rooms in a single EWS request
-          const roomEmails = roomsResult.data.map((r) => r.Address);
-          const freeMap = await areRoomsFree(authResult.token!, roomEmails, start.toISOString(), end.toISOString());
-
-          for (const room of roomsResult.data) {
-            if (freeMap.get(room.Address)) {
-              roomEmail = room.Address;
-              roomName = room.Name;
-              console.log(`Found available room: ${room.Name}`);
-              break;
+      if (options.findRoom || options.room) {
+        if (backend === 'graph' || backend === 'auto') {
+          const ga = await resolveGraphAuth({
+            token: options.token,
+            identity: options.identity
+          });
+          if (ga.success && ga.token) {
+            if (options.findRoom) {
+              if (!options.json) {
+                console.log('Searching for available rooms...');
+              }
+              const fr = await findFirstAvailableRoomGraph(ga.token, start, end);
+              if (fr) {
+                roomEmail = fr.email;
+                roomName = fr.name;
+                if (!options.json) {
+                  console.log(`Found available room: ${fr.name}`);
+                }
+              }
+            } else if (options.room!.includes('@')) {
+              roomEmail = options.room;
+              roomName = options.room;
+            } else {
+              const res = await resolveRoomDisplayNameToPlace(ga.token, options.room!);
+              if (res.ok) {
+                roomEmail = res.place.emailAddress!.trim();
+                roomName = res.place.displayName;
+              } else if (backend === 'graph') {
+                if (options.json) {
+                  console.log(JSON.stringify({ error: res.error }, null, 2));
+                } else {
+                  console.error(`Error: ${res.error}`);
+                }
+                process.exit(1);
+              }
             }
-          }
-
-          if (!roomEmail) {
-            console.log('No available rooms found for this time slot.');
+          } else if (backend === 'graph') {
+            if (options.json) {
+              console.log(JSON.stringify({ error: ga.error || 'Graph authentication failed' }, null, 2));
+            } else {
+              console.error(`Error: ${ga.error || 'Graph authentication failed'}`);
+            }
+            process.exit(1);
           }
         }
-      } else if (options.room) {
-        // User specified a room - could be name or email
-        roomName = options.room;
-        // If it looks like an email, use it directly
-        if (options.room.includes('@')) {
-          roomEmail = options.room;
-        } else {
-          // Try to find the room by name - search for it
-          let roomsResult = await searchRooms(authResult.token!, options.room);
-          if (!roomsResult.ok || !roomsResult.data || roomsResult.data.length === 0) {
-            roomsResult = await getRooms(authResult.token!);
-          }
 
-          if (roomsResult.ok && roomsResult.data) {
-            const found = roomsResult.data.find((r) =>
-              options.room ? r.Name.toLowerCase().includes(options.room.toLowerCase()) : false
-            );
-            if (found) {
-              roomEmail = found.Address;
-              roomName = found.Name;
+        if (backend === 'ews' && options.room?.includes('@')) {
+          roomEmail = options.room;
+          roomName = options.room;
+        }
+
+        const needEwsRoom =
+          backend === 'ews'
+            ? !!(options.findRoom || roomNeedsEwsLookup)
+            : backend === 'auto' && !!(options.findRoom || roomNeedsEwsLookup) && !roomEmail;
+
+        if (needEwsRoom) {
+          const ar = await resolveAuth({
+            token: options.token,
+            identity: options.identity
+          });
+          if (!ar.success) {
+            if (options.json) {
+              console.log(JSON.stringify({ error: ar.error }, null, 2));
+            } else {
+              console.error(`Error: ${ar.error}`);
+              console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
+            }
+            process.exit(1);
+          }
+          const ewsTok = ar.token!;
+          ewsToken = ewsTok;
+
+          if (options.findRoom && !roomEmail) {
+            if (!options.json) {
+              console.log('Searching for available rooms (EWS)...');
+            }
+
+            const roomsResult = await getRooms(ewsTok);
+
+            if (!roomsResult.ok || !roomsResult.data || roomsResult.data.length === 0) {
+              console.error('Could not fetch room list.');
+            } else {
+              const roomEmails = roomsResult.data.map((r) => r.Address);
+              const freeMap = await areRoomsFree(ewsTok, roomEmails, start.toISOString(), end.toISOString());
+
+              for (const room of roomsResult.data) {
+                if (freeMap.get(room.Address)) {
+                  roomEmail = room.Address;
+                  roomName = room.Name;
+                  if (!options.json) {
+                    console.log(`Found available room: ${room.Name}`);
+                  }
+                  break;
+                }
+              }
+
+              if (!roomEmail && !options.json) {
+                console.log('No available rooms found for this time slot.');
+              }
+            }
+          } else if (options.room && !options.room.includes('@') && !roomEmail) {
+            const roomQuery = options.room;
+            roomName = roomQuery;
+            let roomsResult = await searchRooms(ewsToken!, roomQuery);
+            if (!roomsResult.ok || !roomsResult.data || roomsResult.data.length === 0) {
+              roomsResult = await getRooms(ewsToken!);
+            }
+
+            if (roomsResult.ok && roomsResult.data) {
+              const found = roomsResult.data.find((r) =>
+                r.Name.toLowerCase().includes(roomQuery.toLowerCase())
+              );
+              if (found) {
+                roomEmail = found.Address;
+                roomName = found.Name;
+              }
             }
           }
         }
@@ -423,9 +567,163 @@ export const createEventCommand = new Command('create-event')
         }
       }
 
-      // Create the event
+      const tryGraphFirst = backend === 'graph' || backend === 'auto';
+
+      if (tryGraphFirst) {
+        const ga = await resolveGraphAuth({
+          token: options.token,
+          identity: options.identity
+        });
+        if (ga.success && ga.token) {
+          const gr = await createEventViaGraph({
+            token: ga.token,
+            mailbox: options.mailbox,
+            subject: title,
+            body: options.description,
+            start,
+            end,
+            allDay: options.allDay ?? false,
+            timezoneName: options.timezone,
+            attendees,
+            teams: options.teams ?? false,
+            locationDisplay: roomName,
+            sensitivity,
+            categories: options.category && options.category.length > 0 ? options.category : undefined,
+            recurrence,
+            fileAttachments,
+            referenceAttachments: referenceAttachments?.map((a) => ({ name: a.name, sourceUrl: a.url }))
+          });
+
+          if (gr.ok) {
+            const ev = gr.event;
+            const joinUrl = ev.onlineMeeting?.joinUrl;
+            if (options.json) {
+              console.log(
+                JSON.stringify(
+                  {
+                    success: true,
+                    backend: 'graph',
+                    event: {
+                      id: ev.id,
+                      changeKey: ev.changeKey,
+                      subject: ev.subject,
+                      start: ev.start?.dateTime,
+                      end: ev.end?.dateTime,
+                      webLink: ev.webLink,
+                      onlineMeetingUrl: joinUrl,
+                      recurring: !!recurrence,
+                      recurrence: recurrence
+                        ? {
+                            type: recurrence.Pattern.Type,
+                            interval: recurrence.Pattern.Interval,
+                            daysOfWeek: recurrence.Pattern.DaysOfWeek,
+                            endType: recurrence.Range.Type,
+                            endDate: recurrence.Range.EndDate,
+                            occurrences: recurrence.Range.NumberOfOccurrences
+                          }
+                        : undefined
+                    }
+                  },
+                  null,
+                  2
+                )
+              );
+              return;
+            }
+
+            console.log('\n\u2713 Event created successfully!\n');
+            console.log('  Created via: Microsoft Graph');
+            console.log(`  Title: ${ev.subject ?? title}`);
+            const st = ev.start?.dateTime ?? '';
+            const en = ev.end?.dateTime ?? '';
+            if (st && en) {
+              console.log(`  When:  ${formatDate(st)} ${formatTime(st)} - ${formatTime(en)}`);
+            }
+            if (roomName) {
+              console.log(`  Room:  ${roomName}`);
+            }
+            if (attendees.length > 0) {
+              const nonRoomAttendees = attendees.filter((a) => a.type !== 'Resource');
+              if (nonRoomAttendees.length > 0) {
+                console.log(`  Attendees: ${nonRoomAttendees.map((a) => a.email).join(', ')}`);
+              }
+            }
+            if (joinUrl) {
+              console.log(`  Teams: ${joinUrl}`);
+            }
+            if (ev.webLink) {
+              console.log(`  Link:  ${ev.webLink}`);
+            }
+            if (recurrence) {
+              let recurrenceDesc = `Every ${recurrence.Pattern.Interval > 1 ? `${recurrence.Pattern.Interval} ` : ''}`;
+              switch (recurrence.Pattern.Type) {
+                case 'Daily':
+                  recurrenceDesc += recurrence.Pattern.Interval > 1 ? 'days' : 'day';
+                  break;
+                case 'Weekly':
+                  recurrenceDesc += recurrence.Pattern.Interval > 1 ? 'weeks' : 'week';
+                  if (recurrence.Pattern.DaysOfWeek) {
+                    recurrenceDesc += ` on ${recurrence.Pattern.DaysOfWeek.join(', ')}`;
+                  }
+                  break;
+                case 'AbsoluteMonthly':
+                  recurrenceDesc += recurrence.Pattern.Interval > 1 ? 'months' : 'month';
+                  break;
+                case 'AbsoluteYearly':
+                  recurrenceDesc += recurrence.Pattern.Interval > 1 ? 'years' : 'year';
+                  break;
+              }
+              if (recurrence.Range.Type === 'EndDate' && recurrence.Range.EndDate) {
+                recurrenceDesc += ` until ${recurrence.Range.EndDate}`;
+              } else if (recurrence.Range.Type === 'Numbered' && recurrence.Range.NumberOfOccurrences) {
+                recurrenceDesc += ` (${recurrence.Range.NumberOfOccurrences} occurrences)`;
+              }
+              console.log(`  Repeat: ${recurrenceDesc}`);
+            }
+            console.log();
+            return;
+          }
+          if (backend === 'graph') {
+            if (options.json) {
+              console.log(JSON.stringify({ error: gr.error }, null, 2));
+            } else {
+              console.error(`Error: ${gr.error}`);
+            }
+            process.exit(1);
+          }
+          if (!options.json) {
+            console.warn(`[create-event] Graph failed (${gr.error}); falling back to EWS.`);
+          }
+        } else if (backend === 'graph') {
+          if (options.json) {
+            console.log(JSON.stringify({ error: ga.error || 'Graph authentication failed' }, null, 2));
+          } else {
+            console.error(`Error: ${ga.error || 'Graph authentication failed'}`);
+          }
+          process.exit(1);
+        }
+      }
+
+      if (!ewsToken) {
+        const ar = await resolveAuth({
+          token: options.token,
+          identity: options.identity
+        });
+        if (!ar.success) {
+          if (options.json) {
+            console.log(JSON.stringify({ error: ar.error }, null, 2));
+          } else {
+            console.error(`Error: ${ar.error}`);
+            console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
+          }
+          process.exit(1);
+        }
+        ewsToken = ar.token;
+      }
+
+      // Create the event (EWS)
       const result = await createEvent({
-        token: authResult.token!,
+        token: ewsToken!,
         subject: title,
         start: options.timezone ? toLocalUnzonedISOString(start) : toUTCISOString(start),
         end: options.timezone ? toLocalUnzonedISOString(end) : toUTCISOString(end),
@@ -457,6 +755,7 @@ export const createEventCommand = new Command('create-event')
           JSON.stringify(
             {
               success: true,
+              backend: 'ews',
               event: {
                 id: result.data.Id,
                 changeKey: result.data.ChangeKey,

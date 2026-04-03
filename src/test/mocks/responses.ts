@@ -781,6 +781,38 @@ export const mockIsRoomFreeResponse = soapResponse(`
   </m:GetRoomListsResponse>
 `);
 
+// ─── Graph API (user + calendar — CLI integration with M365_EXCHANGE_BACKEND=graph) ─
+
+export const mockGraphMeResponse = {
+  displayName: 'Graph Test User',
+  mail: 'graph.user@example.com',
+  userPrincipalName: 'graph.user@example.com'
+};
+
+export const mockGraphCalendarViewResponse = {
+  value: [
+    {
+      id: 'graph-cal-event-1',
+      subject: 'Standup',
+      isOrganizer: true,
+      isCancelled: false,
+      start: { dateTime: '2026-04-01T09:00:00.0000000', timeZone: 'UTC' },
+      end: { dateTime: '2026-04-01T09:30:00.0000000', timeZone: 'UTC' },
+      organizer: { emailAddress: { address: 'graph.user@example.com', name: 'Graph Test User' } }
+    }
+  ]
+};
+
+export const mockGraphEventDetailResponse = {
+  id: 'graph-cal-event-1',
+  subject: 'Standup',
+  isOrganizer: true,
+  changeKey: 'ck1',
+  start: { dateTime: '2026-04-01T09:00:00.0000000', timeZone: 'UTC' },
+  end: { dateTime: '2026-04-01T09:30:00.0000000', timeZone: 'UTC' },
+  organizer: { emailAddress: { address: 'graph.user@example.com' } }
+};
+
 // ─── Graph API (OneDrive/files) ─────────────────────────────────────────────
 
 export const mockGraphListFilesResponse = {

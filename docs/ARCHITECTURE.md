@@ -4,17 +4,15 @@
 
 ### 1. Single Authentication Token
 
-m365-agent-cli authenticates once using **Microsoft OAuth2 (Azure AD)**. A single refresh token is cached and used to obtain access tokens for all APIs.
+m365-agent-cli authenticates using **Microsoft OAuth2 (Azure AD)**. One refresh token (env: **`M365_REFRESH_TOKEN`**, or legacy names) obtains **separate** short-lived access tokens for **EWS** and **Graph** (different resource audiences), stored in one file.
 
-**Current state:** EWS and Graph use separate token caches. This is being consolidated.
+**Implementation:**
+- One Azure AD app registration (`EWS_CLIENT_ID`)
+- One refresh token in env (prefer **`M365_REFRESH_TOKEN`**)
+- One on-disk cache per identity: **`token-cache-{identity}.json`** (v1: `ews` + `graph` access slots + optional refresh metadata)
+- Incremental consent: new API scopes are added to the app; user re-runs `login` or consent when needed
 
-**Target state:**
-- One Azure AD app registration
-- One refresh token
-- One token cache file (`~/.config/m365-agent-cli/token-cache.json`)
-- Incremental consent: new API scopes are added to the existing app without requiring re-authentication
-
-*Note: The current implementation uses separate caches (`token-cache-{identity}.json` for EWS and `graph-token-cache-{identity}.json` for Graph, default identity `default`) and separate refresh tokens (`EWS_REFRESH_TOKEN` and `GRAPH_REFRESH_TOKEN`). A legacy `graph-token-cache.json` may be migrated to `graph-token-cache-default.json`. The single-token approach described here is a target-state design.*
+Legacy **`graph-token-cache-*.json`** files are merged into the unified cache on load and removed after save.
 
 **API priority:**
 1. **Microsoft Graph REST** — preferred for new features (cleaner, modern)
@@ -47,7 +45,7 @@ m365-agent-cli must not hardcode user-specific settings. These must always be re
 The token cache file is the most sensitive file on disk.
 
 - Directory: `~/.config/m365-agent-cli/` — created with `0o700` (owner-only)
-- Token files: `token-cache-{identity}.json` (EWS) and `graph-token-cache-{identity}.json` (Graph) — written with `0o600` (owner-only read/write)
+- Token file: `token-cache-{identity}.json` (unified EWS + Graph slots) — written with `0o600` (owner-only read/write)
 - Cache path uses `homedir()` — never a configurable path that could redirect to arbitrary locations
 - Refresh token failures are silently tolerated — m365-agent-cli fails gracefully with an auth error rather than crashing
 
@@ -63,19 +61,17 @@ The token cache file is the most sensitive file on disk.
 ```
 User sets env vars:
   EWS_CLIENT_ID         — Azure AD app client ID
-  EWS_REFRESH_TOKEN     — OAuth refresh token for EWS
-  GRAPH_REFRESH_TOKEN   — OAuth refresh token for Graph
+  M365_REFRESH_TOKEN    — preferred single OAuth refresh token (Graph + EWS flows after `login`)
+  GRAPH_REFRESH_TOKEN   — legacy alias (same value as `login` output)
+  EWS_REFRESH_TOKEN     — legacy alias (same value as `login` output)
   EWS_USERNAME          — user's email address
   EWS_ENDPOINT          — Exchange Online EWS endpoint (default: outlook.office365.com)
   GRAPH_SCOPES          — optional: additional Graph scopes (incremental consent)
 
 Token cache:
   ~/.config/m365-agent-cli/
-  — `token-cache-{identity}.json` holds EWS access token + refresh token + expiry
-  — `graph-token-cache-{identity}.json` holds Graph access token + refresh token + expiry
-  — on expiry: refresh token is used to obtain a new access token
-
-  *(Target state: A single `token-cache.json` reused for both)*
+  — `token-cache-{identity}.json` — unified v1 cache: EWS access slot, Graph access slot, optional refresh token field
+  — on expiry: the appropriate slot is refreshed via OAuth using the env refresh token (or cached rotation)
 ```
 
 ### Scope Strategy

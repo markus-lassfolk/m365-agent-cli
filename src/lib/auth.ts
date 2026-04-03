@@ -1,8 +1,10 @@
-import { mkdir, readFile, rename, stat } from 'node:fs/promises';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
-import { atomicWriteUtf8File } from './atomic-write.js';
 import { getJwtExpiration, getMicrosoftTenantPathSegment, isValidJwtStructure } from './jwt-utils.js';
+import {
+  getUnifiedRefreshTokenFromEnv,
+  loadM365TokenCache,
+  type M365TokenCacheV1,
+  saveM365TokenCache
+} from './m365-token-cache.js';
 
 export interface AuthResult {
   success: boolean;
@@ -10,70 +12,7 @@ export interface AuthResult {
   error?: string;
 }
 
-interface CachedToken {
-  accessToken: string;
-  refreshToken: string;
-  expiresAt: number;
-}
-
-function assertCachedToken(data: unknown): CachedToken {
-  if (!data || typeof data !== 'object') throw new Error('invalid token cache');
-  const o = data as Record<string, unknown>;
-  if (typeof o.accessToken !== 'string' || o.accessToken.length > 100_000) throw new Error('invalid token cache');
-  if (typeof o.refreshToken !== 'string' || o.refreshToken.length > 100_000) throw new Error('invalid token cache');
-  if (typeof o.expiresAt !== 'number' || !Number.isFinite(o.expiresAt)) throw new Error('invalid token cache');
-  return { accessToken: o.accessToken, refreshToken: o.refreshToken, expiresAt: o.expiresAt };
-}
-
-// Security model: cache file stores bearer/refresh tokens and must be owner-only.
-// Directory is created as 0700 and file writes enforce 0600 to satisfy least-privilege.
-// The cache path is anchored to a fixed, local per-user directory under homedir();
-// network values (token contents) are written only as file data, never used to select
-// an arbitrary write location.
-const TOKEN_CACHE_FILE_TEMPLATE = join(homedir(), '.config', 'm365-agent-cli', 'token-cache-{identity}.json');
-const OLD_TOKEN_CACHE_FILE_TEMPLATE = join(homedir(), '.config', 'clippy', 'token-cache-{identity}.json');
-
-async function migrateTokenCache(identity: string): Promise<void> {
-  const TOKEN_CACHE_FILE = TOKEN_CACHE_FILE_TEMPLATE.replace('{identity}', identity);
-  const OLD_TOKEN_CACHE_FILE = OLD_TOKEN_CACHE_FILE_TEMPLATE.replace('{identity}', identity);
-
-  try {
-    const newStats = await stat(TOKEN_CACHE_FILE).catch(() => null);
-    if (!newStats) {
-      const oldStats = await stat(OLD_TOKEN_CACHE_FILE).catch(() => null);
-      if (oldStats) {
-        const dir = join(homedir(), '.config', 'm365-agent-cli');
-        await mkdir(dir, { recursive: true, mode: 0o700 });
-        await rename(OLD_TOKEN_CACHE_FILE, TOKEN_CACHE_FILE);
-      }
-    }
-  } catch (_err) {
-    // Ignore migration errors
-  }
-}
-
-async function loadCachedToken(identity: string): Promise<CachedToken | null> {
-  await migrateTokenCache(identity);
-  try {
-    const TOKEN_CACHE_FILE = TOKEN_CACHE_FILE_TEMPLATE.replace('{identity}', identity);
-    const data = await readFile(TOKEN_CACHE_FILE, 'utf-8');
-    return assertCachedToken(JSON.parse(data));
-  } catch {
-    return null;
-  }
-}
-
-async function saveCachedToken(identity: string, token: CachedToken): Promise<void> {
-  try {
-    const safe = assertCachedToken(token);
-    const TOKEN_CACHE_FILE = TOKEN_CACHE_FILE_TEMPLATE.replace('{identity}', identity);
-    await atomicWriteUtf8File(TOKEN_CACHE_FILE, JSON.stringify(safe, null, 2), 0o600);
-  } catch (err) {
-    console.error(`Failed to write token cache for identity '${identity}':`, err instanceof Error ? err.message : err);
-  }
-}
-
-async function refreshAccessToken(clientId: string, refreshToken: string, tenant: string): Promise<CachedToken> {
+async function refreshAccessToken(clientId: string, refreshToken: string, tenant: string) {
   const scopes = [
     'https://outlook.office365.com/EWS.AccessAsUser.All offline_access',
     'https://outlook.office365.com/.default offline_access'
@@ -104,7 +43,6 @@ async function refreshAccessToken(clientId: string, refreshToken: string, tenant
     if (response.ok && json.access_token) {
       const accessToken = json.access_token;
 
-      // Refuse to cache tokens that are not well-formed JWTs
       if (!isValidJwtStructure(accessToken)) {
         throw new Error('OAuth server returned an invalid token structure — refusing to cache');
       }
@@ -134,18 +72,18 @@ export async function resolveAuth(options?: { token?: string; identity?: string 
 
   try {
     const clientId = process.env.EWS_CLIENT_ID;
-    const envRefreshToken = process.env.EWS_REFRESH_TOKEN;
+    const envRefreshToken = getUnifiedRefreshTokenFromEnv();
 
     if (!clientId || !envRefreshToken) {
       return {
         success: false,
-        error: 'Missing EWS_CLIENT_ID or EWS_REFRESH_TOKEN in environment. Check your .env file.'
+        error:
+          'Missing EWS_CLIENT_ID or refresh token. Set M365_REFRESH_TOKEN (preferred) or GRAPH_REFRESH_TOKEN or EWS_REFRESH_TOKEN in environment or run `m365-agent-cli login`.'
       };
     }
 
     const identity = options?.identity || 'default';
 
-    // Validate identity to prevent path traversal
     if (!/^[a-zA-Z0-9_-]+$/.test(identity)) {
       return {
         success: false,
@@ -155,24 +93,25 @@ export async function resolveAuth(options?: { token?: string; identity?: string 
 
     const tenant = getMicrosoftTenantPathSegment();
 
-    // Check cached token
-    const cached = await loadCachedToken(identity);
-    if (cached && cached.expiresAt > Date.now() + 60_000) {
-      // Guard against corrupted cache: validate JWT structure before returning
-      if (!isValidJwtStructure(cached.accessToken)) {
-        // Treat a malformed cached token as if there were no cache
-      } else {
-        return { success: true, token: cached.accessToken };
+    const cached = await loadM365TokenCache(identity);
+    if (cached?.ews && cached.ews.expiresAt > Date.now() + 60_000) {
+      if (isValidJwtStructure(cached.ews.accessToken)) {
+        return { success: true, token: cached.ews.accessToken };
       }
     }
 
-    // Refresh - try cached refresh token first (may have been rotated), then .env
     const refreshTokens = [...new Set([cached?.refreshToken, envRefreshToken].filter((t): t is string => !!t))];
 
     for (const rt of refreshTokens) {
       try {
         const result = await refreshAccessToken(clientId, rt, tenant);
-        await saveCachedToken(identity, result);
+        const next: M365TokenCacheV1 = {
+          version: 1,
+          refreshToken: result.refreshToken,
+          ews: { accessToken: result.accessToken, expiresAt: result.expiresAt },
+          graph: cached?.graph
+        };
+        await saveM365TokenCache(identity, next);
         return { success: true, token: result.accessToken };
       } catch {
         // Try next
@@ -181,7 +120,8 @@ export async function resolveAuth(options?: { token?: string; identity?: string 
 
     return {
       success: false,
-      error: 'Token refresh failed. You may need to update EWS_REFRESH_TOKEN in .env.'
+      error:
+        'Token refresh failed. Update M365_REFRESH_TOKEN (or GRAPH_REFRESH_TOKEN / EWS_REFRESH_TOKEN) in .env or run `login`.'
     };
   } catch (err) {
     return {

@@ -42,6 +42,14 @@ export interface OutlookMessage {
   from?: { emailAddress?: { name?: string; address?: string } };
   toRecipients?: Array<{ emailAddress?: { name?: string; address?: string } }>;
   ccRecipients?: Array<{ emailAddress?: { name?: string; address?: string } }>;
+  /** Open in Outlook on the web (when returned by Graph). */
+  webLink?: string;
+  hasAttachments?: boolean;
+  followupFlag?: {
+    flagStatus?: 'notFlagged' | 'flagged' | 'complete';
+    startDateTime?: { dateTime?: string; timeZone?: string };
+    dueDateTime?: { dateTime?: string; timeZone?: string };
+  };
 }
 
 /** Graph [contact](https://learn.microsoft.com/en-us/graph/api/resources/contact) (subset). */
@@ -202,6 +210,11 @@ export interface MessagesQueryOptions {
   /** When set, only one page (no automatic paging). */
   top?: number;
   skip?: number;
+  /**
+   * Keyword search (`$search`). Requires `ConsistencyLevel: eventual` (applied automatically).
+   * Do not combine with `$filter` on the same request; use client-side filtering if both apply.
+   */
+  search?: string;
 }
 
 /** Query for `GET /me/messages` (mailbox-wide, not folder-scoped). */
@@ -221,6 +234,8 @@ export interface GraphMailMessageAttachment {
   contentType?: string;
   size?: number;
   isInline?: boolean;
+  /** Reference / link attachment target URL. */
+  sourceUrl?: string;
   '@odata.type'?: string;
 }
 
@@ -231,8 +246,16 @@ function messagesPath(folderId: string, user: string | undefined, query?: Messag
   if (query?.select) params.set('$select', query.select);
   if (query?.top !== undefined) params.set('$top', String(query.top));
   if (query?.skip !== undefined) params.set('$skip', String(query.skip));
+  if (query?.search) {
+    const escaped = query.search.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    params.set('$search', `"${escaped}"`);
+  }
   const qs = params.toString() ? `?${params.toString()}` : '';
   return `${mailFoldersRoot(user)}/${encodeURIComponent(folderId)}/messages${qs}`;
+}
+
+function folderMessagesSearchRequestInit(query?: MessagesQueryOptions): RequestInit | undefined {
+  return query?.search ? { headers: { ConsistencyLevel: 'eventual' } } : undefined;
 }
 
 function mailboxMessagesPath(user: string | undefined, query?: RootMailboxMessagesQuery): string {
@@ -266,10 +289,11 @@ export async function listMessagesInFolder(
 ): Promise<GraphResponse<OutlookMessage[]>> {
   const path = messagesPath(folderId, user, query);
   const singlePage = query?.top !== undefined;
+  const req = folderMessagesSearchRequestInit(query);
 
   if (singlePage) {
     try {
-      const result = await callGraph<{ value: OutlookMessage[] }>(token, path);
+      const result = await callGraph<{ value: OutlookMessage[] }>(token, path, req ?? {});
       if (!result.ok || !result.data) {
         return graphError(result.error?.message || 'Failed to list messages', result.error?.code, result.error?.status);
       }
@@ -280,7 +304,7 @@ export async function listMessagesInFolder(
     }
   }
 
-  return fetchAllPages<OutlookMessage>(token, path, 'Failed to list messages');
+  return fetchAllPages<OutlookMessage>(token, path, 'Failed to list messages', undefined, req);
 }
 
 /**
@@ -335,6 +359,62 @@ export async function getMessage(
   }
 }
 
+/** Payload for `POST /me/messages` with `isDraft: true`. */
+export interface GraphCreateDraftMessageInput {
+  subject?: string;
+  bodyContent: string;
+  bodyContentType: 'Text' | 'HTML';
+  toAddresses?: string[];
+  ccAddresses?: string[];
+  categories?: string[];
+}
+
+/** Create a draft in the Drafts folder (`POST /me/messages` with `isDraft: true`). */
+export async function createDraftMessage(
+  token: string,
+  input: GraphCreateDraftMessageInput,
+  user?: string
+): Promise<GraphResponse<OutlookMessage>> {
+  const message: Record<string, unknown> = {
+    isDraft: true,
+    body: {
+      contentType: input.bodyContentType,
+      content: input.bodyContent
+    }
+  };
+  if (input.subject !== undefined) {
+    message.subject = input.subject;
+  }
+  if (input.toAddresses?.length) {
+    message.toRecipients = input.toAddresses.map((address) => ({ emailAddress: { address } }));
+  }
+  if (input.ccAddresses?.length) {
+    message.ccRecipients = input.ccAddresses.map((address) => ({ emailAddress: { address } }));
+  }
+  if (input.categories?.length) {
+    message.categories = input.categories;
+  }
+  try {
+    const result = await callGraph<OutlookMessage>(
+      token,
+      graphUserPath(user, 'messages'),
+      { method: 'POST', body: JSON.stringify(message) },
+      true
+    );
+    if (!result.ok || !result.data) {
+      return graphError(
+        result.error?.message || 'Failed to create draft',
+        result.error?.code,
+        result.error?.status
+      );
+    }
+    return graphResult(result.data);
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to create draft');
+  }
+}
+
 export async function patchMailMessage(
   token: string,
   messageId: string,
@@ -354,6 +434,73 @@ export async function patchMailMessage(
   } catch (err) {
     if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
     return graphError(err instanceof Error ? err.message : 'Failed to update message');
+  }
+}
+
+/** `POST /me/messages/{id}/attachments` — add a file attachment to a draft message. */
+export async function addFileAttachmentToMailMessage(
+  token: string,
+  messageId: string,
+  attachment: { name: string; contentType: string; contentBytes: string },
+  user?: string
+): Promise<GraphResponse<GraphMailMessageAttachment>> {
+  const body = {
+    '@odata.type': '#microsoft.graph.fileAttachment',
+    name: attachment.name,
+    contentType: attachment.contentType,
+    contentBytes: attachment.contentBytes
+  };
+  try {
+    const result = await callGraph<GraphMailMessageAttachment>(
+      token,
+      `${graphUserPath(user, 'messages')}/${encodeURIComponent(messageId)}/attachments`,
+      { method: 'POST', body: JSON.stringify(body) },
+      true
+    );
+    if (!result.ok || !result.data) {
+      return graphError(
+        result.error?.message || 'Failed to add attachment',
+        result.error?.code,
+        result.error?.status
+      );
+    }
+    return graphResult(result.data);
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to add attachment');
+  }
+}
+
+/** `POST /me/messages/{id}/attachments` — add a link (`referenceAttachment`) to a draft message. */
+export async function addReferenceAttachmentToMailMessage(
+  token: string,
+  messageId: string,
+  attachment: { name: string; sourceUrl: string },
+  user?: string
+): Promise<GraphResponse<GraphMailMessageAttachment>> {
+  const body = {
+    '@odata.type': '#microsoft.graph.referenceAttachment',
+    name: attachment.name,
+    sourceUrl: attachment.sourceUrl
+  };
+  try {
+    const result = await callGraph<GraphMailMessageAttachment>(
+      token,
+      `${graphUserPath(user, 'messages')}/${encodeURIComponent(messageId)}/attachments`,
+      { method: 'POST', body: JSON.stringify(body) },
+      true
+    );
+    if (!result.ok || !result.data) {
+      return graphError(
+        result.error?.message || 'Failed to add link attachment',
+        result.error?.code,
+        result.error?.status
+      );
+    }
+    return graphResult(result.data);
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to add link attachment');
   }
 }
 

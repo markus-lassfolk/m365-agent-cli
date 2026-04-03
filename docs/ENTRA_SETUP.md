@@ -62,6 +62,7 @@ The application requires specific Delegated permissions for both Microsoft Graph
    - `User.Read`
    - `Calendars.ReadWrite`
    - `Mail.ReadWrite`
+   - `MailboxSettings.ReadWrite` (automatic replies / `oof`)
    - `Files.ReadWrite.All`
    - `Sites.ReadWrite.All`
    - `Tasks.ReadWrite`
@@ -85,7 +86,7 @@ The application requires specific Delegated permissions for both Microsoft Graph
 After completing the setup (either manually or automatically), you need to capture your credentials for the global `~/.config/m365-agent-cli/.env` file:
 
 1. **`EWS_CLIENT_ID`**: If you used the automated setup scripts, this is already appended to your `~/.config/m365-agent-cli/.env` file. If you used the manual setup, go to the **Overview** page of your App Registration, copy the **Application (client) ID**, and add it to your `~/.config/m365-agent-cli/.env` file as `EWS_CLIENT_ID=<id>`.
-2. **Refresh Tokens**: To get your initial `GRAPH_REFRESH_TOKEN` and `EWS_REFRESH_TOKEN`, use the interactive login flow provided by the CLI. Run the `login` command:
+2. **Refresh Tokens**: Run the `login` command — it saves **`M365_REFRESH_TOKEN`** (preferred) and legacy `GRAPH_REFRESH_TOKEN` / `EWS_REFRESH_TOKEN` (same value):
    ```bash
    clippy login
    ```

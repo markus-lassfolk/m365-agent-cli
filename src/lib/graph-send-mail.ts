@@ -9,6 +9,13 @@ export interface GraphSendFileAttachment {
   contentBytes: string;
 }
 
+/** Link attachment (Graph `referenceAttachment` with `sourceUrl`). */
+export interface GraphSendReferenceAttachment {
+  name: string;
+  /** HTTPS URL shown as a linked attachment in Outlook. */
+  sourceUrl: string;
+}
+
 export function buildGraphSendMailPayload(opts: {
   to: string[];
   cc?: string[];
@@ -18,6 +25,7 @@ export function buildGraphSendMailPayload(opts: {
   html: boolean;
   categories?: string[];
   fileAttachments?: GraphSendFileAttachment[];
+  referenceAttachments?: GraphSendReferenceAttachment[];
 }): { message: Record<string, unknown>; saveToSentItems: boolean } {
   const toRecipients = opts.to.map((address) => ({ emailAddress: { address } }));
   const ccRecipients = opts.cc?.filter(Boolean).map((address) => ({ emailAddress: { address } }));
@@ -37,13 +45,22 @@ export function buildGraphSendMailPayload(opts: {
   if (bccRecipients?.length) message.bccRecipients = bccRecipients;
   if (opts.categories?.length) message.categories = opts.categories;
 
-  if (opts.fileAttachments?.length) {
-    message.attachments = opts.fileAttachments.map((a) => ({
+  const fileParts =
+    opts.fileAttachments?.map((a) => ({
       '@odata.type': '#microsoft.graph.fileAttachment',
       name: a.name,
       contentType: a.contentType,
       contentBytes: a.contentBytes
-    }));
+    })) ?? [];
+  const refParts =
+    opts.referenceAttachments?.map((a) => ({
+      '@odata.type': '#microsoft.graph.referenceAttachment',
+      name: a.name,
+      sourceUrl: a.sourceUrl
+    })) ?? [];
+  const combined = [...fileParts, ...refParts];
+  if (combined.length) {
+    message.attachments = combined;
   }
 
   return { message, saveToSentItems: true };
