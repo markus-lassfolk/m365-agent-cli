@@ -413,13 +413,7 @@ export const findtimeCommand = new Command('findtime')
           return;
         }
         if (options.json) {
-          console.log(
-            JSON.stringify(
-              { error: `findMeetingTimes: ${g.error}; getSchedule: ${gs.error}` },
-              null,
-              2
-            )
-          );
+          console.log(JSON.stringify({ error: `findMeetingTimes: ${g.error}; getSchedule: ${gs.error}` }, null, 2));
         } else {
           console.error(`Error: findMeetingTimes failed (${g.error}). getSchedule failed (${gs.error}).`);
         }

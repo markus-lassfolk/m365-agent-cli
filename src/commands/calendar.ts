@@ -45,6 +45,58 @@ async function pathExists(p: string): Promise<boolean> {
   }
 }
 
+async function resolveUniqueFilePath(
+  outputDir: string,
+  fileName: string,
+  usedPaths: Set<string>,
+  force: boolean
+): Promise<string> {
+  let filePath = join(outputDir, fileName);
+  let counter = 1;
+  const ext = extname(fileName);
+  const base = fileName.slice(0, fileName.length - ext.length);
+
+  while (true) {
+    if (usedPaths.has(filePath)) {
+      filePath = join(outputDir, `${base} (${counter})${ext}`);
+      counter++;
+      continue;
+    }
+    if (!force) {
+      try {
+        await access(filePath);
+        filePath = join(outputDir, `${base} (${counter})${ext}`);
+        counter++;
+        continue;
+      } catch {
+        break;
+      }
+    }
+    break;
+  }
+  return filePath;
+}
+
+async function writeLinkFile(
+  outputDir: string,
+  baseName: string,
+  url: string,
+  usedPaths: Set<string>,
+  force: boolean
+): Promise<string> {
+  const base = sanitizeFileComponent(baseName);
+  let filePath = join(outputDir, `${base}.url`);
+  let counter = 1;
+  while (usedPaths.has(filePath) || (!force && (await pathExists(filePath)))) {
+    filePath = join(outputDir, `${base} (${counter}).url`);
+    counter++;
+  }
+  usedPaths.add(filePath);
+  const content = `[InternetShortcut]\r\nURL=${url}\r\n`;
+  await writeFile(filePath, content, 'utf8');
+  return filePath;
+}
+
 function formatTime(dateStr: string): string {
   const date = parseLocalDate(dateStr);
   return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -629,16 +681,13 @@ export const calendarCommand = new Command('calendar')
                   console.error(`  Failed to resolve link: ${att.name || att.id}`);
                   continue;
                 }
-                const base = sanitizeFileComponent(att.name || 'link');
-                let filePath = join(options.output, `${base}.url`);
-                let counter = 1;
-                while (usedPaths.has(filePath) || (!options.force && (await pathExists(filePath)))) {
-                  filePath = join(options.output, `${base} (${counter}).url`);
-                  counter++;
-                }
-                usedPaths.add(filePath);
-                const content = `[InternetShortcut]\r\nURL=${url}\r\n`;
-                await writeFile(filePath, content, 'utf8');
+                const filePath = await writeLinkFile(
+                  options.output,
+                  att.name || 'link',
+                  url,
+                  usedPaths,
+                  options.force ?? false
+                );
                 console.log(`  ✓ ${filePath.split(/[\\/]/).pop()} (link)`);
                 continue;
               }
@@ -653,30 +702,7 @@ export const calendarCommand = new Command('calendar')
               }
               const content = Buffer.from(dl.data);
               const safeName = att.name || `attachment-${att.id}`;
-              let filePath = join(options.output, safeName);
-              let counter = 1;
-              while (true) {
-                if (usedPaths.has(filePath)) {
-                  const ext = extname(safeName);
-                  const base = safeName.slice(0, safeName.length - ext.length);
-                  filePath = join(options.output, `${base} (${counter})${ext}`);
-                  counter++;
-                  continue;
-                }
-                if (!options.force) {
-                  try {
-                    await access(filePath);
-                    const ext = extname(safeName);
-                    const base = safeName.slice(0, safeName.length - ext.length);
-                    filePath = join(options.output, `${base} (${counter})${ext}`);
-                    counter++;
-                    continue;
-                  } catch {
-                    // missing — ok
-                  }
-                }
-                break;
-              }
+              const filePath = await resolveUniqueFilePath(options.output, safeName, usedPaths, options.force ?? false);
               usedPaths.add(filePath);
               await writeFile(filePath, content);
               const sizeKB = Math.round(content.length / 1024);
@@ -750,16 +776,13 @@ export const calendarCommand = new Command('calendar')
               console.error(`  Failed to resolve link: ${att.Name}`);
               continue;
             }
-            const base = sanitizeFileComponent(att.Name || 'link');
-            let filePath = join(options.output, `${base}.url`);
-            let counter = 1;
-            while (usedPaths.has(filePath) || (!options.force && (await pathExists(filePath)))) {
-              filePath = join(options.output, `${base} (${counter}).url`);
-              counter++;
-            }
-            usedPaths.add(filePath);
-            const content = `[InternetShortcut]\r\nURL=${url}\r\n`;
-            await writeFile(filePath, content, 'utf8');
+            const filePath = await writeLinkFile(
+              options.output,
+              att.Name || 'link',
+              url,
+              usedPaths,
+              options.force ?? false
+            );
             console.log(`  ✓ ${filePath.split(/[\\/]/).pop()} (link)`);
             continue;
           }
@@ -770,30 +793,7 @@ export const calendarCommand = new Command('calendar')
             continue;
           }
           const content = Buffer.from(fullAtt.data.ContentBytes, 'base64');
-          let filePath = join(options.output, att.Name);
-          let counter = 1;
-          while (true) {
-            if (usedPaths.has(filePath)) {
-              const ext = extname(att.Name);
-              const base = att.Name.slice(0, att.Name.length - ext.length);
-              filePath = join(options.output, `${base} (${counter})${ext}`);
-              counter++;
-              continue;
-            }
-            if (!options.force) {
-              try {
-                await access(filePath);
-                const ext = extname(att.Name);
-                const base = att.Name.slice(0, att.Name.length - ext.length);
-                filePath = join(options.output, `${base} (${counter})${ext}`);
-                counter++;
-                continue;
-              } catch {
-                // missing — ok
-              }
-            }
-            break;
-          }
+          const filePath = await resolveUniqueFilePath(options.output, att.Name, usedPaths, options.force ?? false);
           usedPaths.add(filePath);
           await writeFile(filePath, content);
           const sizeKB = Math.round(content.length / 1024);

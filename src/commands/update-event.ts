@@ -351,9 +351,7 @@ export const updateEventCommand = new Command('update-event')
       if (useGraph) {
         targetGraph = (events as GraphCalendarEvent[]).find((e) => e.id === options.id);
         if (!targetGraph && options.id) {
-          targetGraph = (events as GraphCalendarEvent[]).find((e) =>
-            graphEventMatchesOccurrenceFilter(e, options.id!)
-          );
+          targetGraph = (events as GraphCalendarEvent[]).find((e) => graphEventMatchesOccurrenceFilter(e, options.id!));
         }
         if (!targetGraph && graphToken && options.id) {
           const fetched = await getEvent(graphToken, options.id, options.mailbox);
@@ -388,8 +386,7 @@ export const updateEventCommand = new Command('update-event')
               const eventDate = new Date(graphStartDt(e));
               eventDate.setHours(0, 0, 0, 0);
               return (
-                eventDate.getTime() === instanceDate.getTime() &&
-                graphEventMatchesOccurrenceFilter(e, options.id!)
+                eventDate.getTime() === instanceDate.getTime() && graphEventMatchesOccurrenceFilter(e, options.id!)
               );
             });
             if (!occEvent) {
@@ -602,7 +599,13 @@ export const updateEventCommand = new Command('update-event')
 
       let updateResult: Awaited<ReturnType<typeof updateEvent>> | undefined;
 
-      if (wantsAttachments && !hasFieldUpdates && (backend === 'graph' || backend === 'auto') && options.id && useGraph) {
+      if (
+        wantsAttachments &&
+        !hasFieldUpdates &&
+        (backend === 'graph' || backend === 'auto') &&
+        options.id &&
+        useGraph
+      ) {
         const ga = await resolveGraphAuth({
           token: options.token,
           identity: options.identity
@@ -644,7 +647,13 @@ export const updateEventCommand = new Command('update-event')
             }
             const files = fileAttachments ?? [];
             const links = (referenceAttachments ?? []).map((a) => ({ name: a.name, sourceUrl: a.url }));
-            const att = await addCalendarEventAttachmentsGraph(ga.token, gd.id, options.mailbox?.trim() || undefined, files, links);
+            const att = await addCalendarEventAttachmentsGraph(
+              ga.token,
+              gd.id,
+              options.mailbox?.trim() || undefined,
+              files,
+              links
+            );
             if (att.ok) {
               if (options.json) {
                 console.log(
@@ -849,7 +858,9 @@ export const updateEventCommand = new Command('update-event')
                     if (!att.ok) {
                       if (backend === 'graph') {
                         if (options.json) {
-                          console.log(JSON.stringify({ error: att.error?.message || 'Failed to add attachments' }, null, 2));
+                          console.log(
+                            JSON.stringify({ error: att.error?.message || 'Failed to add attachments' }, null, 2)
+                          );
                         } else {
                           console.error(`Error: ${att.error?.message || 'Failed to add attachments'}`);
                         }
@@ -857,7 +868,9 @@ export const updateEventCommand = new Command('update-event')
                       }
                       if (useGraph && backend === 'auto') {
                         if (options.json) {
-                          console.log(JSON.stringify({ error: att.error?.message || 'Failed to add attachments' }, null, 2));
+                          console.log(
+                            JSON.stringify({ error: att.error?.message || 'Failed to add attachments' }, null, 2)
+                          );
                         } else {
                           console.error(`Error: ${att.error?.message || 'Failed to add attachments'}`);
                         }

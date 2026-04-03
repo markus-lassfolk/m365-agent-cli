@@ -362,7 +362,9 @@ removeCommand
 
 export const delegatesCommand = new Command('delegates');
 delegatesCommand
-  .description('Delegates: list (Graph calendar permissions or EWS); add/update/remove (EWS — set M365_EXCHANGE_BACKEND=ews or auto)')
+  .description(
+    'Delegates: list (Graph calendar permissions or EWS); add/update/remove (EWS — set M365_EXCHANGE_BACKEND=ews or auto)'
+  )
   .addCommand(listCommand)
   .addCommand(addCommand)
   .addCommand(updateCommand)

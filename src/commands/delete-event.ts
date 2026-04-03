@@ -466,7 +466,7 @@ export const deleteEventCommand = new Command('delete-event')
         let graphRes: { ok: boolean; error?: { message?: string } };
         let action: string;
 
-        if (hasAttendees && !options.forceDelete && scope === 'all') {
+        if (hasAttendees && !options.forceDelete) {
           console.log(
             `  Attendees: ${attendees
               .map((a) => a.emailAddress?.address)

@@ -175,12 +175,7 @@ export function isGraphMailCategoriesOnlyOptions(opts: MailGraphCommandOptions):
 
 export function isGraphMailMoveOnlyOptions(opts: MailGraphCommandOptions): boolean {
   return Boolean(
-    opts.move &&
-      opts.to &&
-      mailOpsMatch(opts, { move: true }) &&
-      !opts.startDate &&
-      !opts.due &&
-      !opts.flagged
+    opts.move && opts.to && mailOpsMatch(opts, { move: true }) && !opts.startDate && !opts.due && !opts.flagged
   );
 }
 
@@ -193,9 +188,7 @@ export function isGraphMailFlagOnlyOptions(opts: MailGraphCommandOptions): boole
 }
 
 export function isGraphMailSensitivityOnlyOptions(opts: MailGraphCommandOptions): boolean {
-  return Boolean(
-    opts.sensitivity && opts.level && mailOpsMatch(opts, { sensitivity: true }) && !opts.flagged
-  );
+  return Boolean(opts.sensitivity && opts.level && mailOpsMatch(opts, { sensitivity: true }) && !opts.flagged);
 }
 
 /** Reply, reply-all, or forward — Graph create draft + optional extras + send. */
@@ -590,8 +583,8 @@ export async function tryMailGraphPortion(
       }
     } else {
       const srcId = options.forward!.trim();
-      const recipients = options.toAddr!
-        .split(',')
+      const recipients = options
+        .toAddr!.split(',')
         .map((e) => e.trim())
         .filter(Boolean);
       let bodyText = options.message ?? '';
@@ -702,7 +695,13 @@ export async function tryMailGraphPortion(
 
     const replyType = options.replyAll ? 'Reply all' : options.forward ? 'Forward' : 'Reply';
     if (options.json) {
-      console.log(JSON.stringify({ success: true, sent: true, sourceMessageId: options.reply || options.replyAll || options.forward }, null, 2));
+      console.log(
+        JSON.stringify(
+          { success: true, sent: true, sourceMessageId: options.reply || options.replyAll || options.forward },
+          null,
+          2
+        )
+      );
     } else if (hasAttach || hasLinks || withCat.length) {
       console.log(`\u2713 ${replyType} sent (with extras)`);
     } else {

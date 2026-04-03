@@ -142,15 +142,9 @@ export const createEventCommand = new Command('create-event')
             }
             if (backend === 'graph') {
               if (options.json) {
-                console.log(
-                  JSON.stringify(
-                    { error: lr.error?.message || 'No rooms returned', rooms: [] },
-                    null,
-                    2
-                  )
-                );
+                console.log(JSON.stringify({ error: lr.error?.message || 'No rooms returned', rooms: [] }, null, 2));
               } else {
-                console.log(lr.error?.message || "No meeting rooms found or Places API returned no data.");
+                console.log(lr.error?.message || 'No meeting rooms found or Places API returned no data.');
                 console.log('You can still specify a room by email address with --room <email>');
               }
               return;
@@ -400,9 +394,7 @@ export const createEventCommand = new Command('create-event')
             }
 
             if (roomsResult.ok && roomsResult.data) {
-              const found = roomsResult.data.find((r) =>
-                r.Name.toLowerCase().includes(roomQuery.toLowerCase())
-              );
+              const found = roomsResult.data.find((r) => r.Name.toLowerCase().includes(roomQuery.toLowerCase()));
               if (found) {
                 roomEmail = found.Address;
                 roomName = found.Name;

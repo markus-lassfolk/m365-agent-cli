@@ -132,12 +132,20 @@ export const draftsCommand = new Command('drafts')
             }
 
             const toLine =
-              d.toRecipients?.map((x) => x.emailAddress?.address).filter(Boolean).join(', ') || '(none)';
+              d.toRecipients
+                ?.map((x) => x.emailAddress?.address)
+                .filter(Boolean)
+                .join(', ') || '(none)';
             console.log(`\n${'\u2500'.repeat(60)}`);
             console.log(`To: ${toLine}`);
             if (d.ccRecipients?.length) {
               console.log(
-                `Cc: ${d.ccRecipients.map((x) => x.emailAddress?.address).filter(Boolean).join(', ') || '(none)'}`
+                `Cc: ${
+                  d.ccRecipients
+                    .map((x) => x.emailAddress?.address)
+                    .filter(Boolean)
+                    .join(', ') || '(none)'
+                }`
               );
             }
             console.log(`Subject: ${d.subject || '(no subject)'}`);

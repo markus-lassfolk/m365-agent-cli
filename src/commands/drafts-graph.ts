@@ -39,11 +39,7 @@ function normalizeDraftBody(options: DraftsGraphOptions): { body: string; bodyTy
   body = body.replace(/\\n/g, '\n');
   let bodyType: 'Text' | 'HTML' = 'Text';
   if (options.html && body) {
-    const escaped = body
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/\n/g, '<br>');
+    const escaped = body.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
     body = body.match(/<\w+[^>]*>/) ? body : escaped;
     bodyType = 'HTML';
   } else if (options.markdown && body) {

@@ -404,7 +404,10 @@ todoCommand
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox for the task and for --link message lookup (Graph delegation)')
+  .option(
+    '--user <email>',
+    'Target user or shared mailbox for the task and for --link message lookup (Graph delegation)'
+  )
   .action(
     async (
       opts: {
@@ -450,12 +453,7 @@ todoCommand
       let linkedResources: any[] | undefined;
       if (opts.link) {
         const mailboxUser = opts.user || opts.mailbox;
-        const msgRes = await getMessage(
-          auth.token!,
-          opts.link,
-          mailboxUser,
-          'id,subject,webLink'
-        );
+        const msgRes = await getMessage(auth.token!, opts.link, mailboxUser, 'id,subject,webLink');
         if (!msgRes.ok || !msgRes.data) {
           console.error(`Could not fetch message: ${msgRes.error?.message || 'unknown error'}`);
           process.exit(1);

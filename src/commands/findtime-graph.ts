@@ -118,7 +118,7 @@ export async function runFindTimeGraph(opts: {
   const filtered = suggestions.filter((s) => {
     const slot = s.meetingTimeSlot?.start?.dateTime;
     if (!slot) return false;
-    const hour = new Date(slot).getHours();
+    const hour = new Date(slot).getUTCHours();
     return hour >= opts.workStartHour && hour < opts.workEndHour;
   });
 
@@ -203,7 +203,7 @@ export async function runFindTimeGraphSchedule(opts: {
     const t0 = new Date(opts.start.getTime() + i * intervalMinutes * 60 * 1000);
     const t1 = new Date(t0.getTime() + opts.durationMinutes * 60 * 1000);
     if (t1 > opts.end) continue;
-    const hour = t0.getHours();
+    const hour = t0.getUTCHours();
     if (hour >= opts.workStartHour && hour < opts.workEndHour) {
       freeSlots.push({ start: t0.toISOString(), end: t1.toISOString() });
       i += needSlots - 1;

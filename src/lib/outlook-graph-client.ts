@@ -402,11 +402,7 @@ export async function createDraftMessage(
       true
     );
     if (!result.ok || !result.data) {
-      return graphError(
-        result.error?.message || 'Failed to create draft',
-        result.error?.code,
-        result.error?.status
-      );
+      return graphError(result.error?.message || 'Failed to create draft', result.error?.code, result.error?.status);
     }
     return graphResult(result.data);
   } catch (err) {
@@ -458,11 +454,7 @@ export async function addFileAttachmentToMailMessage(
       true
     );
     if (!result.ok || !result.data) {
-      return graphError(
-        result.error?.message || 'Failed to add attachment',
-        result.error?.code,
-        result.error?.status
-      );
+      return graphError(result.error?.message || 'Failed to add attachment', result.error?.code, result.error?.status);
     }
     return graphResult(result.data);
   } catch (err) {
