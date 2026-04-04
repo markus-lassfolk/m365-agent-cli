@@ -1,8 +1,9 @@
-# Publish to npm and create a GitHub Release on tag v*.*.*.
+# Publish to npm and create a GitHub Release when a version tag is pushed.
+# Tag pattern v*.*.* matches semver (v1.2.3) and calendar-style versions (e.g. v2026.4.50).
 # Preferred: Trusted Publishing (OIDC) — configure npm: Package → Trusted publishers → GitHub Actions → this repo + release.yml
 # Optional: add repository secret NPM_TOKEN (granular publish token) if OIDC publish still fails; the publish step uses it when set.
 # See: https://docs.npmjs.com/trusted-publishers
-# Tag must match package.json version (e.g. tag v1.2.3 and "version": "1.2.3").
+# Tag must match package.json version exactly (e.g. tag v2026.4.50 and "version": "2026.4.50").
 
 name: Release
 

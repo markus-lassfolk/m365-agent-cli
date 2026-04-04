@@ -2,6 +2,10 @@
 
 Releases are aligned with **npm**, **Git tags**, and **GlitchTip** eligibility (see [GLITCHTIP.md](./GLITCHTIP.md)): the published tarball embeds the git SHA, and GitHub tag `v{version}` must point at that commit.
 
+**Why isn’t there a new npm version after every merge?** Publishing runs only when someone pushes a **version tag** (`v…` matching `package.json`). Merging to `main` updates the repo but does **not** trigger npm — that is intentional so releases stay deliberate and tagged. See **Cutting a release** below.
+
+User-facing changes for each version are summarized in the root [`CHANGELOG.md`](../CHANGELOG.md).
+
 ## One-time setup (maintainer): npm Trusted Publishing
 
 This repo publishes from [`.github/workflows/release.yml`](../.github/workflows/release.yml) with **`npm publish --access public --provenance`** and `permissions: id-token: write`.
@@ -47,11 +51,11 @@ If the package name is already taken on npm, you must rename the package in `pac
 
 ## Cutting a release
 
-1. On `main`, set **`version`** in `package.json` to the new semver (e.g. `1.2.3`). Run **`npm run sync-skill`** so `skills/m365-agent-cli/SKILL.md` frontmatter `version:` matches the package (OpenClaw/ClawHub skill metadata). Commit, for example: `chore: release 1.2.3`.
-2. Tag that commit: `git tag v1.2.3` (the tag **must** be `v` + the exact version string from `package.json`).
-3. Push the tag: `git push origin v1.2.3` (and push the commit to `main` if needed).
+1. On `main` (or your release branch), set **`version`** in `package.json` to the new version (semver or calendar-style, e.g. `2026.4.50`). Update **`CHANGELOG.md`** for the release. Run **`npm run sync-skill`** so `skills/m365-agent-cli/SKILL.md` frontmatter `version:` matches the package (OpenClaw/ClawHub skill metadata). Commit, for example: `chore(release): 2026.4.50`.
+2. Tag that commit: `git tag v2026.4.50` (the tag **must** be `v` + the exact version string from `package.json`).
+3. Push the tag: `git push origin v2026.4.50` (and push the commit to `main` if needed).
 
-Pushing the tag runs **Release** in GitHub Actions: it checks that the tag matches `package.json`, runs checks, runs **`npm run embed-sha`**, publishes to npm, and creates a GitHub Release with generated notes.
+Pushing the tag runs **Release** in GitHub Actions (see [`.github/workflows/release.yml`](../.github/workflows/release.yml)): it checks that the tag matches `package.json`, runs checks, runs **`npm run embed-sha`**, publishes to npm with **`npm publish --access public`** (Trusted Publishing OIDC when **`NPM_TOKEN`** is unset), and creates a GitHub Release (with auto-generated notes; you can paste from **`CHANGELOG.md`** if you want richer text).
 
 ## After publish
 

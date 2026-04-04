@@ -77,7 +77,7 @@ bun install
 bun run src/cli.ts -- --help
 ```
 
-Pre-release versions on `main` may use a beta semver in `package.json`; npm tags and publishing are described in [docs/RELEASE.md](docs/RELEASE.md).
+Stable releases are versioned in `package.json` and published to npm when a maintainer pushes a matching Git tag — see [CHANGELOG.md](CHANGELOG.md) and [docs/RELEASE.md](docs/RELEASE.md).
 
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: m365-agent-cli
-version: 2.0.0-beta.0
+version: 2026.4.50
 description: Microsoft 365 CLI (EWS + Graph) for calendar, mail, OneDrive, Planner, SharePoint, To Do, Teams, Bookings, Excel-on-drive, presence, inbox rules, delegates, subscriptions, Graph Search, and raw `graph invoke`/`graph batch`. Use when the user needs Outlook/Exchange, Graph, or M365 automation from the terminal.
 # `version` matches the npm CLI release; run `npm run sync-skill` after bumping package.json.
 metadata:
