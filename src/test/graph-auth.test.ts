@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { GRAPH_DEVICE_CODE_LOGIN_SCOPES, GRAPH_REFRESH_SCOPE_CANDIDATES } from '../lib/graph-oauth-scopes.js';
 
 const mockLoad = mock(() => Promise.resolve(null));
 const mockSave = mock(() => Promise.resolve());
@@ -8,8 +9,10 @@ const mockFetch = mock(() =>
   )
 );
 
+// Re-export real login/refresh lists so parallel test workers do not break graph-oauth-scopes.test.ts.
 mock.module('../lib/graph-oauth-scopes.js', () => ({
-  GRAPH_REFRESH_SCOPE_CANDIDATES: ['https://graph.microsoft.com/.default offline_access'],
+  GRAPH_DEVICE_CODE_LOGIN_SCOPES,
+  GRAPH_REFRESH_SCOPE_CANDIDATES,
   GRAPH_CRITICAL_DELEGATED_SCOPES: [
     'Mail.Send',
     'Contacts.ReadWrite',
