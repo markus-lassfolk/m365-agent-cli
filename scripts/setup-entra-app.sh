@@ -50,7 +50,7 @@ else
   exit 1
 fi
 
-if [ -z "$APP_ID" ] || [ -z "$OBJECT_ID" ] || [ "$APP_ID" = "null" ]; then
+if [ -z "$APP_ID" ] || [ -z "$OBJECT_ID" ] || [ "$APP_ID" = "null" ] || [ "$OBJECT_ID" = "null" ]; then
   echo "Failed to parse app create response. Raw output:"
   echo "$CREATE_JSON"
   exit 1
