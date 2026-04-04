@@ -781,6 +781,51 @@ export const mockIsRoomFreeResponse = soapResponse(`
   </m:GetRoomListsResponse>
 `);
 
+// ─── Graph API (user + calendar — CLI integration with M365_EXCHANGE_BACKEND=graph) ─
+
+export const mockGraphMeResponse = {
+  displayName: 'Graph Test User',
+  mail: 'graph.user@example.com',
+  userPrincipalName: 'graph.user@example.com'
+};
+
+export const mockGraphCalendarViewResponse = {
+  value: [
+    {
+      id: 'graph-cal-event-1',
+      subject: 'Standup',
+      isOrganizer: true,
+      isCancelled: false,
+      start: { dateTime: '2026-04-01T09:00:00.0000000', timeZone: 'UTC' },
+      end: { dateTime: '2026-04-01T09:30:00.0000000', timeZone: 'UTC' },
+      organizer: { emailAddress: { address: 'graph.user@example.com', name: 'Graph Test User' } }
+    }
+  ]
+};
+
+/** Room mailbox calendarView: include `showAs` so `isRoomFree` heuristics match production Graph. */
+export const mockGraphRoomCalendarViewResponse = {
+  value: [
+    {
+      id: 'room-block-1',
+      subject: 'Hold',
+      showAs: 'busy',
+      start: { dateTime: '2026-04-01T10:00:00.0000000', timeZone: 'UTC' },
+      end: { dateTime: '2026-04-01T11:00:00.0000000', timeZone: 'UTC' }
+    }
+  ]
+};
+
+export const mockGraphEventDetailResponse = {
+  id: 'graph-cal-event-1',
+  subject: 'Standup',
+  isOrganizer: true,
+  changeKey: 'ck1',
+  start: { dateTime: '2026-04-01T09:00:00.0000000', timeZone: 'UTC' },
+  end: { dateTime: '2026-04-01T09:30:00.0000000', timeZone: 'UTC' },
+  organizer: { emailAddress: { address: 'graph.user@example.com' } }
+};
+
 // ─── Graph API (OneDrive/files) ─────────────────────────────────────────────
 
 export const mockGraphListFilesResponse = {

@@ -1,7 +1,23 @@
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
+import {
+  graphDayRangeIso,
+  graphEventMatchesOccurrenceFilter,
+  graphFilterOrganizerEvents,
+  graphGetMailboxOrMeEmail,
+  graphNonResourceAttendeeCount
+} from '../lib/calendar-graph-helpers.js';
 import { parseDay } from '../lib/dates.js';
-import { cancelEvent, deleteEvent, getCalendarEvents } from '../lib/ews-client.js';
+import { type CalendarEvent, cancelEvent, deleteEvent, getCalendarEvents } from '../lib/ews-client.js';
+import { getExchangeBackend } from '../lib/exchange-backend.js';
+import { resolveGraphAuth } from '../lib/graph-auth.js';
+import {
+  cancelCalendarEvent,
+  deleteCalendarEvent,
+  type GraphCalendarEvent,
+  listCalendarView
+} from '../lib/graph-calendar-client.js';
+import { truncateRecurringSeriesBeforeCut } from '../lib/graph-calendar-recurrence.js';
 import { checkReadOnly } from '../lib/utils.js';
 
 function formatTime(dateStr: string): string {
@@ -12,6 +28,10 @@ function formatTime(dateStr: string): string {
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
   return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+function graphStartDt(e: GraphCalendarEvent): string {
+  return e.start?.dateTime ?? '';
 }
 
 export const deleteEventCommand = new Command('delete-event')
@@ -53,70 +73,150 @@ export const deleteEventCommand = new Command('delete-event')
       cmd: any
     ) => {
       checkReadOnly(cmd);
-      const authResult = await resolveAuth({
-        token: options.token,
-        identity: options.identity
-      });
-
-      if (!authResult.success) {
-        if (options.json) {
-          console.log(JSON.stringify({ error: authResult.error }, null, 2));
-        } else {
-          console.error(`Error: ${authResult.error}`);
-          console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
-        }
-        process.exit(1);
-      }
-
-      // Get events for the day
+      const backend = getExchangeBackend();
       const baseDate = parseDay(options.day);
       const startOfDay = new Date(baseDate);
       startOfDay.setHours(0, 0, 0, 0);
       const endOfDay = new Date(baseDate);
       endOfDay.setHours(23, 59, 59, 999);
+      const graphRange = graphDayRangeIso(baseDate);
 
-      const result = await getCalendarEvents(
-        authResult.token!,
-        startOfDay.toISOString(),
-        endOfDay.toISOString(),
-        options.mailbox
-      );
+      let eventsGraph: GraphCalendarEvent[] | undefined;
+      let graphToken: string | undefined;
+      let ewsToken: string | undefined;
 
-      if (!result.ok || !result.data) {
-        if (options.json) {
-          console.log(JSON.stringify({ error: result.error?.message || 'Failed to fetch events' }, null, 2));
-        } else {
-          console.error(`Error: ${result.error?.message || 'Failed to fetch events'}`);
+      const tryGraphFirst = backend === 'graph' || backend === 'auto';
+
+      if (tryGraphFirst) {
+        const ga = await resolveGraphAuth({
+          token: options.token,
+          identity: options.identity
+        });
+        if (ga.success && ga.token) {
+          const lv = await listCalendarView(ga.token, graphRange.start, graphRange.end, { user: options.mailbox });
+          if (lv.ok && lv.data) {
+            const me = await graphGetMailboxOrMeEmail(ga.token, options.mailbox);
+            if (me) {
+              let evs = graphFilterOrganizerEvents(lv.data, me);
+              if (options.search) {
+                const searchLower = options.search.toLowerCase();
+                evs = evs.filter((e) => e.subject?.toLowerCase().includes(searchLower));
+              }
+              eventsGraph = evs;
+              graphToken = ga.token;
+            } else if (backend === 'graph') {
+              if (options.json) {
+                console.log(JSON.stringify({ error: 'Failed to determine user email' }, null, 2));
+              } else {
+                console.error('Error: Failed to determine user email');
+              }
+              process.exit(1);
+            }
+          } else if (backend === 'graph') {
+            if (options.json) {
+              console.log(JSON.stringify({ error: lv.error?.message || 'Failed to list calendar' }, null, 2));
+            } else {
+              console.error(`Error: ${lv.error?.message || 'Failed to list calendar'}`);
+            }
+            process.exit(1);
+          } else if (!options.json) {
+            console.warn(`[delete-event] Graph list failed (${lv.error?.message}); falling back to EWS.`);
+          }
+        } else if (backend === 'graph') {
+          if (options.json) {
+            console.log(JSON.stringify({ error: ga.error || 'Graph authentication failed' }, null, 2));
+          } else {
+            console.error(`Error: ${ga.error || 'Graph authentication failed'}`);
+          }
+          process.exit(1);
         }
-        process.exit(1);
       }
 
-      // Filter to events the user owns (IsOrganizer) and optionally by search
-      let events = result.data.filter((e) => e.IsOrganizer && !e.IsCancelled);
+      let eventsEws: CalendarEvent[] | undefined;
+      if (!eventsGraph) {
+        const authResult = await resolveAuth({
+          token: options.token,
+          identity: options.identity
+        });
 
-      if (options.search) {
-        const searchLower = options.search.toLowerCase();
-        events = events.filter((e) => e.Subject?.toLowerCase().includes(searchLower));
+        if (!authResult.success) {
+          if (options.json) {
+            console.log(JSON.stringify({ error: authResult.error }, null, 2));
+          } else {
+            console.error(`Error: ${authResult.error}`);
+            console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
+          }
+          process.exit(1);
+        }
+
+        ewsToken = authResult.token!;
+
+        const result = await getCalendarEvents(
+          ewsToken,
+          startOfDay.toISOString(),
+          endOfDay.toISOString(),
+          options.mailbox
+        );
+
+        if (!result.ok || !result.data) {
+          if (options.json) {
+            console.log(JSON.stringify({ error: result.error?.message || 'Failed to fetch events' }, null, 2));
+          } else {
+            console.error(`Error: ${result.error?.message || 'Failed to fetch events'}`);
+          }
+          process.exit(1);
+        }
+
+        let ev = result.data.filter((e) => e.IsOrganizer && !e.IsCancelled);
+
+        if (options.search) {
+          const searchLower = options.search.toLowerCase();
+          ev = ev.filter((e) => e.Subject?.toLowerCase().includes(searchLower));
+        }
+        eventsEws = ev;
       }
+
+      const useGraph = !!eventsGraph && !!graphToken;
+      const events = useGraph ? eventsGraph! : eventsEws!;
 
       // If no id provided, list events
       if (!options.id) {
         if (options.json) {
-          console.log(
-            JSON.stringify(
-              {
-                events: events.map((e, i) => ({
-                  index: i + 1,
-                  id: e.Id,
-                  subject: e.Subject,
-                  start: e.Start.DateTime,
-                  end: e.End.DateTime
-                }))
-              },
-              null,
-              2
-            )
-          );
+          if (useGraph) {
+            console.log(
+              JSON.stringify(
+                {
+                  backend: 'graph',
+                  events: events.map((e, i) => ({
+                    index: i + 1,
+                    id: (e as GraphCalendarEvent).id,
+                    subject: (e as GraphCalendarEvent).subject,
+                    start: graphStartDt(e as GraphCalendarEvent),
+                    end: (e as GraphCalendarEvent).end?.dateTime
+                  }))
+                },
+                null,
+                2
+              )
+            );
+          } else {
+            console.log(
+              JSON.stringify(
+                {
+                  backend: 'ews',
+                  events: (events as CalendarEvent[]).map((e, i) => ({
+                    index: i + 1,
+                    id: e.Id,
+                    subject: e.Subject,
+                    start: e.Start.DateTime,
+                    end: e.End.DateTime
+                  }))
+                },
+                null,
+                2
+              )
+            );
+          }
           return;
         }
 
@@ -131,18 +231,34 @@ export const deleteEventCommand = new Command('delete-event')
 
         for (let i = 0; i < events.length; i++) {
           const event = events[i];
-          const startTime = formatTime(event.Start.DateTime);
-          const endTime = formatTime(event.End.DateTime);
-          const attendees = event.Attendees?.filter((a) => a.EmailAddress?.Address && a.Type !== 'Resource') || [];
-
-          console.log(`\n  [${i + 1}] ${event.Subject}`);
-          console.log(`      ${startTime} - ${endTime}`);
-          console.log(`      ID: ${event.Id}`);
-          if (event.Location?.DisplayName) {
-            console.log(`      Location: ${event.Location.DisplayName}`);
-          }
-          if (attendees.length > 0) {
-            console.log(`      Attendees: ${attendees.length} (will be notified on cancel)`);
+          if (useGraph) {
+            const ge = event as GraphCalendarEvent;
+            const st = graphStartDt(ge);
+            const en = ge.end?.dateTime ?? '';
+            const startTime = formatTime(st);
+            const endTime = formatTime(en);
+            const ac = graphNonResourceAttendeeCount(ge);
+            console.log(`\n  [${i + 1}] ${ge.subject ?? '(no subject)'}`);
+            console.log(`      ${startTime} - ${endTime}`);
+            console.log(`      ID: ${ge.id}`);
+            if (ge.location?.displayName) {
+              console.log(`      Location: ${ge.location.displayName}`);
+            }
+            if (ac > 0) {
+              console.log(`      Attendees: ${ac} (will be notified on cancel)`);
+            }
+          } else {
+            const e = event as CalendarEvent;
+            const attendees = e.Attendees?.filter((a) => a.EmailAddress?.Address && a.Type !== 'Resource') || [];
+            console.log(`\n  [${i + 1}] ${e.Subject}`);
+            console.log(`      ${formatTime(e.Start.DateTime)} - ${formatTime(e.End.DateTime)}`);
+            console.log(`      ID: ${e.Id}`);
+            if (e.Location?.DisplayName) {
+              console.log(`      Location: ${e.Location.DisplayName}`);
+            }
+            if (attendees.length > 0) {
+              console.log(`      Attendees: ${attendees.length} (will be notified on cancel)`);
+            }
           }
         }
 
@@ -156,125 +272,327 @@ export const deleteEventCommand = new Command('delete-event')
       }
 
       // Delete the specified event by ID
-      if (!options.id) {
-        console.error('Please specify the event id with --id.');
-        console.error('Run `m365-agent-cli delete-event` to list events and IDs.');
-        process.exit(1);
-      }
-
-      // Determine scope and occurrence ID
       let scope = options.scope as 'all' | 'this' | 'future';
       let occurrenceItemId: string | undefined;
-      let targetEvent = events.find((e) => e.Id === options.id);
+      let targetGraph: GraphCalendarEvent | undefined;
+      let targetEws: CalendarEvent | undefined;
 
-      // Validate scope: 'future' is not currently supported by EWS
-      if (scope === 'future') {
-        console.error('Error: --scope future is not supported.');
-        console.error('EWS does not provide a native operation to delete "this and future" occurrences.');
-        console.error('Use --scope this to delete a single occurrence, or --scope all to delete the entire series.');
-        process.exit(1);
-      }
-
-      // If occurrence/instance flags are provided without explicit scope, default to 'this'
       if ((options.occurrence || options.instance) && options.scope === 'all') {
         scope = 'this';
       }
 
-      if ((options.occurrence || options.instance) && scope === 'this') {
-        // Find the occurrence by index or date, ensuring it matches the provided event ID
-        if (options.instance) {
-          // Find occurrence matching the specific date and event ID
-          let instanceDate: Date;
-          try {
-            instanceDate = parseDay(options.instance, { throwOnInvalid: true });
-          } catch (err) {
-            const message = err instanceof Error ? err.message : 'Invalid instance date';
-            if (options.json) {
-              console.log(JSON.stringify({ error: message }, null, 2));
-            } else {
-              console.error(`Error: ${message}`);
+      if (useGraph) {
+        targetGraph = events.find((e) => (e as GraphCalendarEvent).id === options.id) as GraphCalendarEvent | undefined;
+        if (!targetGraph && options.id) {
+          targetGraph = events.find((e) => graphEventMatchesOccurrenceFilter(e as GraphCalendarEvent, options.id!)) as
+            | GraphCalendarEvent
+            | undefined;
+        }
+        if ((options.occurrence || options.instance) && (scope === 'this' || scope === 'future') && targetGraph) {
+          if (options.instance) {
+            let instanceDate: Date;
+            try {
+              instanceDate = parseDay(options.instance, { throwOnInvalid: true });
+            } catch (err) {
+              const message = err instanceof Error ? err.message : 'Invalid instance date';
+              if (options.json) {
+                console.log(JSON.stringify({ error: message }, null, 2));
+              } else {
+                console.error(`Error: ${message}`);
+              }
+              process.exit(1);
             }
-            process.exit(1);
+            instanceDate.setHours(0, 0, 0, 0);
+            const occEvent = events.find((e) => {
+              const ge = e as GraphCalendarEvent;
+              const eventDate = new Date(graphStartDt(ge));
+              eventDate.setHours(0, 0, 0, 0);
+              return (
+                eventDate.getTime() === instanceDate.getTime() && graphEventMatchesOccurrenceFilter(ge, options.id!)
+              );
+            }) as GraphCalendarEvent | undefined;
+            if (!occEvent) {
+              console.error(
+                `No occurrence found on ${options.instance} with ID ${options.id}. Try expanding the date range with --day.`
+              );
+              process.exit(1);
+            }
+            occurrenceItemId = occEvent.id;
+            targetGraph = occEvent;
+          } else if (options.occurrence) {
+            const idx = parseInt(options.occurrence, 10);
+            if (Number.isNaN(idx) || idx < 1) {
+              console.error('--occurrence must be a positive integer');
+              process.exit(1);
+            }
+            if (idx > events.length) {
+              console.error(
+                `Invalid occurrence index: ${idx}. Only ${events.length} occurrence(s) found in the date range.`
+              );
+              process.exit(1);
+            }
+            const occEvent = events[idx - 1] as GraphCalendarEvent;
+            if (!graphEventMatchesOccurrenceFilter(occEvent, options.id!)) {
+              console.error(`Occurrence ${idx} does not match the provided event ID ${options.id}.`);
+              process.exit(1);
+            }
+            occurrenceItemId = occEvent.id;
+            targetGraph = occEvent;
           }
-          instanceDate.setHours(0, 0, 0, 0);
-          const occEvent = events.find((e) => {
-            const eventDate = new Date(e.Start.DateTime);
-            eventDate.setHours(0, 0, 0, 0);
-            return eventDate.getTime() === instanceDate.getTime() && e.Id === options.id;
-          });
-          if (!occEvent) {
-            console.error(
-              `No occurrence found on ${options.instance} with ID ${options.id}. Try expanding the date range with --day.`
+          if (!options.json) {
+            if (scope === 'future') {
+              console.log(`\nTruncating series from occurrence: ${targetGraph.subject ?? '(no subject)'}`);
+            } else {
+              console.log(`\nDeleting single occurrence: ${targetGraph.subject ?? '(no subject)'}`);
+            }
+            console.log(
+              `  ${formatDate(graphStartDt(targetGraph))} ${formatTime(graphStartDt(targetGraph))} - ${formatTime(targetGraph.end?.dateTime ?? '')}`
             );
-            process.exit(1);
           }
-          // For CalendarView items, the Id we get IS the occurrence ID
-          occurrenceItemId = occEvent.Id;
-          targetEvent = occEvent;
-        } else if (options.occurrence) {
-          const idx = parseInt(options.occurrence, 10);
-          if (Number.isNaN(idx) || idx < 1) {
-            console.error('--occurrence must be a positive integer');
-            process.exit(1);
-          }
-          // Events from CalendarView are already individual occurrences
-          if (idx > events.length) {
+        } else if (!targetGraph) {
+          if (scope === 'future') {
+            console.error(`No occurrence found for event ID: ${options.id} on ${options.day}.`);
             console.error(
-              `Invalid occurrence index: ${idx}. Only ${events.length} occurrence(s) found in the date range.`
+              `Use --instance <YYYY-MM-DD> to specify the occurrence date, or --day <date> to search a different day.`
             );
-            process.exit(1);
+          } else {
+            console.error(`Invalid event id: ${options.id}`);
           }
-          const occEvent = events[idx - 1];
-          if (occEvent.Id !== options.id) {
-            console.error(`Occurrence ${idx} does not match the provided event ID ${options.id}.`);
-            process.exit(1);
+          process.exit(1);
+        } else if (scope === 'all') {
+          if (!options.json) {
+            console.log(`\nDeleting: ${targetGraph.subject ?? '(no subject)'}`);
+            console.log(
+              `  ${formatDate(graphStartDt(targetGraph))} ${formatTime(graphStartDt(targetGraph))} - ${formatTime(targetGraph.end?.dateTime ?? '')}`
+            );
           }
-          occurrenceItemId = occEvent.Id;
-          targetEvent = occEvent;
-        }
-        console.log(`\nDeleting single occurrence: ${targetEvent!.Subject}`);
-        console.log(
-          `  ${formatDate(targetEvent!.Start.DateTime)} ${formatTime(targetEvent!.Start.DateTime)} - ${formatTime(targetEvent!.End.DateTime)}`
-        );
-      } else if (!targetEvent) {
-        console.error(`Invalid event id: ${options.id}`);
-        process.exit(1);
-      } else {
-        // Full series delete
-        if (scope !== 'all') {
-          // future scope needs the occurrence ID too
-          console.log(`\nDeleting: ${targetEvent.Subject} (scope: ${scope})`);
         } else {
-          console.log(`\nDeleting: ${targetEvent.Subject}`);
+          if (!options.json) {
+            console.log(`\nDeleting: ${targetGraph.subject ?? '(no subject)'} (scope: ${scope})`);
+            console.log(
+              `  ${formatDate(graphStartDt(targetGraph))} ${formatTime(graphStartDt(targetGraph))} - ${formatTime(targetGraph.end?.dateTime ?? '')}`
+            );
+          }
         }
-        console.log(
-          `  ${formatDate(targetEvent.Start.DateTime)} ${formatTime(targetEvent.Start.DateTime)} - ${formatTime(targetEvent.End.DateTime)}`
-        );
+      } else {
+        targetEws = (events as CalendarEvent[]).find((e) => e.Id === options.id);
+        if ((options.occurrence || options.instance) && (scope === 'this' || scope === 'future')) {
+          if (options.instance) {
+            let instanceDate: Date;
+            try {
+              instanceDate = parseDay(options.instance, { throwOnInvalid: true });
+            } catch (err) {
+              const message = err instanceof Error ? err.message : 'Invalid instance date';
+              if (options.json) {
+                console.log(JSON.stringify({ error: message }, null, 2));
+              } else {
+                console.error(`Error: ${message}`);
+              }
+              process.exit(1);
+            }
+            instanceDate.setHours(0, 0, 0, 0);
+            const occEvent = (events as CalendarEvent[]).find((e) => {
+              const eventDate = new Date(e.Start.DateTime);
+              eventDate.setHours(0, 0, 0, 0);
+              return eventDate.getTime() === instanceDate.getTime() && e.Id === options.id;
+            });
+            if (!occEvent) {
+              console.error(
+                `No occurrence found on ${options.instance} with ID ${options.id}. Try expanding the date range with --day.`
+              );
+              process.exit(1);
+            }
+            occurrenceItemId = occEvent.Id;
+            targetEws = occEvent;
+          } else if (options.occurrence) {
+            const idx = parseInt(options.occurrence, 10);
+            if (Number.isNaN(idx) || idx < 1) {
+              console.error('--occurrence must be a positive integer');
+              process.exit(1);
+            }
+            if (idx > events.length) {
+              console.error(
+                `Invalid occurrence index: ${idx}. Only ${events.length} occurrence(s) found in the date range.`
+              );
+              process.exit(1);
+            }
+            const occEvent = (events as CalendarEvent[])[idx - 1];
+            if (occEvent.Id !== options.id) {
+              console.error(`Occurrence ${idx} does not match the provided event ID ${options.id}.`);
+              process.exit(1);
+            }
+            occurrenceItemId = occEvent.Id;
+            targetEws = occEvent;
+          }
+          if (!options.json) {
+            if (scope === 'future') {
+              console.log(`\nTruncating series from occurrence: ${targetEws!.Subject}`);
+            } else {
+              console.log(`\nDeleting single occurrence: ${targetEws!.Subject}`);
+            }
+            console.log(
+              `  ${formatDate(targetEws!.Start.DateTime)} ${formatTime(targetEws!.Start.DateTime)} - ${formatTime(targetEws!.End.DateTime)}`
+            );
+          }
+        } else if (!targetEws) {
+          console.error(`Invalid event id: ${options.id}`);
+          process.exit(1);
+        } else if (scope !== 'all') {
+          if (!options.json) {
+            console.log(`\nDeleting: ${targetEws.Subject} (scope: ${scope})`);
+            console.log(
+              `  ${formatDate(targetEws.Start.DateTime)} ${formatTime(targetEws.Start.DateTime)} - ${formatTime(targetEws.End.DateTime)}`
+            );
+          }
+        } else {
+          if (!options.json) {
+            console.log(`\nDeleting: ${targetEws.Subject}`);
+            console.log(
+              `  ${formatDate(targetEws.Start.DateTime)} ${formatTime(targetEws.Start.DateTime)} - ${formatTime(targetEws.End.DateTime)}`
+            );
+          }
+        }
       }
 
-      // Check if event has attendees (other than organizer)
-      const attendees = targetEvent!.Attendees?.filter((a) => a.EmailAddress?.Address && a.Type !== 'Resource') || [];
-      const hasAttendees = attendees.length > 0;
+      const deletionId = useGraph ? occurrenceItemId || targetGraph!.id : occurrenceItemId || targetEws!.Id;
+
+      if (useGraph && graphToken && scope === 'future') {
+        if (!options.occurrence && !options.instance && targetGraph!.type === 'seriesMaster') {
+          const msg =
+            'Cannot truncate from series master directly. Use --occurrence or --instance to specify which occurrence to start the truncation from.';
+          if (options.json) {
+            console.log(JSON.stringify({ error: msg }, null, 2));
+          } else {
+            console.error(`Error: ${msg}`);
+          }
+          process.exit(1);
+        }
+        const tr = await truncateRecurringSeriesBeforeCut(graphToken, options.mailbox, targetGraph!, {
+          forceDelete: options.forceDelete,
+          message: options.message
+        });
+        if (!tr.ok) {
+          if (options.json) {
+            console.log(JSON.stringify({ error: tr.error?.message || 'Failed to truncate series' }, null, 2));
+          } else {
+            console.error(`\nError: ${tr.error?.message || 'Failed to truncate series'}`);
+          }
+          process.exit(1);
+        }
+        const seriesAction = tr.data!.action;
+        const attendeesNotified = tr.data!.attendeesNotified ?? 0;
+        if (options.json) {
+          console.log(
+            JSON.stringify(
+              {
+                success: true,
+                backend: 'graph',
+                action: seriesAction,
+                event: targetGraph!.subject,
+                attendeesNotified
+              },
+              null,
+              2
+            )
+          );
+        } else {
+          if (seriesAction === 'truncated') {
+            console.log('\n\u2713 Recurring series updated: this and future occurrences were removed.\n');
+          } else if (seriesAction === 'cancelled') {
+            console.log('\n\u2713 Event cancelled. Attendees were notified.\n');
+          } else {
+            console.log('\n\u2713 Event deleted.\n');
+          }
+        }
+        return;
+      }
+
+      if (useGraph && graphToken) {
+        const hasAttendees = graphNonResourceAttendeeCount(targetGraph!) > 0;
+        const org = targetGraph!.organizer?.emailAddress?.address?.toLowerCase();
+        const attendees =
+          targetGraph!.attendees?.filter((a) => {
+            const addr = a.emailAddress?.address;
+            if (!addr) return false;
+            if ((a as { type?: string }).type === 'resource') return false;
+            if (addr.toLowerCase() === org) return false;
+            return true;
+          }) ?? [];
+
+        let graphRes: { ok: boolean; error?: { message?: string } };
+        let action: string;
+
+        if (hasAttendees && !options.forceDelete && scope === 'all') {
+          console.log(
+            `  Attendees: ${attendees
+              .map((a) => a.emailAddress?.address)
+              .filter(Boolean)
+              .join(', ')}`
+          );
+          console.log(`  Sending cancellation notices...`);
+          graphRes = await cancelCalendarEvent(graphToken, deletionId, {
+            comment: options.message,
+            user: options.mailbox
+          });
+          action = 'cancelled';
+        } else {
+          graphRes = await deleteCalendarEvent(graphToken, deletionId, options.mailbox);
+          action = 'deleted';
+        }
+
+        if (!graphRes.ok) {
+          if (options.json) {
+            console.log(JSON.stringify({ error: graphRes.error?.message || `Failed to ${action} event` }, null, 2));
+          } else {
+            console.error(`\nError: ${graphRes.error?.message || `Failed to ${action} event`}`);
+          }
+          process.exit(1);
+        }
+
+        if (options.json) {
+          console.log(
+            JSON.stringify(
+              {
+                success: true,
+                backend: 'graph',
+                action,
+                event: targetGraph!.subject,
+                attendeesNotified: hasAttendees && !options.forceDelete ? attendees.length : 0
+              },
+              null,
+              2
+            )
+          );
+        } else {
+          if (hasAttendees && !options.forceDelete) {
+            console.log(`\n\u2713 Event cancelled. ${attendees.length} attendee(s) notified.\n`);
+          } else {
+            console.log('\n\u2713 Event deleted.\n');
+          }
+        }
+        return;
+      }
+
+      const attendeesEws = targetEws!.Attendees?.filter((a) => a.EmailAddress?.Address && a.Type !== 'Resource') || [];
+      const hasAttendees = attendeesEws.length > 0;
 
       let deleteResult: Awaited<ReturnType<typeof deleteEvent>>;
       let action: string;
 
       if (hasAttendees && !options.forceDelete && scope === 'all') {
-        // Use cancel to send cancellation notices for full series
-        console.log(`  Attendees: ${attendees.map((a) => a.EmailAddress?.Address).join(', ')}`);
+        console.log(`  Attendees: ${attendeesEws.map((a) => a.EmailAddress?.Address).join(', ')}`);
         console.log(`  Sending cancellation notices...`);
         deleteResult = await cancelEvent({
-          token: authResult.token!,
-          eventId: targetEvent!.Id,
+          token: ewsToken!,
+          eventId: targetEws!.Id,
           comment: options.message,
           mailbox: options.mailbox
         });
         action = 'cancelled';
       } else {
-        // Delete with or without notification based on forceDelete flag
         deleteResult = await deleteEvent({
-          token: authResult.token!,
-          eventId: targetEvent!.Id,
+          token: ewsToken!,
+          eventId: targetEws!.Id,
           occurrenceItemId,
           scope,
           mailbox: options.mailbox,
@@ -298,9 +616,10 @@ export const deleteEventCommand = new Command('delete-event')
           JSON.stringify(
             {
               success: true,
+              backend: 'ews',
               action,
-              event: targetEvent!.Subject,
-              attendeesNotified: hasAttendees && !options.forceDelete ? attendees.length : 0,
+              event: targetEws!.Subject,
+              attendeesNotified: hasAttendees && !options.forceDelete ? attendeesEws.length : 0,
               ...(deleteResult.info ? { info: deleteResult.info } : {})
             },
             null,
@@ -312,7 +631,7 @@ export const deleteEventCommand = new Command('delete-event')
           console.warn(`\nNote: ${deleteResult.info}\n`);
         }
         if (hasAttendees && !options.forceDelete) {
-          console.log(`\n\u2713 Event cancelled. ${attendees.length} attendee(s) notified.\n`);
+          console.log(`\n\u2713 Event cancelled. ${attendeesEws.length} attendee(s) notified.\n`);
         } else {
           console.log('\n\u2713 Event deleted.\n');
         }

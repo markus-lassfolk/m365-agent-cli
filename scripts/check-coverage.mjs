@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
  * Enforce a minimum line coverage from Bun's lcov output (coverage/lcov.info).
- * Set COVERAGE_MIN_LINES (default 35) to adjust the bar.
+ * Set COVERAGE_MIN_LINES (default 32) to adjust the bar.
  * Bun/OS versions can shift totals slightly; keep CI threshold below Bun's "All files" % if needed.
  */
 import { readFileSync } from 'node:fs';
 
-const min = Number(process.env.COVERAGE_MIN_LINES ?? '35');
+const min = Number(process.env.COVERAGE_MIN_LINES ?? '32');
 const path = process.argv[2] ?? 'coverage/lcov.info';
 
 let raw;

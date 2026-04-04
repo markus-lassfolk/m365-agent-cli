@@ -1,5 +1,6 @@
 import {
   callGraph,
+  callGraphAbsolute,
   fetchAllPages,
   fetchGraphRaw,
   GraphApiError,
@@ -17,6 +18,10 @@ function contactsRoot(user?: string): string {
   return graphUserPath(user, 'contacts');
 }
 
+function contactFoldersRoot(user?: string): string {
+  return graphUserPath(user, 'contactFolders');
+}
+
 /** Graph [mailFolder](https://learn.microsoft.com/en-us/graph/api/resources/mailfolder) (subset). */
 export interface OutlookMailFolder {
   id: string;
@@ -32,12 +37,31 @@ export interface OutlookMessage {
   id: string;
   subject?: string;
   bodyPreview?: string;
+  body?: { contentType?: string; content?: string };
   receivedDateTime?: string;
   sentDateTime?: string;
+  lastModifiedDateTime?: string;
   isRead?: boolean;
   importance?: string;
+  categories?: string[];
   from?: { emailAddress?: { name?: string; address?: string } };
   toRecipients?: Array<{ emailAddress?: { name?: string; address?: string } }>;
+  ccRecipients?: Array<{ emailAddress?: { name?: string; address?: string } }>;
+  /** Open in Outlook on the web (when returned by Graph). */
+  webLink?: string;
+  hasAttachments?: boolean;
+  followupFlag?: {
+    flagStatus?: 'notFlagged' | 'flagged' | 'complete';
+    startDateTime?: { dateTime?: string; timeZone?: string };
+    dueDateTime?: { dateTime?: string; timeZone?: string };
+  };
+}
+
+/** Graph [contactFolder](https://learn.microsoft.com/en-us/graph/api/resources/contactfolder) (subset). */
+export interface OutlookContactFolder {
+  id: string;
+  displayName?: string;
+  parentFolderId?: string;
 }
 
 /** Graph [contact](https://learn.microsoft.com/en-us/graph/api/resources/contact) (subset). */
@@ -51,6 +75,23 @@ export interface OutlookContact {
   businessPhones?: string[];
   companyName?: string;
   jobTitle?: string;
+  homePhones?: string[];
+  businessAddress?: Record<string, unknown>;
+  homeAddress?: Record<string, unknown>;
+  personalNotes?: string;
+  birthday?: string;
+  categories?: string[];
+  '@removed'?: { reason?: string };
+}
+
+/** Graph [fileAttachment](https://learn.microsoft.com/en-us/graph/api/resources/fileattachment) on a contact (subset). */
+export interface GraphContactAttachment {
+  id: string;
+  name?: string;
+  contentType?: string;
+  size?: number;
+  isInline?: boolean;
+  '@odata.type'?: string;
 }
 
 export async function listMailFolders(token: string, user?: string): Promise<GraphResponse<OutlookMailFolder[]>> {
@@ -160,12 +201,49 @@ export async function deleteMailFolder(token: string, folderId: string, user?: s
   }
 }
 
+/** All mail folders (nested), depth-first under the mailbox root. */
+export async function listAllMailFoldersRecursive(
+  token: string,
+  user?: string
+): Promise<GraphResponse<OutlookMailFolder[]>> {
+  try {
+    const root = await listMailFolders(token, user);
+    if (!root.ok || !root.data) return root;
+    const all: OutlookMailFolder[] = [];
+
+    async function walk(folder: OutlookMailFolder): Promise<void> {
+      all.push(folder);
+      const n = folder.childFolderCount ?? 0;
+      if (n === 0) return;
+      const ch = await listChildMailFolders(token, folder.id, user);
+      if (!ch.ok || !ch.data?.length) return;
+      for (const c of ch.data) {
+        await walk(c);
+      }
+    }
+
+    for (const f of root.data) {
+      await walk(f);
+    }
+    return graphResult(all);
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to list mail folders');
+  }
+}
+
 export interface MessagesQueryOptions {
   filter?: string;
   orderby?: string;
   select?: string;
   /** When set, only one page (no automatic paging). */
   top?: number;
+  skip?: number;
+  /**
+   * Keyword search (`$search`). Requires `ConsistencyLevel: eventual` (applied automatically).
+   * Do not combine with `$filter` on the same request; use client-side filtering if both apply.
+   */
+  search?: string;
 }
 
 /** Query for `GET /me/messages` (mailbox-wide, not folder-scoped). */
@@ -185,6 +263,8 @@ export interface GraphMailMessageAttachment {
   contentType?: string;
   size?: number;
   isInline?: boolean;
+  /** Reference / link attachment target URL. */
+  sourceUrl?: string;
   '@odata.type'?: string;
 }
 
@@ -194,8 +274,17 @@ function messagesPath(folderId: string, user: string | undefined, query?: Messag
   if (query?.orderby) params.set('$orderby', query.orderby);
   if (query?.select) params.set('$select', query.select);
   if (query?.top !== undefined) params.set('$top', String(query.top));
+  if (query?.skip !== undefined) params.set('$skip', String(query.skip));
+  if (query?.search) {
+    const escaped = query.search.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    params.set('$search', `"${escaped}"`);
+  }
   const qs = params.toString() ? `?${params.toString()}` : '';
   return `${mailFoldersRoot(user)}/${encodeURIComponent(folderId)}/messages${qs}`;
+}
+
+function folderMessagesSearchRequestInit(query?: MessagesQueryOptions): RequestInit | undefined {
+  return query?.search ? { headers: { ConsistencyLevel: 'eventual' } } : undefined;
 }
 
 function mailboxMessagesPath(user: string | undefined, query?: RootMailboxMessagesQuery): string {
@@ -229,10 +318,11 @@ export async function listMessagesInFolder(
 ): Promise<GraphResponse<OutlookMessage[]>> {
   const path = messagesPath(folderId, user, query);
   const singlePage = query?.top !== undefined;
+  const req = folderMessagesSearchRequestInit(query);
 
   if (singlePage) {
     try {
-      const result = await callGraph<{ value: OutlookMessage[] }>(token, path);
+      const result = await callGraph<{ value: OutlookMessage[] }>(token, path, req ?? {});
       if (!result.ok || !result.data) {
         return graphError(result.error?.message || 'Failed to list messages', result.error?.code, result.error?.status);
       }
@@ -243,7 +333,7 @@ export async function listMessagesInFolder(
     }
   }
 
-  return fetchAllPages<OutlookMessage>(token, path, 'Failed to list messages');
+  return fetchAllPages<OutlookMessage>(token, path, 'Failed to list messages', undefined, req);
 }
 
 /**
@@ -298,6 +388,58 @@ export async function getMessage(
   }
 }
 
+/** Payload for `POST /me/messages` with `isDraft: true`. */
+export interface GraphCreateDraftMessageInput {
+  subject?: string;
+  bodyContent: string;
+  bodyContentType: 'Text' | 'HTML';
+  toAddresses?: string[];
+  ccAddresses?: string[];
+  categories?: string[];
+}
+
+/** Create a draft in the Drafts folder (`POST /me/messages` with `isDraft: true`). */
+export async function createDraftMessage(
+  token: string,
+  input: GraphCreateDraftMessageInput,
+  user?: string
+): Promise<GraphResponse<OutlookMessage>> {
+  const message: Record<string, unknown> = {
+    isDraft: true,
+    body: {
+      contentType: input.bodyContentType,
+      content: input.bodyContent
+    }
+  };
+  if (input.subject !== undefined) {
+    message.subject = input.subject;
+  }
+  if (input.toAddresses?.length) {
+    message.toRecipients = input.toAddresses.map((address) => ({ emailAddress: { address } }));
+  }
+  if (input.ccAddresses?.length) {
+    message.ccRecipients = input.ccAddresses.map((address) => ({ emailAddress: { address } }));
+  }
+  if (input.categories?.length) {
+    message.categories = input.categories;
+  }
+  try {
+    const result = await callGraph<OutlookMessage>(
+      token,
+      graphUserPath(user, 'messages'),
+      { method: 'POST', body: JSON.stringify(message) },
+      true
+    );
+    if (!result.ok || !result.data) {
+      return graphError(result.error?.message || 'Failed to create draft', result.error?.code, result.error?.status);
+    }
+    return graphResult(result.data);
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to create draft');
+  }
+}
+
 export async function patchMailMessage(
   token: string,
   messageId: string,
@@ -317,6 +459,69 @@ export async function patchMailMessage(
   } catch (err) {
     if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
     return graphError(err instanceof Error ? err.message : 'Failed to update message');
+  }
+}
+
+/** `POST /me/messages/{id}/attachments` — add a file attachment to a draft message. */
+export async function addFileAttachmentToMailMessage(
+  token: string,
+  messageId: string,
+  attachment: { name: string; contentType: string; contentBytes: string },
+  user?: string
+): Promise<GraphResponse<GraphMailMessageAttachment>> {
+  const body = {
+    '@odata.type': '#microsoft.graph.fileAttachment',
+    name: attachment.name,
+    contentType: attachment.contentType,
+    contentBytes: attachment.contentBytes
+  };
+  try {
+    const result = await callGraph<GraphMailMessageAttachment>(
+      token,
+      `${graphUserPath(user, 'messages')}/${encodeURIComponent(messageId)}/attachments`,
+      { method: 'POST', body: JSON.stringify(body) },
+      true
+    );
+    if (!result.ok || !result.data) {
+      return graphError(result.error?.message || 'Failed to add attachment', result.error?.code, result.error?.status);
+    }
+    return graphResult(result.data);
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to add attachment');
+  }
+}
+
+/** `POST /me/messages/{id}/attachments` — add a link (`referenceAttachment`) to a draft message. */
+export async function addReferenceAttachmentToMailMessage(
+  token: string,
+  messageId: string,
+  attachment: { name: string; sourceUrl: string },
+  user?: string
+): Promise<GraphResponse<GraphMailMessageAttachment>> {
+  const body = {
+    '@odata.type': '#microsoft.graph.referenceAttachment',
+    name: attachment.name,
+    sourceUrl: attachment.sourceUrl
+  };
+  try {
+    const result = await callGraph<GraphMailMessageAttachment>(
+      token,
+      `${graphUserPath(user, 'messages')}/${encodeURIComponent(messageId)}/attachments`,
+      { method: 'POST', body: JSON.stringify(body) },
+      true
+    );
+    if (!result.ok || !result.data) {
+      return graphError(
+        result.error?.message || 'Failed to add link attachment',
+        result.error?.code,
+        result.error?.status
+      );
+    }
+    return graphResult(result.data);
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to add link attachment');
   }
 }
 
@@ -567,8 +772,32 @@ export async function createMailForwardDraft(
   }
 }
 
-export async function listContacts(token: string, user?: string): Promise<GraphResponse<OutlookContact[]>> {
-  return fetchAllPages<OutlookContact>(token, contactsRoot(user), 'Failed to list contacts');
+export async function listContactFolders(token: string, user?: string): Promise<GraphResponse<OutlookContactFolder[]>> {
+  return fetchAllPages<OutlookContactFolder>(token, contactFoldersRoot(user), 'Failed to list contact folders');
+}
+
+/** Optional OData query (without leading `?`), e.g. `$filter=...` or `$orderby=displayName`. */
+export async function listContacts(
+  token: string,
+  user?: string,
+  odataQuery?: string
+): Promise<GraphResponse<OutlookContact[]>> {
+  const q = odataQuery?.trim() ? (odataQuery.startsWith('?') ? odataQuery : `?${odataQuery}`) : '';
+  return fetchAllPages<OutlookContact>(token, `${contactsRoot(user)}${q}`, 'Failed to list contacts');
+}
+
+export async function listContactsInFolder(
+  token: string,
+  folderId: string,
+  user?: string,
+  odataQuery?: string
+): Promise<GraphResponse<OutlookContact[]>> {
+  const q = odataQuery?.trim() ? (odataQuery.startsWith('?') ? odataQuery : `?${odataQuery}`) : '';
+  return fetchAllPages<OutlookContact>(
+    token,
+    `${contactFoldersRoot(user)}/${encodeURIComponent(folderId)}/contacts${q}`,
+    'Failed to list contacts in folder'
+  );
 }
 
 export async function getContact(
@@ -596,10 +825,15 @@ export async function getContact(
 export async function createContact(
   token: string,
   body: Record<string, unknown>,
-  user?: string
+  user?: string,
+  /** When set, `POST /contactFolders/{id}/contacts` instead of default `/contacts`. */
+  folderId?: string
 ): Promise<GraphResponse<OutlookContact>> {
+  const path = folderId?.trim()
+    ? `${contactFoldersRoot(user)}/${encodeURIComponent(folderId.trim())}/contacts`
+    : contactsRoot(user);
   try {
-    const result = await callGraph<OutlookContact>(token, contactsRoot(user), {
+    const result = await callGraph<OutlookContact>(token, path, {
       method: 'POST',
       body: JSON.stringify(body)
     });
@@ -645,5 +879,428 @@ export async function deleteContact(token: string, contactId: string, user?: str
   } catch (err) {
     if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
     return graphError(err instanceof Error ? err.message : 'Failed to delete contact');
+  }
+}
+
+// ─── Contact folders (CRUD + child folders) ───────────────────────────────
+
+export async function getContactFolder(
+  token: string,
+  folderId: string,
+  user?: string
+): Promise<GraphResponse<OutlookContactFolder>> {
+  try {
+    const result = await callGraph<OutlookContactFolder>(
+      token,
+      `${contactFoldersRoot(user)}/${encodeURIComponent(folderId)}`
+    );
+    if (!result.ok || !result.data) {
+      return graphError(
+        result.error?.message || 'Failed to get contact folder',
+        result.error?.code,
+        result.error?.status
+      );
+    }
+    return graphResult(result.data);
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to get contact folder');
+  }
+}
+
+export async function createContactFolder(
+  token: string,
+  displayName: string,
+  user?: string,
+  parentFolderId?: string
+): Promise<GraphResponse<OutlookContactFolder>> {
+  const payload: Record<string, unknown> = { displayName };
+  const trimmedParentId = parentFolderId?.trim();
+  const endpoint = trimmedParentId
+    ? `${contactFoldersRoot(user)}/${encodeURIComponent(trimmedParentId)}/childFolders`
+    : contactFoldersRoot(user);
+  try {
+    const result = await callGraph<OutlookContactFolder>(token, endpoint, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    if (!result.ok || !result.data) {
+      return graphError(
+        result.error?.message || 'Failed to create contact folder',
+        result.error?.code,
+        result.error?.status
+      );
+    }
+    return graphResult(result.data);
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to create contact folder');
+  }
+}
+
+export async function updateContactFolder(
+  token: string,
+  folderId: string,
+  patch: Record<string, unknown>,
+  user?: string
+): Promise<GraphResponse<OutlookContactFolder>> {
+  try {
+    const result = await callGraph<OutlookContactFolder>(
+      token,
+      `${contactFoldersRoot(user)}/${encodeURIComponent(folderId)}`,
+      { method: 'PATCH', body: JSON.stringify(patch) }
+    );
+    if (!result.ok || !result.data) {
+      return graphError(
+        result.error?.message || 'Failed to update contact folder',
+        result.error?.code,
+        result.error?.status
+      );
+    }
+    return graphResult(result.data);
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to update contact folder');
+  }
+}
+
+export async function deleteContactFolder(
+  token: string,
+  folderId: string,
+  user?: string
+): Promise<GraphResponse<void>> {
+  try {
+    return await callGraph<void>(
+      token,
+      `${contactFoldersRoot(user)}/${encodeURIComponent(folderId)}`,
+      { method: 'DELETE' },
+      false
+    );
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to delete contact folder');
+  }
+}
+
+export async function listChildContactFolders(
+  token: string,
+  parentFolderId: string,
+  user?: string
+): Promise<GraphResponse<OutlookContactFolder[]>> {
+  return fetchAllPages<OutlookContactFolder>(
+    token,
+    `${contactFoldersRoot(user)}/${encodeURIComponent(parentFolderId)}/childFolders`,
+    'Failed to list child contact folders'
+  );
+}
+
+/** OData search on contacts ([search](https://learn.microsoft.com/en-us/graph/search-query-parameter)); requires `ConsistencyLevel: eventual`. */
+export async function searchContacts(
+  token: string,
+  searchQuery: string,
+  user?: string,
+  folderId?: string
+): Promise<GraphResponse<OutlookContact[]>> {
+  const q = encodeURIComponent(searchQuery);
+  const path = folderId?.trim()
+    ? `${contactFoldersRoot(user)}/${encodeURIComponent(folderId.trim())}/contacts?$search=${q}`
+    : `${contactsRoot(user)}?$search=${q}`;
+  return fetchAllPages<OutlookContact>(token, path, 'Failed to search contacts', undefined, {
+    headers: { ConsistencyLevel: 'eventual' }
+  });
+}
+
+/** One page of message delta sync ([delta](https://learn.microsoft.com/en-us/graph/delta-query-messages)). */
+export interface MailMessagesDeltaPage {
+  value?: OutlookMessage[];
+  '@odata.nextLink'?: string;
+  '@odata.deltaLink'?: string;
+}
+
+export async function mailMessagesDeltaPage(
+  token: string,
+  options?: { user?: string; folderId?: string; nextLink?: string }
+): Promise<GraphResponse<MailMessagesDeltaPage>> {
+  try {
+    if (options?.nextLink?.trim()) {
+      const result = await callGraphAbsolute<MailMessagesDeltaPage>(token, options.nextLink.trim());
+      if (!result.ok || !result.data) {
+        return graphError(
+          result.error?.message || 'Failed to fetch messages delta page',
+          result.error?.code,
+          result.error?.status
+        );
+      }
+      return graphResult(result.data);
+    }
+    const fid = options?.folderId?.trim();
+    const path = fid
+      ? `${mailFoldersRoot(options?.user)}/${encodeURIComponent(fid)}/messages/delta`
+      : `${graphUserPath(options?.user, 'messages')}/delta`;
+    const result = await callGraph<MailMessagesDeltaPage>(token, path);
+    if (!result.ok || !result.data) {
+      return graphError(
+        result.error?.message || 'Failed to start messages delta',
+        result.error?.code,
+        result.error?.status
+      );
+    }
+    return graphResult(result.data);
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to fetch messages delta');
+  }
+}
+
+/** One page of delta sync ([delta](https://learn.microsoft.com/en-us/graph/delta-query-contacts)). Pass `nextLink` from a previous response to continue. */
+export interface ContactsDeltaPage {
+  value: OutlookContact[];
+  '@odata.nextLink'?: string;
+  '@odata.deltaLink'?: string;
+}
+
+export async function contactsDeltaPage(
+  token: string,
+  options?: { user?: string; folderId?: string; nextLink?: string }
+): Promise<GraphResponse<ContactsDeltaPage>> {
+  try {
+    if (options?.nextLink?.trim()) {
+      const result = await callGraphAbsolute<ContactsDeltaPage>(token, options.nextLink.trim());
+      if (!result.ok || !result.data) {
+        return graphError(
+          result.error?.message || 'Failed to fetch contacts delta page',
+          result.error?.code,
+          result.error?.status
+        );
+      }
+      return graphResult(result.data);
+    }
+    const fid = options?.folderId?.trim();
+    const path = fid
+      ? `${contactFoldersRoot(options?.user)}/${encodeURIComponent(fid)}/contacts/delta`
+      : `${contactsRoot(options?.user)}/delta`;
+    const result = await callGraph<ContactsDeltaPage>(token, path);
+    if (!result.ok || !result.data) {
+      return graphError(
+        result.error?.message || 'Failed to start contacts delta',
+        result.error?.code,
+        result.error?.status
+      );
+    }
+    return graphResult(result.data);
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to fetch contacts delta');
+  }
+}
+
+// ─── Contact photo ──────────────────────────────────────────────────────────
+
+export async function getContactPhotoBytes(
+  token: string,
+  contactId: string,
+  user?: string
+): Promise<GraphResponse<Uint8Array>> {
+  const path = `${contactsRoot(user)}/${encodeURIComponent(contactId)}/photo/$value`;
+  try {
+    const res = await fetchGraphRaw(token, path);
+    if (!res.ok) {
+      let message = `Failed to get contact photo: HTTP ${res.status}`;
+      try {
+        const json = (await res.json()) as { error?: { message?: string } };
+        message = json.error?.message || message;
+      } catch {
+        // ignore
+      }
+      return graphError(message, undefined, res.status);
+    }
+    return graphResult(new Uint8Array(await res.arrayBuffer()));
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to get contact photo');
+  }
+}
+
+export async function setContactPhoto(
+  token: string,
+  contactId: string,
+  imageBytes: Uint8Array,
+  contentType: string,
+  user?: string
+): Promise<GraphResponse<void>> {
+  const path = `${contactsRoot(user)}/${encodeURIComponent(contactId)}/photo/$value`;
+  try {
+    return await callGraph<void>(
+      token,
+      path,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': contentType || 'image/jpeg' },
+        body: Buffer.from(imageBytes)
+      },
+      false
+    );
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to set contact photo');
+  }
+}
+
+export async function deleteContactPhoto(
+  token: string,
+  contactId: string,
+  user?: string
+): Promise<GraphResponse<void>> {
+  try {
+    return await callGraph<void>(
+      token,
+      `${contactsRoot(user)}/${encodeURIComponent(contactId)}/photo`,
+      { method: 'DELETE' },
+      false
+    );
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to delete contact photo');
+  }
+}
+
+// ─── Contact attachments ─────────────────────────────────────────────────
+
+export async function listContactAttachments(
+  token: string,
+  contactId: string,
+  user?: string
+): Promise<GraphResponse<GraphContactAttachment[]>> {
+  return fetchAllPages<GraphContactAttachment>(
+    token,
+    `${contactsRoot(user)}/${encodeURIComponent(contactId)}/attachments`,
+    'Failed to list contact attachments'
+  );
+}
+
+export async function addFileAttachmentToContact(
+  token: string,
+  contactId: string,
+  attachment: { name: string; contentType: string; contentBytes: string },
+  user?: string
+): Promise<GraphResponse<GraphContactAttachment>> {
+  const body = JSON.stringify({
+    '@odata.type': '#microsoft.graph.fileAttachment',
+    name: attachment.name,
+    contentType: attachment.contentType,
+    contentBytes: attachment.contentBytes
+  });
+  try {
+    const result = await callGraph<GraphContactAttachment>(
+      token,
+      `${contactsRoot(user)}/${encodeURIComponent(contactId)}/attachments`,
+      { method: 'POST', body }
+    );
+    if (!result.ok || !result.data) {
+      return graphError(result.error?.message || 'Failed to add attachment', result.error?.code, result.error?.status);
+    }
+    return graphResult(result.data);
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to add attachment');
+  }
+}
+
+/** `POST …/contacts/{id}/attachments` — add a link ([referenceAttachment](https://learn.microsoft.com/en-us/graph/api/contact-post-attachments)). */
+export async function addReferenceAttachmentToContact(
+  token: string,
+  contactId: string,
+  attachment: { name: string; sourceUrl: string },
+  user?: string
+): Promise<GraphResponse<GraphContactAttachment>> {
+  const body = JSON.stringify({
+    '@odata.type': '#microsoft.graph.referenceAttachment',
+    name: attachment.name,
+    sourceUrl: attachment.sourceUrl
+  });
+  try {
+    const result = await callGraph<GraphContactAttachment>(
+      token,
+      `${contactsRoot(user)}/${encodeURIComponent(contactId)}/attachments`,
+      { method: 'POST', body },
+      true
+    );
+    if (!result.ok || !result.data) {
+      return graphError(
+        result.error?.message || 'Failed to add link attachment',
+        result.error?.code,
+        result.error?.status
+      );
+    }
+    return graphResult(result.data);
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to add link attachment');
+  }
+}
+
+export async function getContactAttachment(
+  token: string,
+  contactId: string,
+  attachmentId: string,
+  user?: string
+): Promise<GraphResponse<GraphContactAttachment>> {
+  try {
+    const result = await callGraph<GraphContactAttachment>(
+      token,
+      `${contactsRoot(user)}/${encodeURIComponent(contactId)}/attachments/${encodeURIComponent(attachmentId)}`
+    );
+    if (!result.ok || !result.data) {
+      return graphError(result.error?.message || 'Failed to get attachment', result.error?.code, result.error?.status);
+    }
+    return graphResult(result.data);
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to get attachment');
+  }
+}
+
+export async function deleteContactAttachment(
+  token: string,
+  contactId: string,
+  attachmentId: string,
+  user?: string
+): Promise<GraphResponse<void>> {
+  try {
+    return await callGraph<void>(
+      token,
+      `${contactsRoot(user)}/${encodeURIComponent(contactId)}/attachments/${encodeURIComponent(attachmentId)}`,
+      { method: 'DELETE' },
+      false
+    );
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to delete attachment');
+  }
+}
+
+export async function downloadContactAttachmentBytes(
+  token: string,
+  contactId: string,
+  attachmentId: string,
+  user?: string
+): Promise<GraphResponse<Uint8Array>> {
+  const path = `${contactsRoot(user)}/${encodeURIComponent(contactId)}/attachments/${encodeURIComponent(attachmentId)}/$value`;
+  try {
+    const res = await fetchGraphRaw(token, path);
+    if (!res.ok) {
+      let message = `Failed to download attachment: HTTP ${res.status}`;
+      try {
+        const json = (await res.json()) as { error?: { message?: string } };
+        message = json.error?.message || message;
+      } catch {
+        // ignore
+      }
+      return graphError(message, undefined, res.status);
+    }
+    return graphResult(new Uint8Array(await res.arrayBuffer()));
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
+    return graphError(err instanceof Error ? err.message : 'Failed to download attachment');
   }
 }

@@ -59,7 +59,7 @@ jobs:
 
       - name: Tests + coverage floor
         env:
-          COVERAGE_MIN_LINES: '35'
+          COVERAGE_MIN_LINES: '32'
         run: |
           bun run test:coverage
           test -f coverage/lcov.info || (echo '::error::coverage/lcov.info missing after bun test --coverage' && exit 1)

@@ -6,9 +6,10 @@
  * messages redacted (see stripSensitiveEventData).
  */
 
-import type { ErrorEvent, EventHint, StackFrame } from '@sentry/core';
+import type { CaptureContext, ErrorEvent, EventHint, StackFrame } from '@sentry/core';
 import { captureException, flush, init, isInitialized } from '@sentry/node';
 import { checkGlitchTipEligibility } from './glitchtip-eligibility.js';
+import { glitchTipShouldSuppressHint } from './glitchtip-report-policy.js';
 import { getPackageVersionSync } from './package-info.js';
 
 /** Keys we never attach to reports (callers may pass `extra`; these are dropped). */
@@ -154,33 +155,10 @@ function getDsn(): string | undefined {
   return raw;
 }
 
-/** Errno codes that usually indicate environment/network, not application bugs. */
-const DEFAULT_IGNORE_ERRNO = new Set([
-  'ECONNREFUSED',
-  'ECONNRESET',
-  'ETIMEDOUT',
-  'ENOTFOUND',
-  'EAI_AGAIN',
-  'ENETUNREACH'
-]);
-
 function beforeSend(event: ErrorEvent, hint: EventHint): ErrorEvent | null {
   const reportAll = process.env.GLITCHTIP_REPORT_ALL === '1';
-  if (!reportAll) {
-    const ex = hint.originalException;
-    if (ex && typeof ex === 'object' && 'code' in ex) {
-      const code = String((ex as NodeJS.ErrnoException).code);
-      if (code && DEFAULT_IGNORE_ERRNO.has(code)) {
-        return null;
-      }
-    }
-
-    if (ex instanceof Error) {
-      const msg = ex.message;
-      if (/invalid[_ ]?grant|refresh[_ ]?token.*invalid|AADSTS\d+/i.test(msg)) {
-        return null;
-      }
-    }
+  if (glitchTipShouldSuppressHint(hint, reportAll)) {
+    return null;
   }
 
   stripSensitiveEventData(event);
@@ -231,23 +209,57 @@ export async function initGlitchTip(): Promise<void> {
     tracesSampleRate: 0,
     profilesSampleRate: 0,
     maxBreadcrumbs: 0,
+    /** Allow time for the transport to flush events on fatal exit (see `onUncaughtException` integration). */
+    shutdownTimeout: 3000,
     beforeBreadcrumb: () => null,
     beforeSend: beforeSend as (event: ErrorEvent, hint: EventHint) => ErrorEvent | null
   });
 }
 
 /** Wait for the transport to finish (call before `process.exit` after a capture). */
-export async function flushGlitchTip(timeoutMs = 2000): Promise<boolean> {
+export async function flushGlitchTip(timeoutMs = 3000): Promise<boolean> {
   if (!isInitialized()) return true;
   return flush(timeoutMs);
 }
 
-/** Report an exception (e.g. Commander parse failure). No-op if GlitchTip is not configured. */
-export function captureCliException(error: unknown, extra?: Record<string, unknown>): void {
-  if (!isInitialized()) return;
-  if (extra && Object.keys(extra).length > 0) {
-    captureException(error, { extra: sanitizeExtraForReport(extra) });
-  } else {
-    captureException(error);
+const SAFE_TAG_KEY = /^[a-z][a-z0-9_.-]{0,47}$/i;
+
+function sanitizeTags(tags: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(tags)) {
+    if (!SAFE_TAG_KEY.test(k)) continue;
+    out[k] = redactString(v).slice(0, 200);
   }
+  return out;
+}
+
+/**
+ * Report an exception (e.g. Commander parse failure, or a caught bug before exit).
+ * No-op if GlitchTip did not initialize (no DSN, disabled, or failed eligibility).
+ *
+ * `tags` are redacted and key names restricted to safe Sentry tag shape (no PII keys).
+ */
+export function captureCliException(
+  error: unknown,
+  extra?: Record<string, unknown>,
+  tags?: Record<string, string>
+): void {
+  if (!isInitialized()) return;
+
+  const hasExtra = extra && Object.keys(extra).length > 0;
+  const hasTags = tags && Object.keys(tags).length > 0;
+
+  if (!hasExtra && !hasTags) {
+    captureException(error);
+    return;
+  }
+
+  const ctx: CaptureContext = {};
+  if (hasExtra) {
+    ctx.extra = sanitizeExtraForReport(extra!);
+  }
+  if (hasTags) {
+    ctx.tags = sanitizeTags(tags!);
+  }
+  captureException(error, ctx);
 }

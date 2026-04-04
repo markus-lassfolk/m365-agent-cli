@@ -13,9 +13,13 @@ import {
   sendDraftById,
   updateDraft
 } from '../lib/ews-client.js';
+import { getExchangeBackend } from '../lib/exchange-backend.js';
+import { resolveGraphAuth } from '../lib/graph-auth.js';
 import { markdownToHtml } from '../lib/markdown.js';
 import { lookupMimeType } from '../lib/mime-type.js';
+import { getMessage, listMessagesInFolder } from '../lib/outlook-graph-client.js';
 import { checkReadOnly } from '../lib/utils.js';
+import { tryGraphDraftMutations } from './drafts-graph.js';
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
@@ -66,7 +70,7 @@ export const draftsCommand = new Command('drafts')
   .option('--clear-categories', 'On --edit, remove all categories from the draft')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
-  .option('--identity <name>', 'Use a specific authentication identity (EWS; default: default)')
+  .option('--identity <name>', 'Use a specific authentication identity (default: default)')
   .option('--mailbox <email>', 'Delegated or shared mailbox drafts folder')
   .action(
     async (
@@ -97,6 +101,172 @@ export const draftsCommand = new Command('drafts')
       if (options.send || options.delete || options.create || options.edit) {
         checkReadOnly(cmd);
       }
+
+      const backend = getExchangeBackend();
+      const needsEwsMutation = !!(options.create || options.edit || options.send || options.delete);
+      const graphDraftsListOrRead = !needsEwsMutation;
+
+      if (graphDraftsListOrRead && (backend === 'graph' || backend === 'auto')) {
+        const ga = await resolveGraphAuth({ token: options.token, identity: options.identity });
+        if (ga.success && ga.token) {
+          const user = options.mailbox?.trim() || undefined;
+
+          if (options.read) {
+            const id = options.read.trim();
+            const select =
+              'subject,body,bodyPreview,toRecipients,ccRecipients,categories,lastModifiedDateTime,receivedDateTime';
+            const full = await getMessage(ga.token, id, user, select);
+            if (!full.ok || !full.data) {
+              if (backend === 'graph') {
+                if (options.json) {
+                  console.log(JSON.stringify({ error: full.error?.message || 'Failed to fetch draft' }, null, 2));
+                } else {
+                  console.error(`Error: ${full.error?.message || 'Failed to fetch draft'}`);
+                }
+                process.exit(1);
+              }
+              if (!options.json) {
+                console.warn(`[drafts] Graph failed (${full.error?.message || 'unknown'}); falling back to EWS.`);
+              }
+            } else {
+              const d = full.data;
+
+              if (options.json) {
+                console.log(JSON.stringify({ backend: 'graph', draft: d }, null, 2));
+                return;
+              }
+
+              const toLine =
+                d.toRecipients
+                  ?.map((x) => x.emailAddress?.address)
+                  .filter(Boolean)
+                  .join(', ') || '(none)';
+              console.log(`\n${'\u2500'.repeat(60)}`);
+              console.log(`To: ${toLine}`);
+              if (d.ccRecipients?.length) {
+                console.log(
+                  `Cc: ${
+                    d.ccRecipients
+                      .map((x) => x.emailAddress?.address)
+                      .filter(Boolean)
+                      .join(', ') || '(none)'
+                  }`
+                );
+              }
+              console.log(`Subject: ${d.subject || '(no subject)'}`);
+              if (d.categories?.length) console.log(`Categories: ${d.categories.join(', ')}`);
+              console.log(`${'\u2500'.repeat(60)}\n`);
+              const content = d.body?.content ?? d.bodyPreview ?? '(no content)';
+              console.log(content);
+              console.log(`\n${'\u2500'.repeat(60)}\n`);
+              return;
+            }
+          }
+
+          const limit = parseInt(options.limit, 10) || 10;
+          const r = await listMessagesInFolder(ga.token, 'drafts', user, {
+            top: limit,
+            orderby: 'lastModifiedDateTime desc'
+          });
+          if (!r.ok || !r.data) {
+            if (backend === 'graph') {
+              if (options.json) {
+                console.log(JSON.stringify({ error: r.error?.message || 'Failed to fetch drafts' }, null, 2));
+              } else {
+                console.error(`Error: ${r.error?.message || 'Failed to fetch drafts'}`);
+              }
+              process.exit(1);
+            }
+            if (!options.json) {
+              console.warn(`[drafts] Graph failed (${r.error?.message || 'unknown'}); falling back to EWS.`);
+            }
+          } else {
+            const graphDrafts = r.data;
+            if (options.json) {
+              console.log(
+                JSON.stringify(
+                  {
+                    backend: 'graph',
+                    drafts: graphDrafts.map((d, i) => ({
+                      index: i + 1,
+                      id: d.id,
+                      to: d.toRecipients?.map((x) => x.emailAddress?.address),
+                      subject: d.subject,
+                      preview: d.bodyPreview,
+                      lastModified: d.lastModifiedDateTime || d.receivedDateTime,
+                      categories: d.categories
+                    }))
+                  },
+                  null,
+                  2
+                )
+              );
+              return;
+            }
+
+            console.log(`\n\ud83d\udcdd Drafts (Graph)${options.mailbox ? ` — ${options.mailbox}` : ''}:\n`);
+            console.log('\u2500'.repeat(70));
+            if (graphDrafts.length === 0) {
+              console.log('\n  No drafts found.\n');
+              return;
+            }
+            for (let i = 0; i < graphDrafts.length; i++) {
+              const draft = graphDrafts[i];
+              const to = draft.toRecipients?.map((x) => x.emailAddress?.address).join(', ') || '(no recipient)';
+              const subject = draft.subject || '(no subject)';
+              const when = draft.lastModifiedDateTime || draft.receivedDateTime;
+              const date = when ? formatDate(when) : '';
+              console.log(
+                `  [${(i + 1).toString().padStart(2)}] ${truncate(to, 25).padEnd(25)} ${truncate(subject, 32).padEnd(32)} ${date}`
+              );
+              console.log(`       ID: ${draft.id}`);
+              if (draft.categories?.length) console.log(`       Categories: ${draft.categories.join(', ')}`);
+            }
+            console.log(`\n${'\u2500'.repeat(70)}`);
+            console.log('\nCommands:');
+            console.log('  m365-agent-cli drafts -r <id>                  # Read draft by id');
+            console.log('  m365-agent-cli drafts --create --to "..." ...   # Graph when backend=graph|auto');
+            console.log('');
+            return;
+          }
+        }
+        if (backend === 'graph') {
+          const msg = ga.error || 'Graph authentication failed';
+          if (options.json) {
+            console.log(JSON.stringify({ error: msg }, null, 2));
+          } else {
+            console.error(`Error: ${msg}`);
+            console.error('\nSet EWS_CLIENT_ID and M365_REFRESH_TOKEN for Graph, or run `m365-agent-cli login`.');
+          }
+          process.exit(1);
+        }
+      }
+
+      if (needsEwsMutation && (backend === 'graph' || backend === 'auto')) {
+        const ga = await resolveGraphAuth({ token: options.token, identity: options.identity });
+        if (ga.success && ga.token) {
+          const user = options.mailbox?.trim() || undefined;
+          const graphDone = await tryGraphDraftMutations(ga.token, user, options, backend);
+          if (graphDone) return;
+        }
+        if (backend === 'graph') {
+          if (!ga.success || !ga.token) {
+            const msg = ga.error || 'Graph authentication failed';
+            if (options.json) {
+              console.log(JSON.stringify({ error: msg }, null, 2));
+            } else {
+              console.error(`Error: ${msg}`);
+              console.error('\nSet EWS_CLIENT_ID and M365_REFRESH_TOKEN for Graph, or run `m365-agent-cli login`.');
+            }
+          } else {
+            console.error(
+              'Error: Draft operation could not be completed via Microsoft Graph. Set M365_EXCHANGE_BACKEND=auto (the default) or `ews` to try Exchange Web Services, or fix the Graph error above.'
+            );
+          }
+          process.exit(1);
+        }
+      }
+
       const authResult = await resolveAuth({
         token: options.token,
         identity: options.identity

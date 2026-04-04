@@ -7,6 +7,7 @@ import {
   businessDaysForward,
   calendarDaysBackward,
   calendarDaysForward,
+  clipCalendarRangeStartToNow,
   isWeekRangeKeyword
 } from '../lib/calendar-range.js';
 import { parseDay, parseLocalDate } from '../lib/dates.js';
@@ -18,11 +19,20 @@ import {
   getCalendarEvent,
   getCalendarEvents
 } from '../lib/ews-client.js';
-
-function sanitizeFileComponent(name: string): string {
-  const s = name.replace(/[/\\?%*:|"<>]/g, '_').trim();
-  return s.length > 0 ? s : 'attachment';
-}
+import { getExchangeBackend } from '../lib/exchange-backend.js';
+import { warnAutoGraphToEwsFallback } from '../lib/exchange-fallback-hint.js';
+import { resolveGraphAuth } from '../lib/graph-auth.js';
+import {
+  downloadEventAttachmentBytes,
+  type GraphCalendarEvent,
+  type GraphEventAttachment,
+  getEvent,
+  getEventAttachment,
+  listCalendarView,
+  listEventAttachments
+} from '../lib/graph-calendar-client.js';
+import { normalizeGraphDateTimeForParsing } from '../lib/graph-datetime.js';
+import { safeAttachmentFileName, writeInternetShortcutUtf8File } from '../lib/safe-filename.js';
 
 async function pathExists(p: string): Promise<boolean> {
   try {
@@ -31,6 +41,63 @@ async function pathExists(p: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+async function resolveUniqueFilePath(
+  outputDir: string,
+  fileName: string,
+  usedPaths: Set<string>,
+  force: boolean
+): Promise<string> {
+  const safeName = safeAttachmentFileName(fileName, 'attachment');
+  let filePath = join(outputDir, safeName);
+  let counter = 1;
+  const ext = extname(safeName);
+  const base = safeName.slice(0, safeName.length - ext.length);
+
+  while (true) {
+    if (usedPaths.has(filePath)) {
+      filePath = join(outputDir, `${base} (${counter})${ext}`);
+      counter++;
+      continue;
+    }
+    if (!force) {
+      try {
+        await access(filePath);
+        filePath = join(outputDir, `${base} (${counter})${ext}`);
+        counter++;
+        continue;
+      } catch {
+        break;
+      }
+    }
+    break;
+  }
+  return filePath;
+}
+
+async function writeLinkFile(
+  outputDir: string,
+  baseName: string,
+  url: string,
+  usedPaths: Set<string>,
+  force: boolean
+): Promise<string | null> {
+  const base = safeAttachmentFileName(baseName, 'link');
+  let filePath = join(outputDir, `${base}.url`);
+  let counter = 1;
+  while (usedPaths.has(filePath) || (!force && (await pathExists(filePath)))) {
+    filePath = join(outputDir, `${base} (${counter}).url`);
+    counter++;
+  }
+  usedPaths.add(filePath);
+  const ok = await writeInternetShortcutUtf8File(filePath, url);
+  if (!ok) {
+    usedPaths.delete(filePath);
+    console.error('  Refusing unsafe or invalid link URL (only http/https allowed).');
+    return null;
+  }
+  return filePath;
 }
 
 function formatTime(dateStr: string): string {
@@ -142,6 +209,25 @@ function parseCalendarRangeInt(v: string | boolean | undefined, flag: string): n
   return n;
 }
 
+/** Merge --business-days, --busness-days, and --next-business-days (same meaning; error if conflicting values). */
+function parseBusinessDaysOption(options: {
+  businessDays?: string;
+  busnessDays?: string;
+  nextBusinessDays?: string;
+}): number | undefined {
+  const a = parseCalendarRangeInt(options.businessDays, '--business-days');
+  const b = parseCalendarRangeInt(options.busnessDays, '--busness-days');
+  const c = parseCalendarRangeInt(options.nextBusinessDays, '--next-business-days');
+  const vals = [a, b, c].filter((x): x is number => x !== undefined);
+  if (vals.length === 0) {
+    return undefined;
+  }
+  if (new Set(vals).size !== 1) {
+    throw new Error('Conflicting values: use only one of --business-days, --busness-days, --next-business-days');
+  }
+  return vals[0];
+}
+
 function parseAnchorDateForDynamicRange(startDay: string): Date {
   const startDate = parseDay(startDay, { weekdayDirection: 'previous' });
   startDate.setHours(0, 0, 0, 0);
@@ -170,7 +256,7 @@ function resolveCalendarQueryRange(
 
   if (modeCount > 1) {
     throw new Error(
-      'Use only one of: --days, --previous-days, --business-days (--busness-days), --previous-business-days'
+      'Use only one of: --days, --previous-days, --business-days (--busness-days, --next-business-days), --previous-business-days'
     );
   }
 
@@ -226,6 +312,57 @@ function getResponseIcon(response: string): string {
       return '★';
     default:
       return '·';
+  }
+}
+
+function graphAttendeeResponseKey(response: string | undefined): string {
+  if (!response) return 'NotResponded';
+  const u = response.toLowerCase();
+  if (u === 'accepted') return 'Accepted';
+  if (u === 'declined') return 'Declined';
+  if (u === 'tentativelyaccepted') return 'TentativelyAccepted';
+  if (u === 'none' || u === 'notresponded') return 'NotResponded';
+  return 'NotResponded';
+}
+
+function displayGraphCalendarEvent(event: GraphCalendarEvent, verbose: boolean): void {
+  const startStr = normalizeGraphDateTimeForParsing(event.start?.dateTime, event.start?.timeZone);
+  const endStr = normalizeGraphDateTimeForParsing(event.end?.dateTime, event.end?.timeZone);
+  const startTime = startStr ? formatTime(startStr) : '?';
+  const endTime = endStr ? formatTime(endStr) : '?';
+  const location = event.location?.displayName || '';
+  const cancelled = event.isCancelled ? ' [CANCELLED]' : '';
+  const subject = event.subject || '(no subject)';
+
+  if (event.isAllDay) {
+    console.log(`  📅 All day: ${subject}${cancelled}`);
+  } else {
+    console.log(`  ${startTime} - ${endTime}: ${subject}${cancelled}`);
+  }
+
+  if (location) {
+    console.log(`     📍 ${location}`);
+  }
+
+  if (verbose) {
+    const org = event.organizer?.emailAddress?.name || event.organizer?.emailAddress?.address;
+    if (org) {
+      console.log(`     👤 Organizer: ${org}`);
+    }
+    if (event.attendees && event.attendees.length > 0) {
+      const attendeeList = event.attendees
+        .map((a) => {
+          const name = a.emailAddress?.name || a.emailAddress?.address || '?';
+          const r = graphAttendeeResponseKey(a.status?.response);
+          return `${getResponseIcon(r)} ${name}`;
+        })
+        .join(', ');
+      console.log(`     👥 ${attendeeList}`);
+    }
+    if (event.bodyPreview) {
+      const preview = event.bodyPreview.substring(0, 80).replace(/\n/g, ' ');
+      console.log(`     📝 ${preview}${event.bodyPreview.length > 80 ? '...' : ''}`);
+    }
   }
 }
 
@@ -331,8 +468,13 @@ export const calendarCommand = new Command('calendar')
     '--business-days <n>',
     'Show N weekdays (Mon–Fri) forward from start (skip weekend; use for “next N working days”)'
   )
+  .option('--next-business-days <n>', 'Same as --business-days (alias)')
   .option('--busness-days <n>', 'Same as --business-days (common typo)')
   .option('--previous-business-days <n>', 'Show N weekdays backward ending on the last weekday on or before start')
+  .option(
+    '--now',
+    'After the range is computed, start the API window at the current time (hide events that already ended today)'
+  )
   .action(
     async (
       startDay: string,
@@ -351,28 +493,119 @@ export const calendarCommand = new Command('calendar')
         previousDays?: string;
         businessDays?: string;
         busnessDays?: string;
+        nextBusinessDays?: string;
         previousBusinessDays?: string;
+        now?: boolean;
       }
     ) => {
-      const authResult = await resolveAuth({
-        token: options.token,
-        identity: options.identity
-      });
-
-      if (!authResult.success) {
-        if (options.json) {
-          console.log(JSON.stringify({ error: authResult.error }, null, 2));
-        } else {
-          console.error(`Error: ${authResult.error}`);
-          console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
-        }
-        process.exit(1);
-      }
-
-      const token = authResult.token!;
+      const backend = getExchangeBackend();
       const mailbox = options.mailbox;
 
+      function graphAttachmentKind(a: GraphEventAttachment): 'file' | 'reference' | 'other' {
+        const t = a['@odata.type'] || '';
+        if (t.includes('fileAttachment')) return 'file';
+        if (t.includes('referenceAttachment')) return 'reference';
+        return 'other';
+      }
+
+      async function graphListAttachmentsWithToken(graphToken: string): Promise<void> {
+        const eventId = options.listAttachments!.trim();
+        const eventRes = await getEvent(graphToken, eventId, mailbox);
+        if (!eventRes.ok || !eventRes.data) {
+          if (options.json) {
+            console.log(JSON.stringify({ error: eventRes.error?.message || 'Event not found' }, null, 2));
+          } else {
+            console.error(`Error: ${eventRes.error?.message || 'Event not found'}`);
+          }
+          process.exit(1);
+        }
+        const attsRes = await listEventAttachments(graphToken, eventId, mailbox);
+        if (!attsRes.ok || !attsRes.data) {
+          if (options.json) {
+            console.log(JSON.stringify({ error: attsRes.error?.message || 'Failed to list attachments' }, null, 2));
+          } else {
+            console.error(`Error: ${attsRes.error?.message || 'Failed to list attachments'}`);
+          }
+          process.exit(1);
+        }
+        const atts = attsRes.data.filter((a) => !a.isInline);
+        const subject = eventRes.data.subject || '(no subject)';
+        if (options.json) {
+          console.log(
+            JSON.stringify(
+              {
+                backend: 'graph',
+                eventId,
+                subject,
+                attachments: atts
+              },
+              null,
+              2
+            )
+          );
+          return;
+        }
+        console.log(`\nAttachments (Graph) — ${subject}`);
+        console.log('─'.repeat(40));
+        if (atts.length === 0) {
+          console.log('  (none)');
+        } else {
+          for (const a of atts) {
+            const k = graphAttachmentKind(a);
+            if (k === 'reference' && a.sourceUrl) {
+              console.log(`  🔗 ${a.name || a.id}`);
+              console.log(`     ${a.sourceUrl}`);
+            } else if (k === 'file') {
+              const sizeKB = Math.round((a.size || 0) / 1024);
+              console.log(`  📄 ${a.name || 'file'} (${sizeKB} KB)`);
+            } else {
+              console.log(`  📎 ${a.name || a.id} (${a['@odata.type'] || 'attachment'})`);
+            }
+          }
+        }
+        console.log();
+      }
+
       if (options.listAttachments) {
+        if (backend === 'graph' || backend === 'auto') {
+          const ga = await resolveGraphAuth({ token: options.token, identity: options.identity });
+          if (ga.success && ga.token) {
+            await graphListAttachmentsWithToken(ga.token);
+            return;
+          }
+          if (backend === 'graph') {
+            if (options.json) {
+              console.log(JSON.stringify({ error: ga.error || 'Graph authentication failed' }, null, 2));
+            } else {
+              console.error(`Error: ${ga.error || 'Graph authentication failed'}`);
+            }
+            process.exit(1);
+          }
+          warnAutoGraphToEwsFallback('calendar', {
+            json: options.json,
+            graphError: ga.error,
+            reason: 'auth',
+            verbose: options.verbose
+          });
+        }
+
+        const authResult = await resolveAuth({
+          token: options.token,
+          identity: options.identity
+        });
+
+        if (!authResult.success) {
+          if (options.json) {
+            console.log(JSON.stringify({ error: authResult.error }, null, 2));
+          } else {
+            console.error(`Error: ${authResult.error}`);
+            console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
+          }
+          process.exit(1);
+        }
+
+        const token = authResult.token!;
+
         const eventId = options.listAttachments.trim();
         const eventRes = await getCalendarEvent(token, eventId, mailbox);
         if (!eventRes.ok || !eventRes.data) {
@@ -409,6 +642,116 @@ export const calendarCommand = new Command('calendar')
       }
 
       if (options.downloadAttachments) {
+        if (backend === 'graph' || backend === 'auto') {
+          const ga = await resolveGraphAuth({ token: options.token, identity: options.identity });
+          if (ga.success && ga.token) {
+            const eventId = options.downloadAttachments.trim();
+            const eventRes = await getEvent(ga.token, eventId, mailbox);
+            if (!eventRes.ok || !eventRes.data) {
+              console.error(`Error: ${eventRes.error?.message || 'Event not found'}`);
+              process.exit(1);
+            }
+            if (!eventRes.data.hasAttachments) {
+              console.log('This event has no attachments.');
+              return;
+            }
+            const attsRes = await listEventAttachments(ga.token, eventId, mailbox);
+            if (!attsRes.ok || !attsRes.data) {
+              console.error(`Error: ${attsRes.error?.message || 'Failed to fetch attachments'}`);
+              process.exit(1);
+            }
+            const attachments = attsRes.data.filter((a) => !a.isInline);
+            if (attachments.length === 0) {
+              console.log('No downloadable attachments (inline-only).');
+              return;
+            }
+            await mkdir(options.output, { recursive: true });
+            const usedPaths = new Set<string>();
+            console.log(`\nDownloading ${attachments.length} attachment(s) to ${options.output}/ (Graph)\n`);
+            for (const att of attachments) {
+              const kind = graphAttachmentKind(att);
+              if (kind === 'reference') {
+                let url = att.sourceUrl;
+                if (!url && att.id) {
+                  const full = await getEventAttachment(ga.token, eventId, att.id, mailbox);
+                  if (
+                    full.ok &&
+                    full.data &&
+                    'sourceUrl' in full.data &&
+                    (full.data as { sourceUrl?: string }).sourceUrl
+                  ) {
+                    url = (full.data as { sourceUrl?: string }).sourceUrl;
+                  }
+                }
+                if (!url) {
+                  console.error(`  Failed to resolve link: ${att.name || att.id}`);
+                  continue;
+                }
+                const filePath = await writeLinkFile(
+                  options.output,
+                  att.name || 'link',
+                  url,
+                  usedPaths,
+                  options.force ?? false
+                );
+                if (!filePath) {
+                  continue;
+                }
+                console.log(`  ✓ ${filePath.split(/[\\/]/).pop()} (link)`);
+                continue;
+              }
+              if (kind !== 'file') {
+                console.warn(`  Skipping non-file attachment: ${att.name || att.id}`);
+                continue;
+              }
+              const dl = await downloadEventAttachmentBytes(ga.token, eventId, att.id, mailbox);
+              if (!dl.ok || !dl.data) {
+                console.error(`  Failed to download: ${att.name || att.id} (${dl.error?.message})`);
+                continue;
+              }
+              const content = Buffer.from(dl.data);
+              const safeName = safeAttachmentFileName(att.name || `attachment-${att.id}`, 'attachment');
+              const filePath = await resolveUniqueFilePath(options.output, safeName, usedPaths, options.force ?? false);
+              usedPaths.add(filePath);
+              await writeFile(filePath, content);
+              const sizeKB = Math.round(content.length / 1024);
+              console.log(`  ✓ ${filePath.split(/[\\/]/).pop()} (${sizeKB} KB)`);
+            }
+            console.log('\nDone.\n');
+            return;
+          }
+          if (backend === 'graph') {
+            if (options.json) {
+              console.log(JSON.stringify({ error: ga.error || 'Graph authentication failed' }, null, 2));
+            } else {
+              console.error(`Error: ${ga.error || 'Graph authentication failed'}`);
+            }
+            process.exit(1);
+          }
+          warnAutoGraphToEwsFallback('calendar', {
+            json: options.json,
+            graphError: ga.error,
+            reason: 'auth',
+            verbose: options.verbose
+          });
+        }
+
+        const authResult = await resolveAuth({
+          token: options.token,
+          identity: options.identity
+        });
+
+        if (!authResult.success) {
+          if (options.json) {
+            console.log(JSON.stringify({ error: authResult.error }, null, 2));
+          } else {
+            console.error(`Error: ${authResult.error}`);
+            console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
+          }
+          process.exit(1);
+        }
+
+        const token = authResult.token!;
         const eventId = options.downloadAttachments.trim();
         const eventRes = await getCalendarEvent(token, eventId, mailbox);
         if (!eventRes.ok || !eventRes.data) {
@@ -445,16 +788,16 @@ export const calendarCommand = new Command('calendar')
               console.error(`  Failed to resolve link: ${att.Name}`);
               continue;
             }
-            const base = sanitizeFileComponent(att.Name || 'link');
-            let filePath = join(options.output, `${base}.url`);
-            let counter = 1;
-            while (usedPaths.has(filePath) || (!options.force && (await pathExists(filePath)))) {
-              filePath = join(options.output, `${base} (${counter}).url`);
-              counter++;
+            const filePath = await writeLinkFile(
+              options.output,
+              att.Name || 'link',
+              url,
+              usedPaths,
+              options.force ?? false
+            );
+            if (!filePath) {
+              continue;
             }
-            usedPaths.add(filePath);
-            const content = `[InternetShortcut]\r\nURL=${url}\r\n`;
-            await writeFile(filePath, content, 'utf8');
             console.log(`  ✓ ${filePath.split(/[\\/]/).pop()} (link)`);
             continue;
           }
@@ -465,30 +808,7 @@ export const calendarCommand = new Command('calendar')
             continue;
           }
           const content = Buffer.from(fullAtt.data.ContentBytes, 'base64');
-          let filePath = join(options.output, att.Name);
-          let counter = 1;
-          while (true) {
-            if (usedPaths.has(filePath)) {
-              const ext = extname(att.Name);
-              const base = att.Name.slice(0, att.Name.length - ext.length);
-              filePath = join(options.output, `${base} (${counter})${ext}`);
-              counter++;
-              continue;
-            }
-            if (!options.force) {
-              try {
-                await access(filePath);
-                const ext = extname(att.Name);
-                const base = att.Name.slice(0, att.Name.length - ext.length);
-                filePath = join(options.output, `${base} (${counter})${ext}`);
-                counter++;
-                continue;
-              } catch {
-                // missing — ok
-              }
-            }
-            break;
-          }
+          const filePath = await resolveUniqueFilePath(options.output, att.Name, usedPaths, options.force ?? false);
           usedPaths.add(filePath);
           await writeFile(filePath, content);
           const sizeKB = Math.round(content.length / 1024);
@@ -502,15 +822,21 @@ export const calendarCommand = new Command('calendar')
       let end: string;
       let label: string;
       try {
+        const previousDays = parseCalendarRangeInt(options.previousDays, '--previous-days');
+        const previousBusinessDays = parseCalendarRangeInt(options.previousBusinessDays, '--previous-business-days');
+        if (options.now && (previousDays !== undefined || previousBusinessDays !== undefined)) {
+          throw new Error('Cannot use --now with --previous-days or --previous-business-days');
+        }
         const resolved = resolveCalendarQueryRange(startDay, endDay, {
           days: parseCalendarRangeInt(options.days, '--days'),
-          previousDays: parseCalendarRangeInt(options.previousDays, '--previous-days'),
-          businessDays: parseCalendarRangeInt(options.businessDays ?? options.busnessDays, '--business-days'),
-          previousBusinessDays: parseCalendarRangeInt(options.previousBusinessDays, '--previous-business-days')
+          previousDays,
+          businessDays: parseBusinessDaysOption(options),
+          previousBusinessDays
         });
-        start = resolved.start;
-        end = resolved.end;
-        label = resolved.label;
+        const clipped = options.now ? clipCalendarRangeStartToNow(resolved) : resolved;
+        start = clipped.start;
+        end = clipped.end;
+        label = clipped.label;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         if (options.json) {
@@ -521,7 +847,105 @@ export const calendarCommand = new Command('calendar')
         process.exit(1);
       }
 
-      const result = await getCalendarEvents(authResult.token!, start, end, options.mailbox);
+      if (backend === 'graph' || backend === 'auto') {
+        const ga = await resolveGraphAuth({
+          token: options.token,
+          identity: options.identity
+        });
+        if (ga.success && ga.token) {
+          const graphResult = await listCalendarView(ga.token, start, end, { user: mailbox });
+          if (graphResult.ok && graphResult.data) {
+            const graphEvents = graphResult.data.filter((e) => !e.isCancelled);
+
+            if (options.json) {
+              console.log(JSON.stringify({ backend: 'graph', label, events: graphEvents }, null, 2));
+              return;
+            }
+
+            console.log(`\n📆 Calendar for ${label}${mailbox ? ` — ${mailbox}` : ''} (Graph)`);
+            console.log('─'.repeat(40));
+
+            if (graphEvents.length === 0) {
+              console.log('  No events scheduled.');
+            } else {
+              const eventsByDate = new Map<string, GraphCalendarEvent[]>();
+              for (const event of graphEvents) {
+                const startDt = normalizeGraphDateTimeForParsing(event.start?.dateTime, event.start?.timeZone);
+                if (!startDt) continue;
+                const localDate = parseLocalDate(startDt);
+                const dateKey = `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, '0')}-${String(localDate.getDate()).padStart(2, '0')}`;
+                if (!eventsByDate.has(dateKey)) {
+                  eventsByDate.set(dateKey, []);
+                }
+                eventsByDate.get(dateKey)?.push(event);
+              }
+
+              if (eventsByDate.size > 1) {
+                for (const [dateKey, dayEvents] of eventsByDate) {
+                  const dayLabel = formatDate(dateKey);
+                  console.log(`\n  ${dayLabel}`);
+                  for (const event of dayEvents) {
+                    displayGraphCalendarEvent(event, options.verbose ?? false);
+                  }
+                }
+              } else {
+                for (const event of graphEvents) {
+                  displayGraphCalendarEvent(event, options.verbose ?? false);
+                }
+              }
+            }
+            console.log();
+            return;
+          }
+          if (backend === 'graph') {
+            if (options.json) {
+              console.log(
+                JSON.stringify({ error: graphResult.error?.message || 'Failed to fetch calendar (Graph)' }, null, 2)
+              );
+            } else {
+              console.error(`Error: ${graphResult.error?.message || 'Failed to fetch calendar (Graph)'}`);
+            }
+            process.exit(1);
+          }
+          warnAutoGraphToEwsFallback('calendar', {
+            json: options.json,
+            graphError: graphResult.error?.message,
+            reason: 'api',
+            verbose: options.verbose
+          });
+        } else if (backend === 'graph') {
+          if (options.json) {
+            console.log(JSON.stringify({ error: ga.error || 'Graph authentication failed' }, null, 2));
+          } else {
+            console.error(`Error: ${ga.error || 'Graph authentication failed'}`);
+          }
+          process.exit(1);
+        } else if (backend === 'auto') {
+          warnAutoGraphToEwsFallback('calendar', {
+            json: options.json,
+            graphError: ga.error,
+            reason: 'auth',
+            verbose: options.verbose
+          });
+        }
+      }
+
+      const authResult = await resolveAuth({
+        token: options.token,
+        identity: options.identity
+      });
+
+      if (!authResult.success) {
+        if (options.json) {
+          console.log(JSON.stringify({ error: authResult.error }, null, 2));
+        } else {
+          console.error(`Error: ${authResult.error}`);
+          console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
+        }
+        process.exit(1);
+      }
+
+      const result = await getCalendarEvents(authResult.token!, start, end, mailbox);
 
       if (!result.ok || !result.data) {
         if (options.json) {
@@ -539,13 +963,12 @@ export const calendarCommand = new Command('calendar')
         return;
       }
 
-      console.log(`\n📆 Calendar for ${label}${options.mailbox ? ` — ${options.mailbox}` : ''}`);
+      console.log(`\n📆 Calendar for ${label}${mailbox ? ` — ${mailbox}` : ''}`);
       console.log('─'.repeat(40));
 
       if (events.length === 0) {
         console.log('  No events scheduled.');
       } else {
-        // Group by date for multi-day ranges
         const eventsByDate = new Map<string, CalendarEvent[]>();
         for (const event of events) {
           const localDate = parseLocalDate(event.Start.DateTime);
@@ -556,7 +979,6 @@ export const calendarCommand = new Command('calendar')
           eventsByDate.get(dateKey)?.push(event);
         }
 
-        // Check if multiple days
         if (eventsByDate.size > 1) {
           for (const [dateKey, dayEvents] of eventsByDate) {
             const dayLabel = formatDate(dateKey);

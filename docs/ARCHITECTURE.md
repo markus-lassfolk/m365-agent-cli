@@ -4,19 +4,19 @@
 
 ### 1. Single Authentication Token
 
-m365-agent-cli authenticates once using **Microsoft OAuth2 (Azure AD)**. A single refresh token is cached and used to obtain access tokens for all APIs.
+m365-agent-cli authenticates using **Microsoft OAuth2 (Azure AD)**. One refresh token (env: **`M365_REFRESH_TOKEN`**, or legacy names) obtains **separate** short-lived access tokens for **EWS** and **Graph** (different resource audiences), stored in one file.
 
-**Current state:** EWS and Graph use separate token caches. This is being consolidated.
+**Implementation:**
 
-**Target state:**
-- One Azure AD app registration
-- One refresh token
-- One token cache file (`~/.config/m365-agent-cli/token-cache.json`)
-- Incremental consent: new API scopes are added to the existing app without requiring re-authentication
+- One Azure AD app registration (`EWS_CLIENT_ID`)
+- One refresh token in env (prefer **`M365_REFRESH_TOKEN`**)
+- One on-disk cache per identity: **`token-cache-{identity}.json`** (v1: `ews` + `graph` access slots + optional refresh metadata)
+- Incremental consent: new API scopes are added to the app; user re-runs `login` or consent when needed
 
-*Note: The current implementation uses separate caches (`token-cache-{identity}.json` for EWS and `graph-token-cache-{identity}.json` for Graph, default identity `default`) and separate refresh tokens (`EWS_REFRESH_TOKEN` and `GRAPH_REFRESH_TOKEN`). A legacy `graph-token-cache.json` may be migrated to `graph-token-cache-default.json`. The single-token approach described here is a target-state design.*
+Legacy **`graph-token-cache-*.json`** files are merged into the unified cache on load and removed after save.
 
 **API priority:**
+
 1. **Microsoft Graph REST** — preferred for new features (cleaner, modern)
 2. **EWS SOAP** — for operations not available in Graph (delegate management, MailTips, full inbox rules, sharing)
 3. **PowerShell** — NOT used. If an operation requires PowerShell remoting, it is out of scope.
@@ -28,7 +28,7 @@ m365-agent-cli authenticates once using **Microsoft OAuth2 (Azure AD)**. A singl
 m365-agent-cli must not hardcode user-specific settings. These must always be read from the user's actual Microsoft 365 profile:
 
 | Setting | Source | API |
-|---------|--------|-----|
+| --- | --- | --- |
 | Timezone | `mailboxSettings.timeZone` | Graph: `GET /me/mailboxSettings` |
 | Locale / language | `mailboxSettings.automaticRepliesSetting locale` | Graph: `GET /me/mailboxSettings` |
 | Date/time format | Derived from locale | Graph: `GET /me/mailboxSettings` |
@@ -37,6 +37,7 @@ m365-agent-cli must not hardcode user-specific settings. These must always be re
 | Email timezone offset | `GetUserAvailability` response | EWS: `GetUserAvailability` |
 
 **Rules:**
+
 - Never hardcode `CET` or any fixed UTC offset as a default
 - Never assume `en-US` or any fixed locale
 - Always read from the authenticated user's settings when presenting dates, times, or timezones
@@ -47,7 +48,7 @@ m365-agent-cli must not hardcode user-specific settings. These must always be re
 The token cache file is the most sensitive file on disk.
 
 - Directory: `~/.config/m365-agent-cli/` — created with `0o700` (owner-only)
-- Token files: `token-cache-{identity}.json` (EWS) and `graph-token-cache-{identity}.json` (Graph) — written with `0o600` (owner-only read/write)
+- Token file: `token-cache-{identity}.json` (unified EWS + Graph slots) — written with `0o600` (owner-only read/write)
 - Cache path uses `homedir()` — never a configurable path that could redirect to arbitrary locations
 - Refresh token failures are silently tolerated — m365-agent-cli fails gracefully with an auth error rather than crashing
 
@@ -60,66 +61,56 @@ The token cache file is the most sensitive file on disk.
 
 ## Auth Flow
 
-```
+```text
 User sets env vars:
   EWS_CLIENT_ID         — Azure AD app client ID
-  EWS_REFRESH_TOKEN     — OAuth refresh token for EWS
-  GRAPH_REFRESH_TOKEN   — OAuth refresh token for Graph
+  M365_REFRESH_TOKEN    — preferred single OAuth refresh token (Graph + EWS flows after `login`)
+  GRAPH_REFRESH_TOKEN   — legacy alias (same value as `login` output)
+  EWS_REFRESH_TOKEN     — legacy alias (same value as `login` output)
   EWS_USERNAME          — user's email address
   EWS_ENDPOINT          — Exchange Online EWS endpoint (default: outlook.office365.com)
   GRAPH_SCOPES          — optional: additional Graph scopes (incremental consent)
 
 Token cache:
   ~/.config/m365-agent-cli/
-  — `token-cache-{identity}.json` holds EWS access token + refresh token + expiry
-  — `graph-token-cache-{identity}.json` holds Graph access token + refresh token + expiry
-  — on expiry: refresh token is used to obtain a new access token
-
-  *(Target state: A single `token-cache.json` reused for both)*
+  — `token-cache-{identity}.json` — unified v1 cache: EWS access slot, Graph access slot, optional refresh token field
+  — on expiry: the appropriate slot is refreshed via OAuth using the env refresh token (or cached rotation)
 ```
 
 ### Scope Strategy
 
-Scopes are requested incrementally. The base token covers:
+**Authoritative delegated Graph list and feature mapping:** [GRAPH_SCOPES.md](./GRAPH_SCOPES.md). **Code:** [`src/lib/graph-oauth-scopes.ts`](../src/lib/graph-oauth-scopes.ts) (`GRAPH_DEVICE_CODE_LOGIN_SCOPES`, `GRAPH_REFRESH_SCOPE_CANDIDATES`).
 
-**EWS (required):**
-- `https://outlook.office365.com/EWS.AccessAsUser.All`
+**EWS (Exchange Online SOAP):** `https://outlook.office365.com/EWS.AccessAsUser.All` — see `auth.ts`.
 
-**Graph base (required):**
-- `User.Read`
-- `Files.ReadWrite`
-- `OfflineAccess`
-
-**Graph additions (added as features require):**
-| Feature | Additional Scope |
-|---------|----------------|
-| Calendar read/write | `Calendars.ReadWrite` |
-| Mail read/write | `Mail.ReadWrite` |
-| Room discovery | `Place.Read.All` |
-| People/GAL lookup | `People.Read` |
-| To-Do tasks | `Tasks.ReadWrite` |
-| OOF / mailbox settings | `MailboxSettings.ReadWrite` |
-| Outlook master categories (names + colors) | `MailboxSettings.Read` (list), **`MailboxSettings.ReadWrite`** (create/update/delete) |
-| Delegate management | (EWS SOAP — same token) |
+**Summary:** `login` requests mail/calendar **\*.Shared** scopes for delegated **`--mailbox`**, **`Place.Read.All`** (Places / `rooms`), **`People.Read`** and **`User.Read.All`** (`find`), plus Files, Sites, Tasks, Groups, MailboxSettings. **User.Read.All** and **Place.Read.All** often require **admin consent**. Graph token refresh tries a **full** scope string and a **fallback without `User.Read.All`** when tenants restrict directory read consent.
 
 ## Directory Structure
 
-```
+```text
 src/
   cli.ts              — entry point, argument parsing
   lib/
     auth.ts           — EWS OAuth2 (token cache, refresh, validation)
-    graph-auth.ts     — Graph OAuth2 (reuses EWS token via incremental consent)
+    graph-auth.ts     — Graph OAuth2 (refresh; scope strings from graph-oauth-scopes.ts)
+    graph-oauth-scopes.ts — canonical Graph delegated scope strings for login + refresh
     ews-client.ts     — all EWS SOAP operations
     graph-client.ts   — all Microsoft Graph REST calls
     jwt-utils.ts       — JWT parsing (expiry, structure validation)
     xml-utils.ts      — XML escape, SOAP envelope builders
     date-utils.ts     — date parsing, formatting (locale-aware)
     dates.ts          — shared date parsing (`parseDay`, weekday-relative resolution)
-    calendar-range.ts — calendar window helpers (`--days`, `--business-days`, etc. on `calendar`)
+    calendar-range.ts — calendar window helpers (`--days`, `--business-days`, `clipCalendarRangeStartToNow` for `--now`, etc. on `calendar`)
     outlook-master-categories.ts — Graph `GET .../outlook/masterCategories`
     planner-client.ts — Planner tasks, plans, buckets, plan details (label names)
+    graph-advanced-client.ts — raw Graph paths + JSON `$batch` (`graph invoke`, `graph batch`)
+    graph-bookings-client.ts — Microsoft Bookings (businesses, appointments, services, staff, calendarView, …)
     graph-calendar-client.ts — Graph `GET .../calendars`, `calendarView`, `GET .../events/{id}`
+    graph-calendar-recurrence.ts — Graph recurring series truncation (`delete-event --scope future`)
+    graph-excel-client.ts — Excel worksheets CRUD, range read/patch, tables/rows/names/charts on drive items
+    graph-presence-client.ts — `GET /me/presence`, `GET /users/{id}/presence`
+    graph-teams-client.ts — Teams channels (incl. all/incoming), messages, chats, tabs, members, apps
+    onenote-graph-client.ts — OneNote notebooks, sections, pages, copy operations
     todo-client.ts    — Microsoft To Do lists/tasks (including `categories`)
     url-utils.ts      — URL sanitization, safe filename handling
   commands/
@@ -140,6 +131,13 @@ src/
     planner.ts
     todo.ts
     files.ts
+    graph.ts
+    graph-search.ts
+    graph-calendar.ts
+    teams.ts
+    bookings.ts
+    excel.ts
+    presence.ts
 ```
 
 ## API Coverage
@@ -149,7 +147,7 @@ src/
 Used for operations with no Graph equivalent:
 
 | Operation | EWS SOAP | Notes |
-|-----------|----------|-------|
+| --- | --- | --- |
 | Delegate management | `AddDelegate`, `GetDelegate`, `UpdateDelegate`, `RemoveDelegate` | Same token |
 | Inbox rules (full) | `GetInboxRules`, `UpdateInboxRules` | Full condition/action set |
 | MailTips | `GetMailTips` | No Graph equivalent |
@@ -168,20 +166,22 @@ Used for operations with no Graph equivalent:
 Preferred for new features:
 
 | Resource | Endpoints | Notes |
-|----------|-----------|-------|
-| Calendar | `GET .../calendars`, `GET .../calendar/calendarView`, `GET/POST/PATCH/DELETE .../events`, `POST .../events/{id}/accept|decline|tentativelyAccept` | CLI **`graph-calendar`** for list/view/get + invitation responses; EWS **`calendar`** / **`create-event`** still primary for many flows |
+| --- | --- | --- |
+| Calendar | `GET .../calendars`, `GET .../calendar/calendarView`, `GET/POST/PATCH/DELETE .../events`, invitation responses `POST .../events/{id}/accept`, `.../decline`, `.../tentativelyAccept` | CLI **`graph-calendar`** for list/view/get + invitation responses; EWS **`calendar`** / **`create-event`** still primary for many flows |
 | Free/busy | `POST /me/calendar/getSchedule` | Preferred over EWS |
 | Room discovery | `GET /places`, `/roomLists`, `/rooms` | Richer than EWS |
-| Mail | `GET/POST/PATCH/DELETE /me/mailFolders`, folder + `/me/messages`, `POST /sendMail`, `POST .../move|copy|send`, `POST .../createReply|createReplyAll|createForward`, attachments | CLI `outlook-graph` (Graph REST); EWS `mail` / `folders` remains primary for many flows |
+| Mail | `GET/POST/PATCH/DELETE /me/mailFolders`, folder + `/me/messages`, `POST /sendMail`, `POST .../move`, `copy`, `send`, `POST .../createReply`, `createReplyAll`, `createForward`, attachments | CLI **`outlook-graph`** (Graph REST); EWS **`mail`** and **`folders`** remain primary for many flows |
 | Message rules | `GET/POST/PATCH/DELETE /me/mailFolders/inbox/rules` | Partial — no template replies |
-| Contacts | `GET/POST/PATCH/DELETE /me/contacts` | Personal contacts; CLI `outlook-graph contacts` |
+| Contacts | `GET/POST/PATCH/DELETE /me/contacts`, contactFolders, photo, attachments, delta | Primary CLI **`contacts`**; parallel **`outlook-graph`** contact helpers |
+| OneNote | `GET/POST/PATCH/DELETE …/onenote/...` | CLI **`onenote`**; no EWS equivalent |
+| Online meetings | `GET/POST/PATCH/DELETE /me/onlineMeetings` | CLI **`meeting`** |
 | People | `GET /me/people` | Relevance-ranked, not true GAL |
 | Directory | `GET /users`, `/groups/{id}/members` | Requires `Directory.Read.All` |
 | To-Do | `GET/POST/PATCH/DELETE /me/todo/lists/{id}/tasks`, checklistItems CRUD, `GET .../attachments/{id}/$value` for file bytes | Use To-Do API, NOT Outlook Tasks (deprecated) |
 | OOF | `PATCH /me/mailboxSettings` | `automaticRepliesSetting` |
 | Mailbox settings | `GET/PATCH /me/mailboxSettings` | timezone, working hours, language |
 | Subscriptions | `POST /subscriptions` | Webhook push notifications |
-| Outlook categories | `GET/POST/PATCH/DELETE .../outlook/masterCategories` | Master list CRUD (names + `preset0`..`preset24`); CLI `outlook-categories list|create|update|delete` |
+| Outlook categories | `GET/POST/PATCH/DELETE .../outlook/masterCategories` | Master list CRUD (names + `preset0`..`preset24`); CLI `outlook-categories` subcommands: list, create, update, delete |
 | Planner | `GET/PATCH /planner/tasks`, `GET /users/{id}/planner/tasks` (when permitted), `GET /planner/plans/{id}/details`, beta `planner/rosters`, `POST /planner/plans` with roster container | Task `appliedCategories` (six slots); plan `categoryDescriptions` for labels; roster-backed plans use beta Graph |
 
 ## Out of Scope

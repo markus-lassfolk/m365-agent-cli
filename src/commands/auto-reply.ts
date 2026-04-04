@@ -1,10 +1,13 @@
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
 import { getAutoReplyRule, setAutoReplyRule } from '../lib/ews-client.js';
+import { getExchangeBackend } from '../lib/exchange-backend.js';
 import { checkReadOnly } from '../lib/utils.js';
 
 export const autoReplyCommand = new Command('auto-reply')
-  .description('Manage server-side out-of-office (OOF) auto-reply templates via EWS Inbox Rules')
+  .description(
+    'Manage OOF-style auto-reply via EWS Inbox Rules (legacy). Prefer `oof` for Graph mailboxSettings automatic replies.'
+  )
   .option('--message <text>', 'The message text for the auto-reply template')
   .option('--enable', 'Enable the auto-reply rule')
   .option('--disable', 'Disable the auto-reply rule')
@@ -16,6 +19,16 @@ export const autoReplyCommand = new Command('auto-reply')
   .option('--identity <name>', 'Use a specific authentication identity (default: default)')
   .action(async (options, cmd: any) => {
     checkReadOnly(cmd);
+    if (getExchangeBackend() === 'graph') {
+      const msg =
+        'auto-reply uses EWS Inbox Rules only. For Microsoft Graph, use `m365-agent-cli oof` (mailbox automatic replies). To run this command, set M365_EXCHANGE_BACKEND=ews or auto.';
+      if (options.json) {
+        console.log(JSON.stringify({ error: msg }, null, 2));
+      } else {
+        console.error(`Error: ${msg}`);
+      }
+      process.exit(1);
+    }
     try {
       const auth = await resolveAuth({ token: options.token, identity: options.identity });
       if (!auth.success || !auth.token) {

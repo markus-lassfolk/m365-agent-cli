@@ -6,8 +6,8 @@
  * argument parsing (Commander.js), auth resolution, API calls, and output formatting.
  */
 import '../lib/global-env.js';
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
-import { clearMockFetch, createMockFetch } from '../test/mocks/index.js';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import { clearMockFetch, createMockFetch, setMockFetch } from '../test/mocks/index.js';
 
 // Track console output to assert on it
 let stdout = '';
@@ -104,9 +104,30 @@ afterAll(() => {
   globalThis.fetch = undefined;
 });
 
+let savedExchangeBackend: string | undefined;
+let savedEwsUsername: string | undefined;
+
 beforeEach(() => {
   clearMockFetch();
   globalThis.fetch = createMockFetch();
+  savedExchangeBackend = process.env.M365_EXCHANGE_BACKEND;
+  process.env.M365_EXCHANGE_BACKEND = 'ews';
+  savedEwsUsername = process.env.EWS_USERNAME;
+  // `getOwaUserInfo` reads `EWS_USERNAME` at call time; empty entry must match mock whoami routing.
+  process.env.EWS_USERNAME = '';
+});
+
+afterEach(() => {
+  if (savedExchangeBackend === undefined) {
+    delete process.env.M365_EXCHANGE_BACKEND;
+  } else {
+    process.env.M365_EXCHANGE_BACKEND = savedExchangeBackend;
+  }
+  if (savedEwsUsername === undefined) {
+    delete process.env.EWS_USERNAME;
+  } else {
+    process.env.EWS_USERNAME = savedEwsUsername;
+  }
 });
 
 // ─── Import commands ───────────────────────────────────────────────────────
@@ -224,7 +245,27 @@ function tokenizeArgs(args: string): string[] {
   return result;
 }
 
+/**
+ * Commander reuses imported command instances across `parseAsync` calls; omitted flags can leave
+ * stale values (e.g. `--json`, `--id`). Clear leak-prone options before each CLI parse in tests.
+ */
+function resetSharedCommandOptionLeaks() {
+  whoamiCommand.setOptionValue('json', false);
+  updateEventCommand.setOptionValue('json', false);
+  updateEventCommand.setOptionValue('id', undefined);
+  updateEventCommand.setOptionValue('title', undefined);
+  updateEventCommand.setOptionValue('search', undefined);
+  updateEventCommand.setOptionValue('day', 'today');
+  deleteEventCommand.setOptionValue('json', false);
+  deleteEventCommand.setOptionValue('id', undefined);
+  deleteEventCommand.setOptionValue('day', 'today');
+  respondCommand.setOptionValue('json', false);
+  respondCommand.setOptionValue('id', undefined);
+}
+
 async function runM365AgentCli(args: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  resetSharedCommandOptionLeaks();
+
   // Set up mocks INSIDE runM365AgentCli so each call is independent
   let capturedStdout = '';
   let capturedStderr = '';
@@ -232,7 +273,10 @@ async function runM365AgentCli(args: string): Promise<{ stdout: string; stderr: 
 
   const originalLog = console.log;
   const originalError = console.error;
+  const originalWarn = console.warn;
   const originalExit = process.exit;
+  const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+  const originalStderrWrite = process.stderr.write.bind(process.stderr);
 
   console.log = (...args2: any[]) => {
     capturedStdout += `${args2.map((a) => String(a)).join(' ')}\n`;
@@ -242,6 +286,23 @@ async function runM365AgentCli(args: string): Promise<{ stdout: string; stderr: 
     capturedStderr += `${args2.map((a) => String(a)).join(' ')}\n`;
     originalError.apply(console, args2);
   };
+  console.warn = (...args2: any[]) => {
+    capturedStderr += `${args2.map((a) => String(a)).join(' ')}\n`;
+    originalWarn.apply(console, args2);
+  };
+
+  process.stdout.write = ((chunk: any, encoding?: any, cb?: any) => {
+    if (typeof chunk === 'string' || Buffer.isBuffer(chunk)) {
+      capturedStdout += chunk.toString();
+    }
+    return originalStdoutWrite(chunk, encoding, cb);
+  }) as typeof process.stdout.write;
+  process.stderr.write = ((chunk: any, encoding?: any, cb?: any) => {
+    if (typeof chunk === 'string' || Buffer.isBuffer(chunk)) {
+      capturedStderr += chunk.toString();
+    }
+    return originalStderrWrite(chunk, encoding, cb);
+  }) as typeof process.stderr.write;
 
   process.exit = ((code?: number) => {
     capturedExitCode = code;
@@ -265,6 +326,9 @@ async function runM365AgentCli(args: string): Promise<{ stdout: string; stderr: 
   } finally {
     console.log = originalLog;
     console.error = originalError;
+    console.warn = originalWarn;
+    process.stdout.write = originalStdoutWrite;
+    process.stderr.write = originalStderrWrite;
     process.exit = originalExit;
     // delete globalThis.fetch;
   }
@@ -294,6 +358,17 @@ describe('whoami', () => {
     expect(result.exitCode).toBe(0);
     // With a valid token, should show user info
     expect(result.stdout).toContain('test@example.com');
+  });
+
+  test('non-empty EWS_USERNAME uses people-search mock routing (not empty-whoami mock)', async () => {
+    process.env.EWS_USERNAME = 'lookup@example.com';
+    try {
+      const result = await runM365AgentCli('whoami --token test-token-12345');
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain('john.doe@example.com');
+    } finally {
+      delete process.env.EWS_USERNAME;
+    }
   });
 
   test('--help shows help text', async () => {
@@ -341,8 +416,9 @@ describe('calendar', () => {
   test('--help shows help text', async () => {
     const result = await runM365AgentCli('calendar --help');
     expect(result.exitCode).toBe(0);
-    //     // (skip) expect(result.stdout).toContain('--json');
-    //     // (skip) expect(result.stdout).toContain('--verbose');
+    const help = result.stdout + result.stderr;
+    expect(help).toContain('--now');
+    expect(help).toContain('--next-business-days');
   });
 
   test('invalid date shows an error (not a crash)', async () => {
@@ -513,10 +589,12 @@ describe('delete-event', () => {
     expect(result.stderr + result.stdout).toMatch(/invalid|not found/i);
   });
 
-  // NOTE: this test has state leakage in full suite; verified passing in isolation
-  test.skip('--json in list mode shows events [SKIP: state leakage]', async () => {
+  test('--json in list mode returns EWS-shaped JSON', async () => {
     const result = await runM365AgentCli('delete-event --json --token test-token-12345');
     expect(result.exitCode).toBe(0);
+    const data = JSON.parse(result.stdout.trim()) as { backend?: string; events?: unknown[] };
+    expect(data.backend).toBe('ews');
+    expect(Array.isArray(data.events)).toBe(true);
   });
 
   test('--help shows help text', async () => {
@@ -578,10 +656,12 @@ describe('update-event', () => {
     expect(isUsefulError(result.stderr + result.stdout)).toBe(true);
   });
 
-  // NOTE: this test has state leakage in full suite; verified passing in isolation
-  test.skip('--json in list mode shows events [SKIP: state leakage]', async () => {
+  test('--json in list mode returns EWS-shaped JSON', async () => {
     const result = await runM365AgentCli('update-event --json --token test-token-12345');
     expect(result.exitCode).toBe(0);
+    const data = JSON.parse(result.stdout.trim()) as { backend?: string; events?: unknown[] };
+    expect(data.backend).toBe('ews');
+    expect(Array.isArray(data.events)).toBe(true);
   });
 
   test('--help shows help text', async () => {
@@ -1079,5 +1159,283 @@ describe('read-only mode', () => {
         delete process.env.READ_ONLY_MODE;
       }
     }
+  });
+});
+
+describe('Graph backend (M365_EXCHANGE_BACKEND=graph)', () => {
+  let prevBackend: string | undefined;
+
+  beforeEach(() => {
+    prevBackend = process.env.M365_EXCHANGE_BACKEND;
+    process.env.M365_EXCHANGE_BACKEND = 'graph';
+  });
+
+  afterEach(() => {
+    clearMockFetch();
+    if (prevBackend === undefined) {
+      delete process.env.M365_EXCHANGE_BACKEND;
+    } else {
+      process.env.M365_EXCHANGE_BACKEND = prevBackend;
+    }
+  });
+
+  test('whoami shows user from Graph GET /me', async () => {
+    const result = await runM365AgentCli('whoami --token test-graph-token');
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('Microsoft Graph');
+    expect(result.stdout).toContain('Graph Test User');
+    expect(result.stdout).toContain('graph.user@example.com');
+  });
+
+  test('whoami --json includes backend graph', async () => {
+    const result = await runM365AgentCli('whoami --json --token test-graph-token');
+    expect(result.exitCode).toBe(0);
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.backend).toBe('graph');
+    expect(data.email).toBe('graph.user@example.com');
+  });
+
+  test('update-event --json lists organizer events from calendarView', async () => {
+    const result = await runM365AgentCli('update-event --json --day today --token test-graph-token');
+    expect(result.exitCode).toBe(0);
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.backend).toBe('graph');
+    expect(data.events).toHaveLength(1);
+    expect(data.events[0].id).toBe('graph-cal-event-1');
+    expect(data.events[0].subject).toBe('Standup');
+  });
+
+  test('delete-event --json lists organizer events from calendarView', async () => {
+    const result = await runM365AgentCli('delete-event --json --day today --token test-graph-token');
+    expect(result.exitCode).toBe(0);
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.backend).toBe('graph');
+    expect(data.events).toHaveLength(1);
+    expect(data.events[0].id).toBe('graph-cal-event-1');
+  });
+
+  test('delete-event --scope future truncates recurring series via Graph (PATCH master)', async () => {
+    setMockFetch((url, request) => {
+      const method = (request.method || 'GET').toUpperCase();
+      if (!url.includes('graph.microsoft.com/v1.0')) return null;
+      try {
+        const path = new URL(url).pathname;
+        if (path.includes('/calendar/calendarView')) {
+          return {
+            status: 200,
+            body: JSON.stringify({
+              value: [
+                {
+                  id: 'graph-occ-cut',
+                  seriesMasterId: 'graph-series-master-id',
+                  type: 'occurrence',
+                  subject: 'Weekly',
+                  isOrganizer: true,
+                  isCancelled: false,
+                  start: { dateTime: '2026-04-15T09:00:00.0000000', timeZone: 'UTC' },
+                  end: { dateTime: '2026-04-15T09:30:00.0000000', timeZone: 'UTC' },
+                  organizer: { emailAddress: { address: 'graph.user@example.com', name: 'Graph Test User' } }
+                }
+              ]
+            }),
+            contentType: 'application/json'
+          };
+        }
+        if (method === 'GET' && path === '/v1.0/me/events/graph-series-master-id' && !path.includes('/instances')) {
+          return {
+            status: 200,
+            body: JSON.stringify({
+              id: 'graph-series-master-id',
+              subject: 'Weekly',
+              type: 'seriesMaster',
+              recurrence: {
+                pattern: { type: 'weekly', interval: 1, daysOfWeek: ['monday'] },
+                range: { type: 'noEnd', startDate: '2026-04-01' }
+              },
+              start: { dateTime: '2026-04-01T09:00:00.0000000', timeZone: 'UTC' },
+              end: { dateTime: '2026-04-01T09:30:00.0000000', timeZone: 'UTC' },
+              organizer: { emailAddress: { address: 'graph.user@example.com' } }
+            }),
+            contentType: 'application/json'
+          };
+        }
+        if (method === 'GET' && path.includes('/events/graph-series-master-id/instances')) {
+          return {
+            status: 200,
+            body: JSON.stringify({
+              value: [
+                {
+                  id: 'prev-occ',
+                  type: 'occurrence',
+                  isCancelled: false,
+                  start: { dateTime: '2026-04-08T09:00:00.0000000', timeZone: 'UTC' },
+                  end: { dateTime: '2026-04-08T09:30:00.0000000', timeZone: 'UTC' }
+                }
+              ]
+            }),
+            contentType: 'application/json'
+          };
+        }
+        if (method === 'PATCH' && path === '/v1.0/me/events/graph-series-master-id') {
+          return {
+            status: 200,
+            body: JSON.stringify({
+              id: 'graph-series-master-id',
+              subject: 'Weekly',
+              changeKey: 'ck2'
+            }),
+            contentType: 'application/json'
+          };
+        }
+      } catch {
+        return null;
+      }
+      return null;
+    });
+    const result = await runM365AgentCli(
+      'delete-event --id graph-occ-cut --scope future --day today --token test-graph-token'
+    );
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toMatch(/truncated|Recurring series updated/i);
+    const jsonResult = await runM365AgentCli(
+      'delete-event --id graph-occ-cut --scope future --day today --json --token test-graph-token'
+    );
+    expect(jsonResult.exitCode).toBe(0);
+    const data = JSON.parse(jsonResult.stdout.trim()) as { success: boolean; action: string; backend: string };
+    expect(data.success).toBe(true);
+    expect(data.backend).toBe('graph');
+    expect(data.action).toBe('truncated');
+  });
+
+  test('update-event --id --title patches event via Graph', async () => {
+    const result = await runM365AgentCli(
+      'update-event --id graph-cal-event-1 --title "Updated title" --token test-graph-token'
+    );
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('Updated title');
+    expect(result.stdout).toContain('Event updated successfully');
+  });
+
+  test('respond --json list uses Graph calendarView', async () => {
+    const result = await runM365AgentCli('respond list --json --token test-graph-token');
+    expect(result.exitCode).toBe(0);
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.backend).toBe('graph');
+    expect(Array.isArray(data.pendingEvents)).toBe(true);
+  });
+
+  test('whoami does not fall back to EWS when GET /me returns 401 (graph-only mode)', async () => {
+    setMockFetch((url) => {
+      if (url.includes('graph.microsoft.com/v1.0/me')) {
+        return {
+          status: 401,
+          body: JSON.stringify({ error: { message: 'Unauthorized', code: 'InvalidAuthenticationToken' } }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    await expect(runM365AgentCli('whoami --token test-graph-token')).rejects.toThrow();
+  });
+
+  test('auto-reply exits on graph backend with JSON hint to use oof', async () => {
+    const result = await runM365AgentCli('auto-reply --json');
+    expect(result.exitCode).toBe(1);
+    const data = JSON.parse(result.stdout.trim()) as { error: string };
+    expect(data.error).toMatch(/oof/i);
+    expect(data.error).toMatch(/M365_EXCHANGE_BACKEND/i);
+  });
+});
+
+describe('Auto backend (M365_EXCHANGE_BACKEND=auto)', () => {
+  let prevBackend: string | undefined;
+
+  beforeEach(() => {
+    prevBackend = process.env.M365_EXCHANGE_BACKEND;
+    process.env.M365_EXCHANGE_BACKEND = 'auto';
+  });
+
+  afterEach(() => {
+    clearMockFetch();
+    if (prevBackend === undefined) {
+      delete process.env.M365_EXCHANGE_BACKEND;
+    } else {
+      process.env.M365_EXCHANGE_BACKEND = prevBackend;
+    }
+  });
+
+  test('whoami uses Microsoft Graph when token resolves and GET /me succeeds', async () => {
+    const result = await runM365AgentCli('whoami --token test-graph-token');
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('Microsoft Graph');
+    expect(result.stdout).toContain('Graph Test User');
+  });
+
+  test('whoami falls back to EWS when Graph GET /me is unauthorized', async () => {
+    setMockFetch((url) => {
+      if (url.includes('graph.microsoft.com/v1.0/me')) {
+        return {
+          status: 401,
+          body: JSON.stringify({ error: { message: 'Unauthorized' } }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    const result = await runM365AgentCli('whoami --token test-token-12345');
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('Authenticated (EWS)');
+    expect(result.stdout).toContain('test@example.com');
+    expect(result.stderr).toMatch(/EWS|M365_EXCHANGE_BACKEND=auto/i);
+  });
+
+  test('delegates list does not call EWS when Graph returns empty calendar permissions', async () => {
+    const result = await runM365AgentCli('delegates list --token test-graph-token');
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('No calendar permissions (Graph)');
+    expect(result.stdout).not.toMatch(/Delegates — EWS/i);
+  });
+
+  test('whoami --json reports backend graph when Graph GET /me succeeds', async () => {
+    const result = await runM365AgentCli('whoami --json --token test-graph-token');
+    expect(result.exitCode).toBe(0);
+    const data = JSON.parse(result.stdout.trim()) as { backend: string; email: string };
+    expect(data.backend).toBe('graph');
+    expect(data.email).toBe('graph.user@example.com');
+  });
+
+  test('whoami --json falls back to EWS when Graph GET /me is unauthorized', async () => {
+    setMockFetch((url) => {
+      if (url.includes('graph.microsoft.com/v1.0/me')) {
+        return {
+          status: 401,
+          body: JSON.stringify({
+            error: { message: 'Unauthorized', code: 'InvalidAuthenticationToken' }
+          }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    const result = await runM365AgentCli('whoami --json --token test-token-12345');
+    expect(result.exitCode).toBe(0);
+    const data = JSON.parse(result.stdout.trim()) as { backend: string; email: string };
+    expect(data.backend).toBe('ews');
+    expect(data.email).toBe('test@example.com');
+  });
+
+  test('calendar today uses Graph path with graph token (parity with M365_EXCHANGE_BACKEND=graph)', async () => {
+    const result = await runM365AgentCli('calendar today --token test-graph-token');
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toMatch(/Standup|Team Standup/i);
+  });
+
+  test('delete-event --json list uses Graph backend with graph token', async () => {
+    const result = await runM365AgentCli('delete-event --json --day today --token test-graph-token');
+    expect(result.exitCode).toBe(0);
+    const data = JSON.parse(result.stdout.trim()) as { backend: string; events: unknown[] };
+    expect(data.backend).toBe('graph');
+    expect(Array.isArray(data.events)).toBe(true);
+    expect(data.events.length).toBeGreaterThan(0);
   });
 });

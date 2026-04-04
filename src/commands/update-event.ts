@@ -3,9 +3,16 @@ import { Command } from 'commander';
 import { AttachmentLinkSpecError, parseAttachLinkSpec } from '../lib/attach-link-spec.js';
 import { AttachmentPathError, validateAttachmentPath } from '../lib/attachments.js';
 import { resolveAuth } from '../lib/auth.js';
+import {
+  graphDayRangeIso,
+  graphEventMatchesOccurrenceFilter,
+  graphFilterOrganizerEvents,
+  graphGetMailboxOrMeEmail
+} from '../lib/calendar-graph-helpers.js';
 import { parseDay, parseTimeToDate, toLocalUnzonedISOString, toUTCISOString } from '../lib/dates.js';
 import {
   addCalendarEventAttachments,
+  type CalendarEvent,
   type EmailAttachment,
   getCalendarEvent,
   getCalendarEvents,
@@ -15,8 +22,23 @@ import {
   searchRooms,
   updateEvent
 } from '../lib/ews-client.js';
+import { getExchangeBackend } from '../lib/exchange-backend.js';
+import { resolveGraphAuth } from '../lib/graph-auth.js';
+import {
+  addCalendarEventAttachmentsGraph,
+  type GraphCalendarEvent,
+  getEvent,
+  listCalendarView,
+  updateCalendarEvent
+} from '../lib/graph-calendar-client.js';
+import { resolveRoomDisplayNameToPlace } from '../lib/graph-places-helpers.js';
 import { lookupMimeType } from '../lib/mime-type.js';
 import { checkReadOnly } from '../lib/utils.js';
+import { buildGraphUpdatePatch } from './update-event-graph.js';
+
+/** Shown when Graph cannot resolve an event id (often mixed EWS vs Microsoft Graph ids). */
+const GRAPH_EVENT_ID_HINT =
+  'With M365_EXCHANGE_BACKEND=graph, use event ids from Graph-backed listing (`calendar`, `respond list`). EWS-format ids will not load.';
 
 function formatTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -28,6 +50,10 @@ function formatDate(dateStr: string): string {
   return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
+function graphStartDt(e: GraphCalendarEvent): string {
+  return e.start?.dateTime ?? '';
+}
+
 export const updateEventCommand = new Command('update-event')
   .description('Update a calendar event')
   .argument('[eventIndex]', 'Event index from the list (deprecated; use --id)')
@@ -37,6 +63,7 @@ export const updateEventCommand = new Command('update-event')
     'Day to show events from (today, tomorrow, YYYY-MM-DD) - note: may miss multi-day events crossing midnight',
     'today'
   )
+  .option('--search <text>', 'Search for events by title')
   .option('--title <text>', 'New title/subject')
   .option('--description <text>', 'New description/body')
   .option('--start <time>', 'New start time (e.g., 14:00, 2pm)')
@@ -82,6 +109,7 @@ export const updateEventCommand = new Command('update-event')
       options: {
         id?: string;
         day: string;
+        search?: string;
         timezone?: string;
         title?: string;
         description?: string;
@@ -108,22 +136,7 @@ export const updateEventCommand = new Command('update-event')
       cmd: any
     ) => {
       checkReadOnly(cmd);
-      const authResult = await resolveAuth({
-        token: options.token,
-        identity: options.identity
-      });
-
-      if (!authResult.success) {
-        if (options.json) {
-          console.log(JSON.stringify({ error: authResult.error }, null, 2));
-        } else {
-          console.error(`Error: ${authResult.error}`);
-          console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
-        }
-        process.exit(1);
-      }
-
-      // Get events for the day
+      const backend = getExchangeBackend();
       let baseDate: Date;
       try {
         baseDate = parseDay(options.day, { throwOnInvalid: true });
@@ -140,45 +153,146 @@ export const updateEventCommand = new Command('update-event')
       startOfDay.setHours(0, 0, 0, 0);
       const endOfDay = new Date(baseDate);
       endOfDay.setHours(23, 59, 59, 999);
+      const graphRange = graphDayRangeIso(baseDate);
 
-      const result = await getCalendarEvents(
-        authResult.token!,
-        startOfDay.toISOString(),
-        endOfDay.toISOString(),
-        options.mailbox
-      );
+      const tryGraphFirst = backend === 'graph' || backend === 'auto';
 
-      if (!result.ok || !result.data) {
-        if (options.json) {
-          console.log(JSON.stringify({ error: result.error?.message || 'Failed to fetch events' }, null, 2));
-        } else {
-          console.error(`Error: ${result.error?.message || 'Failed to fetch events'}`);
+      let eventsGraph: GraphCalendarEvent[] | undefined;
+      let graphToken: string | undefined;
+      let authResult: Awaited<ReturnType<typeof resolveAuth>> | undefined;
+
+      if (tryGraphFirst) {
+        const ga = await resolveGraphAuth({
+          token: options.token,
+          identity: options.identity
+        });
+        if (ga.success && ga.token) {
+          const lv = await listCalendarView(ga.token, graphRange.start, graphRange.end, { user: options.mailbox });
+          if (lv.ok && lv.data) {
+            const me = await graphGetMailboxOrMeEmail(ga.token, options.mailbox);
+            if (me) {
+              let evs = graphFilterOrganizerEvents(lv.data, me);
+              if (options.search) {
+                const searchLower = options.search.toLowerCase();
+                evs = evs.filter((e) => e.subject?.toLowerCase().includes(searchLower));
+              }
+              eventsGraph = evs;
+              graphToken = ga.token;
+            } else if (backend === 'graph') {
+              if (options.json) {
+                console.log(JSON.stringify({ error: 'Failed to determine user email' }, null, 2));
+              } else {
+                console.error('Error: Failed to determine user email');
+              }
+              process.exit(1);
+            } else if (!options.json) {
+              console.warn(
+                '[update-event] Graph did not return a mailbox identity (/me); falling back to EWS for listing.'
+              );
+            }
+          } else if (backend === 'graph') {
+            if (options.json) {
+              console.log(JSON.stringify({ error: lv.error?.message || 'Failed to list calendar' }, null, 2));
+            } else {
+              console.error(`Error: ${lv.error?.message || 'Failed to list calendar'}`);
+            }
+            process.exit(1);
+          } else if (!options.json) {
+            console.warn(`[update-event] Graph list failed (${lv.error?.message}); falling back to EWS.`);
+          }
+        } else if (backend === 'graph') {
+          if (options.json) {
+            console.log(JSON.stringify({ error: ga.error || 'Graph authentication failed' }, null, 2));
+          } else {
+            console.error(`Error: ${ga.error || 'Graph authentication failed'}`);
+          }
+          process.exit(1);
         }
-        process.exit(1);
       }
 
-      // Filter to events the user owns
-      const events = result.data.filter((e) => e.IsOrganizer && !e.IsCancelled);
+      let eventsEws: CalendarEvent[] | undefined;
+      if (!eventsGraph) {
+        authResult = await resolveAuth({
+          token: options.token,
+          identity: options.identity
+        });
+
+        if (!authResult.success) {
+          if (options.json) {
+            console.log(JSON.stringify({ error: authResult.error }, null, 2));
+          } else {
+            console.error(`Error: ${authResult.error}`);
+            console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
+          }
+          process.exit(1);
+        }
+
+        const result = await getCalendarEvents(
+          authResult.token!,
+          startOfDay.toISOString(),
+          endOfDay.toISOString(),
+          options.mailbox
+        );
+
+        if (!result.ok || !result.data) {
+          if (options.json) {
+            console.log(JSON.stringify({ error: result.error?.message || 'Failed to fetch events' }, null, 2));
+          } else {
+            console.error(`Error: ${result.error?.message || 'Failed to fetch events'}`);
+          }
+          process.exit(1);
+        }
+
+        let ev = result.data.filter((e) => e.IsOrganizer && !e.IsCancelled);
+        if (options.search) {
+          const searchLower = options.search.toLowerCase();
+          ev = ev.filter((e) => e.Subject?.toLowerCase().includes(searchLower));
+        }
+        eventsEws = ev;
+      }
+
+      const useGraph = !!eventsGraph && !!graphToken;
+      const events = useGraph ? eventsGraph! : eventsEws!;
 
       // If no id provided, list events
       if (!options.id) {
         if (options.json) {
-          console.log(
-            JSON.stringify(
-              {
-                events: events.map((e, i) => ({
-                  index: i + 1,
-                  id: e.Id,
-                  subject: e.Subject,
-                  start: e.Start.DateTime,
-                  end: e.End.DateTime,
-                  attendees: e.Attendees?.map((a) => a.EmailAddress?.Address)
-                }))
-              },
-              null,
-              2
-            )
-          );
+          if (useGraph) {
+            console.log(
+              JSON.stringify(
+                {
+                  backend: 'graph',
+                  events: events.map((e, i) => ({
+                    index: i + 1,
+                    id: (e as GraphCalendarEvent).id,
+                    subject: (e as GraphCalendarEvent).subject,
+                    start: graphStartDt(e as GraphCalendarEvent),
+                    end: (e as GraphCalendarEvent).end?.dateTime
+                  }))
+                },
+                null,
+                2
+              )
+            );
+          } else {
+            console.log(
+              JSON.stringify(
+                {
+                  backend: 'ews',
+                  events: (events as CalendarEvent[]).map((e, i) => ({
+                    index: i + 1,
+                    id: e.Id,
+                    subject: e.Subject,
+                    start: e.Start.DateTime,
+                    end: e.End.DateTime,
+                    attendees: e.Attendees?.map((a) => a.EmailAddress?.Address)
+                  }))
+                },
+                null,
+                2
+              )
+            );
+          }
           return;
         }
 
@@ -193,101 +307,201 @@ export const updateEventCommand = new Command('update-event')
 
         for (let i = 0; i < events.length; i++) {
           const event = events[i];
-          const startTime = formatTime(event.Start.DateTime);
-          const endTime = formatTime(event.End.DateTime);
+          if (useGraph) {
+            const ge = event as GraphCalendarEvent;
+            const st = graphStartDt(ge);
+            const en = ge.end?.dateTime ?? '';
+            console.log(`\n  [${i + 1}] ${ge.subject ?? '(no subject)'}`);
+            console.log(`      ${formatTime(st)} - ${formatTime(en)}`);
+            console.log(`      ID: ${ge.id}`);
+            if (ge.location?.displayName) {
+              console.log(`      Location: ${ge.location.displayName}`);
+            }
+            if (ge.attendees && ge.attendees.length > 0) {
+              const attendeeList = ge.attendees
+                .filter((a) => (a as { type?: string }).type !== 'resource')
+                .map((a) => a.emailAddress?.address)
+                .filter(Boolean);
+              if (attendeeList.length > 0) {
+                console.log(`      Attendees: ${attendeeList.join(', ')}`);
+              }
+            }
+          } else {
+            const e = event as CalendarEvent;
+            const startTime = formatTime(e.Start.DateTime);
+            const endTime = formatTime(e.End.DateTime);
 
-          console.log(`\n  [${i + 1}] ${event.Subject}`);
-          console.log(`      ${startTime} - ${endTime}`);
-          console.log(`      ID: ${event.Id}`);
-          if (event.Location?.DisplayName) {
-            console.log(`      Location: ${event.Location.DisplayName}`);
-          }
-          if (event.Attendees && event.Attendees.length > 0) {
-            const attendeeList = event.Attendees.filter((a) => a.Type !== 'Resource')
-              .map((a) => a.EmailAddress?.Address)
-              .filter(Boolean);
-            if (attendeeList.length > 0) {
-              console.log(`      Attendees: ${attendeeList.join(', ')}`);
+            console.log(`\n  [${i + 1}] ${e.Subject}`);
+            console.log(`      ${startTime} - ${endTime}`);
+            console.log(`      ID: ${e.Id}`);
+            if (e.Location?.DisplayName) {
+              console.log(`      Location: ${e.Location.DisplayName}`);
+            }
+            if (e.Attendees && e.Attendees.length > 0) {
+              const attendeeList = e.Attendees.filter((a) => a.Type !== 'Resource')
+                .map((a) => a.EmailAddress?.Address)
+                .filter(Boolean);
+              if (attendeeList.length > 0) {
+                console.log(`      Attendees: ${attendeeList.join(', ')}`);
+              }
             }
           }
         }
 
         console.log(`\n${'\u2500'.repeat(60)}`);
         console.log('\nTo update an event:');
-        console.log('  m365-agent-cli update-event <number> --title "New Title"');
-        console.log('  m365-agent-cli update-event <number> --add-attendee user@example.com');
-        console.log('  m365-agent-cli update-event <number> --room "Taxi"');
-        console.log('  m365-agent-cli update-event <number> --start 14:00 --end 15:00');
+        console.log('  m365-agent-cli update-event --id <id> --title "New Title"');
+        console.log('  m365-agent-cli update-event --id <id> --add-attendee user@example.com');
+        console.log('  m365-agent-cli update-event --id <id> --room "Taxi"');
+        console.log('  m365-agent-cli update-event --id <id> --start 14:00 --end 15:00');
         console.log('');
         return;
       }
 
-      let targetEvent = events.find((e) => e.Id === options.id);
+      let targetGraph: GraphCalendarEvent | undefined;
+      let targetEws: CalendarEvent | undefined;
       let occurrenceItemId: string | undefined;
-      let displayEvent = targetEvent;
+      let displayEws: CalendarEvent | undefined;
 
-      if (options.occurrence || options.instance) {
-        // Find the specific occurrence, ensuring it matches the provided event ID
-        if (options.instance) {
-          let instanceDate: Date;
-          try {
-            instanceDate = parseDay(options.instance, { throwOnInvalid: true });
-          } catch (err) {
-            const message = err instanceof Error ? err.message : 'Invalid instance date';
-            if (options.json) {
-              console.log(JSON.stringify({ error: message }, null, 2));
-            } else {
-              console.error(`Error: ${message}`);
-            }
-            process.exit(1);
-          }
-          instanceDate.setHours(0, 0, 0, 0);
-          const occEvent = events.find((e) => {
-            const eventDate = new Date(e.Start.DateTime);
-            eventDate.setHours(0, 0, 0, 0);
-            return eventDate.getTime() === instanceDate.getTime() && e.Id === options.id;
-          });
-          if (!occEvent) {
-            console.error(
-              `No occurrence found on ${options.instance} with ID ${options.id}. Try expanding the date range with --day.`
-            );
-            process.exit(1);
-          }
-          occurrenceItemId = occEvent.Id;
-          displayEvent = occEvent;
-          console.log(`\nUpdating single occurrence of: ${occEvent.Subject}`);
-          console.log(
-            `  ${formatDate(occEvent.Start.DateTime)} ${formatTime(occEvent.Start.DateTime)} - ${formatTime(occEvent.End.DateTime)}`
-          );
-        } else if (options.occurrence) {
-          const idx = parseInt(options.occurrence, 10);
-          if (Number.isNaN(idx) || idx < 1 || idx > events.length) {
-            console.error(`Invalid --occurrence index: ${options.occurrence}. Valid range: 1-${events.length}.`);
-            process.exit(1);
-          }
-          const occEvent = events[idx - 1];
-          if (occEvent.Id !== options.id) {
-            console.error(`Occurrence ${idx} does not match the provided event ID ${options.id}.`);
-            process.exit(1);
-          }
-          occurrenceItemId = occEvent.Id;
-          displayEvent = occEvent;
-          console.log(`\nUpdating occurrence ${idx} of: ${occEvent.Subject}`);
-          console.log(
-            `  ${formatDate(occEvent.Start.DateTime)} ${formatTime(occEvent.Start.DateTime)} - ${formatTime(occEvent.End.DateTime)}`
-          );
+      if (useGraph) {
+        targetGraph = (events as GraphCalendarEvent[]).find((e) => e.id === options.id);
+        if (!targetGraph && options.id) {
+          targetGraph = (events as GraphCalendarEvent[]).find((e) => graphEventMatchesOccurrenceFilter(e, options.id!));
         }
-      } else if (!targetEvent && options.id) {
-        const fetched = await getCalendarEvent(authResult.token!, options.id, options.mailbox);
-        if (!fetched.ok || !fetched.data) {
+        if (!targetGraph && graphToken && options.id) {
+          const fetched = await getEvent(graphToken, options.id, options.mailbox);
+          if (fetched.ok && fetched.data) {
+            targetGraph = fetched.data;
+          }
+        }
+        if (!targetGraph) {
+          if (options.json) {
+            console.log(
+              JSON.stringify({ error: `Invalid event id: ${options.id}`, hint: GRAPH_EVENT_ID_HINT }, null, 2)
+            );
+          } else {
+            console.error(`Invalid event id: ${options.id}`);
+            console.error(GRAPH_EVENT_ID_HINT);
+          }
+          process.exit(1);
+        }
+        if ((options.occurrence || options.instance) && targetGraph) {
+          if (options.instance) {
+            let instanceDate: Date;
+            try {
+              instanceDate = parseDay(options.instance, { throwOnInvalid: true });
+            } catch (err) {
+              const message = err instanceof Error ? err.message : 'Invalid instance date';
+              if (options.json) {
+                console.log(JSON.stringify({ error: message }, null, 2));
+              } else {
+                console.error(`Error: ${message}`);
+              }
+              process.exit(1);
+            }
+            instanceDate.setHours(0, 0, 0, 0);
+            const occEvent = (events as GraphCalendarEvent[]).find((e) => {
+              const eventDate = new Date(graphStartDt(e));
+              eventDate.setHours(0, 0, 0, 0);
+              return (
+                eventDate.getTime() === instanceDate.getTime() && graphEventMatchesOccurrenceFilter(e, options.id!)
+              );
+            });
+            if (!occEvent) {
+              console.error(
+                `No occurrence found on ${options.instance} with ID ${options.id}. Try expanding the date range with --day.`
+              );
+              process.exit(1);
+            }
+            targetGraph = occEvent;
+            console.log(`\nUpdating single occurrence of: ${occEvent.subject ?? '(no subject)'}`);
+            console.log(
+              `  ${formatDate(graphStartDt(occEvent))} ${formatTime(graphStartDt(occEvent))} - ${formatTime(occEvent.end?.dateTime ?? '')}`
+            );
+          } else if (options.occurrence) {
+            const idx = parseInt(options.occurrence, 10);
+            if (Number.isNaN(idx) || idx < 1 || idx > events.length) {
+              console.error(`Invalid --occurrence index: ${options.occurrence}. Valid range: 1-${events.length}.`);
+              process.exit(1);
+            }
+            const occEvent = (events as GraphCalendarEvent[])[idx - 1];
+            if (!graphEventMatchesOccurrenceFilter(occEvent, options.id!)) {
+              console.error(`Occurrence ${idx} does not match the provided event ID ${options.id}.`);
+              process.exit(1);
+            }
+            targetGraph = occEvent;
+            console.log(`\nUpdating occurrence ${idx} of: ${occEvent.subject ?? '(no subject)'}`);
+            console.log(
+              `  ${formatDate(graphStartDt(occEvent))} ${formatTime(graphStartDt(occEvent))} - ${formatTime(occEvent.end?.dateTime ?? '')}`
+            );
+          }
+        }
+      } else {
+        targetEws = (events as CalendarEvent[]).find((e) => e.Id === options.id);
+        displayEws = targetEws;
+
+        if (options.occurrence || options.instance) {
+          if (options.instance) {
+            let instanceDate: Date;
+            try {
+              instanceDate = parseDay(options.instance, { throwOnInvalid: true });
+            } catch (err) {
+              const message = err instanceof Error ? err.message : 'Invalid instance date';
+              if (options.json) {
+                console.log(JSON.stringify({ error: message }, null, 2));
+              } else {
+                console.error(`Error: ${message}`);
+              }
+              process.exit(1);
+            }
+            instanceDate.setHours(0, 0, 0, 0);
+            const occEvent = (events as CalendarEvent[]).find((e) => {
+              const eventDate = new Date(e.Start.DateTime);
+              eventDate.setHours(0, 0, 0, 0);
+              return eventDate.getTime() === instanceDate.getTime() && e.Id === options.id;
+            });
+            if (!occEvent) {
+              console.error(
+                `No occurrence found on ${options.instance} with ID ${options.id}. Try expanding the date range with --day.`
+              );
+              process.exit(1);
+            }
+            occurrenceItemId = occEvent.Id;
+            displayEws = occEvent;
+            console.log(`\nUpdating single occurrence of: ${occEvent.Subject}`);
+            console.log(
+              `  ${formatDate(occEvent.Start.DateTime)} ${formatTime(occEvent.Start.DateTime)} - ${formatTime(occEvent.End.DateTime)}`
+            );
+          } else if (options.occurrence) {
+            const idx = parseInt(options.occurrence, 10);
+            if (Number.isNaN(idx) || idx < 1 || idx > events.length) {
+              console.error(`Invalid --occurrence index: ${options.occurrence}. Valid range: 1-${events.length}.`);
+              process.exit(1);
+            }
+            const occEvent = (events as CalendarEvent[])[idx - 1];
+            if (occEvent.Id !== options.id) {
+              console.error(`Occurrence ${idx} does not match the provided event ID ${options.id}.`);
+              process.exit(1);
+            }
+            occurrenceItemId = occEvent.Id;
+            displayEws = occEvent;
+            console.log(`\nUpdating occurrence ${idx} of: ${occEvent.Subject}`);
+            console.log(
+              `  ${formatDate(occEvent.Start.DateTime)} ${formatTime(occEvent.Start.DateTime)} - ${formatTime(occEvent.End.DateTime)}`
+            );
+          }
+        } else if (!targetEws && options.id) {
+          const fetched = await getCalendarEvent(authResult!.token!, options.id!, options.mailbox);
+          if (!fetched.ok || !fetched.data) {
+            console.error(`Invalid event id: ${options.id}`);
+            process.exit(1);
+          }
+          displayEws = fetched.data;
+          targetEws = fetched.data;
+        } else if (!targetEws) {
           console.error(`Invalid event id: ${options.id}`);
           process.exit(1);
         }
-        displayEvent = fetched.data;
-        targetEvent = fetched.data;
-      } else if (!targetEvent) {
-        console.error(`Invalid event id: ${options.id}`);
-        process.exit(1);
       }
 
       const hasFieldUpdates =
@@ -312,19 +526,37 @@ export const updateEventCommand = new Command('update-event')
       const wantsAttachments = wantsFileAttach || wantsLinkAttach;
 
       if (!hasFieldUpdates && !wantsAttachments) {
-        // Show current event details
-        console.log(`\nEvent: ${displayEvent!.Subject}`);
-        console.log(
-          `  When: ${formatDate(displayEvent!.Start.DateTime)} ${formatTime(displayEvent!.Start.DateTime)} - ${formatTime(displayEvent!.End.DateTime)}`
-        );
-        if (displayEvent!.Location?.DisplayName) {
-          console.log(`  Location: ${displayEvent!.Location.DisplayName}`);
-        }
-        if (displayEvent!.Attendees && displayEvent!.Attendees.length > 0) {
-          console.log('  Attendees:');
-          for (const a of displayEvent!.Attendees) {
-            const typeLabel = a.Type === 'Resource' ? ' (Room)' : '';
-            console.log(`    - ${a.EmailAddress?.Address}${typeLabel}`);
+        if (useGraph && targetGraph) {
+          const tg = targetGraph;
+          const st = graphStartDt(tg);
+          const en = tg.end?.dateTime ?? '';
+          console.log(`\nEvent: ${tg.subject ?? '(no subject)'}`);
+          console.log(`  When: ${formatDate(st)} ${formatTime(st)} - ${formatTime(en)}`);
+          if (tg.location?.displayName) {
+            console.log(`  Location: ${tg.location.displayName}`);
+          }
+          if (tg.attendees && tg.attendees.length > 0) {
+            console.log('  Attendees:');
+            for (const a of tg.attendees) {
+              const typeLabel = (a as { type?: string }).type === 'resource' ? ' (Room)' : '';
+              console.log(`    - ${a.emailAddress?.address ?? ''}${typeLabel}`);
+            }
+          }
+        } else if (displayEws) {
+          const de = displayEws;
+          console.log(`\nEvent: ${de.Subject}`);
+          console.log(
+            `  When: ${formatDate(de.Start.DateTime)} ${formatTime(de.Start.DateTime)} - ${formatTime(de.End.DateTime)}`
+          );
+          if (de.Location?.DisplayName) {
+            console.log(`  Location: ${de.Location.DisplayName}`);
+          }
+          if (de.Attendees && de.Attendees.length > 0) {
+            console.log('  Attendees:');
+            for (const a of de.Attendees) {
+              const typeLabel = a.Type === 'Resource' ? ' (Room)' : '';
+              console.log(`    - ${a.EmailAddress?.Address}${typeLabel}`);
+            }
           }
         }
         console.log('\nUse options like --title, --add-attendee, --room, --attach, or --attach-link to update.');
@@ -385,166 +617,578 @@ export const updateEventCommand = new Command('update-event')
 
       let updateResult: Awaited<ReturnType<typeof updateEvent>> | undefined;
 
-      if (hasFieldUpdates) {
-        const updateOptions: Parameters<typeof updateEvent>[0] = {
-          token: authResult.token!,
-          eventId: targetEvent ? targetEvent.Id : displayEvent!.Id,
-          changeKey: displayEvent!.ChangeKey,
-          occurrenceItemId,
-          mailbox: options.mailbox,
-          categories: options.clearCategories
-            ? []
-            : options.category && options.category.length > 0
-              ? options.category
-              : undefined
-        };
-
-        if (options.title) {
-          updateOptions.subject = options.title;
-        }
-
-        if (options.timezone) {
-          updateOptions.timezone = options.timezone;
-        }
-
-        if (options.description) {
-          updateOptions.body = options.description;
-        }
-
-        if (options.start || options.end) {
-          const eventDate = new Date(displayEvent!.Start.DateTime);
-
-          if (options.start) {
-            try {
-              const newStart = parseTimeToDate(options.start, eventDate, { throwOnInvalid: true });
-              updateOptions.start = options.timezone ? toLocalUnzonedISOString(newStart) : toUTCISOString(newStart);
-            } catch (err) {
-              const message = err instanceof Error ? err.message : 'Invalid start time';
+      if (
+        wantsAttachments &&
+        !hasFieldUpdates &&
+        (backend === 'graph' || backend === 'auto') &&
+        options.id &&
+        useGraph
+      ) {
+        const ga = await resolveGraphAuth({
+          token: options.token,
+          identity: options.identity
+        });
+        if (ga.success && ga.token) {
+          let gd: GraphCalendarEvent | undefined = targetGraph;
+          if (!gd) {
+            const ge = await getEvent(ga.token, options.id!, options.mailbox);
+            if (ge.ok && ge.data) gd = ge.data;
+          }
+          if (!gd) {
+            if (backend === 'graph') {
               if (options.json) {
-                console.log(JSON.stringify({ error: message }, null, 2));
+                console.log(JSON.stringify({ error: 'Could not load event for attachments' }, null, 2));
               } else {
-                console.error(`Error: ${message}`);
+                console.error(`Could not load event: ${options.id}`);
               }
               process.exit(1);
             }
-          }
-
-          if (options.end) {
-            try {
-              const newEnd = parseTimeToDate(options.end, eventDate, { throwOnInvalid: true });
-              updateOptions.end = options.timezone ? toLocalUnzonedISOString(newEnd) : toUTCISOString(newEnd);
-            } catch (err) {
-              const message = err instanceof Error ? err.message : 'Invalid end time';
+            if (!options.json) {
+              console.warn('[update-event] Could not load event on Graph; falling back to EWS for attachments.');
+            }
+          } else {
+            if (gd.isOrganizer === false) {
               if (options.json) {
-                console.log(JSON.stringify({ error: message }, null, 2));
+                console.log(
+                  JSON.stringify(
+                    {
+                      error: 'Only the organizer can update this event. Use `respond` if you were invited.'
+                    },
+                    null,
+                    2
+                  )
+                );
               } else {
-                console.error(`Error: ${message}`);
+                console.error('Error: Only the organizer can update this event.');
               }
               process.exit(1);
             }
-          }
-        }
-
-        if (options.location) {
-          updateOptions.location = options.location;
-        }
-
-        if (options.allDay !== undefined) {
-          updateOptions.isAllDay = options.allDay;
-        }
-
-        if (options.sensitivity) {
-          const sensitivity = SENSITIVITY_MAP[options.sensitivity.toLowerCase()];
-          if (!sensitivity) {
-            console.error(`Invalid sensitivity: ${options.sensitivity}`);
-            process.exit(1);
-          }
-          updateOptions.sensitivity = sensitivity;
-        }
-
-        let roomEmail: string | undefined;
-        let roomName: string | undefined;
-
-        if (options.room) {
-          if (options.room.includes('@')) {
-            roomEmail = options.room;
-            roomName = options.room;
-          } else {
-            let roomsResult = await searchRooms(authResult.token!, options.room);
-            if (!roomsResult.ok || !roomsResult.data || roomsResult.data.length === 0) {
-              roomsResult = await getRooms(authResult.token!);
-            }
-
-            if (roomsResult.ok && roomsResult.data) {
-              const found = roomsResult.data.find((r) =>
-                options.room ? r.Name.toLowerCase().includes(options.room.toLowerCase()) : false
-              );
-              if (found) {
-                roomEmail = found.Address;
-                roomName = found.Name;
+            const files = fileAttachments ?? [];
+            const links = (referenceAttachments ?? []).map((a) => ({ name: a.name, sourceUrl: a.url }));
+            const att = await addCalendarEventAttachmentsGraph(
+              ga.token,
+              gd.id,
+              options.mailbox?.trim() || undefined,
+              files,
+              links
+            );
+            if (att.ok) {
+              if (options.json) {
+                console.log(
+                  JSON.stringify(
+                    {
+                      success: true,
+                      backend: 'graph',
+                      eventId: gd.id,
+                      fileAttachmentsAdded: files.length,
+                      referenceAttachmentsAdded: links.length
+                    },
+                    null,
+                    2
+                  )
+                );
               } else {
-                console.error(`Room not found: ${options.room}`);
-                process.exit(1);
+                console.log(`\n\u2713 Attachment(s) added to calendar event (Graph).`);
               }
+              return;
+            }
+            if (backend === 'graph') {
+              if (options.json) {
+                console.log(JSON.stringify({ error: att.error?.message || 'Failed to add attachments' }, null, 2));
+              } else {
+                console.error(`Error: ${att.error?.message || 'Failed to add attachments'}`);
+              }
+              process.exit(1);
+            }
+            if (!options.json) {
+              console.warn(`[update-event] Graph attachments failed (${att.error?.message}); falling back to EWS.`);
             }
           }
-
-          if (roomName) {
-            updateOptions.location = roomName;
-          }
-        }
-
-        if (options.addAttendee.length > 0 || options.removeAttendee.length > 0 || roomEmail) {
-          const existingAttendees: Array<{ email: string; name?: string; type: 'Required' | 'Optional' | 'Resource' }> =
-            (displayEvent!.Attendees || []).map((a) => ({
-              email: a.EmailAddress?.Address || '',
-              name: a.EmailAddress?.Name,
-              type: a.Type as 'Required' | 'Optional' | 'Resource'
-            }));
-
-          for (const email of options.removeAttendee) {
-            const idx = existingAttendees.findIndex((a) => a.email.toLowerCase() === email.toLowerCase());
-            if (idx !== -1) existingAttendees.splice(idx, 1);
-          }
-
-          for (const email of options.addAttendee) {
-            if (!existingAttendees.find((a) => a.email.toLowerCase() === email.toLowerCase())) {
-              existingAttendees.push({ email, type: 'Required' });
-            }
-          }
-
-          if (roomEmail) {
-            const withoutRooms = existingAttendees.filter((a) => a.type !== 'Resource');
-            withoutRooms.push({ email: roomEmail, name: roomName, type: 'Resource' });
-            updateOptions.attendees = withoutRooms;
-          } else {
-            updateOptions.attendees = existingAttendees;
-          }
-        }
-
-        if (options.teams !== undefined) {
-          updateOptions.isOnlineMeeting = options.teams;
-        }
-
-        console.log(`\nUpdating: ${displayEvent!.Subject}`);
-
-        updateResult = await updateEvent(updateOptions);
-
-        if (!updateResult.ok) {
+        } else if (backend === 'graph') {
           if (options.json) {
-            console.log(JSON.stringify({ error: updateResult.error?.message || 'Failed to update event' }, null, 2));
+            console.log(JSON.stringify({ error: ga.error || 'Graph authentication failed' }, null, 2));
           } else {
-            console.error(`\nError: ${updateResult.error?.message || 'Failed to update event'}`);
+            console.error(`Error: ${ga.error || 'Graph authentication failed'}`);
           }
           process.exit(1);
         }
       }
 
-      const eventIdForAttach = occurrenceItemId || updateResult?.data?.Id || displayEvent!.Id;
+      if (hasFieldUpdates) {
+        const tryGraphUpdate = (backend === 'graph' || backend === 'auto') && options.id;
+
+        if (tryGraphUpdate) {
+          const ga = await resolveGraphAuth({
+            token: options.token,
+            identity: options.identity
+          });
+          if (ga.success && ga.token) {
+            let gd: GraphCalendarEvent | undefined = useGraph && targetGraph ? targetGraph : undefined;
+            let graphGetErr: string | undefined;
+            if (!gd) {
+              const ge = await getEvent(ga.token, options.id!, options.mailbox);
+              if (ge.ok && ge.data) {
+                gd = ge.data;
+              } else {
+                graphGetErr = ge.error?.message;
+              }
+            }
+            if (gd) {
+              if (gd.isOrganizer === false) {
+                if (options.json) {
+                  console.log(
+                    JSON.stringify(
+                      {
+                        error: 'Only the organizer can update this event. Use `respond` if you were invited.'
+                      },
+                      null,
+                      2
+                    )
+                  );
+                } else {
+                  console.error('Error: Only the organizer can update this event.');
+                }
+                process.exit(1);
+              }
+
+              let sensitivityEws: 'Normal' | 'Personal' | 'Private' | 'Confidential' | undefined;
+              if (options.sensitivity) {
+                const s = SENSITIVITY_MAP[options.sensitivity.toLowerCase()];
+                if (!s) {
+                  console.error(`Invalid sensitivity: ${options.sensitivity}`);
+                  process.exit(1);
+                }
+                sensitivityEws = s;
+              }
+
+              const eventDate = new Date(gd.start?.dateTime ?? '');
+              let newStart: Date | undefined;
+              let newEnd: Date | undefined;
+              try {
+                if (options.start) {
+                  newStart = parseTimeToDate(options.start, eventDate, { throwOnInvalid: true });
+                }
+                if (options.end) {
+                  newEnd = parseTimeToDate(options.end, eventDate, { throwOnInvalid: true });
+                }
+              } catch (err) {
+                const message = err instanceof Error ? err.message : 'Invalid time';
+                if (options.json) {
+                  console.log(JSON.stringify({ error: message }, null, 2));
+                } else {
+                  console.error(`Error: ${message}`);
+                }
+                process.exit(1);
+              }
+
+              let locationText = options.location;
+              let roomResource: { email: string; name?: string } | undefined;
+              if (options.room) {
+                if (options.room.includes('@')) {
+                  roomResource = { email: options.room, name: options.room };
+                  locationText = options.room;
+                } else {
+                  const rr = await resolveRoomDisplayNameToPlace(ga.token, options.room);
+                  if (!rr.ok) {
+                    if (options.json) {
+                      console.log(JSON.stringify({ error: rr.error }, null, 2));
+                    } else {
+                      console.error(`Error: ${rr.error}`);
+                    }
+                    process.exit(1);
+                  }
+                  const em = rr.place.emailAddress!.trim();
+                  roomResource = { email: em, name: rr.place.displayName };
+                  locationText = rr.place.displayName?.trim() || em;
+                }
+              }
+
+              const patch = buildGraphUpdatePatch({
+                display: gd,
+                title: options.title,
+                description: options.description,
+                newStart: newStart && newEnd ? newStart : undefined,
+                newEnd: newStart && newEnd ? newEnd : undefined,
+                timezone: options.timezone,
+                location: locationText,
+                allDay: options.allDay,
+                sensitivity: sensitivityEws,
+                categories: options.category && options.category.length > 0 ? options.category : undefined,
+                clearCategories: options.clearCategories,
+                teams: options.teams === true,
+                noTeams: options.teams === false,
+                addAttendee: options.addAttendee,
+                removeAttendee: options.removeAttendee,
+                roomResource
+              });
+
+              if (newStart && !newEnd) {
+                const endD = new Date(gd.end?.dateTime ?? '');
+                patch.end = {
+                  dateTime: options.timezone
+                    ? toLocalUnzonedISOString(endD)
+                    : toUTCISOString(endD).replace(/\.\d{3}Z$/, ''),
+                  timeZone: options.timezone?.trim() || gd.end?.timeZone || 'UTC'
+                };
+                patch.start = {
+                  dateTime: options.timezone
+                    ? toLocalUnzonedISOString(newStart)
+                    : toUTCISOString(newStart).replace(/\.\d{3}Z$/, ''),
+                  timeZone: options.timezone?.trim() || gd.start?.timeZone || 'UTC'
+                };
+              } else if (!newStart && newEnd) {
+                const startD = new Date(gd.start?.dateTime ?? '');
+                patch.start = {
+                  dateTime: options.timezone
+                    ? toLocalUnzonedISOString(startD)
+                    : toUTCISOString(startD).replace(/\.\d{3}Z$/, ''),
+                  timeZone: options.timezone?.trim() || gd.start?.timeZone || 'UTC'
+                };
+                patch.end = {
+                  dateTime: options.timezone
+                    ? toLocalUnzonedISOString(newEnd)
+                    : toUTCISOString(newEnd).replace(/\.\d{3}Z$/, ''),
+                  timeZone: options.timezone?.trim() || gd.end?.timeZone || 'UTC'
+                };
+              }
+
+              if (Object.keys(patch).length === 0) {
+                if (options.json) {
+                  console.log(JSON.stringify({ error: 'No field updates to apply' }, null, 2));
+                } else {
+                  console.error('No field updates to apply.');
+                }
+                process.exit(1);
+              } else {
+                console.log(`\nUpdating: ${gd.subject ?? '(no subject)'}`);
+                const ur = await updateCalendarEvent(ga.token, gd.id, patch, options.mailbox);
+                if (ur.ok && ur.data) {
+                  const files = fileAttachments ?? [];
+                  const links = (referenceAttachments ?? []).map((a) => ({ name: a.name, sourceUrl: a.url }));
+                  if (files.length > 0 || links.length > 0) {
+                    const att = await addCalendarEventAttachmentsGraph(
+                      ga.token,
+                      ur.data.id,
+                      options.mailbox?.trim() || undefined,
+                      files,
+                      links
+                    );
+                    if (!att.ok) {
+                      if (backend === 'graph') {
+                        if (options.json) {
+                          console.log(
+                            JSON.stringify({ error: att.error?.message || 'Failed to add attachments' }, null, 2)
+                          );
+                        } else {
+                          console.error(`Error: ${att.error?.message || 'Failed to add attachments'}`);
+                        }
+                        process.exit(1);
+                      }
+                      if (useGraph && backend === 'auto') {
+                        if (options.json) {
+                          console.log(
+                            JSON.stringify({ error: att.error?.message || 'Failed to add attachments' }, null, 2)
+                          );
+                        } else {
+                          console.error(`Error: ${att.error?.message || 'Failed to add attachments'}`);
+                        }
+                        process.exit(1);
+                      }
+                    }
+                  }
+                  if (options.json) {
+                    console.log(
+                      JSON.stringify(
+                        {
+                          success: true,
+                          backend: 'graph',
+                          event: {
+                            id: ur.data.id,
+                            changeKey: ur.data.changeKey,
+                            subject: ur.data.subject,
+                            start: ur.data.start?.dateTime,
+                            end: ur.data.end?.dateTime
+                          },
+                          fileAttachmentsAdded: files.length,
+                          referenceAttachmentsAdded: links.length
+                        },
+                        null,
+                        2
+                      )
+                    );
+                  } else {
+                    console.log('\n\u2713 Event updated successfully.');
+                    console.log(`\n  Title: ${ur.data.subject ?? ''}`);
+                    const st = ur.data.start?.dateTime ?? '';
+                    const en = ur.data.end?.dateTime ?? '';
+                    if (st && en) {
+                      console.log(`  When:  ${formatDate(st)} ${formatTime(st)} - ${formatTime(en)}`);
+                    }
+                    if (files.length + links.length > 0) {
+                      console.log(`  Attachments: ${files.length} file(s), ${links.length} link(s)`);
+                    }
+                    console.log('');
+                  }
+                  return;
+                }
+                if (backend === 'graph') {
+                  if (options.json) {
+                    console.log(JSON.stringify({ error: ur.error?.message || 'Failed to update event' }, null, 2));
+                  } else {
+                    console.error(`Error: ${ur.error?.message || 'Failed to update event'}`);
+                  }
+                  process.exit(1);
+                }
+                if (useGraph && backend === 'auto') {
+                  if (options.json) {
+                    console.log(
+                      JSON.stringify(
+                        {
+                          error:
+                            ur.error?.message ||
+                            'Graph update failed; cannot fall back to EWS when using Graph calendar data.'
+                        },
+                        null,
+                        2
+                      )
+                    );
+                  } else {
+                    console.error(
+                      `Error: Graph update failed (${ur.error?.message}). Cannot fall back to EWS when using Graph calendar data; set M365_EXCHANGE_BACKEND=ews or use an EWS event id.`
+                    );
+                  }
+                  process.exit(1);
+                }
+                if (!options.json) {
+                  console.warn(`[update-event] Graph failed (${ur.error?.message}); falling back to EWS.`);
+                }
+              }
+            } else {
+              if (backend === 'graph') {
+                if (options.json) {
+                  console.log(
+                    JSON.stringify(
+                      {
+                        error: graphGetErr || 'Invalid event id',
+                        id: options.id,
+                        hint: GRAPH_EVENT_ID_HINT
+                      },
+                      null,
+                      2
+                    )
+                  );
+                } else {
+                  const detail = graphGetErr ? `: ${graphGetErr}` : '';
+                  console.error(`Invalid event id: ${options.id}${detail}`);
+                  console.error(GRAPH_EVENT_ID_HINT);
+                }
+                process.exit(1);
+              }
+              if (useGraph && backend === 'auto') {
+                if (options.json) {
+                  console.log(
+                    JSON.stringify(
+                      {
+                        error:
+                          graphGetErr ||
+                          'Failed to load event from Graph; cannot fall back to EWS when using Graph calendar data.'
+                      },
+                      null,
+                      2
+                    )
+                  );
+                } else {
+                  console.error(
+                    `Error: ${graphGetErr || 'Failed to load event'}. Cannot fall back to EWS when using Graph calendar data; set M365_EXCHANGE_BACKEND=ews or use an EWS event id.`
+                  );
+                }
+                process.exit(1);
+              }
+              if (!options.json) {
+                console.warn(`[update-event] Graph get event failed (${graphGetErr}); falling back to EWS.`);
+              }
+            }
+          } else if (useGraph && backend === 'auto') {
+            if (options.json) {
+              console.log(JSON.stringify({ error: ga.error || 'Graph authentication failed' }, null, 2));
+            } else {
+              console.error(`Error: ${ga.error || 'Graph authentication failed'}`);
+            }
+            process.exit(1);
+          } else if (backend === 'graph') {
+            if (options.json) {
+              console.log(JSON.stringify({ error: ga.error || 'Graph authentication failed' }, null, 2));
+            } else {
+              console.error(`Error: ${ga.error || 'Graph authentication failed'}`);
+            }
+            process.exit(1);
+          }
+        }
+
+        if (!useGraph) {
+          const updateOptions: Parameters<typeof updateEvent>[0] = {
+            token: authResult!.token!,
+            eventId: (targetEws ?? displayEws!).Id,
+            changeKey: displayEws!.ChangeKey,
+            occurrenceItemId,
+            mailbox: options.mailbox,
+            categories: options.clearCategories
+              ? []
+              : options.category && options.category.length > 0
+                ? options.category
+                : undefined
+          };
+
+          if (options.title) {
+            updateOptions.subject = options.title;
+          }
+
+          if (options.timezone) {
+            updateOptions.timezone = options.timezone;
+          }
+
+          if (options.description) {
+            updateOptions.body = options.description;
+          }
+
+          if (options.start || options.end) {
+            const eventDate = new Date(displayEws!.Start.DateTime);
+
+            if (options.start) {
+              try {
+                const newStart = parseTimeToDate(options.start, eventDate, { throwOnInvalid: true });
+                updateOptions.start = options.timezone ? toLocalUnzonedISOString(newStart) : toUTCISOString(newStart);
+              } catch (err) {
+                const message = err instanceof Error ? err.message : 'Invalid start time';
+                if (options.json) {
+                  console.log(JSON.stringify({ error: message }, null, 2));
+                } else {
+                  console.error(`Error: ${message}`);
+                }
+                process.exit(1);
+              }
+            }
+
+            if (options.end) {
+              try {
+                const newEnd = parseTimeToDate(options.end, eventDate, { throwOnInvalid: true });
+                updateOptions.end = options.timezone ? toLocalUnzonedISOString(newEnd) : toUTCISOString(newEnd);
+              } catch (err) {
+                const message = err instanceof Error ? err.message : 'Invalid end time';
+                if (options.json) {
+                  console.log(JSON.stringify({ error: message }, null, 2));
+                } else {
+                  console.error(`Error: ${message}`);
+                }
+                process.exit(1);
+              }
+            }
+          }
+
+          if (options.location) {
+            updateOptions.location = options.location;
+          }
+
+          if (options.allDay !== undefined) {
+            updateOptions.isAllDay = options.allDay;
+          }
+
+          if (options.sensitivity) {
+            const sensitivity = SENSITIVITY_MAP[options.sensitivity.toLowerCase()];
+            if (!sensitivity) {
+              console.error(`Invalid sensitivity: ${options.sensitivity}`);
+              process.exit(1);
+            }
+            updateOptions.sensitivity = sensitivity;
+          }
+
+          let roomEmail: string | undefined;
+          let roomName: string | undefined;
+
+          if (options.room) {
+            if (options.room.includes('@')) {
+              roomEmail = options.room;
+              roomName = options.room;
+            } else {
+              let roomsResult = await searchRooms(authResult!.token!, options.room!);
+              if (!roomsResult.ok || !roomsResult.data || roomsResult.data.length === 0) {
+                roomsResult = await getRooms(authResult!.token!);
+              }
+
+              if (roomsResult.ok && roomsResult.data) {
+                const found = roomsResult.data.find((r) =>
+                  options.room ? r.Name.toLowerCase().includes(options.room.toLowerCase()) : false
+                );
+                if (found) {
+                  roomEmail = found.Address;
+                  roomName = found.Name;
+                } else {
+                  console.error(`Room not found: ${options.room}`);
+                  process.exit(1);
+                }
+              }
+            }
+
+            if (roomName) {
+              updateOptions.location = roomName;
+            }
+          }
+
+          if (options.addAttendee.length > 0 || options.removeAttendee.length > 0 || roomEmail) {
+            const existingAttendees: Array<{
+              email: string;
+              name?: string;
+              type: 'Required' | 'Optional' | 'Resource';
+            }> = (displayEws!.Attendees || []).map((a) => ({
+              email: a.EmailAddress?.Address || '',
+              name: a.EmailAddress?.Name,
+              type: a.Type as 'Required' | 'Optional' | 'Resource'
+            }));
+
+            for (const email of options.removeAttendee) {
+              const idx = existingAttendees.findIndex((a) => a.email.toLowerCase() === email.toLowerCase());
+              if (idx !== -1) existingAttendees.splice(idx, 1);
+            }
+
+            for (const email of options.addAttendee) {
+              if (!existingAttendees.find((a) => a.email.toLowerCase() === email.toLowerCase())) {
+                existingAttendees.push({ email, type: 'Required' });
+              }
+            }
+
+            if (roomEmail) {
+              const withoutRooms = existingAttendees.filter((a) => a.type !== 'Resource');
+              withoutRooms.push({ email: roomEmail, name: roomName, type: 'Resource' });
+              updateOptions.attendees = withoutRooms;
+            } else {
+              updateOptions.attendees = existingAttendees;
+            }
+          }
+
+          if (options.teams !== undefined) {
+            updateOptions.isOnlineMeeting = options.teams;
+          }
+
+          console.log(`\nUpdating: ${displayEws!.Subject}`);
+
+          updateResult = await updateEvent(updateOptions);
+
+          if (!updateResult.ok) {
+            if (options.json) {
+              console.log(JSON.stringify({ error: updateResult.error?.message || 'Failed to update event' }, null, 2));
+            } else {
+              console.error(`\nError: ${updateResult.error?.message || 'Failed to update event'}`);
+            }
+            process.exit(1);
+          }
+        }
+      }
+
+      const eventIdForAttach = occurrenceItemId || updateResult?.data?.Id || displayEws!.Id;
 
       if (wantsAttachments) {
         const attachResult = await addCalendarEventAttachments(
-          authResult.token!,
+          authResult!.token!,
           eventIdForAttach,
           options.mailbox,
           fileAttachments ?? [],
@@ -562,7 +1206,7 @@ export const updateEventCommand = new Command('update-event')
 
       if (options.json) {
         const dr = updateResult?.data;
-        const de = displayEvent!;
+        const de = displayEws!;
         console.log(
           JSON.stringify(
             {
@@ -590,13 +1234,13 @@ export const updateEventCommand = new Command('update-event')
           console.log('\n\u2713 Attachment(s) added to calendar event.');
         }
         const dr = updateResult?.data;
-        const de = displayEvent!;
+        const de = displayEws!;
         if (dr) {
           console.log(`\n  Title: ${dr.Subject}`);
           console.log(
             `  When:  ${formatDate(dr.Start.DateTime)} ${formatTime(dr.Start.DateTime)} - ${formatTime(dr.End.DateTime)}`
           );
-        } else if (wantsAttachments) {
+        } else if (wantsAttachments && de) {
           console.log(`\n  Title: ${de.Subject}`);
           console.log(
             `  When:  ${formatDate(de.Start.DateTime)} ${formatTime(de.Start.DateTime)} - ${formatTime(de.End.DateTime)}`

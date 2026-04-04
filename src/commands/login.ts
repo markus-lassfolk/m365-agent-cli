@@ -1,13 +1,20 @@
 import { existsSync, mkdirSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { dirname } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { Command } from 'commander';
 import { atomicWriteUtf8File } from '../lib/atomic-write.js';
+import { GRAPH_DEVICE_CODE_LOGIN_SCOPES } from '../lib/graph-oauth-scopes.js';
 import { getMicrosoftTenantPathSegment } from '../lib/jwt-utils.js';
+import { applyEnvFileOverrides, getGlobalEnvFilePath, resolveEnvFilePathArgument } from '../lib/utils.js';
 
-async function performDeviceCodeFlow(clientId: string, tenant: string, scope: string, label: string): Promise<string> {
+async function performDeviceCodeFlow(
+  clientId: string,
+  tenant: string,
+  scope: string,
+  label: string,
+  envPath: string
+): Promise<string> {
   console.log(`\nInitiating Device Code flow for ${label}...`);
 
   const deviceCodeRes = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/devicecode`, {
@@ -77,9 +84,7 @@ async function performDeviceCodeFlow(clientId: string, tenant: string, scope: st
           if (username) {
             let envContent = '';
 
-            const configDir = join(homedir(), '.config', 'm365-agent-cli');
-            mkdirSync(configDir, { recursive: true, mode: 0o700 });
-            const envPath = join(configDir, '.env');
+            mkdirSync(dirname(envPath), { recursive: true, mode: 0o700 });
 
             try {
               envContent = await readFile(envPath, 'utf8');
@@ -122,13 +127,19 @@ async function performDeviceCodeFlow(clientId: string, tenant: string, scope: st
 
 export const loginCommand = new Command('login')
   .description('Interactive login to obtain refresh tokens via OAuth2 Device Code flow')
-  .action(async () => {
-    let clientId = process.env.EWS_CLIENT_ID;
+  .option(
+    '--env-file <path>',
+    'Load/save EWS_CLIENT_ID and refresh tokens in this file (e.g. ~/.config/m365-agent-cli/.env.beta). Overrides vars from the default .env loaded at startup.'
+  )
+  .action(async (opts: { envFile?: string }) => {
+    let envPath = getGlobalEnvFilePath();
+    if (opts.envFile) {
+      envPath = resolveEnvFilePathArgument(opts.envFile);
+      applyEnvFileOverrides(envPath);
+    }
 
-    // Read existing .env if present
-    const configDir = join(homedir(), '.config', 'm365-agent-cli');
-    mkdirSync(configDir, { recursive: true, mode: 0o700 });
-    const envPath = join(configDir, '.env');
+    let clientId = process.env.EWS_CLIENT_ID;
+    mkdirSync(dirname(envPath), { recursive: true, mode: 0o700 });
     let envContent = '';
     if (existsSync(envPath)) {
       envContent = await readFile(envPath, 'utf8');
@@ -159,12 +170,26 @@ export const loginCommand = new Command('login')
       await atomicWriteUtf8File(envPath, `${envContent.trim()}\n`, 0o600);
     }
 
+    console.log('');
+    console.log(`Configuration file: ${envPath}`);
+    if (!process.env.M365_AGENT_ENV_FILE?.trim() && !opts.envFile) {
+      console.log(
+        'Tip: For a second app (e.g. beta), use --env-file ~/.config/m365-agent-cli/.env.beta or export M365_AGENT_ENV_FILE to that path before running the CLI.'
+      );
+    }
+    console.log(`Application (client) ID: ${clientId}`);
+    console.log('');
+
     const tenant = getMicrosoftTenantPathSegment();
 
-    // Use a single Graph Device Code flow to obtain a multi-resource refresh token
-    const graphScope =
-      'offline_access User.Read Calendars.ReadWrite Mail.ReadWrite Files.ReadWrite.All Sites.ReadWrite.All Tasks.ReadWrite Group.ReadWrite.All';
-    const rawToken = await performDeviceCodeFlow(clientId, tenant, graphScope, 'Microsoft 365');
+    // Use a single Graph Device Code flow to obtain a multi-resource refresh token (see src/lib/graph-oauth-scopes.ts)
+    const rawToken = await performDeviceCodeFlow(
+      clientId,
+      tenant,
+      GRAPH_DEVICE_CODE_LOGIN_SCOPES,
+      'Microsoft 365',
+      envPath
+    );
     const refreshToken = rawToken.replace(/[\r\n]/g, '');
 
     // Save tokens immediately
@@ -174,22 +199,21 @@ export const loginCommand = new Command('login')
       if (err.code !== 'ENOENT') throw err;
     }
 
-    // Update or append EWS_REFRESH_TOKEN
-    if (/^EWS_REFRESH_TOKEN=.*$/m.test(envContent)) {
-      envContent = envContent.replace(/^EWS_REFRESH_TOKEN=.*$/m, () => `EWS_REFRESH_TOKEN=${refreshToken}`);
-    } else {
-      envContent += `\nEWS_REFRESH_TOKEN=${refreshToken}\n`;
-    }
+    const upsertEnvLine = (key: string, value: string) => {
+      const re = new RegExp(`^${key}=.*$`, 'm');
+      if (re.test(envContent)) {
+        envContent = envContent.replace(re, () => `${key}=${value}`);
+      } else {
+        envContent += `\n${key}=${value}\n`;
+      }
+    };
 
-    // Update or append GRAPH_REFRESH_TOKEN
-    if (/^GRAPH_REFRESH_TOKEN=.*$/m.test(envContent)) {
-      envContent = envContent.replace(/^GRAPH_REFRESH_TOKEN=.*$/m, () => `GRAPH_REFRESH_TOKEN=${refreshToken}`);
-    } else {
-      envContent += `\nGRAPH_REFRESH_TOKEN=${refreshToken}\n`;
-    }
+    upsertEnvLine('M365_REFRESH_TOKEN', refreshToken);
+    upsertEnvLine('EWS_REFRESH_TOKEN', refreshToken);
+    upsertEnvLine('GRAPH_REFRESH_TOKEN', refreshToken);
 
     envContent = envContent.replace(/\n{3,}/g, '\n\n');
     await atomicWriteUtf8File(envPath, `${envContent.trim()}\n`, 0o600);
 
-    console.log(`Saved GRAPH_REFRESH_TOKEN and EWS_REFRESH_TOKEN to ${envPath}`);
+    console.log(`Saved M365_REFRESH_TOKEN (and legacy GRAPH_REFRESH_TOKEN / EWS_REFRESH_TOKEN) to ${envPath}`);
   });

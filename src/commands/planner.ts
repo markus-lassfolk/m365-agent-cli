@@ -84,39 +84,49 @@ function formatTaskLabels(task: PlannerTask, descriptions?: PlannerPlanDetails['
 
 export const plannerCommand = new Command('planner').description('Manage Microsoft Planner tasks and plans');
 
+async function runPlannerListMyTasks(opts: { json?: boolean; token?: string; identity?: string }): Promise<void> {
+  const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+  if (!auth.success) {
+    console.error(`Auth error: ${auth.error}`);
+    process.exit(1);
+  }
+  const result = await listUserTasks(auth.token!);
+  if (!result.ok || !result.data) {
+    console.error(`Error listing tasks: ${result.error?.message}`);
+    process.exit(1);
+  }
+  if (opts.json) {
+    console.log(JSON.stringify(result.data, null, 2));
+  } else {
+    const planDetailsCache = new Map<string, PlannerPlanDetails['categoryDescriptions']>();
+    for (const t of result.data) {
+      if (!planDetailsCache.has(t.planId)) {
+        const d = await getPlanDetails(auth.token!, t.planId);
+        planDetailsCache.set(t.planId, d.ok ? d.data?.categoryDescriptions : undefined);
+      }
+      const desc = planDetailsCache.get(t.planId);
+      const labels = formatTaskLabels(t, desc);
+      console.log(`- [${t.percentComplete === 100 ? 'x' : ' '}] ${t.title} (ID: ${t.id})`);
+      console.log(`  Plan ID: ${t.planId} | Bucket ID: ${t.bucketId}${labels ? ` | Labels: ${labels}` : ''}`);
+    }
+  }
+}
+
 plannerCommand
   .command('list-my-tasks')
   .description('List tasks assigned to you')
   .option('--json', 'Output JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .action(async (opts: { json?: boolean; token?: string; identity?: string }) => {
-    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
-    if (!auth.success) {
-      console.error(`Auth error: ${auth.error}`);
-      process.exit(1);
-    }
-    const result = await listUserTasks(auth.token!);
-    if (!result.ok || !result.data) {
-      console.error(`Error listing tasks: ${result.error?.message}`);
-      process.exit(1);
-    }
-    if (opts.json) {
-      console.log(JSON.stringify(result.data, null, 2));
-    } else {
-      const planDetailsCache = new Map<string, PlannerPlanDetails['categoryDescriptions']>();
-      for (const t of result.data) {
-        if (!planDetailsCache.has(t.planId)) {
-          const d = await getPlanDetails(auth.token!, t.planId);
-          planDetailsCache.set(t.planId, d.ok ? d.data?.categoryDescriptions : undefined);
-        }
-        const desc = planDetailsCache.get(t.planId);
-        const labels = formatTaskLabels(t, desc);
-        console.log(`- [${t.percentComplete === 100 ? 'x' : ' '}] ${t.title} (ID: ${t.id})`);
-        console.log(`  Plan ID: ${t.planId} | Bucket ID: ${t.bucketId}${labels ? ` | Labels: ${labels}` : ''}`);
-      }
-    }
-  });
+  .action(runPlannerListMyTasks);
+
+plannerCommand
+  .command('tasks')
+  .description('Alias for list-my-tasks (tasks assigned to you)')
+  .option('--json', 'Output JSON')
+  .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .action(runPlannerListMyTasks);
 
 plannerCommand
   .command('list-plans')

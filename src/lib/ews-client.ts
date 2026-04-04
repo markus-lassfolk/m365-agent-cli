@@ -858,16 +858,18 @@ export async function validateSession(token: string): Promise<boolean> {
 
 export async function getOwaUserInfo(token: string): Promise<OwaResponse<OwaUserInfo>> {
   try {
+    // Read at call time so tests (and shells) can set `EWS_USERNAME` without re-importing the module.
+    const unresolved = process.env.EWS_USERNAME || '';
     const envelope = soapEnvelope(`
     <m:ResolveNames ReturnFullContactData="true" SearchScope="ActiveDirectory">
-      <m:UnresolvedEntry>${xmlEscape(EWS_USERNAME)}</m:UnresolvedEntry>
+      <m:UnresolvedEntry>${xmlEscape(unresolved)}</m:UnresolvedEntry>
     </m:ResolveNames>`);
     const xml = await callEws(token, envelope);
 
     const resolution = extractBlocks(xml, 'Resolution')[0] || '';
     const mailbox = extractSelfClosingOrBlock(resolution, 'Mailbox');
-    const name = extractTag(mailbox, 'Name') || EWS_USERNAME;
-    const email = extractTag(mailbox, 'EmailAddress') || EWS_USERNAME;
+    const name = extractTag(mailbox, 'Name') || unresolved;
+    const email = extractTag(mailbox, 'EmailAddress') || unresolved;
 
     return ewsResult({ displayName: name, email });
   } catch (err) {

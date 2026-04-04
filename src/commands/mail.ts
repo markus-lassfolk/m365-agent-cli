@@ -23,9 +23,18 @@ import {
   updateDraft,
   updateEmail
 } from '../lib/ews-client.js';
+import { getExchangeBackend } from '../lib/exchange-backend.js';
+import { warnAutoGraphToEwsFallback } from '../lib/exchange-fallback-hint.js';
+import { resolveGraphAuth } from '../lib/graph-auth.js';
 import { markdownToHtml } from '../lib/markdown.js';
 import { lookupMimeType } from '../lib/mime-type.js';
 import { checkReadOnly } from '../lib/utils.js';
+import {
+  describeMailGraphUnhandledCombination,
+  isGraphMailPortionEligible,
+  type MailGraphCommandOptions,
+  tryMailGraphPortion
+} from './mail-graph.js';
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
@@ -243,6 +252,65 @@ export const mailCommand = new Command('mail')
       if (isMutating) {
         checkReadOnly(cmd);
       }
+
+      if (folder.trim().toLowerCase() === 'folders') {
+        if (options.json) {
+          console.log(
+            JSON.stringify({
+              error: 'There is no `mail folders` subcommand. Use the top-level `folders` command to list mail folders.',
+              hint: 'm365-agent-cli folders [--mailbox <email>]'
+            })
+          );
+        } else {
+          console.error('To list mail folders, use the top-level command (not `mail folders`):');
+          console.error('  m365-agent-cli folders [--mailbox <email>]');
+        }
+        process.exit(1);
+      }
+
+      const backend = getExchangeBackend();
+      const mailGraphOpts = options as unknown as MailGraphCommandOptions;
+      const tryGraphMail =
+        (!isMutating || isGraphMailPortionEligible(mailGraphOpts)) && (backend === 'graph' || backend === 'auto');
+
+      if (tryGraphMail) {
+        const ga = await resolveGraphAuth({ token: options.token, identity: options.identity });
+        let graphSkippedUnhandled = false;
+        if (ga.success && ga.token) {
+          const { handled } = await tryMailGraphPortion(ga.token, folder, mailGraphOpts, cmd);
+          if (handled) return;
+          graphSkippedUnhandled = true;
+        }
+        if (backend === 'graph') {
+          if (!ga.success || !ga.token) {
+            const msg = ga.error || 'Graph authentication failed';
+            if (options.json) {
+              console.log(JSON.stringify({ error: msg }, null, 2));
+            } else {
+              console.error(`Error: ${msg}`);
+            }
+            process.exit(1);
+          }
+          const detail = describeMailGraphUnhandledCombination(mailGraphOpts);
+          if (options.json) {
+            console.log(JSON.stringify({ error: detail }, null, 2));
+          } else {
+            console.error(detail);
+          }
+          process.exit(1);
+        }
+        if (backend === 'auto') {
+          const errMsg = graphSkippedUnhandled
+            ? describeMailGraphUnhandledCombination(mailGraphOpts)
+            : ga.error || 'Graph path did not handle this mail command';
+          warnAutoGraphToEwsFallback('mail', {
+            json: options.json,
+            graphError: errMsg,
+            reason: graphSkippedUnhandled ? 'api' : 'auth'
+          });
+        }
+      }
+
       const authResult = await resolveAuth({
         token: options.token,
         identity: options.identity

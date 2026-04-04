@@ -1,8 +1,17 @@
-import { mkdir, readFile, rename, stat } from 'node:fs/promises';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
-import { atomicWriteUtf8File } from './atomic-write.js';
-import { getJwtExpiration, getMicrosoftTenantPathSegment, isValidJwtStructure } from './jwt-utils.js';
+import { GRAPH_CRITICAL_DELEGATED_SCOPES, GRAPH_REFRESH_SCOPE_CANDIDATES } from './graph-oauth-scopes.js';
+import {
+  getJwtExpiration,
+  getJwtPayloadAppId,
+  getJwtPayloadScopeSet,
+  getMicrosoftTenantPathSegment,
+  isValidJwtStructure
+} from './jwt-utils.js';
+import {
+  getUnifiedRefreshTokenFromEnv,
+  loadM365TokenCache,
+  type M365TokenCacheV1,
+  saveM365TokenCache
+} from './m365-token-cache.js';
 
 export interface GraphAuthResult {
   success: boolean;
@@ -10,90 +19,14 @@ export interface GraphAuthResult {
   error?: string;
 }
 
-interface CachedGraphToken {
-  accessToken: string;
-  refreshToken: string;
-  expiresAt: number;
-}
-
-function assertCachedGraphToken(data: unknown): CachedGraphToken {
-  if (!data || typeof data !== 'object') throw new Error('invalid graph token cache');
-  const o = data as Record<string, unknown>;
-  if (typeof o.accessToken !== 'string' || o.accessToken.length > 100_000) throw new Error('invalid graph token cache');
-  if (typeof o.refreshToken !== 'string' || o.refreshToken.length > 100_000)
-    throw new Error('invalid graph token cache');
-  if (typeof o.expiresAt !== 'number' || !Number.isFinite(o.expiresAt)) throw new Error('invalid graph token cache');
-  return { accessToken: o.accessToken, refreshToken: o.refreshToken, expiresAt: o.expiresAt };
-}
-
-const GRAPH_TOKEN_CACHE_TEMPLATE = join(homedir(), '.config', 'm365-agent-cli', 'graph-token-cache-{identity}.json');
-const LEGACY_GRAPH_TOKEN_CACHE_FILE = join(homedir(), '.config', 'm365-agent-cli', 'graph-token-cache.json');
-const OLD_GRAPH_TOKEN_CACHE_FILE = join(homedir(), '.config', 'clippy', 'graph-token-cache.json');
-
-function graphTokenCachePath(identity: string): string {
-  return GRAPH_TOKEN_CACHE_TEMPLATE.replace('{identity}', identity);
-}
-
-async function migrateGraphTokenCache(): Promise<void> {
-  try {
-    const dir = join(homedir(), '.config', 'm365-agent-cli');
-    const defaultPath = graphTokenCachePath('default');
-    const defaultStats = await stat(defaultPath).catch(() => null);
-    if (!defaultStats) {
-      const legacyStats = await stat(LEGACY_GRAPH_TOKEN_CACHE_FILE).catch(() => null);
-      if (legacyStats) {
-        await mkdir(dir, { recursive: true, mode: 0o700 });
-        await rename(LEGACY_GRAPH_TOKEN_CACHE_FILE, defaultPath);
-        return;
-      }
-      const oldClippyStats = await stat(OLD_GRAPH_TOKEN_CACHE_FILE).catch(() => null);
-      if (oldClippyStats) {
-        await mkdir(dir, { recursive: true, mode: 0o700 });
-        await rename(OLD_GRAPH_TOKEN_CACHE_FILE, defaultPath);
-      }
-    }
-  } catch (_err) {
-    // Ignore migration errors
-  }
-}
-
-const GRAPH_SCOPES = [
-  'https://graph.microsoft.com/Files.ReadWrite offline_access User.Read',
-  'https://graph.microsoft.com/Files.ReadWrite.All offline_access User.Read',
-  'https://graph.microsoft.com/Sites.ReadWrite.All offline_access User.Read',
-  'https://graph.microsoft.com/.default offline_access',
-  'https://graph.microsoft.com/Tasks.ReadWrite offline_access User.Read',
-  'https://graph.microsoft.com/Group.ReadWrite.All offline_access User.Read',
-  'https://graph.microsoft.com/Files.Read offline_access User.Read'
-];
-
-async function loadCachedGraphToken(identity: string): Promise<CachedGraphToken | null> {
-  await migrateGraphTokenCache();
-  try {
-    const data = await readFile(graphTokenCachePath(identity), 'utf-8');
-    return assertCachedGraphToken(JSON.parse(data));
-  } catch {
-    return null;
-  }
-}
-
-async function saveCachedGraphToken(identity: string, token: CachedGraphToken): Promise<void> {
-  try {
-    const safe = assertCachedGraphToken(token);
-    await atomicWriteUtf8File(graphTokenCachePath(identity), JSON.stringify(safe, null, 2), 0o600);
-  } catch (err) {
-    console.error('Failed to write Graph token cache:', err instanceof Error ? err.message : err);
-  }
-}
-
 async function refreshGraphAccessToken(
   clientId: string,
   refreshToken: string,
   tenant: string
-): Promise<CachedGraphToken> {
+): Promise<{ accessToken: string; refreshToken: string; expiresAt: number }> {
   let lastError = '';
 
-  for (const scope of GRAPH_SCOPES) {
+  for (const scope of GRAPH_REFRESH_SCOPE_CANDIDATES) {
     const response = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -116,7 +49,6 @@ async function refreshGraphAccessToken(
     if (response.ok && json.access_token) {
       const accessToken = json.access_token;
 
-      // Refuse to cache tokens that are not well-formed JWTs
       if (!isValidJwtStructure(accessToken)) {
         throw new Error('OAuth server returned an invalid token structure — refusing to cache');
       }
@@ -146,7 +78,7 @@ export async function resolveGraphAuth(options?: { token?: string; identity?: st
 
   try {
     const clientId = process.env.EWS_CLIENT_ID;
-    const graphRefreshToken = process.env.GRAPH_REFRESH_TOKEN;
+    const envRefreshToken = getUnifiedRefreshTokenFromEnv();
 
     if (!clientId) {
       return {
@@ -155,19 +87,11 @@ export async function resolveGraphAuth(options?: { token?: string; identity?: st
       };
     }
 
-    if (!graphRefreshToken) {
-      if (process.env.EWS_REFRESH_TOKEN) {
-        console.warn(
-          '[graph-auth] EWS_REFRESH_TOKEN is set but GRAPH_REFRESH_TOKEN is not. ' +
-            'EWS tokens cannot be used for Microsoft Graph operations — they have different OAuth scopes. ' +
-            'Please set GRAPH_REFRESH_TOKEN to your Graph API refresh token.'
-        );
-      }
+    if (!envRefreshToken) {
       return {
         success: false,
         error:
-          'Missing GRAPH_REFRESH_TOKEN in environment. ' +
-          'Note: EWS_REFRESH_TOKEN cannot be used for Graph operations — Graph requires its own token with Graph scopes.'
+          'Missing refresh token for Microsoft Graph. Set M365_REFRESH_TOKEN (preferred) or GRAPH_REFRESH_TOKEN or EWS_REFRESH_TOKEN, or run `m365-agent-cli login`.'
       };
     }
 
@@ -181,25 +105,51 @@ export async function resolveGraphAuth(options?: { token?: string; identity?: st
 
     const tenant = getMicrosoftTenantPathSegment();
 
-    const cached = await loadCachedGraphToken(identity);
-    if (cached && cached.expiresAt > Date.now() + 60_000) {
-      // Guard against corrupted cache: validate JWT structure before returning
-      if (!isValidJwtStructure(cached.accessToken)) {
+    const cached = await loadM365TokenCache(identity);
+    if (cached?.graph && cached.graph.expiresAt > Date.now() + 60_000) {
+      if (isValidJwtStructure(cached.graph.accessToken)) {
+        const tokenAppId = getJwtPayloadAppId(cached.graph.accessToken);
+        const expectId = clientId.trim();
+        const mismatch = tokenAppId && expectId && tokenAppId.toLowerCase() !== expectId.toLowerCase();
+        if (mismatch) {
+          console.warn(
+            `[graph-auth] Ignoring cached Graph access token: token app id (${tokenAppId}) does not match EWS_CLIENT_ID (${expectId}). Refreshing.`
+          );
+        } else {
+          const scopeSet = getJwtPayloadScopeSet(cached.graph.accessToken);
+          const missingCritical = GRAPH_CRITICAL_DELEGATED_SCOPES.filter((s) => !scopeSet.has(s));
+          const narrowOk = cached.graphNarrowScopeAccepted === true;
+          if (missingCritical.length > 0 && !narrowOk) {
+            console.warn(
+              `[graph-auth] Ignoring cached Graph access token: missing delegated scopes ${missingCritical.join(', ')} (narrow token — e.g. stale cache from another host). Refreshing.`
+            );
+          } else {
+            return { success: true, token: cached.graph.accessToken };
+          }
+        }
+      } else {
         console.warn(
           '[graph-auth] Cached Graph token has an invalid JWT structure — falling back to token refresh. ' +
             'You may need to re-authenticate if this persists.'
         );
-      } else {
-        return { success: true, token: cached.accessToken };
       }
     }
 
-    const refreshTokens = [...new Set([cached?.refreshToken, graphRefreshToken].filter((t): t is string => !!t))];
+    const refreshTokens = [...new Set([cached?.refreshToken, envRefreshToken].filter((t): t is string => !!t))];
 
     for (let i = 0; i < refreshTokens.length; i++) {
       try {
         const result = await refreshGraphAccessToken(clientId, refreshTokens[i], tenant);
-        await saveCachedGraphToken(identity, result);
+        const newScopeSet = getJwtPayloadScopeSet(result.accessToken);
+        const missingAfterRefresh = GRAPH_CRITICAL_DELEGATED_SCOPES.filter((s) => !newScopeSet.has(s));
+        const next: M365TokenCacheV1 = {
+          version: 1,
+          refreshToken: result.refreshToken,
+          ews: cached?.ews,
+          graph: { accessToken: result.accessToken, expiresAt: result.expiresAt },
+          graphNarrowScopeAccepted: missingAfterRefresh.length > 0
+        };
+        await saveM365TokenCache(identity, next);
         return { success: true, token: result.accessToken };
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -212,7 +162,7 @@ export async function resolveGraphAuth(options?: { token?: string; identity?: st
 
     return {
       success: false,
-      error: 'Graph token refresh failed. You may need to update GRAPH_REFRESH_TOKEN in .env.'
+      error: 'Graph token refresh failed. Update M365_REFRESH_TOKEN (or GRAPH_REFRESH_TOKEN) in .env or run `login`.'
     };
   } catch (err) {
     return {
@@ -220,4 +170,13 @@ export async function resolveGraphAuth(options?: { token?: string; identity?: st
       error: err instanceof Error ? err.message : 'Graph authentication failed'
     };
   }
+}
+
+export async function requireGraphAuth(opts: { token?: string; identity?: string }): Promise<string> {
+  const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+  if (!auth.success || !auth.token) {
+    console.error(`Auth error: ${auth.error}`);
+    process.exit(1);
+  }
+  return auth.token;
 }

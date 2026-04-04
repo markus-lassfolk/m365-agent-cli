@@ -8,7 +8,7 @@
 2. Set in the environment or `~/.config/m365-agent-cli/.env`:
 
 | Variable | Meaning |
-|----------|---------|
+| -------- | ------- |
 | **`GLITCHTIP_DSN`** or **`SENTRY_DSN`** | Project DSN. If unset, **no** reporting runs. |
 | `GLITCHTIP_ENABLED` | Set to `0` or `false` to disable even when DSN is set. |
 | `GLITCHTIP_ENVIRONMENT` | e.g. `production`, `ci` (defaults to `NODE_ENV` or `production`). |
@@ -28,24 +28,28 @@ To avoid flooding GlitchTip from **dev installs**, **pre-release builds**, or **
 The **Release** GitHub Action runs **`npm run embed-sha`** before `npm publish`, so published builds embed the tag commit. For manual publishes, run **`npm run embed-sha`** yourself. Tag **`vX.Y.Z`** on GitHub at the same commit you publish to npm (see [RELEASE.md](./RELEASE.md)).
 
 | Variable | Meaning |
-|----------|---------|
+| -------- | ------- |
 | **`GLITCHTIP_SKIP_VERSION_CHECK`** | Set to `1` or `true` to **skip** the checks above and report whenever DSN is set (e.g. internal testing). |
 | **`GLITCHTIP_ALLOW_UNVERIFIED_COMMIT`** | If the embedded commit is `unknown` (e.g. local dev without `embed-sha`), set to `1` to still allow reporting when the npm version check passes. |
 | **`GLITCHTIP_DEBUG_ELIGIBILITY`** | Set to `1` or `true` to print why reporting was disabled to **stderr**. |
 
 ## What gets reported
 
-- **Uncaught exceptions** and **unhandled promise rejections** (via `@sentry/node`).
-- **Commander parse failures** (e.g. invalid CLI usage that throws).
+- **Uncaught exceptions** and **unhandled promise rejections** — registered automatically by `@sentry/node` default integrations (`onUncaughtException`, `onUnhandledRejection`) after `initGlitchTip()` succeeds.
+- **Commander / async wrapper failures** — `src/cli.ts` calls `captureCliException()` and `flushGlitchTip()` when `program.parseAsync()` throws or the top-level async IIFE rejects, so parse errors and thrown failures in the command path are still reported when they surface as exceptions.
 
 Tracing is disabled (`tracesSampleRate: 0`) to keep events small and GlitchTip-friendly.
 
+The SDK is configured with **`shutdownTimeout: 3000`** (ms) so the transport can flush before the process exits on fatal errors.
+
 ## What is filtered out (by default)
 
-To reduce noise from environment and auth (not “our code bug”):
+To reduce noise from environment and auth (not “our code bug”), `beforeSend` drops events whose original exception matches:
 
-- Common **network errno** values: `ECONNREFUSED`, `ETIMEDOUT`, `ENOTFOUND`, etc.
+- Common **network errno** values: `ECONNREFUSED`, `ETIMEDOUT`, `ENOTFOUND`, etc. (see `src/lib/glitchtip-report-policy.ts`).
 - Messages that look like **OAuth refresh / AAD token** failures (`invalid_grant`, `AADSTS…`).
+
+**Expected API failures** (e.g. Microsoft Graph **403** / “access denied” returned to the user and handled by a command with `process.exit(1)`) are **not** sent to GlitchTip unless they surface as an **uncaught** exception — the CLI does not treat routine permission or validation errors as crash reports.
 
 Set **`GLITCHTIP_REPORT_ALL=1`** to **disable** those filters (send everything that Sentry would still accept). **PII scrubbing still applies** (see below); this flag does not re-enable raw argv or user-identifiable fields.
 

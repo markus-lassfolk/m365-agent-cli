@@ -1,7 +1,7 @@
 {
   "name": "m365-agent-cli",
-  "version": "1.2.4",
-  "description": "CLI for Microsoft 365/EWS using OAuth2 refresh token authentication",
+  "version": "2.0.0-beta.0",
+  "description": "Microsoft 365 from your terminal: calendar, mail, OneDrive, Planner, Teams, Graph — one OAuth login",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/markus-lassfolk/m365-agent-cli.git"
@@ -16,6 +16,7 @@
   },
   "scripts": {
     "start": "bun run src/cli.ts",
+    "cli:tsx": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit",
     "lint": "biome lint --max-diagnostics=none --diagnostic-level=error .",
     "lint:fix": "biome lint --write --unsafe --diagnostic-level=error .",
@@ -28,7 +29,8 @@
     "knip": "knip",
     "verify:coverage": "node scripts/check-coverage.mjs",
     "test": "bun test",
-    "test:coverage": "bun test --coverage --coverage-reporter=lcov --coverage-reporter=text"
+    "test:coverage": "bun test --coverage --coverage-reporter=lcov --coverage-reporter=text",
+    "publish:beta": "npm publish --tag beta"
   },
   "files": [
     "src",
@@ -45,6 +47,7 @@
     "@types/bun": "latest",
     "@types/semver": "^7.5.8",
     "knip": "^5.46.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.0.0"
   }
 }

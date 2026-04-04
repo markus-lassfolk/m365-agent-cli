@@ -2,6 +2,10 @@ import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
 import { parseDay } from '../lib/dates.js';
 import { getOwaUserInfo, getScheduleViaOutlook } from '../lib/ews-client.js';
+import { getExchangeBackend } from '../lib/exchange-backend.js';
+import { resolveGraphAuth } from '../lib/graph-auth.js';
+import { callGraph } from '../lib/graph-client.js';
+import { runFindTimeGraph, runFindTimeGraphSchedule } from './findtime-graph.js';
 
 function formatTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -96,20 +100,7 @@ export const findtimeCommand = new Command('findtime')
       },
       _cmd: any
     ) => {
-      const authResult = await resolveAuth({
-        token: options.token,
-        identity: options.identity
-      });
-
-      if (!authResult.success) {
-        if (options.json) {
-          console.log(JSON.stringify({ error: authResult.error }, null, 2));
-        } else {
-          console.error(`Error: ${authResult.error}`);
-          console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
-        }
-        process.exit(1);
-      }
+      const backend = getExchangeBackend();
 
       // Parse arguments: figure out which are dates vs emails
       const dateKeywords = [
@@ -150,20 +141,113 @@ export const findtimeCommand = new Command('findtime')
         emails.push(arg);
       }
 
-      // Get current user's email to include in search (unless --solo)
+      let ewsToken: string | undefined;
+      let graphToken: string | undefined;
+
+      // Include current user unless --solo (EWS: OWA info; Graph/auto: /me when Graph is used first)
       if (!options.solo) {
-        const userInfo = await getOwaUserInfo(authResult.token!);
-        if (!userInfo.ok || !userInfo.data?.email) {
-          if (options.json) {
-            console.log(JSON.stringify({ error: 'Failed to determine user email' }, null, 2));
-          } else {
-            console.error('Error: Failed to determine user email');
+        if (backend === 'ews') {
+          const authResult = await resolveAuth({
+            token: options.token,
+            identity: options.identity
+          });
+          if (!authResult.success) {
+            if (options.json) {
+              console.log(JSON.stringify({ error: authResult.error }, null, 2));
+            } else {
+              console.error(`Error: ${authResult.error}`);
+              console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
+            }
+            process.exit(1);
           }
-          process.exit(1);
-        }
-        // Add current user if not already in the list
-        if (!emails.includes(userInfo.data.email)) {
-          emails.unshift(userInfo.data.email);
+          ewsToken = authResult.token!;
+          const userInfo = await getOwaUserInfo(ewsToken!);
+          if (!userInfo.ok || !userInfo.data?.email) {
+            if (options.json) {
+              console.log(JSON.stringify({ error: 'Failed to determine user email' }, null, 2));
+            } else {
+              console.error('Error: Failed to determine user email');
+            }
+            process.exit(1);
+          }
+          if (!emails.includes(userInfo.data.email)) {
+            emails.unshift(userInfo.data.email);
+          }
+        } else if (backend === 'graph') {
+          const ga = await resolveGraphAuth({
+            token: options.token,
+            identity: options.identity
+          });
+          if (!ga.success || !ga.token) {
+            if (options.json) {
+              console.log(JSON.stringify({ error: ga.error || 'Graph authentication failed' }, null, 2));
+            } else {
+              console.error(`Error: ${ga.error || 'Graph authentication failed'}`);
+            }
+            process.exit(1);
+          }
+          graphToken = ga.token;
+          const me = await callGraph<{ mail?: string; userPrincipalName?: string }>(
+            graphToken,
+            '/me?$select=mail,userPrincipalName'
+          );
+          const myEmail = me.data?.mail || me.data?.userPrincipalName;
+          if (!myEmail) {
+            if (options.json) {
+              console.log(JSON.stringify({ error: 'Failed to determine user email' }, null, 2));
+            } else {
+              console.error('Error: Failed to determine user email');
+            }
+            process.exit(1);
+          }
+          if (!emails.includes(myEmail)) {
+            emails.unshift(myEmail);
+          }
+        } else {
+          const ga = await resolveGraphAuth({
+            token: options.token,
+            identity: options.identity
+          });
+          let myEmail: string | undefined;
+          if (ga.success && ga.token) {
+            graphToken = ga.token;
+            const me = await callGraph<{ mail?: string; userPrincipalName?: string }>(
+              graphToken,
+              '/me?$select=mail,userPrincipalName'
+            );
+            myEmail = me.data?.mail || me.data?.userPrincipalName;
+            if (myEmail && !emails.includes(myEmail)) {
+              emails.unshift(myEmail);
+            }
+          }
+          if (!myEmail) {
+            const authResult = await resolveAuth({
+              token: options.token,
+              identity: options.identity
+            });
+            if (!authResult.success) {
+              if (options.json) {
+                console.log(JSON.stringify({ error: authResult.error }, null, 2));
+              } else {
+                console.error(`Error: ${authResult.error}`);
+                console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
+              }
+              process.exit(1);
+            }
+            ewsToken = authResult.token!;
+            const userInfo = await getOwaUserInfo(ewsToken!);
+            if (!userInfo.ok || !userInfo.data?.email) {
+              if (options.json) {
+                console.log(JSON.stringify({ error: 'Failed to determine user email' }, null, 2));
+              } else {
+                console.error('Error: Failed to determine user email');
+              }
+              process.exit(1);
+            }
+            if (!emails.includes(userInfo.data.email)) {
+              emails.unshift(userInfo.data.email);
+            }
+          }
         }
       }
 
@@ -189,82 +273,207 @@ export const findtimeCommand = new Command('findtime')
         process.exit(1);
       }
       const duration = parseInt(options.duration, 10);
+      const workStart = parseInt(options.start, 10);
+      const workEnd = parseInt(options.end, 10);
 
-      const result = await getScheduleViaOutlook(
-        authResult.token!,
-        emails,
-        start.toISOString(),
-        end.toISOString(),
-        duration,
-        undefined,
-        options.mailbox
-      );
+      async function runEwsFindTime(): Promise<void> {
+        if (!ewsToken) {
+          const ar = await resolveAuth({
+            token: options.token,
+            identity: options.identity
+          });
+          if (!ar.success) {
+            if (options.json) {
+              console.log(JSON.stringify({ error: ar.error }, null, 2));
+            } else {
+              console.error(`Error: ${ar.error}`);
+              console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
+            }
+            process.exit(1);
+          }
+          ewsToken = ar.token;
+        }
 
-      if (!result.ok || !result.data) {
+        const result = await getScheduleViaOutlook(
+          ewsToken!,
+          emails,
+          start.toISOString(),
+          end.toISOString(),
+          duration,
+          undefined,
+          options.mailbox
+        );
+
+        if (!result.ok || !result.data) {
+          if (options.json) {
+            console.log(JSON.stringify({ error: result.error?.message || 'Failed to find meeting times' }, null, 2));
+          } else {
+            console.error(`Error: ${result.error?.message || 'Failed to find meeting times'}`);
+          }
+          process.exit(1);
+        }
+
+        const freeSlots = (result.data[0]?.scheduleItems || []).filter((item) => {
+          if (item.status !== 'Free') return false;
+          const hour = new Date(item.start.dateTime).getHours();
+          return hour >= workStart && hour < workEnd;
+        });
+
         if (options.json) {
-          console.log(JSON.stringify({ error: result.error?.message || 'Failed to find meeting times' }, null, 2));
+          console.log(
+            JSON.stringify(
+              {
+                backend: 'ews',
+                attendees: emails,
+                duration: duration,
+                dateRange: { start: start.toISOString(), end: end.toISOString() },
+                availableSlots: freeSlots.map((s) => ({
+                  start: s.start.dateTime,
+                  end: s.end.dateTime
+                }))
+              },
+              null,
+              2
+            )
+          );
+          return;
+        }
+
+        console.log(`\n🗓️  Finding ${duration}-minute meeting times`);
+        console.log(`   Attendees: ${emails.join(', ')}`);
+        console.log(`   Date range: ${label}`);
+        console.log('─'.repeat(50));
+
+        if (freeSlots.length === 0) {
+          console.log('\n  ❌ No available times found for all attendees.');
+          console.log('     Try a longer date range or shorter meeting duration.');
         } else {
-          console.error(`Error: ${result.error?.message || 'Failed to find meeting times'}`);
+          console.log(`\n  ✅ Found ${freeSlots.length} available slot${freeSlots.length > 1 ? 's' : ''}:\n`);
+
+          const byDay = new Map<string, typeof freeSlots>();
+          for (const slot of freeSlots) {
+            const day = slot.start.dateTime.split('T')[0];
+            if (!byDay.has(day)) byDay.set(day, []);
+            byDay.get(day)?.push(slot);
+          }
+
+          for (const [day, slots] of byDay) {
+            const dayLabel = formatDate(new Date(day).toISOString());
+            console.log(`  ${dayLabel}:`);
+            for (const slot of slots) {
+              console.log(`    🟢 ${formatTime(slot.start.dateTime)} - ${formatTime(slot.end.dateTime)}`);
+            }
+          }
+        }
+        console.log();
+      }
+
+      if (backend === 'graph') {
+        if (!graphToken) {
+          const ga = await resolveGraphAuth({
+            token: options.token,
+            identity: options.identity
+          });
+          if (!ga.success || !ga.token) {
+            if (options.json) {
+              console.log(JSON.stringify({ error: ga.error || 'Graph authentication failed' }, null, 2));
+            } else {
+              console.error(`Error: ${ga.error || 'Graph authentication failed'}`);
+            }
+            process.exit(1);
+          }
+          graphToken = ga.token;
+        }
+        const g = await runFindTimeGraph({
+          token: graphToken,
+          emails,
+          start,
+          end,
+          durationMinutes: duration,
+          workStartHour: workStart,
+          workEndHour: workEnd,
+          label,
+          mailbox: options.mailbox,
+          json: options.json
+        });
+        if (g.ok) {
+          return;
+        }
+        const gs = await runFindTimeGraphSchedule({
+          token: graphToken,
+          emails,
+          start,
+          end,
+          durationMinutes: duration,
+          workStartHour: workStart,
+          workEndHour: workEnd,
+          label,
+          mailbox: options.mailbox,
+          json: options.json
+        });
+        if (gs.ok) {
+          return;
+        }
+        if (options.json) {
+          console.log(JSON.stringify({ error: `findMeetingTimes: ${g.error}; getSchedule: ${gs.error}` }, null, 2));
+        } else {
+          console.error(`Error: findMeetingTimes failed (${g.error}). getSchedule failed (${gs.error}).`);
         }
         process.exit(1);
       }
 
-      // Extract free slots from the response, filtered to working hours
-      const workStart = parseInt(options.start, 10);
-      const workEnd = parseInt(options.end, 10);
-
-      const freeSlots = (result.data[0]?.scheduleItems || []).filter((item) => {
-        if (item.status !== 'Free') return false;
-        const hour = new Date(item.start.dateTime).getHours();
-        return hour >= workStart && hour < workEnd;
-      });
-
-      if (options.json) {
-        console.log(
-          JSON.stringify(
-            {
-              attendees: emails,
-              duration: duration,
-              dateRange: { start: start.toISOString(), end: end.toISOString() },
-              availableSlots: freeSlots.map((s) => ({
-                start: s.start.dateTime,
-                end: s.end.dateTime
-              }))
-            },
-            null,
-            2
-          )
-        );
+      if (backend === 'auto') {
+        if (!graphToken) {
+          const ga = await resolveGraphAuth({
+            token: options.token,
+            identity: options.identity
+          });
+          if (ga.success && ga.token) {
+            graphToken = ga.token;
+          }
+        }
+        if (graphToken) {
+          const g = await runFindTimeGraph({
+            token: graphToken,
+            emails,
+            start,
+            end,
+            durationMinutes: duration,
+            workStartHour: workStart,
+            workEndHour: workEnd,
+            label,
+            mailbox: options.mailbox,
+            json: options.json
+          });
+          if (g.ok) {
+            return;
+          }
+          if (!options.json) {
+            console.warn(`[findtime] findMeetingTimes failed (${g.error}); trying getSchedule.`);
+          }
+          const gs = await runFindTimeGraphSchedule({
+            token: graphToken,
+            emails,
+            start,
+            end,
+            durationMinutes: duration,
+            workStartHour: workStart,
+            workEndHour: workEnd,
+            label,
+            mailbox: options.mailbox,
+            json: options.json
+          });
+          if (gs.ok) {
+            return;
+          }
+          if (!options.json) {
+            console.warn(`[findtime] Graph getSchedule failed (${gs.error}); falling back to EWS.`);
+          }
+        }
+        await runEwsFindTime();
         return;
       }
 
-      console.log(`\n🗓️  Finding ${duration}-minute meeting times`);
-      console.log(`   Attendees: ${emails.join(', ')}`);
-      console.log(`   Date range: ${label}`);
-      console.log('─'.repeat(50));
-
-      if (freeSlots.length === 0) {
-        console.log('\n  ❌ No available times found for all attendees.');
-        console.log('     Try a longer date range or shorter meeting duration.');
-      } else {
-        console.log(`\n  ✅ Found ${freeSlots.length} available slot${freeSlots.length > 1 ? 's' : ''}:\n`);
-
-        // Group by day
-        const byDay = new Map<string, typeof freeSlots>();
-        for (const slot of freeSlots) {
-          const day = slot.start.dateTime.split('T')[0];
-          if (!byDay.has(day)) byDay.set(day, []);
-          byDay.get(day)?.push(slot);
-        }
-
-        for (const [day, slots] of byDay) {
-          const dayLabel = formatDate(new Date(day).toISOString());
-          console.log(`  ${dayLabel}:`);
-          for (const slot of slots) {
-            console.log(`    🟢 ${formatTime(slot.start.dateTime)} - ${formatTime(slot.end.dateTime)}`);
-          }
-        }
-      }
-      console.log();
+      await runEwsFindTime();
     }
   );

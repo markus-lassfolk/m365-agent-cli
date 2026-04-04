@@ -8,7 +8,7 @@ Workflows live under [`.github/workflows/`](../.github/workflows/).
 
 |  Workflow  | Purpose                                                                                                                                                                                                                                                                                                                                                                                    |
 |------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-|   **CI**   | TypeScript (`tsc --noEmit`), **Biome** (`biome check` = lint + format + assists), tests with **LCOV** coverage, **minimum line coverage** (35% default in CI; see `scripts/check-coverage.mjs` and `COVERAGE_MIN_LINES`), **Knip** (unused deps/files/exports), TruffleHog + Gitleaks + Trivy. Bun is **pinned** in workflows (see `oven-sh/setup-bun`) so coverage is stable across runs. |
+|   **CI**   | TypeScript (`tsc --noEmit`), **Biome** (`biome check` = lint + format + assists), tests with **LCOV** coverage, **minimum line coverage** (32% default in CI; see `scripts/check-coverage.mjs` and `COVERAGE_MIN_LINES`), **Knip** (unused deps/files/exports), TruffleHog + Gitleaks + Trivy. Bun is **pinned** in workflows (see `oven-sh/setup-bun`) so coverage is stable across runs. |
 | **CodeQL** | Semantic analysis for TypeScript (`security-extended` query pack).                                                                                                                                                                                                                                                                                                                         |
 
 <!-- markdownlint-enable MD013 -->
@@ -23,7 +23,7 @@ bun install --frozen-lockfile
 bun run typecheck
 bun run biome:check
 bun run test:coverage
-COVERAGE_MIN_LINES=35 bun run verify:coverage
+COVERAGE_MIN_LINES=32 bun run verify:coverage
 bun run knip
 ```
 

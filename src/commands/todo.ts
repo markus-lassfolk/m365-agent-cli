@@ -1,9 +1,8 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 import { Command } from 'commander';
-import { resolveAuth } from '../lib/auth.js';
-import { getEmail } from '../lib/ews-client.js';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
+import { getMessage } from '../lib/outlook-graph-client.js';
 import {
   addChecklistItem,
   addLinkedResource,
@@ -393,8 +392,8 @@ todoCommand
   .option('--due-tz <tz>', 'Time zone for due only (overrides --timezone)')
   .option('--start-tz <tz>', 'Time zone for start only')
   .option('--reminder-tz <tz>', 'Time zone for reminder only')
-  .option('--link <msgId>', 'Link task to an email by message ID')
-  .option('--mailbox <email>', 'Delegated or shared mailbox (with --link, for EWS message lookup)')
+  .option('--link <msgId>', 'Link task to an email by Graph message id (GET /me/messages/{id})')
+  .option('--mailbox <email>', 'Delegated or shared mailbox for message lookup (same as --user)')
   .option(
     '--category <name>',
     'Category label (repeatable; To Do uses string categories)',
@@ -405,8 +404,10 @@ todoCommand
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--ews-identity <name>', 'EWS token cache identity for --link (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox for the task (Graph delegation)')
+  .option(
+    '--user <email>',
+    'Target user or shared mailbox for the task and for --link message lookup (Graph delegation)'
+  )
   .action(
     async (
       opts: {
@@ -429,7 +430,6 @@ todoCommand
         json?: boolean;
         token?: string;
         identity?: string;
-        ewsIdentity?: string;
         user?: string;
       },
       cmd: any
@@ -452,18 +452,15 @@ todoCommand
 
       let linkedResources: any[] | undefined;
       if (opts.link) {
-        // Do not pass the Graph --token to EWS auth, as they require different tokens
-        const ewsAuth = await resolveAuth({ identity: opts.ewsIdentity });
-        if (!ewsAuth.success) {
-          console.error(`EWS Auth error: ${ewsAuth.error}`);
+        const mailboxUser = opts.user || opts.mailbox;
+        const msgRes = await getMessage(auth.token!, opts.link, mailboxUser, 'id,subject,webLink');
+        if (!msgRes.ok || !msgRes.data) {
+          console.error(`Could not fetch message: ${msgRes.error?.message || 'unknown error'}`);
           process.exit(1);
         }
-        const er = await getEmail(ewsAuth.token!, opts.link, opts.mailbox);
-        if (!er.ok || !er.data) {
-          console.error(`Could not fetch email: ${er.error?.message}`);
-          process.exit(1);
-        }
-        linkedResources = [{ webUrl: emailUrl(er.data.Id), displayName: er.data.Subject || 'Linked email' }];
+        const m = msgRes.data;
+        const webUrl = m.webLink || emailUrl(m.id);
+        linkedResources = [{ webUrl, displayName: m.subject || 'Linked email' }];
       }
 
       const cats = (opts.category ?? []).map((c) => c.trim()).filter(Boolean);
