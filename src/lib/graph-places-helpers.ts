@@ -37,6 +37,8 @@ export async function resolveRoomDisplayNameToPlace(
   return { ok: true, place };
 }
 
+const ROOM_FREE_PROBE_CONCURRENCY = 4;
+
 /** First room with a mailbox that appears free in the given window (calendarView heuristic). */
 export async function findFirstAvailableRoomGraph(
   token: string,
@@ -49,13 +51,21 @@ export async function findFirstAvailableRoomGraph(
   }
   const startISO = start.toISOString();
   const endISO = end.toISOString();
-  for (const room of r.data) {
-    const email = room.emailAddress?.trim();
-    if (!email) continue;
-    const free = await isRoomFree(token, email, startISO, endISO);
-    if (free === true) {
-      return { email, name: room.displayName?.trim() || email };
-    }
+  const rooms = r.data.filter((room) => room.emailAddress?.trim());
+  for (let i = 0; i < rooms.length; i += ROOM_FREE_PROBE_CONCURRENCY) {
+    const chunk = rooms.slice(i, i + ROOM_FREE_PROBE_CONCURRENCY);
+    const hits = await Promise.all(
+      chunk.map(async (room) => {
+        const email = room.emailAddress!.trim();
+        const free = await isRoomFree(token, email, startISO, endISO);
+        if (free === true) {
+          return { email, name: room.displayName?.trim() || email };
+        }
+        return null;
+      })
+    );
+    const found = hits.find((h) => h !== null);
+    if (found) return found;
   }
   return null;
 }

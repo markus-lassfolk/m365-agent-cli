@@ -88,7 +88,13 @@ presenceCommand
       console.error(`Error: ${r.error?.message}`);
       process.exit(1);
     }
-    console.log(opts.json ? JSON.stringify(r.data, null, 2) : JSON.stringify(r.data, null, 2));
+    if (opts.json) {
+      console.log(JSON.stringify(r.data, null, 2));
+    } else {
+      for (const row of r.data) {
+        console.log(`${row.id ?? ''}\t${row.availability ?? ''}\t${row.activity ?? ''}`);
+      }
+    }
   });
 
 presenceCommand

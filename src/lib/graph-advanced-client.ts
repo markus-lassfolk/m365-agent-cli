@@ -7,11 +7,15 @@ export function assertSafeGraphRelativePath(path: string): string {
   if (!p.startsWith('/')) {
     throw new GraphApiError('Path must start with / (relative to GRAPH_BASE_URL)', 'InvalidPath', 400);
   }
-  if (p.includes('..')) {
-    throw new GraphApiError('Path must not contain ..', 'InvalidPath', 400);
-  }
   if (p.length > 8192) {
     throw new GraphApiError('Path exceeds maximum length', 'InvalidPath', 400);
+  }
+  const q = p.indexOf('?');
+  const pathOnly = q === -1 ? p : p.slice(0, q);
+  for (const seg of pathOnly.split('/')) {
+    if (seg === '.' || seg === '..') {
+      throw new GraphApiError('Path must not contain . or .. segments', 'InvalidPath', 400);
+    }
   }
   return p;
 }

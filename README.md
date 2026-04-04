@@ -4,6 +4,8 @@
 
 A powerful command-line interface for Microsoft 365 using Exchange Web Services (EWS) and Microsoft Graph. Manage your calendar, email, OneDrive files, Microsoft Planner tasks, SharePoint Sites, Microsoft Teams, Bookings, Excel workbooks on drives, presence, and more from the terminal—including **`graph invoke`** / **`graph batch`** for paths not wrapped as dedicated commands.
 
+> **Versioning:** `package.json` on `main` may use a **pre-release** semver (for example `2.0.0-beta.0`) while Graph-first work stabilizes; npm publishes use normal tags (`latest` vs `beta`). See [RELEASE.md](./docs/RELEASE.md) for the release workflow.
+
 ## The Ultimate AI Personal Assistant (PA)
 
 The Personal Assistant (PA) playbook and skills have been moved to their own dedicated repository.

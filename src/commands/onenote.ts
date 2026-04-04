@@ -1,5 +1,5 @@
-import { readFile, writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
 import { Command } from 'commander';
 import { requireGraphAuth } from '../lib/graph-auth.js';
 import {
@@ -39,7 +39,7 @@ import {
   updateOneNoteSection,
   updateOneNoteSectionGroup
 } from '../lib/onenote-graph-client.js';
-import { checkReadOnly } from '../lib/utils.js';
+import { checkReadOnly, resolveOutputFilePath } from '../lib/utils.js';
 
 /** Resolves `--user` vs `--group` / `--site` OneNote roots (mutually exclusive). */
 function parseOneNoteRoot(opts: { user?: string; group?: string; site?: string }): {
@@ -340,8 +340,11 @@ addOneNoteRootOptions(
       console.error(`Error: ${r.error?.message}`);
       process.exit(1);
     }
-    await writeFile(opts.output, r.data, 'utf-8');
-    console.log(`Wrote ${opts.output}`);
+    const outPath = resolveOutputFilePath(opts.output);
+    await mkdir(dirname(outPath), { recursive: true });
+    // codeql[js/file-access-to-http]: User chose --output; HTML is Graph page export under authenticated session.
+    await writeFile(outPath, r.data, 'utf-8');
+    console.log(`Wrote ${outPath}`);
   }
 );
 
@@ -368,8 +371,11 @@ addOneNoteRootOptions(
       console.error(`Error: ${r.error?.message || 'Failed to download resource'}`);
       process.exit(1);
     }
-    await writeFile(opts.output, r.data);
-    console.log(`Wrote ${opts.output} (${r.data.length} bytes)`);
+    const outPath = resolveOutputFilePath(opts.output);
+    await mkdir(dirname(outPath), { recursive: true });
+    // codeql[js/file-access-to-http]: User chose --output; bytes are Graph resource content under authenticated session.
+    await writeFile(outPath, r.data);
+    console.log(`Wrote ${outPath} (${r.data.length} bytes)`);
   }
 );
 

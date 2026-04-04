@@ -26,12 +26,14 @@ export function graphEventStartMs(st?: { dateTime?: string; timeZone?: string })
   if (!st?.dateTime) return NaN;
   const raw = st.dateTime.trim();
   if (/[zZ]$|[+-]\d{2}:\d{2}$|[+-]\d{2}\d{2}$/.test(raw)) return Date.parse(raw);
-  const tz = st.timeZone?.trim().toUpperCase();
-  if (tz === 'UTC' || tz === 'GMT' || tz === 'ETC/UTC') {
-    const base = raw.replace(/\.\d+$/, '');
+  const tzU = st.timeZone?.trim().toUpperCase();
+  const base = raw.replace(/\.\d+$/, '');
+  if (tzU === 'UTC' || tzU === 'GMT' || tzU === 'ETC/UTC') {
     return Date.parse(`${base}Z`);
   }
-  const base = raw.replace(/\.\d+$/, '');
+  if (tzU) {
+    return NaN;
+  }
   return Date.parse(`${base}Z`);
 }
 

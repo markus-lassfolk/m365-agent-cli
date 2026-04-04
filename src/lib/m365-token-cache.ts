@@ -34,12 +34,32 @@ export interface M365TokenCacheV1 {
   graphNarrowScopeAccepted?: boolean;
 }
 
+const CACHE_IDENTITY_RE = /^[a-zA-Z0-9_-]{1,128}$/;
+
+/** Rejects path-separator injection in cache filenames (`token-cache-{identity}.json`). */
+export function assertValidCacheIdentity(identity: string): string {
+  const id = identity.trim();
+  if (!CACHE_IDENTITY_RE.test(id)) {
+    throw new Error('Invalid token cache identity: use only letters, digits, underscore, hyphen (max 128 chars).');
+  }
+  return id;
+}
+
 function assertTokenSlot(o: unknown, label: string): TokenSlot {
   if (!o || typeof o !== 'object') throw new Error(`invalid ${label} slot`);
   const s = o as Record<string, unknown>;
   if (typeof s.accessToken !== 'string' || s.accessToken.length > 100_000) throw new Error(`invalid ${label} slot`);
   if (typeof s.expiresAt !== 'number' || !Number.isFinite(s.expiresAt)) throw new Error(`invalid ${label} slot`);
   return { accessToken: s.accessToken, expiresAt: s.expiresAt };
+}
+
+/** Malformed slots are treated as absent so refresh-from-env can recover (Codex / robustness). */
+function tryParseTokenSlot(o: unknown, label: string): TokenSlot | undefined {
+  try {
+    return assertTokenSlot(o, label);
+  } catch {
+    return undefined;
+  }
 }
 
 function isLegacyFlat(data: Record<string, unknown>): boolean {
@@ -88,11 +108,12 @@ async function readJsonFile(path: string): Promise<unknown | null> {
  * on first read (and may delete the legacy graph file after a successful merged save — caller triggers save).
  */
 export async function loadM365TokenCache(identity: string): Promise<M365TokenCacheV1 | null> {
+  const id = assertValidCacheIdentity(identity);
   await migrateLegacyGraphRootFiles();
-  await migrateLegacyEwsClippyCache(identity);
+  await migrateLegacyEwsClippyCache(id);
 
-  const primaryPath = tokenCachePath(identity);
-  const graphPath = graphTokenCachePath(identity);
+  const primaryPath = tokenCachePath(id);
+  const graphPath = graphTokenCachePath(id);
 
   let merged: M365TokenCacheV1 = { version: 1 };
   let hadPrimary = false;
@@ -104,14 +125,14 @@ export async function loadM365TokenCache(identity: string): Promise<M365TokenCac
       merged = {
         version: 1,
         refreshToken: typeof p.refreshToken === 'string' ? p.refreshToken : undefined,
-        ews: p.ews ? assertTokenSlot(p.ews, 'ews') : undefined,
-        graph: p.graph ? assertTokenSlot(p.graph, 'graph') : undefined,
+        ews: tryParseTokenSlot(p.ews, 'ews'),
+        graph: tryParseTokenSlot(p.graph, 'graph'),
         graphNarrowScopeAccepted:
           typeof p.graphNarrowScopeAccepted === 'boolean' ? p.graphNarrowScopeAccepted : undefined
       };
       hadPrimary = true;
     } else if (isLegacyFlat(p)) {
-      merged.ews = { accessToken: p.accessToken as string, expiresAt: p.expiresAt as number };
+      merged.ews = tryParseTokenSlot({ accessToken: p.accessToken, expiresAt: p.expiresAt }, 'ews');
       merged.refreshToken = p.refreshToken as string;
       hadPrimary = true;
     }
@@ -121,10 +142,10 @@ export async function loadM365TokenCache(identity: string): Promise<M365TokenCac
   if (!merged.graph && graphOnly && typeof graphOnly === 'object') {
     const g = graphOnly as Record<string, unknown>;
     if (g.version === 1 && g.graph) {
-      merged.graph = assertTokenSlot(g.graph, 'graph');
+      merged.graph = tryParseTokenSlot(g.graph, 'graph');
       if (!merged.refreshToken && typeof g.refreshToken === 'string') merged.refreshToken = g.refreshToken;
     } else if (isLegacyFlat(g)) {
-      merged.graph = { accessToken: g.accessToken as string, expiresAt: g.expiresAt as number };
+      merged.graph = tryParseTokenSlot({ accessToken: g.accessToken, expiresAt: g.expiresAt }, 'graph');
       if (!merged.refreshToken && typeof g.refreshToken === 'string') merged.refreshToken = g.refreshToken;
     }
   }
@@ -138,6 +159,7 @@ export async function loadM365TokenCache(identity: string): Promise<M365TokenCac
 
 /** Persist unified cache; pass full object (merge in caller). */
 export async function saveM365TokenCache(identity: string, cache: M365TokenCacheV1): Promise<void> {
+  const id = assertValidCacheIdentity(identity);
   const safe: M365TokenCacheV1 = {
     version: 1,
     refreshToken: cache.refreshToken,
@@ -146,10 +168,10 @@ export async function saveM365TokenCache(identity: string, cache: M365TokenCache
     graphNarrowScopeAccepted: cache.graphNarrowScopeAccepted
   };
   await mkdir(CONFIG_DIR, { recursive: true, mode: 0o700 });
-  await atomicWriteUtf8File(tokenCachePath(identity), JSON.stringify(safe, null, 2), 0o600);
+  await atomicWriteUtf8File(tokenCachePath(id), JSON.stringify(safe, null, 2), 0o600);
 
   try {
-    await unlink(graphTokenCachePath(identity));
+    await unlink(graphTokenCachePath(id));
   } catch {
     // no legacy file
   }

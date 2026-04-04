@@ -3,6 +3,23 @@ import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 /**
+ * Resolve a user-provided `--output` path: expand `~`, resolve to absolute (relative paths use cwd).
+ */
+export function resolveOutputFilePath(raw: string): string {
+  const s = raw.trim();
+  if (!s) {
+    throw new Error('Output path is required');
+  }
+  if (s === '~') {
+    return resolve(homedir());
+  }
+  if (s.startsWith('~/') || s.startsWith('~\\')) {
+    return resolve(join(homedir(), s.slice(2)));
+  }
+  return resolve(s);
+}
+
+/**
  * Resolve a path with tilde expansion support.
  * @param raw - The raw path string to resolve
  * @param fallback - The fallback path if raw is empty

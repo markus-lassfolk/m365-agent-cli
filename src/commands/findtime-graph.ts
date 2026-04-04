@@ -3,6 +3,7 @@
  * with fallback to calendar/getSchedule + merged availability views.
  */
 
+import { graphEventStartMs } from '../lib/graph-calendar-recurrence.js';
 import { type AttendeeBase, findMeetingTimes, getSchedule } from '../lib/graph-schedule.js';
 
 /** Each char in availabilityView: 0=free, 1–5=busy/tentative/OOF/etc. */
@@ -116,9 +117,10 @@ export async function runFindTimeGraph(opts: {
 
   const suggestions = meetingTimeSuggestions || [];
   const filtered = suggestions.filter((s) => {
-    const slot = s.meetingTimeSlot?.start?.dateTime;
-    if (!slot) return false;
-    const hour = new Date(slot).getHours();
+    const start = s.meetingTimeSlot?.start;
+    if (!start?.dateTime) return false;
+    const ms = graphEventStartMs(start);
+    const hour = Number.isFinite(ms) ? new Date(ms).getHours() : new Date(start.dateTime).getHours();
     return hour >= opts.workStartHour && hour < opts.workEndHour;
   });
 
@@ -128,10 +130,20 @@ export async function runFindTimeGraph(opts: {
   } else {
     console.log(`\n  ✅ Found ${filtered.length} suggested slot${filtered.length > 1 ? 's' : ''}:\n`);
     for (const s of filtered) {
-      const st = s.meetingTimeSlot?.start?.dateTime;
-      const en = s.meetingTimeSlot?.end?.dateTime;
-      const startLabel = st ? new Date(st).toLocaleString() : '?';
-      const endLabel = en ? new Date(en).toLocaleString() : '?';
+      const stSlot = s.meetingTimeSlot?.start;
+      const enSlot = s.meetingTimeSlot?.end;
+      const stMs = stSlot ? graphEventStartMs(stSlot) : NaN;
+      const enMs = enSlot ? graphEventStartMs(enSlot) : NaN;
+      const startLabel = stSlot?.dateTime
+        ? Number.isFinite(stMs)
+          ? new Date(stMs).toLocaleString()
+          : new Date(stSlot.dateTime).toLocaleString()
+        : '?';
+      const endLabel = enSlot?.dateTime
+        ? Number.isFinite(enMs)
+          ? new Date(enMs).toLocaleString()
+          : new Date(enSlot.dateTime).toLocaleString()
+        : '?';
       const conf = s.confidence !== undefined ? ` (${s.confidence}% confidence)` : '';
       console.log(`    🟢 ${startLabel} – ${endLabel}${conf}`);
       if (s.suggestionReason) console.log(`       ${s.suggestionReason}`);
