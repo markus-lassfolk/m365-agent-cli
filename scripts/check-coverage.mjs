@@ -17,7 +17,20 @@ const excludePrefixes = (process.env.COVERAGE_EXCLUDE_PREFIXES ?? '')
   .filter(Boolean);
 
 function normalizeSf(sf) {
-  return sf.trim().replace(/\\/g, '/');
+  const s = sf.trim().replace(/\\/g, '/');
+  // If already relative, return as-is
+  for (const p of excludePrefixes) {
+    if (s.startsWith(p)) return s;
+  }
+  // Handle absolute paths: find and extract from first exclude prefix match
+  for (const p of excludePrefixes) {
+    const idx = s.indexOf(p);
+    if (idx !== -1) return s.slice(idx);
+  }
+  // Fallback: try to find src/ (common repo-relative anchor)
+  const srcIdx = s.indexOf('src/');
+  if (srcIdx !== -1) return s.slice(srcIdx);
+  return s;
 }
 
 /** Bun lcov `SF:` is usually `src/...`; CI may emit absolute paths — match exclusions on the `src/…` tail. */
