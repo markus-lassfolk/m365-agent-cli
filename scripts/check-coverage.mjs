@@ -20,10 +20,24 @@ function normalizeSf(sf) {
   return sf.trim().replace(/\\/g, '/');
 }
 
+/** Bun lcov `SF:` is usually `src/...`; CI may emit absolute paths — match exclusions on the `src/…` tail. */
+function stripToSrcTail(sfNorm) {
+  const needle = '/src/';
+  const i = sfNorm.indexOf(needle);
+  if (i !== -1) {
+    return sfNorm.slice(i + 1);
+  }
+  if (sfNorm.startsWith('src/')) {
+    return sfNorm;
+  }
+  return sfNorm;
+}
+
 function isExcluded(sfNorm) {
+  const rel = stripToSrcTail(sfNorm);
   for (const p of excludePrefixes) {
     const dir = p.endsWith('/') ? p : `${p}/`;
-    if (sfNorm === p || sfNorm.startsWith(dir)) {
+    if (rel === p || rel.startsWith(dir)) {
       return true;
     }
   }
