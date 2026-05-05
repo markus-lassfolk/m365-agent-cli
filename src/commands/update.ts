@@ -1,10 +1,28 @@
 import { spawn } from 'node:child_process';
+import { realpathSync } from 'node:fs';
+import { sep } from 'node:path';
 import { Command } from 'commander';
 import semver from 'semver';
 import { getPackageVersion } from '../lib/package-info.js';
 
 const NPM_PKG = 'm365-agent-cli';
 const NPM_LATEST_URL = `https://registry.npmjs.org/${NPM_PKG}/latest`;
+
+const NODE_MODULES_PKG = `${sep}node_modules${sep}m365-agent-cli${sep}`;
+
+/**
+ * When the CLI is executed by Bun but lives under npm/pnpm/yarn `node_modules/m365-agent-cli`
+ * (not under Bun's `~/.bun` install), `bun install -g` only updates Bun's global bin — the copy
+ * your shell usually runs stays old. Use npm for the global install in that case.
+ */
+function isInstalledFromNpmStyleGlobalLayout(): boolean {
+  try {
+    const exe = realpathSync(process.argv[1] || '');
+    return exe.includes(NODE_MODULES_PKG) && !exe.includes(`${sep}.bun${sep}`);
+  } catch {
+    return false;
+  }
+}
 
 function compareVersions(a: string, b: string): number {
   const va = semver.valid(semver.coerce(a));
@@ -31,20 +49,21 @@ async function fetchLatestVersion(): Promise<string> {
   }
 }
 
-function runGlobalInstall(): Promise<number> {
+function runGlobalInstall(): Promise<{ code: number; packageManager: 'npm' | 'bun' }> {
   const pkg = `${NPM_PKG}@latest`;
-  const useBun = process.versions.bun !== undefined;
-  const cmd = useBun ? 'bun' : 'npm';
+  const bunRuntime = process.versions.bun !== undefined;
+  const useBun = bunRuntime && !isInstalledFromNpmStyleGlobalLayout();
+  const packageManager: 'npm' | 'bun' = useBun ? 'bun' : 'npm';
   const args = ['install', '-g', pkg];
 
   return new Promise((resolve, reject) => {
-    const child = spawn(cmd, args, {
+    const child = spawn(packageManager, args, {
       stdio: 'inherit',
       shell: process.platform === 'win32',
       env: process.env
     });
     child.on('error', reject);
-    child.on('close', (code) => resolve(code ?? 1));
+    child.on('close', (code) => resolve({ code: code ?? 1, packageManager }));
   });
 }
 
@@ -77,12 +96,19 @@ export const updateCommand = new Command('update')
     }
 
     console.log(`Updating ${current} → ${latest}…`);
-    const code = await runGlobalInstall();
+    const { code, packageManager } = await runGlobalInstall();
     if (code !== 0) {
-      console.error(`Error: ${process.versions.bun ? 'bun' : 'npm'} install exited with code ${code}`);
+      console.error(`Error: ${packageManager} install -g exited with code ${code}`);
       console.error('Try manually: npm install -g m365-agent-cli@latest   or   bun install -g m365-agent-cli@latest');
       process.exit(1);
     }
-    console.log(`Updated to ${latest}. Run again to use the new version.`);
+    console.log(`Updated to ${latest} (${packageManager} install -g).`);
+    if (packageManager === 'bun') {
+      console.log(
+        'If m365-agent-cli --version is still old, another copy is earlier on PATH. Check: type -a m365-agent-cli  (or put Bun’s global bin before npm).'
+      );
+    } else {
+      console.log('Run m365-agent-cli --version to confirm (same shell is fine for npm global).');
+    }
     process.exit(0);
   });
