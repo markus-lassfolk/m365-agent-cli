@@ -8,17 +8,27 @@ import { filesCommand } from '../commands/files.js';
 import { teamsCommand } from '../commands/teams.js';
 import { installM365HelpOnCommandTree } from '../lib/m365-help.js';
 
+/** `addCommand()` does not copy `configureOutput` / `exitOverride` onto attached commands (unlike `.command()`). */
+function forEachCommandDepthFirst(cmd: Command, fn: (c: Command) => void): void {
+  fn(cmd);
+  for (const sub of cmd.commands) {
+    forEachCommandDepthFirst(sub, fn);
+  }
+}
+
 async function helpOutput(program: Command, argv: string[]): Promise<string> {
   const chunks: string[] = [];
-  program.configureOutput({
-    writeOut: (s) => {
-      chunks.push(s);
-    },
-    writeErr: (s) => {
-      chunks.push(s);
-    }
+  forEachCommandDepthFirst(program, (cmd) => {
+    cmd.configureOutput({
+      writeOut: (s) => {
+        chunks.push(s);
+      },
+      writeErr: (s) => {
+        chunks.push(s);
+      }
+    });
+    cmd.exitOverride();
   });
-  program.exitOverride();
   try {
     await program.parseAsync(argv);
   } catch (err) {
