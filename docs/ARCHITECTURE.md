@@ -188,6 +188,13 @@ Preferred for new features:
 | Outlook categories | `GET/POST/PATCH/DELETE .../outlook/masterCategories` | Master list CRUD (names + `preset0`..`preset24`); CLI `outlook-categories` subcommands: list, create, update, delete |
 | Planner | `GET/PATCH /planner/tasks`, `GET /users/{id}/planner/tasks` (when permitted), `GET /planner/plans/{id}/details`, beta `planner/rosters`, `POST /planner/plans` with roster container | Task `appliedCategories` (six slots); plan `categoryDescriptions` for labels; roster-backed plans use beta Graph |
 
+## CLI help conventions
+
+- The program uses a custom Commander `Help` subclass ([`src/lib/m365-help.ts`](../src/lib/m365-help.ts)): **grouped** subcommand lists for the root CLI ([`src/lib/root-command-groups.ts`](../src/lib/root-command-groups.ts)) and for selected high–fan-out parents ([`src/lib/subcommand-help-groups.ts`](../src/lib/subcommand-help-groups.ts)). Parents without a registry entry keep Commander’s default flat list.
+- Prefer **`.summary()`** for the short line shown when a command appears in another command’s list; keep **`.description()`** for the full paragraph on that command’s own `--help`.
+- Use **`.addHelpText('after', …)`** on parents (or flat commands like `mail`) for short **examples** and pointers to [`CLI_REFERENCE.md`](./CLI_REFERENCE.md) / [`GRAPH_SCOPES.md`](./GRAPH_SCOPES.md) instead of duplicating long scope matrices in the terminal.
+- For **HTTP 404** responses on a **v1.0** Graph URL (`…/v1.0/…`), the shared Graph client may append a one-line **tip** suggesting `--beta` or a beta `GRAPH_BASE_URL` when the API might exist only on beta. This is a hint only (404s have many causes).
+
 ## Out of Scope
 
 The following are explicitly NOT part of m365-agent-cli's roadmap:

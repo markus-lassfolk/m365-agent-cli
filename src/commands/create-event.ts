@@ -40,6 +40,7 @@ function formatDate(dateStr: string): string {
 
 export function buildCreateEventCommand(commandName: string, description = 'Create a new calendar event'): Command {
   return new Command(commandName)
+    .summary('Create a calendar event (EWS or Graph)')
     .description(description)
     .argument('<title>', 'Event title/subject')
     .argument('[start]', 'Start time (e.g., 13:00, 1pm) - not needed for all-day events')

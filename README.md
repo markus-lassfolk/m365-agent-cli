@@ -49,6 +49,86 @@ flowchart TB
 
 ---
 
+## Supported workloads
+
+These map to top-level `m365-agent-cli` commands (run **`m365-agent-cli --help`** for the full, grouped list and flags). Many flows use **Microsoft Graph**; some mail/calendar paths still use **EWS** depending on `M365_EXCHANGE_BACKEND`—see [docs/GRAPH_EWS_PARITY_MATRIX.md](docs/GRAPH_EWS_PARITY_MATRIX.md).
+
+### Sign-in and CLI
+
+- **whoami** — signed-in user / token identity
+- **login** — device-code OAuth
+- **update** — install/update from npm
+- **verify-token** — scopes and feature matrix vs your token
+
+### Calendar and meetings
+
+- **calendar** — list/create events (EWS or Graph)
+- **graph-calendar** — Graph REST calendars, events, deltas, invitations
+- **create-event**, **update-event**, **delete-event** — top-level event helpers
+- **respond** — accept / tentative / decline invitations
+- **forward-event** (alias `forward`) — forward an event
+- **counter** (alias `propose-new-time`) — propose a new time
+- **findtime** — find slots with others
+- **schedule** — merged free/busy
+- **suggest** — AI-assisted time suggestions
+- **meeting** — standalone Teams **online meetings** (`POST /onlineMeetings`; calendar invites with Teams often use `create-event --teams`)
+- **rooms** — room lists and Places
+
+### Mail and mailbox
+
+- **mail** — list, read, reply, forward, flags, attachments (EWS or Graph)
+- **outlook-graph** — Graph mail folders and messages (REST surface alongside `mail`)
+- **folders** — mail folders
+- **send** — send mail
+- **drafts** — drafts
+- **contacts** — Outlook contacts (Graph)
+- **outlook-categories** — mailbox category colors/names
+- **oof** — out of office (Graph mailbox settings)
+- **auto-reply** — legacy EWS inbox-rule style OOF (prefer **oof** on Graph)
+- **mailbox-settings** — time zone, working hours, regional formats
+- **rules** — server-side inbox rules (Graph)
+- **delegates** — delegates and calendar sharing (Graph and/or EWS)
+
+### Files and content
+
+- **files** — OneDrive and SharePoint **drives** (list, delta, search, upload, share, permissions, versions, labels, …)
+- **word**, **excel**, **powerpoint** — Office files on drives (Graph item + workbook/slide APIs mirrored from `files` where applicable)
+- **onenote** — notebooks, sections, pages
+- **sharepoint** (alias `sp`) — sites, lists, libraries, items, permissions
+- **pages** — SharePoint **site pages**
+
+### Teams and work
+
+- **teams** — teams, channels, chats, messages, apps, tabs, …
+- **planner** — Planner plans and tasks
+- **todo** — Microsoft To Do
+- **groups** — Microsoft 365 unified groups (conversations, posts)
+- **bookings** — Bookings businesses, appointments, staff, services
+- **approvals** — Teams / Power Automate approvals (Graph **beta**)
+
+### People and organization
+
+- **find** — people, groups, rooms (directory + Places)
+- **people** — Graph People relevance
+- **org** — profile, manager, reports
+- **presence** — presence read/write and status message
+- **insights** — MyAnalytics-style insights documents (delegated)
+
+### Copilot and Viva
+
+- **copilot** — Graph Copilot APIs (licensing and preview terms apply)
+- **viva** — Viva / employee experience (**beta** Graph)
+
+### Automation and advanced Microsoft Graph
+
+- **graph** — raw `graph invoke` and JSON **$batch**
+- **graph-search** — Microsoft Search (`POST /search/query`)
+- **subscribe** / **subscriptions** / **serve** — change notifications and local webhook receiver
+
+For every flag, JSON shape, and scripting notes, use **[docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md)** and **[docs/GRAPH_SCOPES.md](docs/GRAPH_SCOPES.md)**.
+
+---
+
 ## Who it is for
 
 - **Terminal-first people** who want Outlook-class outcomes without living in web apps.

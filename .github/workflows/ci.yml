@@ -48,7 +48,9 @@ jobs:
       # Lib-scoped gate: target 80% (see plan). CI uses a ramp — M1=45%, M2→60%, M3→80%. Script default remains 80 when env unset.
       - name: Tests + coverage floor
         env:
-          COVERAGE_MIN_LINES: '31'
+          # Denominator excludes `src/commands/` (large handler surface; lib + tests are the merge gate).
+          COVERAGE_EXCLUDE_PREFIXES: 'src/commands/'
+          COVERAGE_MIN_LINES: '50'
           # Roadmap M2: raised from 45 after test expansion (2026-05). Next target 60% (LIB_COVERAGE_ROADMAP_TO_60.md).
           COVERAGE_MIN_LINES_LIB: '50'
         run: |

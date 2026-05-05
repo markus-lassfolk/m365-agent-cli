@@ -388,3 +388,61 @@ describe('inviteDriveItem and listDriveItemPermissions', () => {
     }
   });
 });
+
+describe('Graph v1.0 404 beta hint', () => {
+  it('appends beta hint on 404 for graph.microsoft.com v1.0', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = (async () =>
+        new Response(
+          JSON.stringify({
+            error: { code: 'Request_ResourceNotFound', message: 'Resource could not be discovered.' }
+          }),
+          { status: 404, headers: { 'content-type': 'application/json' } }
+        )) as unknown as typeof fetch;
+
+      await expect(callGraphAt(baseUrl, token, '/me/drive/root/children')).rejects.toMatchObject({
+        message: expect.stringMatching(/beta-only Microsoft Graph API/)
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('does not append beta hint for 404 on beta host', async () => {
+    const betaBase = 'https://graph.microsoft.com/beta';
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = (async () =>
+        new Response(JSON.stringify({ error: { code: 'itemNotFound', message: 'Item not found' } }), {
+          status: 404,
+          headers: { 'content-type': 'application/json' }
+        })) as unknown as typeof fetch;
+
+      await expect(callGraphAt(betaBase, token, '/me/drive/root/children')).rejects.toMatchObject({
+        message: 'Item not found'
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('does not append beta hint for v1.0 non-404 errors', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = (async () =>
+        new Response(JSON.stringify({ error: { code: 'accessDenied', message: 'Forbidden' } }), {
+          status: 403,
+          headers: { 'content-type': 'application/json' }
+        })) as unknown as typeof fetch;
+
+      await expect(callGraphAt(baseUrl, token, '/me/drive/root/children')).rejects.toMatchObject({
+        message: 'Forbidden'
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});

@@ -191,6 +191,19 @@ export const mailCommand = new Command('mail')
     (v: string, prev: string[]) => [...prev, v],
     [] as string[]
   )
+  .addHelpText(
+    'after',
+    `
+Examples (EWS or Graph per M365_EXCHANGE_BACKEND):
+  List inbox:     m365-agent-cli mail
+  Unread page:    m365-agent-cli mail --unread -n 20
+  Read message:   m365-agent-cli mail --read <messageId>
+  Reply:          m365-agent-cli mail --reply <messageId> --message "Thanks!"
+  Forward:        m365-agent-cli mail --forward <messageId> --to-addr other@contoso.com --message "FYI"
+
+Shared mailbox: add --mailbox shared@contoso.com. Full flags: docs/CLI_REFERENCE.md.
+`
+  )
   .action(
     async (
       folder: string,

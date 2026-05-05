@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to **m365-agent-cli** are documented here. Release **2026.4.50** was the first stable line after **1.2.4** with the Graph-first stack and unified auth. **2026.5.50** adds agent packaging (OpenClaw skill + MCP), Microsoft Copilot and Viva Graph command surfaces, deeper Teams / Excel / OneDrive / SharePoint coverage, meeting recordings & transcripts, and expanded docs and CI tooling—see that section below.
+All notable changes to **m365-agent-cli** are documented here. Release **2026.4.50** was the first stable line after **1.2.4** with the Graph-first stack and unified auth. **2026.5.51** is a follow-up patch focused on **discoverability** (grouped `--help` for the full tree and key workloads), **clearer Microsoft Graph errors** when a **v1.0** call returns **404** (hint to try **beta** or `GRAPH_BASE_URL`), and small **reliability / analysis** fixes (trailing-slash handling on Graph base URLs, refreshed path inventory). **2026.5.50** remains the larger feature drop: agent packaging (OpenClaw skill + MCP), Copilot and Viva surfaces, deeper Teams / Excel / OneDrive / SharePoint coverage, meeting recordings and transcripts, and expanded docs and CI—see that section below.
 
 For install and tagging, see [docs/RELEASE.md](docs/RELEASE.md).
 
@@ -9,6 +9,38 @@ For install and tagging, see [docs/RELEASE.md](docs/RELEASE.md).
 ## [Unreleased]
 
 _No user-facing changes logged yet._
+
+---
+
+## [2026.5.51] — 2026-05-05
+
+Patch release after **2026.5.50**. Upgrade with `npm install -g m365-agent-cli@2026.5.51` (or `@latest` once published). No new Entra permissions are required for this patch; behavior changes are limited to help output, error messaging, and internal URL normalization.
+
+### Highlights (what changed at a glance)
+
+| Area | What you get |
+|------|----------------|
+| **Help and discovery** | **`m365-agent-cli --help`** now lists commands in **logical groups** (calendar, mail, files, Teams, Graph tools, etc.) instead of a flat wall of names. Heavy commands (**`teams`**, **`files`**, **`calendar`**, **`mail`**, **`create-event`**) show **grouped subcommand help** with short summaries so you can scan options faster. |
+| **Graph 404 guidance** | When Microsoft Graph returns **404** on a request that still looks like **v1.0** (not **beta**), the CLI appends a **one-line tip**: retry with **`--beta`** on commands that support it, or point **`GRAPH_BASE_URL`** at the beta root—see [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md). This does not change routing; it only clarifies a common “wrong API version” situation. |
+| **Documentation** | [README.md](README.md) **Supported workloads** expanded with clearer command-to-scenario mapping; [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) notes how grouped help is wired from the registry. |
+| **Reliability and maintainers** | **Trailing slashes** on the configured Graph base URL are stripped with a **CodeQL-safe** implementation (no risky regex on user-controlled strings). Generated **[docs/GRAPH_PATH_INVENTORY.json](docs/GRAPH_PATH_INVENTORY.json)** refreshed; tests and formatting aligned with **Biome** and stricter **`fetch`** mock typing. |
+
+### User-facing details
+
+- **Root help (`m365-agent-cli --help`)** — New **`m365-help`** and **`root-command-groups`** plumbing reads the live command registry and prints **sections** (for example sign-in, calendar, mail, files, Teams, tasks, Graph utilities). Same binaries and flags; only the **layout and copy** of help changed.
+- **Subcommand help** — **`teams`**, **`files`**, **`calendar`**, **`mail`**, and **`create-event`** include **grouped subcommands** via **`subcommand-help-groups`**, plus **`addHelpText`** / summary lines where it improves scanability. Run **`m365-agent-cli <command> --help`** to see the new layout.
+- **Beta-only APIs** — If you call a path that exists only under **Microsoft Graph beta** while the client is still on **v1.0**, a **404** response now includes the **beta hint** above (when the response URL looks like v1, not beta). Prefer explicit **`--beta`** or **`GRAPH_BASE_URL`** for beta-only flows as documented.
+- **README** — The **Supported workloads** table lists more top-level commands in context (sign-in, calendar, mail, files, Teams, etc.) so newcomers map **tasks → commands** without opening every `--help` first.
+
+### Upgrading from 2026.5.50
+
+1. **Install:** `npm install -g m365-agent-cli@2026.5.51` or `@latest`.
+2. **Scripts / automation:** Output of **`--help`** is **different** (grouped). If you parse help text with brittle string matching, prefer **`--json`** where the command supports it, or match on **command names** rather than exact help layout.
+3. **No auth changes** for this patch.
+
+### Compare on GitHub
+
+**`v2026.5.50...v2026.5.51`** — [compare on GitHub](https://github.com/markus-lassfolk/m365-agent-cli/compare/v2026.5.50...v2026.5.51) after the tag exists.
 
 ---
 

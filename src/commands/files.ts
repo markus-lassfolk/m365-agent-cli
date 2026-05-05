@@ -101,11 +101,25 @@ function renderItems(items: DriveItem[]): void {
   }
 }
 
-export const filesCommand = new Command('files').description(
-  'OneDrive and SharePoint files via Microsoft Graph (list, delta, search, thumbnails, upload, copy, move, share, invite, permissions, checkout, list-item, follow, MIP sensitivity, retention label, versions, restore-deleted, …). Use --beta with drive flags for Graph beta host.'
-);
+export const filesCommand = new Command('files')
+  .description(
+    'OneDrive and SharePoint drives via Microsoft Graph: browse, upload, share, permissions, versions, labels.'
+  )
+  .addHelpText(
+    'after',
+    `
+Examples:
+  m365-agent-cli files list
+  m365-agent-cli files search "report"
+  m365-agent-cli files upload ./deck.pptx --folder <folderId>
+  m365-agent-cli files download <fileId> --out ./out.bin
+
+Drive targets use the same flags as other file commands (default /me/drive). See docs/CLI_REFERENCE.md and GRAPH_SCOPES.md.
+`
+  );
 
 withDriveOptions(filesCommand.command('list'))
+  .summary('List folder or drive root children')
   .description('List files in drive root or a folder')
   .option('--folder <id>', 'Folder item ID')
   .option('--json', 'Output as JSON')
@@ -136,6 +150,7 @@ withDriveOptions(filesCommand.command('list'))
   );
 
 withDriveOptions(filesCommand.command('delta'))
+  .summary('Incremental sync with deltaLink state')
   .description(
     'One page of drive item delta sync (root or --folder). Use --url for @odata.nextLink/@odata.deltaLink; optional --state-file persists cursor (kind: driveDelta).'
   )
@@ -207,7 +222,10 @@ withDriveOptions(filesCommand.command('delta'))
   );
 
 withDriveOptions(filesCommand.command('search <query>'))
-  .description('Search files in the selected drive root')
+  .summary('Search drive by query')
+  .description(
+    'Search under the drive root only (Microsoft Graph GET …/root/search(q=…)); there is no --folder flag. Folder-scoped search uses …/items/{folderId}/search in Graph — use graph invoke if you need that.'
+  )
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
@@ -236,6 +254,7 @@ withDriveOptions(filesCommand.command('search <query>'))
   );
 
 withDriveOptions(filesCommand.command('meta <fileId>'))
+  .summary('Show item metadata')
   .description('Get file metadata')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
@@ -265,6 +284,7 @@ withDriveOptions(filesCommand.command('meta <fileId>'))
   );
 
 withDriveOptions(filesCommand.command('thumbnails <fileId>'))
+  .summary('List image thumbnail URLs')
   .description('List thumbnail sets for a drive item (GET …/thumbnails — small/medium/large URLs per Graph)')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
@@ -304,6 +324,7 @@ withDriveOptions(filesCommand.command('thumbnails <fileId>'))
   );
 
 withDriveOptions(filesCommand.command('upload <path>'))
+  .summary('Upload a small file')
   .description('Upload a file up to 250MB')
   .option('--folder <id>', 'Target folder item ID')
   .option('--json', 'Output as JSON')
@@ -341,6 +362,7 @@ withDriveOptions(filesCommand.command('upload <path>'))
   );
 
 withDriveOptions(filesCommand.command('upload-large <path>'))
+  .summary('Resumable large upload')
   .description('Upload a file up to 4GB using a chunked upload session')
   .option('--folder <id>', 'Target folder item ID')
   .option('--json', 'Output as JSON')
@@ -384,6 +406,7 @@ withDriveOptions(filesCommand.command('upload-large <path>'))
   );
 
 withDriveOptions(filesCommand.command('download <fileId>'))
+  .summary('Download file bytes')
   .description('Download a file by ID')
   .option('--out <path>', 'Output path (defaults to ~/Downloads/<name>)')
   .option('--json', 'Output as JSON')
@@ -427,6 +450,7 @@ withDriveOptions(filesCommand.command('download <fileId>'))
   );
 
 withDriveOptions(filesCommand.command('delete <fileId>'))
+  .summary('Delete a drive item')
   .description('Delete a file by ID')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
@@ -461,6 +485,7 @@ withDriveOptions(filesCommand.command('delete <fileId>'))
   );
 
 withDriveOptions(filesCommand.command('restore-deleted <fileId>'))
+  .summary('Restore item from recycle bin')
   .description(
     'Restore a deleted drive item from the recycle bin (`POST …/items/{id}/restore`). Optional `--json-file` body (e.g. parentReference).'
   )
@@ -512,6 +537,7 @@ withDriveOptions(filesCommand.command('restore-deleted <fileId>'))
   );
 
 withDriveOptions(filesCommand.command('share <fileId>'))
+  .summary('Create sharing link')
   .description('Create a sharing link or Office Online collaboration handoff')
   .option('--type <type>', 'Link type: view or edit', 'view')
   .option('--scope <scope>', 'Link scope: org or anonymous', 'org')
@@ -597,6 +623,7 @@ withDriveOptions(filesCommand.command('share <fileId>'))
   );
 
 withDriveOptions(filesCommand.command('invite <fileId>'))
+  .summary('Send invite to people')
   .description('POST driveItem invite — share with specific recipients (JSON body; see Graph driveItem: invite)')
   .requiredOption('--body <path>', 'Path to JSON file for the invite request body')
   .option('--json', 'Output as JSON')
@@ -651,6 +678,7 @@ withDriveOptions(filesCommand.command('invite <fileId>'))
   );
 
 withDriveOptions(filesCommand.command('permissions <fileId>'))
+  .summary('List sharing permissions')
   .description('List permissions on a drive item (sharing links and grants)')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
@@ -689,6 +717,7 @@ withDriveOptions(filesCommand.command('permissions <fileId>'))
   );
 
 withDriveOptions(filesCommand.command('permission-remove <fileId> <permissionId>'))
+  .summary('Remove a permission')
   .description('DELETE a permission from a drive item (revoke access granted by that permission)')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
@@ -724,6 +753,7 @@ withDriveOptions(filesCommand.command('permission-remove <fileId> <permissionId>
   );
 
 withDriveOptions(filesCommand.command('permission-update <fileId> <permissionId>'))
+  .summary('Update permission role')
   .description('PATCH a permission on a drive item (e.g. change roles — JSON body per Graph driveItem permission)')
   .requiredOption('--json-file <path>', 'Path to JSON body for PATCH')
   .option('--json', 'Output as JSON')
@@ -772,6 +802,7 @@ withDriveOptions(filesCommand.command('permission-update <fileId> <permissionId>
 
 filesCommand
   .command('shared-with-me')
+  .summary('List files shared with me')
   .description(
     'List items shared with the signed-in user (GET /me/drive/sharedWithMe only — not available for --user/--drive-id/--site-id)'
   )
@@ -810,6 +841,7 @@ filesCommand
   });
 
 withDriveOptions(filesCommand.command('copy <fileId>'))
+  .summary('Copy item to another folder')
   .description('Copy a drive item into another folder (async; use --wait to poll the Graph job to completion)')
   .requiredOption('--parent-id <id>', 'Destination folder item id (parentReference.id)')
   .option('--parent-drive-id <id>', 'Destination drive id when copying across drives (parentReference.driveId)')
@@ -882,6 +914,7 @@ withDriveOptions(filesCommand.command('copy <fileId>'))
   );
 
 withDriveOptions(filesCommand.command('move <fileId>'))
+  .summary('Move item to another folder')
   .description('Move a drive item to another folder (PATCH parentReference)')
   .requiredOption('--parent-id <id>', 'Destination folder item id')
   .option('--parent-drive-id <id>', 'Destination drive id when moving across drives')
@@ -927,6 +960,7 @@ withDriveOptions(filesCommand.command('move <fileId>'))
   );
 
 withDriveOptions(filesCommand.command('versions <fileId>'))
+  .summary('List file versions')
   .description('List versions of a file')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
@@ -966,6 +1000,7 @@ withDriveOptions(filesCommand.command('versions <fileId>'))
   );
 
 withDriveOptions(filesCommand.command('restore <fileId> <versionId>'))
+  .summary('Restore prior version')
   .description('Restore a specific version of a file')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
@@ -1001,6 +1036,7 @@ withDriveOptions(filesCommand.command('restore <fileId> <versionId>'))
   );
 
 withDriveOptions(filesCommand.command('checkout <fileId>'))
+  .summary('Check out for exclusive edit')
   .description('Check out a drive item for exclusive edit (`POST …/checkout`) — pair with `files checkin` when done')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
@@ -1032,6 +1068,7 @@ withDriveOptions(filesCommand.command('checkout <fileId>'))
   );
 
 withDriveOptions(filesCommand.command('checkin <fileId>'))
+  .summary('Check in after checkout')
   .description('Check in a previously checked-out Office document')
   .option('--comment <comment>', 'Optional check-in comment')
   .option('--json', 'Output as JSON')
@@ -1070,6 +1107,7 @@ withDriveOptions(filesCommand.command('checkin <fileId>'))
   );
 
 withDriveOptions(filesCommand.command('list-item <fileId>'))
+  .summary('Get SharePoint listItem fields')
   .description(
     'GET SharePoint listItem for a file (`…/items/{id}/listItem`). Returns library columns/metadata; often 404 on personal OneDrive.'
   )
@@ -1098,6 +1136,7 @@ withDriveOptions(filesCommand.command('list-item <fileId>'))
   );
 
 withDriveOptions(filesCommand.command('follow <fileId>'))
+  .summary('Follow item in Office hub')
   .description('Follow a drive item (OneDrive for Business — POST …/follow)')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
@@ -1129,6 +1168,7 @@ withDriveOptions(filesCommand.command('follow <fileId>'))
   );
 
 withDriveOptions(filesCommand.command('unfollow <fileId>'))
+  .summary('Stop following item')
   .description('Unfollow a drive item (POST …/unfollow)')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
@@ -1160,6 +1200,7 @@ withDriveOptions(filesCommand.command('unfollow <fileId>'))
   );
 
 withDriveOptions(filesCommand.command('sensitivity-assign <fileId>'))
+  .summary('Apply MIP sensitivity label')
   .description('POST assignSensitivityLabel (Microsoft Information Protection — JSON body per Graph docs)')
   .requiredOption('--json-file <path>', 'Path to JSON action parameters')
   .option('--json', 'Output as JSON')
@@ -1207,6 +1248,7 @@ withDriveOptions(filesCommand.command('sensitivity-assign <fileId>'))
   );
 
 withDriveOptions(filesCommand.command('sensitivity-extract <fileId>'))
+  .summary('Read sensitivity labels')
   .description('POST extractSensitivityLabels — scan content for applicable labels (tenant/licensing dependent)')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
@@ -1233,6 +1275,7 @@ withDriveOptions(filesCommand.command('sensitivity-extract <fileId>'))
   );
 
 withDriveOptions(filesCommand.command('permanent-delete <fileId>'))
+  .summary('Permanently delete from recycle bin')
   .description('POST permanentDelete — irreversible; bypasses recycle bin where permitted')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
@@ -1264,6 +1307,7 @@ withDriveOptions(filesCommand.command('permanent-delete <fileId>'))
   );
 
 withDriveOptions(filesCommand.command('retention-label <fileId>'))
+  .summary('Assign retention label')
   .description('GET retention label metadata (`…/retentionLabel`)')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
@@ -1286,6 +1330,7 @@ withDriveOptions(filesCommand.command('retention-label <fileId>'))
   );
 
 withDriveOptions(filesCommand.command('retention-label-remove <fileId>'))
+  .summary('Clear retention label')
   .description('DELETE retention label from item (`…/retentionLabel`)')
   .option('--if-match <etag>', 'Optional If-Match (ETag) header')
   .option('--json', 'Output as JSON')
@@ -1318,6 +1363,7 @@ withDriveOptions(filesCommand.command('retention-label-remove <fileId>'))
   );
 
 withDriveOptions(filesCommand.command('convert <fileId>'))
+  .summary('Download converted format (e.g. PDF)')
   .description('Download a file converted to a specific format (default: pdf)')
   .option('--format <format>', 'Target format (e.g. pdf, html, glb)', 'pdf')
   .option('--out <path>', 'Output path')
@@ -1360,6 +1406,7 @@ withDriveOptions(filesCommand.command('convert <fileId>'))
   );
 
 withDriveOptions(filesCommand.command('analytics <fileId>'))
+  .summary('Item access analytics')
   .description('Get file analytics (access/action counts)')
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
@@ -1404,6 +1451,7 @@ withDriveOptions(filesCommand.command('analytics <fileId>'))
 
 filesCommand
   .command('recent')
+  .summary('Recently used items for user')
   .description(
     'List items recently used by the signed-in user (`GET /me/drive/recent` or `/users/{id}/drive/recent` with `--user`).'
   )
@@ -1453,6 +1501,7 @@ filesCommand
   );
 
 withDriveOptions(filesCommand.command('activities <fileId>'))
+  .summary('Recent activities on an item')
   .description(
     'List recent activities on a drive item (`GET /drives/{id}/items/{id}/activities`). Drive location flags select the item source (default `/me/drive`).'
   )
@@ -1495,6 +1544,7 @@ withDriveOptions(filesCommand.command('activities <fileId>'))
   );
 
 withDriveOptions(filesCommand.command('preview <fileId>'))
+  .summary('Short-lived preview/embed URL')
   .description(
     'Create a short-lived preview session URL for any drive item (`POST /drives/{id}/items/{id}/preview`). Complements `word preview` / `powerpoint preview` for non-Office items.'
   )

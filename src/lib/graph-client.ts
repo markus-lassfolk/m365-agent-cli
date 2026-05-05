@@ -14,6 +14,50 @@ import {
 } from './drive-location.js';
 import { getGraphBaseUrl } from './graph-constants.js';
 
+/** Shown after HTTP 404 on a v1.0-style Graph URL (preview APIs are often beta-only). */
+const GRAPH_BETA_404_HINT =
+  '\nTip: If this request might be a beta-only Microsoft Graph API, retry with --beta on commands that support it, or set GRAPH_BASE_URL to your Graph beta root (see docs/CLI_REFERENCE.md).';
+
+function graphRequestUrlAppearsToBeV1NotBeta(fullUrl: string): boolean {
+  try {
+    const { pathname } = new URL(fullUrl);
+    if (pathname.includes('/beta/') || pathname.endsWith('/beta')) {
+      return false;
+    }
+    return pathname.includes('/v1.0/') || pathname.endsWith('/v1.0');
+  } catch {
+    return false;
+  }
+}
+
+/** Appends a one-line hint for v1.0 404 responses (does not imply 404 always means "use beta"). */
+function appendGraphBeta404Hint(fullUrl: string, httpStatus: number, message: string): string {
+  if (httpStatus !== 404) return message;
+  if (!graphRequestUrlAppearsToBeV1NotBeta(fullUrl)) return message;
+  if (message.includes('Tip: If this request might be a beta-only')) return message;
+  return message + GRAPH_BETA_404_HINT;
+}
+
+/** Strips trailing slashes in linear time (avoids ReDoS-prone `/+$/` on uncontrolled URLs). */
+function stripTrailingSlashes(s: string): string {
+  let end = s.length;
+  while (end > 0 && s.charCodeAt(end - 1) === 47 /* / */) {
+    end -= 1;
+  }
+  return end === s.length ? s : s.slice(0, end);
+}
+
+function appendGraphBeta404HintForBasePath(
+  graphBaseUrl: string,
+  relativePath: string,
+  httpStatus: number,
+  message: string
+): string {
+  const root = stripTrailingSlashes(graphBaseUrl);
+  const rel = relativePath.startsWith('/') ? relativePath : `/${relativePath}`;
+  return appendGraphBeta404Hint(`${root}${rel}`, httpStatus, message);
+}
+
 export type { DriveLocation } from './drive-location.js';
 export {
   buildDriveFolderOrRootPath,
@@ -486,7 +530,13 @@ async function callGraphUrlWithRetries<T>(
         await delayBeforeThrottleRetry(response.headers, throttleAttempt);
         continue;
       }
-      throw new GraphApiError(parsed.message, parsed.code, response.status, parsed.requestId, parsed.innerError);
+      throw new GraphApiError(
+        appendGraphBeta404Hint(fullUrl, response.status, parsed.message),
+        parsed.code,
+        response.status,
+        parsed.requestId,
+        parsed.innerError
+      );
     }
 
     if (responseMode === 'text') {
@@ -1792,7 +1842,14 @@ export async function startCopyDriveItem(
       }
     }
     const parsed = await parseGraphFailureResponse(res);
-    throw new GraphApiError(parsed.message, parsed.code, res.status, parsed.requestId, parsed.innerError);
+    const relPath = `${driveItemPath(location, itemId)}/copy`;
+    throw new GraphApiError(
+      appendGraphBeta404HintForBasePath(graphBaseUrl, relPath, res.status, parsed.message),
+      parsed.code,
+      res.status,
+      parsed.requestId,
+      parsed.innerError
+    );
   } catch (err) {
     if (err instanceof GraphApiError) {
       return graphErrorFromApiError(err);

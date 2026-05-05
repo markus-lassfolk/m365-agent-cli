@@ -1,6 +1,6 @@
 {
   "name": "m365-agent-cli",
-  "version": "2026.5.50",
+  "version": "2026.5.51",
   "description": "Microsoft 365 from your terminal: calendar, mail, OneDrive, Planner, Teams, Graph — one OAuth login",
   "repository": {
     "type": "git",
@@ -31,6 +31,7 @@
     "verify:graph-openapi": "node scripts/graph-openapi-compliance.mjs",
     "verify:graph-openapi:strict": "GRAPH_OPENAPI_STRICT=1 node scripts/graph-openapi-compliance.mjs",
     "verify:graph-compliance": "node scripts/graph-call-inventory.mjs --check docs/GRAPH_PATH_INVENTORY.json && GRAPH_OPENAPI_STRICT=1 node scripts/graph-openapi-compliance.mjs",
+    "verify:cli-help-examples": "node scripts/run-bun-test.mjs test src/test/cli-help-examples-verify.test.ts",
     "embed-sha": "node scripts/embed-git-sha.mjs",
     "sync-skill": "node scripts/sync-skill-version.mjs",
     "install-tools-md": "node scripts/install-tools-md.mjs",
