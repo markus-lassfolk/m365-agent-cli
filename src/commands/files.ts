@@ -223,7 +223,9 @@ withDriveOptions(filesCommand.command('delta'))
 
 withDriveOptions(filesCommand.command('search <query>'))
   .summary('Search drive by query')
-  .description('Search files in the selected drive root')
+  .description(
+    'Search under the drive root only (Microsoft Graph GET …/root/search(q=…)); there is no --folder flag. Folder-scoped search uses …/items/{folderId}/search in Graph — use graph invoke if you need that.'
+  )
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
