@@ -1,5 +1,4 @@
-import type { Command } from 'commander';
-import type { Help } from 'commander';
+import type { Command, Help } from 'commander';
 
 /** Root `m365-agent-cli --help` sections: primary command names only (not aliases). */
 const ROOT_COMMAND_GROUPS: readonly { readonly title: string; readonly commands: readonly string[] }[] = [

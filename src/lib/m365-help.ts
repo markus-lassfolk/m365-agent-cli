@@ -1,6 +1,6 @@
-import { Help, type Command } from 'commander';
-import { buildNestedCommandSections } from './subcommand-help-groups.js';
+import { type Command, Help } from 'commander';
 import { buildRootCommandSections } from './root-command-groups.js';
+import { buildNestedCommandSections } from './subcommand-help-groups.js';
 
 /**
  * Custom Commander help: grouped subcommands for the root program and for parents
@@ -37,11 +37,7 @@ class M365Help extends Help {
     function formatItem(term: string, description: string, wrapColumnWidthOffset: number): string {
       if (description) {
         const fullText = `${term.padEnd(termWidth + itemSeparatorWidth)}${description}`;
-        return helper.wrap(
-          fullText,
-          helpWidth - wrapColumnWidthOffset,
-          termWidth + itemSeparatorWidth
-        );
+        return helper.wrap(fullText, helpWidth - wrapColumnWidthOffset, termWidth + itemSeparatorWidth);
       }
       return term;
     }
@@ -58,11 +54,7 @@ class M365Help extends Help {
     }
 
     const argumentList = helper.visibleArguments(cmd).map((argument) => {
-      return formatItem(
-        helper.argumentTerm(argument),
-        helper.argumentDescription(argument),
-        itemIndentWidth
-      );
+      return formatItem(helper.argumentTerm(argument), helper.argumentDescription(argument), itemIndentWidth);
     });
     if (argumentList.length > 0) {
       output = output.concat(['Arguments:', formatList(argumentList, itemIndentWidth), '']);

@@ -186,10 +186,7 @@ function makeProgram(): Command {
   p.name('m365-agent-cli')
     .version('0.1.0')
     .option('--read-only', 'Run in read-only mode, blocking any mutating operations');
-  p.addHelpText(
-    'after',
-    'Tip: run m365-agent-cli <command> --help for flags and examples on each command.'
-  );
+  p.addHelpText('after', 'Tip: run m365-agent-cli <command> --help for flags and examples on each command.');
   p.addCommand(whoamiCommand);
   p.addCommand(updateCommand);
   p.addCommand(autoReplyCommand);

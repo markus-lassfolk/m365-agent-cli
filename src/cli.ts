@@ -63,17 +63,12 @@ const program = new Command();
 
 program
   .name('m365-agent-cli')
-  .description(
-    'Microsoft 365 from your terminal: calendar, mail, OneDrive, Planner, Teams, Graph — one OAuth login'
-  )
+  .description('Microsoft 365 from your terminal: calendar, mail, OneDrive, Planner, Teams, Graph — one OAuth login')
   .version(getPackageVersionSync());
 
 program.option('--read-only', 'Run in read-only mode, blocking any mutating operations');
 
-program.addHelpText(
-  'after',
-  'Tip: run m365-agent-cli <command> --help for flags and examples on each command.'
-);
+program.addHelpText('after', 'Tip: run m365-agent-cli <command> --help for flags and examples on each command.');
 
 program.addCommand(whoamiCommand);
 program.addCommand(updateCommand);

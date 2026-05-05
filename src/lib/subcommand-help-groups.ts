@@ -1,5 +1,4 @@
-import type { Command } from 'commander';
-import type { Help } from 'commander';
+import type { Command, Help } from 'commander';
 
 const OTHER_SECTION_TITLE = 'Other commands';
 
@@ -328,7 +327,15 @@ const SUBCOMMAND_GROUPS_BY_PARENT: Record<
     },
     {
       title: 'Comments and names',
-      commands: ['comments-list', 'comments-get', 'comments-create', 'comments-patch', 'comments-reply', 'names', 'name-get']
+      commands: [
+        'comments-list',
+        'comments-get',
+        'comments-create',
+        'comments-patch',
+        'comments-reply',
+        'names',
+        'name-get'
+      ]
     }
   ],
   bookings: [

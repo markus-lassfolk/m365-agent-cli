@@ -30,12 +30,21 @@ function graphRequestUrlAppearsToBeV1NotBeta(fullUrl: string): boolean {
   }
 }
 
-/** Appends a one-line hint for v1.0 404 responses (does not imply 404 always means “use beta”). */
+/** Appends a one-line hint for v1.0 404 responses (does not imply 404 always means "use beta"). */
 function appendGraphBeta404Hint(fullUrl: string, httpStatus: number, message: string): string {
   if (httpStatus !== 404) return message;
   if (!graphRequestUrlAppearsToBeV1NotBeta(fullUrl)) return message;
   if (message.includes('Tip: If this request might be a beta-only')) return message;
   return message + GRAPH_BETA_404_HINT;
+}
+
+/** Strips trailing slashes in linear time (avoids ReDoS-prone `/+$/` on uncontrolled URLs). */
+function stripTrailingSlashes(s: string): string {
+  let end = s.length;
+  while (end > 0 && s.charCodeAt(end - 1) === 47 /* / */) {
+    end -= 1;
+  }
+  return end === s.length ? s : s.slice(0, end);
 }
 
 function appendGraphBeta404HintForBasePath(
@@ -44,7 +53,7 @@ function appendGraphBeta404HintForBasePath(
   httpStatus: number,
   message: string
 ): string {
-  const root = graphBaseUrl.replace(/\/+$/, '');
+  const root = stripTrailingSlashes(graphBaseUrl);
   const rel = relativePath.startsWith('/') ? relativePath : `/${relativePath}`;
   return appendGraphBeta404Hint(`${root}${rel}`, httpStatus, message);
 }

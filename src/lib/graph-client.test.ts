@@ -394,13 +394,13 @@ describe('Graph v1.0 404 beta hint', () => {
     process.env.GRAPH_BASE_URL = baseUrl;
     const originalFetch = globalThis.fetch;
     try {
-      globalThis.fetch = async () =>
+      globalThis.fetch = (async () =>
         new Response(
           JSON.stringify({
             error: { code: 'Request_ResourceNotFound', message: 'Resource could not be discovered.' }
           }),
           { status: 404, headers: { 'content-type': 'application/json' } }
-        ) as Promise<Response>;
+        )) as unknown as typeof fetch;
 
       await expect(callGraphAt(baseUrl, token, '/me/drive/root/children')).rejects.toMatchObject({
         message: expect.stringMatching(/beta-only Microsoft Graph API/)
@@ -414,11 +414,11 @@ describe('Graph v1.0 404 beta hint', () => {
     const betaBase = 'https://graph.microsoft.com/beta';
     const originalFetch = globalThis.fetch;
     try {
-      globalThis.fetch = async () =>
+      globalThis.fetch = (async () =>
         new Response(JSON.stringify({ error: { code: 'itemNotFound', message: 'Item not found' } }), {
           status: 404,
           headers: { 'content-type': 'application/json' }
-        }) as Promise<Response>;
+        })) as unknown as typeof fetch;
 
       await expect(callGraphAt(betaBase, token, '/me/drive/root/children')).rejects.toMatchObject({
         message: 'Item not found'
@@ -432,11 +432,11 @@ describe('Graph v1.0 404 beta hint', () => {
     process.env.GRAPH_BASE_URL = baseUrl;
     const originalFetch = globalThis.fetch;
     try {
-      globalThis.fetch = async () =>
+      globalThis.fetch = (async () =>
         new Response(JSON.stringify({ error: { code: 'accessDenied', message: 'Forbidden' } }), {
           status: 403,
           headers: { 'content-type': 'application/json' }
-        }) as Promise<Response>;
+        })) as unknown as typeof fetch;
 
       await expect(callGraphAt(baseUrl, token, '/me/drive/root/children')).rejects.toMatchObject({
         message: 'Forbidden'
