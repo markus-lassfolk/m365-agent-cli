@@ -1,7 +1,7 @@
 /**
  * Grouped `--help` for parents listed in subcommand-help-groups.ts
  */
-import { describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, test } from 'bun:test';
 import { Command, CommanderError } from 'commander';
 import { calendarCommand } from '../commands/calendar.js';
 import { filesCommand } from '../commands/files.js';
@@ -39,6 +39,24 @@ async function helpOutput(program: Command, argv: string[]): Promise<string> {
   }
   return chunks.join('');
 }
+
+/** Shared command modules must not keep test hooks (breaks other suites and stdout capture). */
+function resetCommanderExitAndOutputHooks(cmd: Command): void {
+  (cmd as unknown as { _exitCallback: null })._exitCallback = null;
+  cmd.configureOutput({
+    writeOut: (str) => process.stdout.write(str),
+    writeErr: (str) => process.stderr.write(str)
+  });
+  for (const sub of cmd.commands) {
+    resetCommanderExitAndOutputHooks(sub);
+  }
+}
+
+afterAll(() => {
+  resetCommanderExitAndOutputHooks(teamsCommand);
+  resetCommanderExitAndOutputHooks(filesCommand);
+  resetCommanderExitAndOutputHooks(calendarCommand);
+});
 
 describe('grouped subcommand help', () => {
   test('teams --help shows section titles', async () => {

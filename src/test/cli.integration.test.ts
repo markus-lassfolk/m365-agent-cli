@@ -178,7 +178,7 @@ async function _runCmdAction(command: any, opts: any): Promise<{ stdout: string;
 
 // Simpler approach: use program.parse() on a trimmed-down argv
 // This avoids needing to know each command's argument structure
-import { Command } from 'commander';
+import { Command, CommanderError } from 'commander';
 import { installM365HelpOnCommandTree } from '../lib/m365-help.js';
 
 function makeProgram(): Command {
@@ -323,6 +323,11 @@ async function runM365AgentCli(args: string): Promise<{ stdout: string; stderr: 
   } catch (err: any) {
     if (err.message?.startsWith('process.exit')) {
       return { stdout: capturedStdout, stderr: capturedStderr, exitCode: err.code ?? 1 };
+    }
+    if (err instanceof CommanderError) {
+      if (err.code === 'commander.helpDisplayed' || err.code === 'commander.help' || err.code === 'commander.version') {
+        return { stdout: capturedStdout, stderr: capturedStderr, exitCode: err.exitCode };
+      }
     }
     throw err;
   } finally {
