@@ -2,7 +2,7 @@
  * Grouped `--help` for parents listed in subcommand-help-groups.ts
  */
 import { describe, expect, test } from 'bun:test';
-import { Command } from 'commander';
+import { Command, CommanderError } from 'commander';
 import { calendarCommand } from '../commands/calendar.js';
 import { filesCommand } from '../commands/files.js';
 import { teamsCommand } from '../commands/teams.js';
@@ -18,7 +18,15 @@ async function helpOutput(program: Command, argv: string[]): Promise<string> {
       chunks.push(s);
     }
   });
-  await program.parseAsync(argv);
+  program.exitOverride();
+  try {
+    await program.parseAsync(argv);
+  } catch (err) {
+    if (err instanceof CommanderError && (err.code === 'commander.helpDisplayed' || err.code === 'commander.help')) {
+      return chunks.join('');
+    }
+    throw err;
+  }
   return chunks.join('');
 }
 

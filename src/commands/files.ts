@@ -111,8 +111,8 @@ export const filesCommand = new Command('files')
 Examples:
   m365-agent-cli files list
   m365-agent-cli files search "report" --folder <folderId>
-  m365-agent-cli files upload ./deck.pptx --parent-id <folderId>
-  m365-agent-cli files download <fileId> -o ./out.bin
+  m365-agent-cli files upload ./deck.pptx --folder <folderId>
+  m365-agent-cli files download <fileId> --out ./out.bin
 
 Drive targets use the same flags as other file commands (default /me/drive). See docs/CLI_REFERENCE.md and GRAPH_SCOPES.md.
 `

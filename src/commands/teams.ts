@@ -96,8 +96,8 @@ export const teamsCommand = new Command('teams')
 Examples:
   m365-agent-cli teams list
   m365-agent-cli teams list --user someone@contoso.com
-  m365-agent-cli teams channels --team <teamId>
-  m365-agent-cli teams channel-message-send --team <id> --channel <id> --text "Hello" --at <userId>:Name
+  m365-agent-cli teams channels <teamId>
+  m365-agent-cli teams channel-message-send <teamId> <channelId> --text "Hello" --at <userId>:Name
 
 Channel/chat mentions: use --at userId:displayName and put @displayName in --text. Chats list is /me/chats only.
 See docs/CLI_REFERENCE.md for full flag lists.
