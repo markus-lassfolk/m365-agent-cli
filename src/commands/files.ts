@@ -110,7 +110,7 @@ export const filesCommand = new Command('files')
     `
 Examples:
   m365-agent-cli files list
-  m365-agent-cli files search "report" --folder <folderId>
+  m365-agent-cli files search "report"
   m365-agent-cli files upload ./deck.pptx --folder <folderId>
   m365-agent-cli files download <fileId> --out ./out.bin
 

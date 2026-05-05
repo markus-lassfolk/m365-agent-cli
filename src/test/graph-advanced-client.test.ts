@@ -85,9 +85,9 @@ describe('graphInvoke with fetch mock', () => {
   test('maps GraphApiError to error response', async () => {
     const orig = globalThis.fetch;
     try {
-      globalThis.fetch = async () => {
+      globalThis.fetch = (async () => {
         throw new GraphApiError('nope', 'Custom', 418);
-      };
+      }) as unknown as typeof fetch;
       const r = await graphInvoke('tok', { method: 'GET', path: '/me', pinAccessToken: true });
       expect(r.ok).toBe(false);
       expect(r.error?.message).toContain('nope');
