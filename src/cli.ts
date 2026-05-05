@@ -56,13 +56,24 @@ import { vivaCommand } from './commands/viva.js';
 import { whoamiCommand } from './commands/whoami.js';
 import { wordCommand } from './commands/word.js';
 import { captureCliException, flushGlitchTip, initGlitchTip } from './lib/glitchtip.js';
+import { installM365HelpOnCommandTree } from './lib/m365-help.js';
 import { getPackageVersionSync } from './lib/package-info.js';
 
 const program = new Command();
 
-program.name('m365-agent-cli').description('CLI for Microsoft 365/EWS').version(getPackageVersionSync());
+program
+  .name('m365-agent-cli')
+  .description(
+    'Microsoft 365 from your terminal: calendar, mail, OneDrive, Planner, Teams, Graph — one OAuth login'
+  )
+  .version(getPackageVersionSync());
 
 program.option('--read-only', 'Run in read-only mode, blocking any mutating operations');
+
+program.addHelpText(
+  'after',
+  'Tip: run m365-agent-cli <command> --help for flags and examples on each command.'
+);
 
 program.addCommand(whoamiCommand);
 program.addCommand(updateCommand);
@@ -123,6 +134,8 @@ program.addCommand(wordCommand);
 program.addCommand(powerpointCommand);
 
 program.addCommand(sharepointCommand);
+
+installM365HelpOnCommandTree(program);
 
 (async () => {
   await initGlitchTip();

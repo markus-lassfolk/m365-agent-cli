@@ -445,6 +445,7 @@ function displayEvent(event: CalendarEvent, verbose: boolean): void {
 
 function buildCalendarListCommand(): Command {
   return new Command('list')
+    .summary('List calendar events for a day or range')
     .description('List calendar events for a day or range (default when no subcommand is given)')
     .argument(
       '[start]',
@@ -1055,9 +1056,19 @@ function buildCalendarListCommand(): Command {
     );
 }
 
-export const calendarCommand = new Command('calendar').description(
-  'View or create calendar events (subcommands: list, create; default is list — same as before)'
-);
+export const calendarCommand = new Command('calendar')
+  .description('EWS or Graph calendar: list events and create events (default subcommand: list).')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  m365-agent-cli calendar list
+  m365-agent-cli calendar list week --mailbox shared@contoso.com
+  m365-agent-cli calendar create "1:1" 15:00 15:30 --day tomorrow
+
+For Microsoft Graph–native calendars and REST, see graph-calendar and create-event. Details: docs/CLI_REFERENCE.md.
+`
+  );
 calendarCommand.addCommand(buildCalendarListCommand(), { isDefault: true });
 calendarCommand.addCommand(
   buildCreateEventCommand('create', 'Create a calendar event (alias for top-level create-event)')

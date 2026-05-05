@@ -86,12 +86,27 @@ function collectAtSpec(value: string, previous: string[]): string[] {
   return [...previous, value];
 }
 
-export const teamsCommand = new Command('teams').description(
-  'Microsoft Teams (Graph): teams, channels, channel-files-folder, tabs, messages, reactions, activity feed, chats, members, **app catalog** + **team/chat/personal** app install lifecycle (see GRAPH_SCOPES.md). `teams list --user` for joined teams; `teams chats` is `/me/chats` only. Channel/chat **send**/**reply**: `--at userId:displayName` with `--text` containing @displayName per mention.'
-);
+export const teamsCommand = new Command('teams')
+  .description(
+    'Microsoft Teams via Graph: teams, channels, chats, messages, tabs, apps, and notifications. See GRAPH_SCOPES.md for permissions.'
+  )
+  .addHelpText(
+    'after',
+    `
+Examples:
+  m365-agent-cli teams list
+  m365-agent-cli teams list --user someone@contoso.com
+  m365-agent-cli teams channels --team <teamId>
+  m365-agent-cli teams channel-message-send --team <id> --channel <id> --text "Hello" --at <userId>:Name
+
+Channel/chat mentions: use --at userId:displayName and put @displayName in --text. Chats list is /me/chats only.
+See docs/CLI_REFERENCE.md for full flag lists.
+`
+  );
 
 teamsCommand
   .command('list')
+  .summary('Teams List')
   .description('List joined teams for /me or another user (GET /me/joinedTeams or GET /users/{id}/joinedTeams)')
   .option(
     '--user <upn-or-id>',
@@ -122,6 +137,7 @@ teamsCommand
 
 teamsCommand
   .command('get')
+  .summary('Teams Get')
   .description('Get a team by id (GET /teams/{id})')
   .argument('<teamId>', 'Team id (GUID)')
   .option('--json', 'Output as JSON')
@@ -143,6 +159,7 @@ teamsCommand
 
 teamsCommand
   .command('primary-channel')
+  .summary('Teams Primary Channel')
   .description('Get the team General channel (GET /teams/{id}/primaryChannel; Channel.ReadBasic.All)')
   .argument('<teamId>', 'Team id')
   .option('--json', 'Output as JSON')
@@ -168,6 +185,7 @@ teamsCommand
 
 teamsCommand
   .command('channel-files-folder')
+  .summary('Teams Channel Files Folder')
   .description(
     'Get the channel Files root drive item (GET …/channels/{id}/filesFolder). Use printed driveId with `files list --drive-id … --folder <id>`.'
   )
@@ -203,6 +221,7 @@ teamsCommand
 
 teamsCommand
   .command('channels')
+  .summary('Teams Channels')
   .description('List channels in a team (GET /teams/{id}/channels)')
   .argument('<teamId>', 'Team id')
   .option('--json', 'Output as JSON')
@@ -230,6 +249,7 @@ teamsCommand
 
 teamsCommand
   .command('all-channels')
+  .summary('Teams All Channels')
   .description('List all channels including shared/incoming (GET /teams/{id}/allChannels; Channel.ReadBasic.All)')
   .argument('<teamId>', 'Team id')
   .option('--filter <odata>', "OData $filter e.g. membershipType eq 'shared' (quoted for your shell)")
@@ -258,6 +278,7 @@ teamsCommand
 
 teamsCommand
   .command('incoming-channels')
+  .summary('Teams Incoming Channels')
   .description(
     'List channels shared into this team from other tenants (GET /teams/{id}/incomingChannels; Channel.ReadBasic.All)'
   )
@@ -287,6 +308,7 @@ teamsCommand
 
 teamsCommand
   .command('channel-get')
+  .summary('Teams Channel Get')
   .description('Get one channel (GET /teams/{id}/channels/{id}; Channel.ReadBasic.All)')
   .argument('<teamId>', 'Team id')
   .argument('<channelId>', 'Channel id')
@@ -313,6 +335,7 @@ teamsCommand
 
 teamsCommand
   .command('channel-members')
+  .summary('Teams Channel Members')
   .description('List members of a channel (GET …/channels/{id}/members; ChannelMember.Read.All or Group.ReadWrite.All)')
   .argument('<teamId>', 'Team id')
   .argument('<channelId>', 'Channel id')
@@ -349,6 +372,7 @@ teamsCommand
 
 teamsCommand
   .command('tabs')
+  .summary('Teams Tabs')
   .description(
     'List tabs in a channel (GET …/channels/{id}/tabs?$expand=teamsApp; Group.ReadWrite.All or TeamsTab.Read.All)'
   )
@@ -380,6 +404,7 @@ teamsCommand
 
 teamsCommand
   .command('messages')
+  .summary('Teams Messages')
   .description('List recent messages in a channel (GET …/channels/{id}/messages)')
   .argument('<teamId>', 'Team id')
   .argument('<channelId>', 'Channel id')
@@ -418,6 +443,7 @@ teamsCommand
 
 teamsCommand
   .command('channel-message-get')
+  .summary('Teams Channel Message Get')
   .description('Get one channel message by id (GET …/channels/{id}/messages/{id})')
   .argument('<teamId>', 'Team id')
   .argument('<channelId>', 'Channel id')
@@ -454,6 +480,7 @@ teamsCommand
 
 teamsCommand
   .command('channel-message-send')
+  .summary('Teams Channel Message Send')
   .description(
     'Post a message to a channel (`ChannelMessage.Send`). Use `--json-file` for full `chatMessage` body, or `--text` / `--html`.'
   )
@@ -531,6 +558,7 @@ teamsCommand
 
 teamsCommand
   .command('message-replies')
+  .summary('Teams Message Replies')
   .description(
     'List replies to a channel message (GET …/messages/{id}/replies; ChannelMessage.Read.All or Group.ReadWrite.All)'
   )
@@ -573,6 +601,7 @@ teamsCommand
 
 teamsCommand
   .command('channel-message-reply')
+  .summary('Teams Channel Message Reply')
   .description(
     'Reply to a channel message (`POST …/messages/{id}/replies`; `ChannelMessage.Send`). Same body options as **channel-message-send**.'
   )
@@ -652,6 +681,7 @@ teamsCommand
 
 teamsCommand
   .command('members')
+  .summary('Teams Members')
   .description('List members of a team (GET /teams/{id}/members; uses Group.ReadWrite.All or TeamMember.Read.*)')
   .argument('<teamId>', 'Team id')
   .option('-n, --top <n>', 'Page size (default: server default)', '')
@@ -681,6 +711,7 @@ teamsCommand
 
 teamsCommand
   .command('chats')
+  .summary('Teams Chats')
   .description(
     'List chats for the signed-in user only (GET /me/chats; requires Chat.Read). There is no Graph equivalent to list another user’s chats by id.'
   )
@@ -712,6 +743,7 @@ teamsCommand
 
 teamsCommand
   .command('chat-get')
+  .summary('Teams Chat Get')
   .description(
     'Get one chat (GET /chats/{id}); optional --expand members, lastMessagePreview, or both (comma-separated)'
   )
@@ -740,6 +772,7 @@ teamsCommand
 
 teamsCommand
   .command('chat-messages')
+  .summary('Teams Chat Messages')
   .description(
     'List messages in a chat (GET /chats/{id}/messages; requires Chat.ReadWrite for read in same app registration)'
   )
@@ -773,6 +806,7 @@ teamsCommand
 
 teamsCommand
   .command('chat-message-get')
+  .summary('Teams Chat Message Get')
   .description('Get one chat message by id (GET /chats/{id}/messages/{id})')
   .argument('<chatId>', 'Chat id')
   .argument('<messageId>', 'Message id')
@@ -801,6 +835,7 @@ teamsCommand
 
 teamsCommand
   .command('chat-message-replies')
+  .summary('Teams Chat Message Replies')
   .description('List replies to a chat message (GET …/messages/{id}/replies)')
   .argument('<chatId>', 'Chat id')
   .argument('<messageId>', 'Parent message id')
@@ -839,6 +874,7 @@ teamsCommand
 
 teamsCommand
   .command('chat-message-send')
+  .summary('Teams Chat Message Send')
   .description('Post a message to a chat (`Chat.ReadWrite`). Use `--json-file` or `--text` / `--html`.')
   .argument('<chatId>', 'Chat id')
   .option('--json-file <path>', 'Full JSON body for POST')
@@ -912,6 +948,7 @@ teamsCommand
 
 teamsCommand
   .command('chat-message-reply')
+  .summary('Teams Chat Message Reply')
   .description(
     'Reply in a chat thread (`POST …/messages/{id}/replies`; `Chat.ReadWrite`). Same body options as **chat-message-send**.'
   )
@@ -989,6 +1026,7 @@ teamsCommand
 
 teamsCommand
   .command('chat-pinned')
+  .summary('Teams Chat Pinned')
   .description(
     'List pinned messages in a chat (GET /chats/{id}/pinnedMessages; Chat.ReadWrite; --expand-message for bodies)'
   )
@@ -1027,6 +1065,7 @@ teamsCommand
 
 teamsCommand
   .command('chat-members')
+  .summary('Teams Chat Members')
   .description('List members of a chat (GET /chats/{id}/members; Chat.Read or Chat.ReadBasic)')
   .argument('<chatId>', 'Chat id')
   .option('--json', 'Output as JSON')
@@ -1054,6 +1093,7 @@ teamsCommand
 
 teamsCommand
   .command('apps')
+  .summary('Teams Apps')
   .description(
     'List apps installed in a team (GET …/installedApps?$expand=teamsAppDefinition; Group.ReadWrite.All or TeamsAppInstallation.*)'
   )
@@ -1086,6 +1126,7 @@ teamsCommand
 
 teamsCommand
   .command('app-catalog')
+  .summary('Teams App Catalog')
   .description(
     "List Teams apps in the tenant/store catalog (`GET /appCatalogs/teamsApps`; `AppCatalog.Read.All` or related). Use --filter e.g. distributionMethod eq 'organization'"
   )
@@ -1116,6 +1157,7 @@ teamsCommand
 
 teamsCommand
   .command('app-catalog-get')
+  .summary('Teams App Catalog Get')
   .description('Get one catalog app by id (`GET /appCatalogs/teamsApps/{id}`)')
   .argument('<catalogTeamsAppId>', 'teamsApp id from app-catalog')
   .option('--expand <segments>', 'e.g. appDefinitions')
@@ -1140,6 +1182,7 @@ teamsCommand
 
 teamsCommand
   .command('app-get')
+  .summary('Teams App Get')
   .description('Get one app installation on a team (`GET …/installedApps/{id}`)')
   .argument('<teamId>', 'Team id')
   .argument('<installationId>', 'teamsAppInstallation id (from **teams apps**)')
@@ -1169,6 +1212,7 @@ teamsCommand
 
 teamsCommand
   .command('app-add')
+  .summary('Teams App Add')
   .description(
     'Install an app on a team (`POST …/installedApps`). Use `--teams-app-id` (catalog id) or full `--json-file` (e.g. teamsApp@odata.bind + consentedPermissionSet).'
   )
@@ -1209,6 +1253,7 @@ teamsCommand
 
 teamsCommand
   .command('app-patch')
+  .summary('Teams App Patch')
   .description('PATCH a team app installation (`PATCH …/installedApps/{id}`)')
   .argument('<teamId>', 'Team id')
   .argument('<installationId>', 'Installation id')
@@ -1241,6 +1286,7 @@ teamsCommand
 
 teamsCommand
   .command('app-upgrade')
+  .summary('Teams App Upgrade')
   .description('Upgrade a team app installation to the latest catalog version (`POST …/upgrade`)')
   .argument('<teamId>', 'Team id')
   .argument('<installationId>', 'Installation id')
@@ -1263,6 +1309,7 @@ teamsCommand
 
 teamsCommand
   .command('app-delete')
+  .summary('Teams App Delete')
   .description('Remove an app from a team (`DELETE …/installedApps/{id}`)')
   .argument('<teamId>', 'Team id')
   .argument('<installationId>', 'Installation id')
@@ -1293,6 +1340,7 @@ teamsCommand
 
 teamsCommand
   .command('chat-apps')
+  .summary('Teams Chat Apps')
   .description('List apps installed in a chat (`GET /chats/{id}/installedApps`)')
   .argument('<chatId>', 'Chat id')
   .option('--json', 'Output as JSON')
@@ -1321,6 +1369,7 @@ teamsCommand
 
 teamsCommand
   .command('chat-app-get')
+  .summary('Teams Chat App Get')
   .description('Get one chat app installation')
   .argument('<chatId>', 'Chat id')
   .argument('<installationId>', 'Installation id')
@@ -1349,6 +1398,7 @@ teamsCommand
 
 teamsCommand
   .command('chat-app-add')
+  .summary('Teams Chat App Add')
   .description('Install an app in a chat (`POST /chats/{id}/installedApps`)')
   .argument('<chatId>', 'Chat id')
   .option('--teams-app-id <id>', 'Catalog teamsApp id')
@@ -1387,6 +1437,7 @@ teamsCommand
 
 teamsCommand
   .command('chat-app-patch')
+  .summary('Teams Chat App Patch')
   .description('PATCH a chat app installation')
   .argument('<chatId>', 'Chat id')
   .argument('<installationId>', 'Installation id')
@@ -1419,6 +1470,7 @@ teamsCommand
 
 teamsCommand
   .command('chat-app-upgrade')
+  .summary('Teams Chat App Upgrade')
   .description('Upgrade a chat app installation (`POST …/upgrade`)')
   .argument('<chatId>', 'Chat id')
   .argument('<installationId>', 'Installation id')
@@ -1441,6 +1493,7 @@ teamsCommand
 
 teamsCommand
   .command('chat-app-delete')
+  .summary('Teams Chat App Delete')
   .description('Remove an app from a chat')
   .argument('<chatId>', 'Chat id')
   .argument('<installationId>', 'Installation id')
@@ -1471,6 +1524,7 @@ teamsCommand
 
 teamsCommand
   .command('user-apps')
+  .summary('Teams User Apps')
   .description(
     'Apps in the user’s personal Teams scope (`GET …/teamwork/installedApps`). Default: signed-in user; `--user` for `/users/{id}/…` (needs appropriate Teams app permissions).'
   )
@@ -1501,6 +1555,7 @@ teamsCommand
 
 teamsCommand
   .command('user-app-get')
+  .summary('Teams User App Get')
   .description('Get one personal-scope app installation')
   .argument('<installationId>', 'Installation id')
   .option('--user <upn-or-id>', 'Target user (omit for /me)')
@@ -1529,6 +1584,7 @@ teamsCommand
 
 teamsCommand
   .command('user-app-add')
+  .summary('Teams User App Add')
   .description('Install an app in the user’s personal scope (`POST …/teamwork/installedApps`)')
   .option('--user <upn-or-id>', 'Target user (omit for /me)')
   .option('--teams-app-id <id>', 'Catalog teamsApp id')
@@ -1566,6 +1622,7 @@ teamsCommand
 
 teamsCommand
   .command('user-app-delete')
+  .summary('Teams User App Delete')
   .description('Remove an app from the user’s personal scope')
   .argument('<installationId>', 'Installation id')
   .option('--user <upn-or-id>', 'Target user (omit for /me)')
@@ -1595,6 +1652,7 @@ teamsCommand
 
 teamsCommand
   .command('activity-notify')
+  .summary('Teams Activity Notify')
   .description(
     'Teams activity feed: POST /me/teamwork/sendActivityNotification (default), POST /chats/{id}/sendActivityNotification with --chat-id, or POST /users/{id}/teamwork/sendActivityNotification with --user-id (usually app-only token + `TeamsActivity.Send`). Body from --json-file (see Microsoft Graph docs).'
   )
@@ -1639,6 +1697,7 @@ teamsCommand
 
 teamsCommand
   .command('channel-message-patch')
+  .summary('Teams Channel Message Patch')
   .description('PATCH a channel message or reply (`ChannelMessage.Send`). Use --json-file for the PATCH body.')
   .argument('<teamId>', 'Team id')
   .argument('<channelId>', 'Channel id')
@@ -1685,6 +1744,7 @@ teamsCommand
 
 teamsCommand
   .command('channel-message-delete')
+  .summary('Teams Channel Message Delete')
   .description(
     'Delete a channel message or reply: hard DELETE (`--hard`), soft-delete POST …/softDelete (default), or `--undo-soft` (often requires `--beta`). Use `--parent` when targeting a reply.'
   )
@@ -1748,6 +1808,7 @@ teamsCommand
 
 teamsCommand
   .command('chat-message-patch')
+  .summary('Teams Chat Message Patch')
   .description('PATCH a chat message (`Chat.ReadWrite`). Use --json-file for the PATCH body.')
   .argument('<chatId>', 'Chat id')
   .argument('<messageId>', 'Message id')
@@ -1781,6 +1842,7 @@ teamsCommand
 
 teamsCommand
   .command('chat-message-reply-patch')
+  .summary('Teams Chat Message Reply Patch')
   .description('PATCH a reply in a chat thread (`Chat.ReadWrite`).')
   .argument('<chatId>', 'Chat id')
   .argument('<parentMessageId>', 'Root message id')
@@ -1816,6 +1878,7 @@ teamsCommand
 
 teamsCommand
   .command('chat-message-delete')
+  .summary('Teams Chat Message Delete')
   .description(
     'Delete a chat message or reply: `--hard` (DELETE), default soft-delete POST, or `--undo-soft`. Use `--parent` for replies.'
   )
@@ -1877,6 +1940,7 @@ teamsCommand
 
 teamsCommand
   .command('chat-create')
+  .summary('Teams Chat Create')
   .description('Create a chat (`POST /chats`; `Chat.ReadWrite`). Body from --json-file (members, chatType, …).')
   .requiredOption('--json-file <path>', 'Full JSON body for POST /chats')
   .option('--json', 'Print created chat JSON')
@@ -1901,6 +1965,7 @@ teamsCommand
 
 teamsCommand
   .command('chat-member-add')
+  .summary('Teams Chat Member Add')
   .description('Add a member to a chat (`POST /chats/{id}/members`). Body from --json-file (conversationMember).')
   .argument('<chatId>', 'Chat id')
   .requiredOption('--json-file <path>', 'JSON body for new member')
@@ -1931,6 +1996,7 @@ teamsCommand
 
 teamsCommand
   .command('team-member-add')
+  .summary('Teams Team Member Add')
   .description(
     'Add a member to a team (`POST /teams/{id}/members`). Body from --json-file. Requires elevated team membership permissions.'
   )
@@ -1963,6 +2029,7 @@ teamsCommand
 
 teamsCommand
   .command('channel-member-add')
+  .summary('Teams Channel Member Add')
   .description('Add a member to a channel (`POST …/channels/{id}/members`). Body from --json-file.')
   .argument('<teamId>', 'Team id')
   .argument('<channelId>', 'Channel id')
@@ -1995,6 +2062,7 @@ teamsCommand
 
 teamsCommand
   .command('tab-get')
+  .summary('Teams Tab Get')
   .description('Get one channel tab (`GET …/tabs/{id}` with $expand=teamsApp)')
   .argument('<teamId>', 'Team id')
   .argument('<channelId>', 'Channel id')
@@ -2025,6 +2093,7 @@ teamsCommand
 
 teamsCommand
   .command('tab-create')
+  .summary('Teams Tab Create')
   .description('Create a channel tab (`POST …/tabs`). Body from --json-file.')
   .argument('<teamId>', 'Team id')
   .argument('<channelId>', 'Channel id')
@@ -2057,6 +2126,7 @@ teamsCommand
 
 teamsCommand
   .command('tab-update')
+  .summary('Teams Tab Update')
   .description('PATCH a channel tab (`PATCH …/tabs/{id}`). Body from --json-file.')
   .argument('<teamId>', 'Team id')
   .argument('<channelId>', 'Channel id')
@@ -2091,6 +2161,7 @@ teamsCommand
 
 teamsCommand
   .command('tab-delete')
+  .summary('Teams Tab Delete')
   .description('Delete a channel tab (`DELETE …/tabs/{id}`)')
   .argument('<teamId>', 'Team id')
   .argument('<channelId>', 'Channel id')
@@ -2122,6 +2193,7 @@ teamsCommand
 
 teamsCommand
   .command('channel-message-react')
+  .summary('Teams Channel Message React')
   .description('Set or remove a reaction on a channel message (POST setReaction / unsetReaction; ChannelMessage.Send)')
   .argument('<teamId>', 'Team id')
   .argument('<channelId>', 'Channel id')
@@ -2158,6 +2230,7 @@ teamsCommand
 
 teamsCommand
   .command('chat-message-react')
+  .summary('Teams Chat Message React')
   .description('Set or remove a reaction on a chat message (POST setReaction / unsetReaction)')
   .argument('<chatId>', 'Chat id')
   .argument('<messageId>', 'Message id')

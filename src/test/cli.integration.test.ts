@@ -179,13 +179,18 @@ async function _runCmdAction(command: any, opts: any): Promise<{ stdout: string;
 // Simpler approach: use program.parse() on a trimmed-down argv
 // This avoids needing to know each command's argument structure
 import { Command } from 'commander';
+import { installM365HelpOnCommandTree } from '../lib/m365-help.js';
 
 function makeProgram(): Command {
   const p = new Command();
   p.name('m365-agent-cli')
     .version('0.1.0')
-    .option('--read-only', 'Run in read-only mode, blocking any mutating operations')
-    .addCommand(whoamiCommand);
+    .option('--read-only', 'Run in read-only mode, blocking any mutating operations');
+  p.addHelpText(
+    'after',
+    'Tip: run m365-agent-cli <command> --help for flags and examples on each command.'
+  );
+  p.addCommand(whoamiCommand);
   p.addCommand(updateCommand);
   p.addCommand(autoReplyCommand);
   p.addCommand(calendarCommand);
@@ -215,6 +220,7 @@ function makeProgram(): Command {
   p.addCommand(rulesCommand);
   p.addCommand(delegatesCommand);
   p.addCommand(todoCommand);
+  installM365HelpOnCommandTree(p);
   return p;
 }
 
@@ -1119,10 +1125,17 @@ describe('global options', () => {
   test('--help works at top level', async () => {
     const result = await runM365AgentCli('--help');
     expect(result.exitCode).toBe(0);
-    //     expect(result.stdout).toContain('whoami');
-    //     expect(result.stdout).toContain('calendar');
-    //     expect(result.stdout).toContain('mail');
-    //     expect(result.stdout).toContain('files');
+    const out = result.stdout + result.stderr;
+    expect(out).toContain('Usage: m365-agent-cli');
+    expect(out).toContain('Commands:');
+    expect(out).toContain('Sign-in and CLI');
+    expect(out).toContain('Calendar and meetings');
+    expect(out).toContain('Mail and mailbox');
+    expect(out).toContain('Automation and advanced Graph');
+    expect(out).toContain('whoami');
+    expect(out).toContain('mail');
+    expect(out).toContain('subscribe');
+    expect(out).toContain('Tip: run m365-agent-cli <command> --help');
   });
 });
 
