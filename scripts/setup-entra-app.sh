@@ -103,7 +103,7 @@ cat <<EOF > "$TEMP_JSON"
       { "id": "948eb538-f19d-4ec5-9ccc-f059e1ea4c72", "type": "Scope" },
       { "id": "9ff7295e-131b-4d94-90e1-69fde507ac11", "type": "Scope" },
       { "id": "7427e0e9-2fba-42fe-b0c0-848c9e6a8182", "type": "Scope" },
-      { "id": "535e6066-2894-49ef-ab33-e2c6d064bb81", "type": "Scope" },
+      { "id": "ac08cdae-e845-41db-adf9-5899a0ec9ef6", "type": "Scope" },
       { "id": "3cad91a5-8413-4c4a-acfe-dfeb83d1366d", "type": "Scope" },
       { "id": "4905982d-6459-4ccd-949c-949fefc0a8f2", "type": "Scope" }
     ]

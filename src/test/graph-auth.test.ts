@@ -439,4 +439,43 @@ describe('auth resolution', () => {
     };
     expect(saved.refreshToken).toBe('new-refresh-token');
   });
+
+  test('persists rotated refresh token to .env on EWS refresh', async () => {
+    const envPath = join(testHome, 'cli.env');
+    process.env.M365_AGENT_ENV_FILE = envPath;
+    process.env.EWS_CLIENT_ID = 'client';
+    process.env.M365_REFRESH_TOKEN = 'env-refresh';
+    await writeFile(envPath, 'EWS_CLIENT_ID=client\nM365_REFRESH_TOKEN=env-refresh\n', 'utf8');
+
+    const expiredTok = ewsFixtureAccessToken('expired-env');
+    const newTok = ewsFixtureAccessToken('new-env');
+
+    await writePrimaryCache(testHome, cacheIdentity, {
+      version: 1,
+      refreshToken: 'cached-refresh-token',
+      ews: {
+        accessToken: expiredTok,
+        expiresAt: Date.now() - 1000_000
+      }
+    });
+
+    authFetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          access_token: newTok,
+          refresh_token: 'new-refresh-token',
+          expires_in: 3600
+        }),
+        { status: 200 }
+      )
+    );
+
+    delete process.env.NODE_ENV;
+
+    const result = await resolveAuth({ identity: cacheIdentity });
+    expect(result.success).toBe(true);
+    const envAfter = await readFile(envPath, 'utf8');
+    expect(envAfter).toContain('M365_REFRESH_TOKEN=new-refresh-token');
+    expect(envAfter).toContain('GRAPH_REFRESH_TOKEN=new-refresh-token');
+  });
 });

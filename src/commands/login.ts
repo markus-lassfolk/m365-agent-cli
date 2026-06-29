@@ -4,6 +4,7 @@ import { dirname } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { Command } from 'commander';
 import { atomicWriteUtf8File } from '../lib/atomic-write.js';
+import { persistRefreshTokenToEnv } from '../lib/env-persist.js';
 import { GRAPH_DEVICE_CODE_LOGIN_SCOPES } from '../lib/graph-oauth-scopes.js';
 import { getMicrosoftTenantPathSegment } from '../lib/jwt-utils.js';
 import { applyEnvFileOverrides, getGlobalEnvFilePath, resolveEnvFilePathArgument } from '../lib/utils.js';
@@ -192,28 +193,7 @@ export const loginCommand = new Command('login')
     );
     const refreshToken = rawToken.replace(/[\r\n]/g, '');
 
-    // Save tokens immediately
-    try {
-      envContent = await readFile(envPath, 'utf8');
-    } catch (err: any) {
-      if (err.code !== 'ENOENT') throw err;
-    }
-
-    const upsertEnvLine = (key: string, value: string) => {
-      const re = new RegExp(`^${key}=.*$`, 'm');
-      if (re.test(envContent)) {
-        envContent = envContent.replace(re, () => `${key}=${value}`);
-      } else {
-        envContent += `\n${key}=${value}\n`;
-      }
-    };
-
-    upsertEnvLine('M365_REFRESH_TOKEN', refreshToken);
-    upsertEnvLine('EWS_REFRESH_TOKEN', refreshToken);
-    upsertEnvLine('GRAPH_REFRESH_TOKEN', refreshToken);
-
-    envContent = envContent.replace(/\n{3,}/g, '\n\n');
-    await atomicWriteUtf8File(envPath, `${envContent.trim()}\n`, 0o600);
+    await persistRefreshTokenToEnv(refreshToken, { envPath });
 
     console.log(`Saved M365_REFRESH_TOKEN (and legacy GRAPH_REFRESH_TOKEN / EWS_REFRESH_TOKEN) to ${envPath}`);
   });

@@ -38,7 +38,7 @@ describe('graph-oauth-scopes', () => {
       'OnlineMeetingTranscript.Read.All',
       'People.Read.All',
       'AiEnterpriseInteraction.Read',
-      'LearningAssignedCourse.Read.All',
+      'LearningAssignedCourse.Read',
       'EngagementRole.Read.All',
       'EngagementRole.ReadWrite.All'
     ]) {

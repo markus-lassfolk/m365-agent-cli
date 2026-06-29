@@ -95,7 +95,7 @@ Subcommand prefixes include **`tenant-`**, **`admin-item-insights-`**, **`org-it
 
 | Area | Typical delegated permissions |
 | --- | --- |
-| Learning activities (list/get) | **`LearningAssignedCourse.Read.All`** |
+| Learning activities (list/get) | **`LearningAssignedCourse.Read`** |
 | Engage roles (list/get) | **`EngagementRole.Read`** (e.g. another user with directory read) and/or **`EngagementRole.Read.All`** |
 | Engage roles / members (create, update, delete) | **`EngagementRole.ReadWrite.All`** (admin consent) |
 | Item insights (read) | Often **`User.Read`** for self |
@@ -118,5 +118,5 @@ Subcommand prefixes include **`tenant-`**, **`admin-item-insights-`**, **`org-it
 
 **Maintainers:** After editing **`GRAPH_CAPABILITY_MATRIX`** in [`src/lib/graph-capability-matrix.ts`](../src/lib/graph-capability-matrix.ts), run **`npm run docs:graph-permission-matrix`** so [`GRAPH_PERMISSION_FEATURE_MATRIX.md`](./GRAPH_PERMISSION_FEATURE_MATRIX.md) stays in sync; CI runs **`docs:graph-permission-matrix:check`**. To sanity-check live endpoints, `$filter`, and permission requirements against current Microsoft Graph docs, use the **msgraph** Cursor skill ([graph.pm introduction](https://graph.pm/getting-started/introduction/)); install with `npx skills add merill/msgraph` if you use Cursor skills.
 
-*Last updated: 2026-05-05 — **Viva / `viva`:** **`LearningAssignedCourse.Read.All`**, **`EngagementRole.Read.All`**, **`EngagementRole.ReadWrite.All`**. **`AppCatalog.Read.All`**, **`TeamsAppInstallation.ReadWriteSelfForUser`**; **Teams** app catalog + installs; **Presence** extended verbs. **`Sites.ReadWrite.All`**, **`excel`**, Phase 1–3 scopes; aligned with `graph-oauth-scopes.ts`. **`insights`**, **`files`**, **`sharepoint`**, **`groups`**.*
+*Last updated: 2026-06-29 — **Viva / `viva`:** **`LearningAssignedCourse.Read`** (Graph publishes this name; not `.Read.All`), **`EngagementRole.Read.All`**, **`EngagementRole.ReadWrite.All`**. **`AppCatalog.Read.All`**, **`TeamsAppInstallation.ReadWriteSelfForUser`**; **Teams** app catalog + installs; **Presence** extended verbs. **`Sites.ReadWrite.All`**, **`excel`**, Phase 1–3 scopes; aligned with `graph-oauth-scopes.ts`. **`insights`**, **`files`**, **`sharepoint`**, **`groups`**.*
 

@@ -218,7 +218,7 @@ export const GRAPH_CAPABILITY_MATRIX: readonly CapabilityMatrixRow[] = [
       '`viva` — user + tenant `/employeeExperience` (communities, goals, learning, roles), work time + insights, admin/org itemInsights, workHoursAndLocations, meeting Engage Q&A',
     readScopes: [
       'User.Read',
-      'LearningAssignedCourse.Read.All',
+      'LearningAssignedCourse.Read',
       'EngagementRole.Read',
       'EngagementRole.Read.All',
       'MailboxSettings.Read',

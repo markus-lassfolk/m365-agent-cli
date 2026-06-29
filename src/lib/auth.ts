@@ -1,3 +1,4 @@
+import { persistRefreshTokenToEnv } from './env-persist.js';
 import { getJwtExpiration, getMicrosoftTenantPathSegment, isValidJwtStructure } from './jwt-utils.js';
 import {
   getUnifiedRefreshTokenFromEnv,
@@ -112,6 +113,9 @@ export async function resolveAuth(options?: { token?: string; identity?: string 
           graph: cached?.graph
         };
         await saveM365TokenCache(identity, next);
+        await persistRefreshTokenToEnv(result.refreshToken, {
+          previousRefreshToken: cached?.refreshToken ?? envRefreshToken
+        });
         return { success: true, token: result.accessToken };
       } catch {
         // Try next

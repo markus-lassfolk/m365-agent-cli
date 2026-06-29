@@ -12,6 +12,23 @@ _No user-facing changes logged yet._
 
 ---
 
+## [2026.6.29] — 2026-06-29
+
+Patch release: **refresh-token `.env` sync** ([#230](https://github.com/markus-lassfolk/m365-agent-cli/issues/230)) and **Viva Learning OAuth scope name** fix. Upgrade with `npm install -g m365-agent-cli@2026.6.29` (or `@latest` once published).
+
+### Auth / token persistence
+
+- After any successful **Graph** or **EWS** OAuth refresh, the CLI now **upserts** `M365_REFRESH_TOKEN` (and legacy `GRAPH_REFRESH_TOKEN` / `EWS_REFRESH_TOKEN`) in the global `.env` — same keys as `login`. The JSON cache and `.env` stay aligned when Entra rotates refresh tokens.
+- Skips the write when the refresh token string is unchanged, when `NODE_ENV=test`, or when `M365_AGENT_SKIP_GLOBAL_ENV=1`.
+- **`login`** uses the same helper (behavior unchanged for operators).
+
+### OAuth scopes (Viva Learning)
+
+- **`LearningAssignedCourse.Read.All`** → **`LearningAssignedCourse.Read`** in `login` / refresh scope lists and Entra setup scripts. Microsoft Graph exposes only the `.Read` delegated permission; the old name never existed on the service principal (stale GUID in setup scripts corrected to `ac08cdae-e845-41db-adf9-5899a0ec9ef6`).
+- Re-run **`m365-agent-cli login`** after upgrading if Viva Learning calls previously failed consent for the wrong scope name.
+
+---
+
 ## [2026.5.51] — 2026-05-05
 
 Patch release after **2026.5.50**. Upgrade with `npm install -g m365-agent-cli@2026.5.51` (or `@latest` once published). No new Entra permissions are required for this patch; behavior changes are limited to help output, error messaging, and internal URL normalization.

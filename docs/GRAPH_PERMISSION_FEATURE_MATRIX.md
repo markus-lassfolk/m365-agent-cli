@@ -38,7 +38,7 @@
 | SharePoint sites | `sharepoint` resolve-site/get-site/drives/lists/get-list/columns/items (OData paging)/create/update/get/delete, `items-delta`, followed sites; `site-pages` | `Sites.Read.All`, `Sites.ReadWrite.All`, `Sites.Manage.All` | `Sites.ReadWrite.All`, `Sites.Manage.All` |
 | SharePoint followed sites | `sharepoint followed-sites`, `follow`, `unfollow` | `Sites.Read.All`, `Sites.ReadWrite.All` | `Sites.ReadWrite.All` |
 | Discovery / Insights | `insights` trending / used / shared, `files recent`, `files activities`, `files preview` | `Sites.Read.All`, `Sites.ReadWrite.All`, `Files.Read`, `Files.Read.All`, `Files.ReadWrite`, `Files.ReadWrite.All` | — |
-| Viva / employee experience (Graph beta) | `viva` — user + tenant `/employeeExperience` (communities, goals, learning, roles), work time + insights, admin/org itemInsights, workHoursAndLocations, meeting Engage Q&A | `User.Read`, `LearningAssignedCourse.Read.All`, `EngagementRole.Read`, `EngagementRole.Read.All`, `MailboxSettings.Read`, `MailboxSettings.ReadWrite` — tenant learning / communities / goals need product-specific admin-consented scopes per Microsoft; work-time mutations may be app-only (`Schedule-WorkingTime.*`) in some tenants | `EngagementRole.ReadWrite.All`, `MailboxSettings.ReadWrite`, `User.ReadWrite`, `User.ReadWrite.All` |
+| Viva / employee experience (Graph beta) | `viva` — user + tenant `/employeeExperience` (communities, goals, learning, roles), work time + insights, admin/org itemInsights, workHoursAndLocations, meeting Engage Q&A | `User.Read`, `LearningAssignedCourse.Read`, `EngagementRole.Read`, `EngagementRole.Read.All`, `MailboxSettings.Read`, `MailboxSettings.ReadWrite` — tenant learning / communities / goals need product-specific admin-consented scopes per Microsoft; work-time mutations may be app-only (`Schedule-WorkingTime.*`) in some tenants | `EngagementRole.ReadWrite.All`, `MailboxSettings.ReadWrite`, `User.ReadWrite`, `User.ReadWrite.All` |
 | Approvals | `approvals` list / get / steps / respond / cancel (DELETE) — Teams Approvals + Power Automate (beta `/me/approvals`); `ApprovalSolution.ReadWrite` (canonical) or narrower `ApprovalSolutionResponse.ReadWrite` | `ApprovalSolution.Read.All`, `ApprovalSolution.ReadWrite`, `ApprovalSolution.ReadWrite.All`, `ApprovalSolutionResponse.ReadWrite` | `ApprovalSolution.ReadWrite`, `ApprovalSolutionResponse.ReadWrite` |
 | Microsoft To Do | `todo` (incl. `attachment-session` list/get/patch/delete/content-*; `root` get/patch/delete for …/todo — destructive delete requires `--confirm`) | `Tasks.Read`, `Tasks.ReadWrite` | `Tasks.ReadWrite` |
 | Planner & group-backed Teams | `planner` (incl. `delete-plan-details`, `delete-task-details`), `teams` members/channels/apps/tabs — broad group scope | `Group.Read.All`, `Group.ReadWrite.All` | `Group.ReadWrite.All` |
@@ -125,7 +125,7 @@ Alphabetical **delegated** (and noted **application**) permissions referenced by
 | `Files.ReadWrite.All` | Copilot Retrieval API; Copilot Search API (preview); Discovery / Insights; Graph Search; OneDrive / files | Broad file read/write |
 | `Group.Read.All` | Outlook Groups (Microsoft 365 groups); Planner & group-backed Teams | Read |
 | `Group.ReadWrite.All` | Outlook Groups (Microsoft 365 groups); Planner & group-backed Teams; Teams apps on a team; Teams membership (provision) | Includes member add paths per matrix |
-| `LearningAssignedCourse.Read.All` | Viva / employee experience (Graph beta) |  |
+| `LearningAssignedCourse.Read` | Viva / employee experience (Graph beta) |  |
 | `Mail.Read` | Copilot Chat API (preview); Graph Search; Mail (your mailbox) | Read |
 | `Mail.Read.Shared` | Mail (shared / delegated) | Read |
 | `Mail.ReadWrite` | Copilot Chat API (preview); Graph Search; Mail (your mailbox); Send mail (Graph) | Read + write mailbox |
@@ -170,4 +170,4 @@ Alphabetical **delegated** (and noted **application**) permissions referenced by
 - [`GRAPH_INVOKE_BOUNDARIES.md`](./GRAPH_INVOKE_BOUNDARIES.md) — raw **`graph invoke`** surfaces; consent must match each API.
 - [`GRAPH_TROUBLESHOOTING.md`](./GRAPH_TROUBLESHOOTING.md)
 
-*Auto-generated from `GRAPH_CAPABILITY_MATRIX` — run `npm run docs:graph-permission-matrix` after editing the matrix. Generated: 2026-05-05.*
+*Auto-generated from `GRAPH_CAPABILITY_MATRIX` — run `npm run docs:graph-permission-matrix` after editing the matrix. Generated: 2026-06-29.*

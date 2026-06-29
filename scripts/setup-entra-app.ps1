@@ -220,8 +220,8 @@ $GraphResourceAccess = @(
     @{ Id = "948eb538-f19d-4ec5-9ccc-f059e1ea4c72"; Type = "Scope" },
     # Chat.ReadWrite
     @{ Id = "9ff7295e-131b-4d94-90e1-69fde507ac11"; Type = "Scope" },
-    # LearningAssignedCourse.Read.All (Viva Learning)
-    @{ Id = "535e6066-2894-49ef-ab33-e2c6d064bb81"; Type = "Scope" },
+    # LearningAssignedCourse.Read (Viva Learning)
+    @{ Id = "ac08cdae-e845-41db-adf9-5899a0ec9ef6"; Type = "Scope" },
     # EngagementRole.Read.All (Viva Engage roles)
     @{ Id = "3cad91a5-8413-4c4a-acfe-dfeb83d1366d"; Type = "Scope" },
     # EngagementRole.ReadWrite.All (Viva Engage role membership writes)
