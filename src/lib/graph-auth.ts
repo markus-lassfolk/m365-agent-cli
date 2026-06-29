@@ -1,3 +1,4 @@
+import { persistRefreshTokenToEnv } from './env-persist.js';
 import { GRAPH_CRITICAL_DELEGATED_SCOPES, GRAPH_REFRESH_SCOPE_CANDIDATES } from './graph-oauth-scopes.js';
 import {
   getJwtExpiration,
@@ -6,7 +7,6 @@ import {
   getMicrosoftTenantPathSegment,
   isValidJwtStructure
 } from './jwt-utils.js';
-import { persistRefreshTokenToEnv } from './env-persist.js';
 import {
   getUnifiedRefreshTokenFromEnv,
   loadM365TokenCache,
