@@ -180,7 +180,7 @@ todoCommand
   .option('--count', 'Include total count ($count=true; ConsistencyLevel: eventual)')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (opts: {
       json?: boolean;
@@ -284,7 +284,7 @@ todoCommand
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (opts: {
       list?: string;
@@ -474,7 +474,7 @@ todoCommand
   .option('--start-tz <tz>', 'Time zone for start only')
   .option('--reminder-tz <tz>', 'Time zone for reminder only')
   .option('--link <msgId>', 'Link task to an email by Graph message id (GET /me/messages/{id})')
-  .option('--mailbox <email>', 'Delegated or shared mailbox for message lookup (same as --user)')
+  .option('--mailbox <email>', 'Target user for message lookup (same as --user; To Do is not mailbox delegation)')
   .option(
     '--category <name>',
     'Category label (repeatable; To Do uses string categories)',
@@ -487,7 +487,7 @@ todoCommand
   .option('--identity <name>', 'Graph token cache identity (default: default)')
   .option(
     '--user <email>',
-    'Target user or shared mailbox for the task and for --link message lookup (Graph delegation)'
+    'Target user for the task and --link message lookup (/users/{id}; To Do access/provisioning required)'
   )
   .action(
     async (
@@ -613,7 +613,7 @@ todoCommand
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (
       opts: {
@@ -764,7 +764,7 @@ todoCommand
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (
       opts: { list: string; task: string; json?: boolean; token?: string; identity?: string; user?: string },
@@ -804,7 +804,7 @@ todoCommand
   .option('--confirm', 'Skip confirmation prompt')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (
       opts: { list: string; task: string; confirm?: boolean; token?: string; identity?: string; user?: string },
@@ -845,7 +845,7 @@ todoCommand
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (
       opts: {
@@ -888,7 +888,7 @@ todoCommand
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (
       opts: {
@@ -943,7 +943,7 @@ todoCommand
   .option('--confirm', 'Confirm without prompt')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (
       opts: {
@@ -984,7 +984,7 @@ todoCommand
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (opts: { name: string; json?: boolean; token?: string; identity?: string; user?: string }, cmd: any) => {
       checkReadOnly(cmd);
@@ -1011,7 +1011,7 @@ todoCommand
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (
       opts: { list: string; name: string; json?: boolean; token?: string; identity?: string; user?: string },
@@ -1042,7 +1042,7 @@ todoCommand
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (
       opts: { list: string; confirm?: boolean; json?: boolean; token?: string; identity?: string; user?: string },
@@ -1078,7 +1078,7 @@ todoCommand
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (opts: { list: string; task: string; json?: boolean; token?: string; identity?: string; user?: string }) => {
       const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
@@ -1112,7 +1112,7 @@ todoCommand
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (
       opts: {
@@ -1158,7 +1158,7 @@ todoCommand
   .option('--confirm', 'Confirm without prompt')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (
       opts: {
@@ -1201,7 +1201,7 @@ todoCommand
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (opts: {
       list: string;
@@ -1245,7 +1245,7 @@ todoCommand
   .requiredOption('-o, --output <path>', 'Write file to this path')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (opts: {
       list: string;
@@ -1282,7 +1282,7 @@ todoCommand
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (
       opts: {
@@ -1326,7 +1326,7 @@ todoCommand
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (
       opts: {
@@ -1380,7 +1380,7 @@ todoCommand
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (
       opts: {
@@ -1421,7 +1421,7 @@ todoCommand
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (
       opts: {
@@ -1465,7 +1465,7 @@ todoAttachmentSessionCommand
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (opts: { list: string; task: string; json?: boolean; token?: string; identity?: string; user?: string }) => {
       const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
@@ -1497,7 +1497,7 @@ todoAttachmentSessionCommand
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (opts: {
       list: string;
@@ -1535,7 +1535,7 @@ todoAttachmentSessionCommand
   .option('--json', 'Echo updated session as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (
       opts: {
@@ -1588,7 +1588,7 @@ todoAttachmentSessionCommand
   .option('--if-match <etag>', 'If-Match (optional concurrency)')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (
       opts: {
@@ -1639,7 +1639,7 @@ todoAttachmentSessionCommand
   .requiredOption('-o, --output <path>', 'Write bytes to this path')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (opts: {
       list: string;
@@ -1676,7 +1676,7 @@ todoAttachmentSessionCommand
   .option('--json', 'Echo updated session as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (
       opts: {
@@ -1726,7 +1726,7 @@ todoAttachmentSessionCommand
   .option('--if-match <etag>', 'If-Match (optional concurrency)')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (
       opts: {
@@ -1769,7 +1769,7 @@ todoAttachmentSessionCommand
   );
 
 const todoRootCommand = new Command('root').description(
-  'The signed-in user `todo` navigation resource (GET/PATCH/DELETE …/me/todo or …/users/{id}/todo). DELETE is destructive.'
+  'The Graph To Do navigation resource (GET/PATCH/DELETE …/me/todo or …/users/{id}/todo). Cross-user access depends on To Do provisioning/sharing. DELETE is destructive.'
 );
 
 todoRootCommand
@@ -1778,7 +1778,7 @@ todoRootCommand
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(async (opts: { json?: boolean; token?: string; identity?: string; user?: string }) => {
     const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success) {
@@ -1801,7 +1801,7 @@ todoRootCommand
   .option('--json', 'Echo body as formatted JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (opts: { jsonFile: string; json?: boolean; token?: string; identity?: string; user?: string }, cmd: any) => {
       checkReadOnly(cmd);
@@ -1829,7 +1829,7 @@ todoRootCommand
   .option('--if-match <etag>', 'If-Match (optional concurrency)')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (
       opts: { confirm?: boolean; ifMatch?: string; token?: string; identity?: string; user?: string },
@@ -1862,7 +1862,7 @@ todoCommand
   .option('--state-file <path>', 'Read/write JSON delta cursor')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user (first page only; --url encodes scope)')
+  .option('--user <email>', 'Target user for Graph To Do (first page only; --url encodes scope)')
   .action(
     async (opts: {
       list?: string;
@@ -1937,7 +1937,7 @@ todoCommand
   .option('--state-file <path>', 'Read/write JSON delta cursor (kind: todoLists)')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user (first page only; --url encodes scope)')
+  .option('--user <email>', 'Target user for Graph To Do (first page only; --url encodes scope)')
   .action(async (opts: { url?: string; stateFile?: string; token?: string; identity?: string; user?: string }) => {
     const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success) {
@@ -1988,7 +1988,7 @@ todoCommand
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (opts: { list: string; task: string; json?: boolean; token?: string; identity?: string; user?: string }) => {
       const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
@@ -2020,7 +2020,7 @@ todoCommand
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (opts: {
       list: string;
@@ -2065,7 +2065,7 @@ todoLinkedResourceCommand
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (opts: { list: string; task: string; json?: boolean; token?: string; identity?: string; user?: string }) => {
       const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
@@ -2100,7 +2100,7 @@ todoLinkedResourceCommand
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (
       opts: {
@@ -2154,7 +2154,7 @@ todoLinkedResourceCommand
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (opts: {
       list: string;
@@ -2194,7 +2194,7 @@ todoLinkedResourceCommand
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (
       opts: {
@@ -2259,7 +2259,7 @@ todoLinkedResourceCommand
   .option('--confirm', 'Confirm without prompt')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (
       opts: {
@@ -2306,7 +2306,7 @@ todoListExtensionCommand
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(async (opts: { list: string; json?: boolean; token?: string; identity?: string; user?: string }) => {
     const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success) {
@@ -2336,7 +2336,7 @@ todoListExtensionCommand
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (opts: { list: string; name: string; json?: boolean; token?: string; identity?: string; user?: string }) => {
       const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
@@ -2364,7 +2364,7 @@ todoListExtensionCommand
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (
       opts: {
@@ -2405,7 +2405,7 @@ todoListExtensionCommand
   .requiredOption('--json-file <path>', 'JSON patch body')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (
       opts: { list: string; name: string; jsonFile: string; token?: string; identity?: string; user?: string },
@@ -2437,7 +2437,7 @@ todoListExtensionCommand
   .option('--confirm', 'Confirm without prompt')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (
       opts: { list: string; name: string; confirm?: boolean; token?: string; identity?: string; user?: string },
@@ -2475,7 +2475,7 @@ todoExtensionCommand
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (opts: { list: string; task: string; json?: boolean; token?: string; identity?: string; user?: string }) => {
       const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
@@ -2508,7 +2508,7 @@ todoExtensionCommand
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (opts: {
       list: string;
@@ -2545,7 +2545,7 @@ todoExtensionCommand
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (
       opts: {
@@ -2588,7 +2588,7 @@ todoExtensionCommand
   .requiredOption('--json-file <path>', 'JSON object: properties to patch')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (
       opts: {
@@ -2629,7 +2629,7 @@ todoExtensionCommand
   .option('--confirm', 'Confirm without prompt')
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
-  .option('--user <email>', 'Target user or shared mailbox (Graph delegation)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
   .action(
     async (
       opts: {
