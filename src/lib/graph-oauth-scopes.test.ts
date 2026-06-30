@@ -18,6 +18,8 @@ describe('graph-oauth-scopes', () => {
       'User.Read.All',
       'MailboxSettings.ReadWrite',
       'Contacts.ReadWrite',
+      'Tasks.Read.Shared',
+      'Tasks.ReadWrite.Shared',
       'Contacts.Read.Shared',
       'Contacts.ReadWrite.Shared',
       'OnlineMeetings.ReadWrite',
@@ -53,6 +55,8 @@ describe('graph-oauth-scopes', () => {
     expect(joined).toContain('https://graph.microsoft.com/Place.Read.All');
     expect(joined).toContain('https://graph.microsoft.com/Mail.Read.Shared');
     expect(joined).toContain('https://graph.microsoft.com/Notes.ReadWrite.All');
+    expect(joined).toContain('https://graph.microsoft.com/Tasks.Read.Shared');
+    expect(joined).toContain('https://graph.microsoft.com/Tasks.ReadWrite.Shared');
     expect(joined).toContain('https://graph.microsoft.com/Team.ReadBasic.All');
     expect(joined).toContain('https://graph.microsoft.com/ChannelMessage.Read.All');
     expect(joined).toContain('https://graph.microsoft.com/Chat.ReadWrite');
@@ -62,6 +66,7 @@ describe('graph-oauth-scopes', () => {
     expect(joined).toContain('https://graph.microsoft.com/OnlineMeetingAiInsight.Read.All');
     expect(joined).toContain('https://graph.microsoft.com/ChannelMessage.Send');
     expect(GRAPH_CRITICAL_DELEGATED_SCOPES).toContain('Mail.Send');
+    expect(GRAPH_CRITICAL_DELEGATED_SCOPES).toContain('Tasks.ReadWrite.Shared');
     expect(GRAPH_CRITICAL_DELEGATED_SCOPES.length).toBeGreaterThanOrEqual(4);
     const withoutUserReadAll = GRAPH_REFRESH_SCOPE_CANDIDATES.find(
       (c) => c.includes('Mail.Read.Shared') && !c.includes('User.Read.All')

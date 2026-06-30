@@ -13,6 +13,7 @@ How to use **`m365-agent-cli`** when you automate mail, calendar, files, Teams, 
 ## 2. Manager calendar and mail (assistant scenarios)
 
 - **Calendar view / events:** **`calendar`** / **`graph-calendar`** with **`--user`** where supported, or EWS **`--mailbox`** for shared mailboxes—pick one stack per mailbox.
+- **To Do:** **`todo --user <email>`** uses Graph `/users/{id}/todo/...` and requires **Tasks.Read.Shared** / **Tasks.ReadWrite.Shared** in addition to the user's actual sharing/delegation rights.
 - **Mail:** **`mail`**, **`outlook-graph`**, **`folders`** — Graph variants often support **`--user`** for delegated mailboxes your token can access (**Mail.Read\*\.Shared** scopes).
 - **Subscriptions (notifications):** **`subscribe`** with **`--user`** when the resource lives under **`users/{id}`** (mail folders, events, calendar, Copilot resources—see command help).
 - **Org hierarchy:** **`org manager`** (your manager or **`--user`**’s manager) and **`org direct-reports`** — routing (“who approves?”, “who reports here?”). Requires **`User.Read`** for self paths and typically **`User.Read.All`** for **`--user`** (tenant-dependent).

@@ -40,7 +40,7 @@
 | Discovery / Insights | `insights` trending / used / shared, `files recent`, `files activities`, `files preview` | `Sites.Read.All`, `Sites.ReadWrite.All`, `Files.Read`, `Files.Read.All`, `Files.ReadWrite`, `Files.ReadWrite.All` | — |
 | Viva / employee experience (Graph beta) | `viva` — user + tenant `/employeeExperience` (communities, goals, learning, roles), work time + insights, admin/org itemInsights, workHoursAndLocations, meeting Engage Q&A | `User.Read`, `LearningAssignedCourse.Read`, `EngagementRole.Read`, `EngagementRole.Read.All`, `MailboxSettings.Read`, `MailboxSettings.ReadWrite` — tenant learning / communities / goals need product-specific admin-consented scopes per Microsoft; work-time mutations may be app-only (`Schedule-WorkingTime.*`) in some tenants | `EngagementRole.ReadWrite.All`, `MailboxSettings.ReadWrite`, `User.ReadWrite`, `User.ReadWrite.All` |
 | Approvals | `approvals` list / get / steps / respond / cancel (DELETE) — Teams Approvals + Power Automate (beta `/me/approvals`); `ApprovalSolution.ReadWrite` (canonical) or narrower `ApprovalSolutionResponse.ReadWrite` | `ApprovalSolution.Read.All`, `ApprovalSolution.ReadWrite`, `ApprovalSolution.ReadWrite.All`, `ApprovalSolutionResponse.ReadWrite` | `ApprovalSolution.ReadWrite`, `ApprovalSolutionResponse.ReadWrite` |
-| Microsoft To Do | `todo` (incl. `attachment-session` list/get/patch/delete/content-*; `root` get/patch/delete for …/todo — destructive delete requires `--confirm`) | `Tasks.Read`, `Tasks.ReadWrite` | `Tasks.ReadWrite` |
+| Microsoft To Do | `todo` (incl. `attachment-session` list/get/patch/delete/content-*; `root` get/patch/delete for …/todo — destructive delete requires `--confirm`) | `Tasks.Read`, `Tasks.ReadWrite`, `Tasks.Read.Shared`, `Tasks.ReadWrite.Shared` — `--user` / `/users/{id}/todo` shared or delegated To Do requires `Tasks.Read.Shared` or `Tasks.ReadWrite.Shared` | `Tasks.ReadWrite`, `Tasks.ReadWrite.Shared` |
 | Planner & group-backed Teams | `planner` (incl. `delete-plan-details`, `delete-task-details`), `teams` members/channels/apps/tabs — broad group scope | `Group.Read.All`, `Group.ReadWrite.All` | `Group.ReadWrite.All` |
 | Outlook Groups (Microsoft 365 groups) | `groups list`, `conversations`, `thread`, `posts`, `post-reply` | `Group.Read.All`, `Group.ReadWrite.All` | `Group.ReadWrite.All` |
 | Contacts (your mailbox) | `contacts` (extensions: `-f/--folder`, `--child-folder` for nested contact folder paths) | `Contacts.Read`, `Contacts.ReadWrite` | `Contacts.ReadWrite` |
@@ -151,7 +151,9 @@ Alphabetical **delegated** (and noted **application**) permissions referenced by
 | `Sites.Read.All` | Copilot Chat API (preview); Copilot Retrieval API; Copilot Search API (preview); Discovery / Insights; Graph Search; SharePoint followed sites; SharePoint sites |  |
 | `Sites.ReadWrite.All` | Copilot Chat API (preview); Copilot Retrieval API; Copilot Search API (preview); Discovery / Insights; Graph Search; SharePoint followed sites; SharePoint sites |  |
 | `Tasks.Read` | Microsoft To Do |  |
+| `Tasks.Read.Shared` | Microsoft To Do |  |
 | `Tasks.ReadWrite` | Microsoft To Do |  |
+| `Tasks.ReadWrite.Shared` | Microsoft To Do |  |
 | `Team.ReadBasic.All` | Teams (teams & channels) | Joined teams |
 | `TeamMember.ReadWrite.All` | Teams membership (provision) | Add team members |
 | `TeamMember.ReadWriteNonGuestRole.All` | Teams membership (provision) | Non-guest variant |
@@ -170,4 +172,4 @@ Alphabetical **delegated** (and noted **application**) permissions referenced by
 - [`GRAPH_INVOKE_BOUNDARIES.md`](./GRAPH_INVOKE_BOUNDARIES.md) — raw **`graph invoke`** surfaces; consent must match each API.
 - [`GRAPH_TROUBLESHOOTING.md`](./GRAPH_TROUBLESHOOTING.md)
 
-*Auto-generated from `GRAPH_CAPABILITY_MATRIX` — run `npm run docs:graph-permission-matrix` after editing the matrix. Generated: 2026-06-29.*
+*Auto-generated from `GRAPH_CAPABILITY_MATRIX` — run `npm run docs:graph-permission-matrix` after editing the matrix. Generated: 2026-06-30.*
