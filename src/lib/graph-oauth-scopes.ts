@@ -23,6 +23,8 @@ export const GRAPH_DEVICE_CODE_LOGIN_SCOPES = [
   'Files.ReadWrite.All',
   'Sites.ReadWrite.All',
   'Tasks.ReadWrite',
+  'Tasks.Read.Shared',
+  'Tasks.ReadWrite.Shared',
   'Group.ReadWrite.All',
   'Contacts.ReadWrite',
   'Contacts.Read.Shared',
@@ -64,7 +66,8 @@ export const GRAPH_CRITICAL_DELEGATED_SCOPES: readonly string[] = [
   'Mail.Send',
   'Contacts.ReadWrite',
   'Notes.ReadWrite.All',
-  'OnlineMeetings.ReadWrite'
+  'OnlineMeetings.ReadWrite',
+  'Tasks.ReadWrite.Shared'
 ];
 
 /** Primary delegated resource scopes (URL form) for refresh_token grant, without `offline_access` / `User.Read`. */
@@ -83,6 +86,8 @@ const GRAPH_RESOURCE_SCOPES_FULL = [
   G('Files.ReadWrite.All'),
   G('Sites.ReadWrite.All'),
   G('Tasks.ReadWrite'),
+  G('Tasks.Read.Shared'),
+  G('Tasks.ReadWrite.Shared'),
   G('Group.ReadWrite.All'),
   G('Contacts.ReadWrite'),
   G('Contacts.Read.Shared'),
@@ -132,6 +137,8 @@ const GRAPH_RESOURCE_SCOPES_WITHOUT_USER_READ_ALL = [
   G('Files.ReadWrite.All'),
   G('Sites.ReadWrite.All'),
   G('Tasks.ReadWrite'),
+  G('Tasks.Read.Shared'),
+  G('Tasks.ReadWrite.Shared'),
   G('Group.ReadWrite.All'),
   G('Contacts.ReadWrite'),
   G('Contacts.Read.Shared'),
@@ -176,7 +183,7 @@ export const GRAPH_REFRESH_SCOPE_CANDIDATES: readonly string[] = [
   `${G('Files.ReadWrite')} offline_access User.Read`,
   `${G('Files.ReadWrite.All')} offline_access User.Read`,
   `${G('Sites.ReadWrite.All')} offline_access User.Read`,
-  `${G('Tasks.ReadWrite')} offline_access User.Read`,
+  `${G('Tasks.ReadWrite')} ${G('Tasks.Read.Shared')} ${G('Tasks.ReadWrite.Shared')} offline_access User.Read`,
   `${G('Group.ReadWrite.All')} offline_access User.Read`,
   `${G('Contacts.ReadWrite')} ${G('OnlineMeetings.ReadWrite')} ${G('Notes.ReadWrite.All')} offline_access User.Read`,
   `${G('Files.Read')} offline_access User.Read`

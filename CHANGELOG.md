@@ -12,6 +12,23 @@ _No user-facing changes logged yet._
 
 ---
 
+## [2026.6.30] — 2026-06-30
+
+Patch release: **shared Microsoft To Do delegated scopes** and clearer cross-user To Do guidance. Upgrade with `npm install -g m365-agent-cli@2026.6.30` (or `@latest` once published).
+
+### OAuth scopes (Microsoft To Do)
+
+- Adds **`Tasks.Read.Shared`** and **`Tasks.ReadWrite.Shared`** to Graph login and refresh scope sets so shared/delegated Microsoft To Do scenarios request the same consent the Entra setup now documents.
+- Treats **`Tasks.ReadWrite.Shared`** as a critical delegated scope; stale or narrow cached Graph tokens refresh instead of silently continuing without the shared To Do write permission.
+- Updates the Graph capability matrix, Entra setup, authentication, and personal-assistant delegation docs to include the shared To Do scopes.
+
+### Microsoft To Do cross-user semantics
+
+- Clarifies `todo --user` help text and docs: Microsoft To Do `/users/{id}/todo/...` is **not mailbox delegation** and can still depend on target-user To Do provisioning/sharing even after the shared scopes are present.
+- Documents the practical troubleshooting path: verify `/me/todo/lists` and `/users/{self}/todo/lists` first, then investigate target-user To Do service/sharing state if another user returns Graph `Invalid request`.
+
+---
+
 ## [2026.6.29] — 2026-06-29
 
 Patch release: **refresh-token `.env` sync** ([#230](https://github.com/markus-lassfolk/m365-agent-cli/issues/230)) and **Viva Learning OAuth scope name** fix. Upgrade with `npm install -g m365-agent-cli@2026.6.29` (or `@latest` once published).

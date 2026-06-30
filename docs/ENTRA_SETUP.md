@@ -189,6 +189,7 @@ The application requires specific Delegated permissions for both Microsoft Graph
    - `Files.ReadWrite.All`
    - `Sites.ReadWrite.All`
    - `Tasks.ReadWrite`
+   - `Tasks.Read.Shared` / `Tasks.ReadWrite.Shared` (shared/delegated Microsoft To Do where Microsoft Graph exposes it; required but not sufficient for arbitrary cross-user To Do access)
    - `Group.ReadWrite.All` (Planner groups, group-related calls; also covers `find` group search)
    - `Contacts.ReadWrite` (`contacts`; `outlook-graph` contact APIs)
    - `Contacts.Read.Shared` / `Contacts.ReadWrite.Shared` (shared/delegated contact folders — `contacts --user`, etc.)

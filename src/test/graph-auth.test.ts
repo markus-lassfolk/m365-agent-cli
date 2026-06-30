@@ -6,7 +6,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AuthResult } from '../lib/auth.js';
 import type { GraphAuthResult } from '../lib/graph-auth.js';
-import { GRAPH_DEVICE_CODE_LOGIN_SCOPES, GRAPH_REFRESH_SCOPE_CANDIDATES } from '../lib/graph-oauth-scopes.js';
+import {
+  GRAPH_CRITICAL_DELEGATED_SCOPES,
+  GRAPH_DEVICE_CODE_LOGIN_SCOPES,
+  GRAPH_REFRESH_SCOPE_CANDIDATES
+} from '../lib/graph-oauth-scopes.js';
 import * as jwtUtilsReal from '../lib/jwt-utils.js';
 
 const mockLoad = mock(() => Promise.resolve(null));
@@ -21,12 +25,7 @@ const mockFetch = mock(() =>
 mock.module('../lib/graph-oauth-scopes.js', () => ({
   GRAPH_DEVICE_CODE_LOGIN_SCOPES,
   GRAPH_REFRESH_SCOPE_CANDIDATES,
-  GRAPH_CRITICAL_DELEGATED_SCOPES: [
-    'Mail.Send',
-    'Contacts.ReadWrite',
-    'Notes.ReadWrite.All',
-    'OnlineMeetings.ReadWrite'
-  ]
+  GRAPH_CRITICAL_DELEGATED_SCOPES
 }));
 
 /** Captured once before `mock.module` mutates the live module namespace (spread/`import()` can still see mocked slots). */

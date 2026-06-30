@@ -246,8 +246,10 @@ export const GRAPH_CAPABILITY_MATRIX: readonly CapabilityMatrixRow[] = [
     area: 'Microsoft To Do',
     detail:
       '`todo` (incl. `attachment-session` list/get/patch/delete/content-*; `root` get/patch/delete for …/todo — destructive delete requires `--confirm`)',
-    readScopes: ['Tasks.Read', 'Tasks.ReadWrite'],
-    writeScopes: ['Tasks.ReadWrite']
+    readScopes: ['Tasks.Read', 'Tasks.ReadWrite', 'Tasks.Read.Shared', 'Tasks.ReadWrite.Shared'],
+    writeScopes: ['Tasks.ReadWrite', 'Tasks.ReadWrite.Shared'],
+    docFeatureMatrixReadSuffix:
+      ' — shared/delegated To Do surfaces require `Tasks.Read.Shared` or `Tasks.ReadWrite.Shared`; `/users/{other}/todo` can still depend on target To Do provisioning/sharing'
   },
   {
     id: 'planner.groups',
