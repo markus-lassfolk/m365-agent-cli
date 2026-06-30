@@ -249,7 +249,7 @@ export const GRAPH_CAPABILITY_MATRIX: readonly CapabilityMatrixRow[] = [
     readScopes: ['Tasks.Read', 'Tasks.ReadWrite', 'Tasks.Read.Shared', 'Tasks.ReadWrite.Shared'],
     writeScopes: ['Tasks.ReadWrite', 'Tasks.ReadWrite.Shared'],
     docFeatureMatrixReadSuffix:
-      ' — `--user` / `/users/{id}/todo` shared or delegated To Do requires `Tasks.Read.Shared` or `Tasks.ReadWrite.Shared`'
+      ' — shared/delegated To Do surfaces require `Tasks.Read.Shared` or `Tasks.ReadWrite.Shared`; `/users/{other}/todo` can still depend on target To Do provisioning/sharing'
   },
   {
     id: 'planner.groups',
