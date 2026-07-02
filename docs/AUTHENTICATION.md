@@ -38,6 +38,8 @@ EWS_ENDPOINT=https://outlook.office365.com/EWS/Exchange.asmx
 EWS_TENANT_ID=common  # or your tenant ID
 ```
 
+**Tenant ID precedence** (for the OAuth endpoint path, `--tenant`, login device-code flow): `M365_TENANT_ID` > `MICROSOFT_TENANT_ID` > `EWS_TENANT_ID` (legacy) > `common`. The legacy `EWS_TENANT_ID` name remains supported for backwards compatibility.
+
 ### Shared and delegated mailboxes (`--mailbox`)
 
 To send from or access another mailbox, set the default in your env:

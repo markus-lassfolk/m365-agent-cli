@@ -40,7 +40,12 @@ export async function persistRefreshTokenToEnv(
     return false;
   }
 
-  const envPath = options?.envPath ?? getGlobalEnvFilePath();
+  const envPath = options?.envPath?.trim() || getGlobalEnvFilePath();
+  if (!envPath) {
+    // Defensive: getGlobalEnvFilePath() always returns a path, so this branch is unreachable
+    // in normal flows, but guard against future regressions that pass an explicitly empty path.
+    return false;
+  }
 
   let envContent = '';
   try {

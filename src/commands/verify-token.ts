@@ -49,7 +49,12 @@ export const verifyTokenCommand = new Command('verify-token')
       if (options.envFile) {
         applyEnvFileOverrides(resolveEnvFilePathArgument(options.envFile));
       }
-      const authResult = await resolveGraphAuth({ token: options.token, identity: options.identity });
+      const resolvedEnvPath = options.envFile ? resolveEnvFilePathArgument(options.envFile) : undefined;
+      const authResult = await resolveGraphAuth({
+        token: options.token,
+        identity: options.identity,
+        envPath: resolvedEnvPath
+      });
       if (!authResult.success || !authResult.token) {
         if (options.json) {
           console.log(JSON.stringify({ error: authResult.error || 'Failed to resolve auth token' }, null, 2));

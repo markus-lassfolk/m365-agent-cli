@@ -1,3 +1,4 @@
+import { getActiveEnvFilePath } from './active-env.js';
 import { persistRefreshTokenToEnv } from './env-persist.js';
 import { getJwtExpiration, getMicrosoftTenantPathSegment, isValidJwtStructure } from './jwt-utils.js';
 import {
@@ -7,10 +8,29 @@ import {
   saveM365TokenCache
 } from './m365-token-cache.js';
 
+/**
+ * Sanitize an OAuth token-endpoint error for surfacing in CLI output / tests.
+ * Strips control characters and truncates long error_descriptions to keep logs bounded.
+ * Does NOT touch refresh tokens or access tokens — callers must not pass those here.
+ */
+export function sanitizeRefreshError(raw: string | undefined | null): string {
+  if (!raw) return '';
+  return raw
+    .replace(/[\r\n\t\0]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 500);
+}
+
 export interface AuthResult {
   success: boolean;
   token?: string;
   error?: string;
+  /**
+   * Sanitized last refresh-token-exchange error (AADSTS code + description, HTTP status, etc.).
+   * Surfaces detailed OAuth failure context to callers and tests without leaking secrets.
+   */
+  lastRefreshError?: string;
 }
 
 async function refreshAccessToken(clientId: string, refreshToken: string, tenant: string) {
@@ -63,10 +83,17 @@ async function refreshAccessToken(clientId: string, refreshToken: string, tenant
     lastError = [json.error, json.error_description].filter(Boolean).join(': ') || `HTTP ${response.status}`;
   }
 
-  throw new Error(`Token refresh failed: ${lastError}`);
+  const error = new Error(`Token refresh failed: ${lastError}`) as Error & { lastRefreshError?: string };
+  // Preserve the most recent (last) OAuth error so callers can surface AADSTS / interaction_required details.
+  error.lastRefreshError = sanitizeRefreshError(lastError);
+  throw error;
 }
 
-export async function resolveAuth(options?: { token?: string; identity?: string }): Promise<AuthResult> {
+export async function resolveAuth(options?: {
+  token?: string;
+  identity?: string;
+  envPath?: string;
+}): Promise<AuthResult> {
   if (options?.token) {
     return { success: true, token: options.token };
   }
@@ -103,6 +130,12 @@ export async function resolveAuth(options?: { token?: string; identity?: string 
 
     const refreshTokens = [...new Set([cached?.refreshToken, envRefreshToken].filter((t): t is string => !!t))];
 
+    // Resolve the active env file once so all refresh attempts persist to the same file the
+    // CLI loaded from (M365_AGENT_ENV_FILE / --env-file / default). Without this, refreshes
+    // can silently write rotated tokens to the default global .env.
+    const activeEnvPath = getActiveEnvFilePath(options?.envPath);
+    const lastRefreshErrors: string[] = [];
+
     for (const rt of refreshTokens) {
       try {
         const result = await refreshAccessToken(clientId, rt, tenant);
@@ -114,18 +147,33 @@ export async function resolveAuth(options?: { token?: string; identity?: string 
         };
         await saveM365TokenCache(identity, next);
         await persistRefreshTokenToEnv(result.refreshToken, {
+          envPath: activeEnvPath,
           previousRefreshToken: cached?.refreshToken ?? envRefreshToken
         });
         return { success: true, token: result.accessToken };
-      } catch {
-        // Try next
+      } catch (err) {
+        // Capture the most recent OAuth error (AADSTS code, description, HTTP status) per attempt
+        // so the caller can surface it on failure instead of a generic message.
+        const msg = err instanceof Error ? err.message : String(err);
+        const detailed =
+          err && typeof err === 'object' && 'lastRefreshError' in err
+            ? (err as { lastRefreshError?: string }).lastRefreshError
+            : undefined;
+        lastRefreshErrors.push(sanitizeRefreshError(detailed || msg));
       }
     }
 
+    // Aggregate the last error from each candidate so the caller can see AADSTS / interaction_required
+    // details instead of a generic "Token refresh failed" message. The env-persist call above
+    // re-resolves via getActiveEnvFilePath(options?.envPath) when envPath is omitted, so the
+    // default path remains correct.
+    const lastErrorDetail = lastRefreshErrors[lastRefreshErrors.length - 1] ?? '';
     return {
       success: false,
       error:
-        'Token refresh failed. Update M365_REFRESH_TOKEN (or GRAPH_REFRESH_TOKEN / EWS_REFRESH_TOKEN) in .env or run `login`.'
+        'Token refresh failed. Update M365_REFRESH_TOKEN (or GRAPH_REFRESH_TOKEN / EWS_REFRESH_TOKEN) in .env or run `login`.' +
+        (lastErrorDetail ? ` Last error: ${lastErrorDetail}` : ''),
+      lastRefreshError: lastErrorDetail || undefined
     };
   } catch (err) {
     return {

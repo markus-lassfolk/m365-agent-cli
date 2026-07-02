@@ -73,4 +73,40 @@ describe('graph-oauth-scopes', () => {
     );
     expect(withoutUserReadAll).toBeDefined();
   });
+
+  test('M-3: Viva/Engage scopes appear in both login source-of-truth and refresh candidates', () => {
+    // Regression for the audit M-3 finding: EngagementRole.Read.All appeared in refresh
+    // scope candidates but NOT in GRAPH_DEVICE_CODE_LOGIN_SCOPES, so a brand-new
+    // device-code login would never request it from the user.
+    const loginScopes = new Set(GRAPH_DEVICE_CODE_LOGIN_SCOPES.split(/\s+/).filter(Boolean));
+    const refreshScopesJoined = GRAPH_REFRESH_SCOPE_CANDIDATES.join(' ');
+
+    // The audit-listed scopes must appear in BOTH places.
+    for (const s of ['EngagementRole.Read.All', 'EngagementRole.ReadWrite.All', 'LearningAssignedCourse.Read']) {
+      expect(loginScopes.has(s)).toBe(true);
+      expect(refreshScopesJoined).toContain(`https://graph.microsoft.com/${s}`);
+    }
+
+    // Additionally, every "primary" refresh scope (the broad resource URLs, not narrow
+    // fallbacks like `Files.ReadWrite` or `.default`) should be requested at login so
+    // the device-code grant covers them. Pull those out and verify.
+    const allShortScopes = new Set<string>();
+    for (const candidate of GRAPH_REFRESH_SCOPE_CANDIDATES) {
+      for (const seg of candidate.split(/\s+/)) {
+        if (!seg) continue;
+        const m = seg.match(/^https:\/\/graph\.microsoft\.com\/([A-Za-z0-9.]+)$/);
+        if (m) allShortScopes.add(m[1]);
+      }
+    }
+    // Narrow fallback / placeholder scopes intentionally not in the broad login grant.
+    // The point of these candidates is to keep refresh working on tenants that did not
+    // grant the broader ones. The login scope string remains the source of truth.
+    const narrowFallbackAllowList = new Set([
+      '.default',
+      'Files.ReadWrite', // narrower than Files.ReadWrite.All
+      'Files.Read' // narrower still
+    ]);
+    const missingPrimary = [...allShortScopes].filter((s) => !loginScopes.has(s) && !narrowFallbackAllowList.has(s));
+    expect(missingPrimary).toEqual([]);
+  });
 });
