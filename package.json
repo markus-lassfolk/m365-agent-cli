@@ -1,6 +1,6 @@
 {
   "name": "m365-agent-cli",
-  "version": "2026.6.30",
+  "version": "2026.7.3",
   "description": "Microsoft 365 from your terminal: calendar, mail, OneDrive, Planner, Teams, Graph \u2014 one OAuth login",
   "repository": {
     "type": "git",
