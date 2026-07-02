@@ -1,10 +1,11 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { Buffer } from 'node:buffer';
 import {
   getJwtPayloadAppId,
   getJwtPayloadScopeSet,
   getMicrosoftTenantPathSegment,
-  isValidJwtStructure
+  isValidJwtStructure,
+  resolveTenantPathSegment
 } from './jwt-utils.js';
 
 describe('getJwtPayloadAppId', () => {
@@ -100,78 +101,67 @@ describe('isValidJwtStructure', () => {
   });
 });
 
-describe('getMicrosoftTenantPathSegment precedence', () => {
-  // We re-set the same env keys in every test so that other suites (which may also touch
-  // EWS_TENANT_ID in their own beforeEach) cannot pollute this describe block.
-  // Bun runs test files in parallel by default; per-file isolation depends on the
-  // beforeEach/afterEach in this file alone, so we explicitly clear and restore all three keys.
-  const originalKeys = ['M365_TENANT_ID', 'MICROSOFT_TENANT_ID', 'EWS_TENANT_ID'] as const;
-  let snapshot: Record<string, string | undefined>;
-
-  beforeEach(() => {
-    snapshot = {};
-    for (const k of originalKeys) {
-      snapshot[k] = process.env[k];
-      delete process.env[k];
-    }
-  });
-  afterEach(() => {
-    for (const k of originalKeys) {
-      if (snapshot[k] === undefined) {
-        delete process.env[k];
-      } else {
-        process.env[k] = snapshot[k];
-      }
-    }
-  });
+describe('resolveTenantPathSegment precedence', () => {
+  // The pure helper is independent of `process.env`, so these tests do not race against
+  // other suites in the same Bun process that mutate shared env state.
 
   test('defaults to "common" when no tenant env vars are set', () => {
-    delete process.env.M365_TENANT_ID;
-    delete process.env.MICROSOFT_TENANT_ID;
-    delete process.env.EWS_TENANT_ID;
-    expect(getMicrosoftTenantPathSegment()).toBe('common');
+    expect(resolveTenantPathSegment({})).toBe('common');
   });
 
   test('honors EWS_TENANT_ID for backwards compatibility (legacy single variable)', () => {
-    delete process.env.M365_TENANT_ID;
-    delete process.env.MICROSOFT_TENANT_ID;
-    process.env.EWS_TENANT_ID = 'contoso.onmicrosoft.com';
-    expect(getMicrosoftTenantPathSegment()).toBe('contoso.onmicrosoft.com');
+    expect(resolveTenantPathSegment({ EWS_TENANT_ID: 'contoso.onmicrosoft.com' })).toBe('contoso.onmicrosoft.com');
   });
 
   test('MICROSOFT_TENANT_ID takes precedence over legacy EWS_TENANT_ID', () => {
-    delete process.env.M365_TENANT_ID;
-    process.env.EWS_TENANT_ID = 'legacy.example.com';
-    process.env.MICROSOFT_TENANT_ID = 'modern.example.com';
-    expect(getMicrosoftTenantPathSegment()).toBe('modern.example.com');
+    expect(
+      resolveTenantPathSegment({
+        EWS_TENANT_ID: 'legacy.example.com',
+        MICROSOFT_TENANT_ID: 'modern.example.com'
+      })
+    ).toBe('modern.example.com');
   });
 
   test('M365_TENANT_ID takes precedence over MICROSOFT_TENANT_ID and EWS_TENANT_ID', () => {
-    process.env.EWS_TENANT_ID = 'legacy.example.com';
-    process.env.MICROSOFT_TENANT_ID = 'modern.example.com';
-    process.env.M365_TENANT_ID = 'preferred.example.com';
-    expect(getMicrosoftTenantPathSegment()).toBe('preferred.example.com');
+    expect(
+      resolveTenantPathSegment({
+        EWS_TENANT_ID: 'legacy.example.com',
+        MICROSOFT_TENANT_ID: 'modern.example.com',
+        M365_TENANT_ID: 'preferred.example.com'
+      })
+    ).toBe('preferred.example.com');
   });
 
   test('treats whitespace-only values as unset and falls through to the next var', () => {
-    process.env.EWS_TENANT_ID = 'legacy.example.com';
-    process.env.MICROSOFT_TENANT_ID = '   ';
-    process.env.M365_TENANT_ID = '';
-    expect(getMicrosoftTenantPathSegment()).toBe('legacy.example.com');
+    expect(
+      resolveTenantPathSegment({
+        EWS_TENANT_ID: 'legacy.example.com',
+        MICROSOFT_TENANT_ID: '   ',
+        M365_TENANT_ID: ''
+      })
+    ).toBe('legacy.example.com');
   });
 
   test('accepts common tenant placeholder even when other vars are set', () => {
-    delete process.env.EWS_TENANT_ID;
-    process.env.MICROSOFT_TENANT_ID = 'common';
-    process.env.M365_TENANT_ID = 'organizations';
-    expect(getMicrosoftTenantPathSegment()).toBe('organizations');
+    expect(
+      resolveTenantPathSegment({
+        MICROSOFT_TENANT_ID: 'common',
+        M365_TENANT_ID: 'organizations'
+      })
+    ).toBe('organizations');
   });
 
   test('throws with descriptive error referencing all three variable names', () => {
-    delete process.env.M365_TENANT_ID;
-    delete process.env.MICROSOFT_TENANT_ID;
-    delete process.env.EWS_TENANT_ID;
-    process.env.M365_TENANT_ID = 'not a real tenant value!!!';
-    expect(() => getMicrosoftTenantPathSegment()).toThrow(/M365_TENANT_ID/);
+    expect(() => resolveTenantPathSegment({ M365_TENANT_ID: 'not a real tenant value!!!' })).toThrow(/M365_TENANT_ID/);
+  });
+});
+
+describe('getMicrosoftTenantPathSegment (process.env wrapper)', () => {
+  // This wrapper reads process.env directly. We do not assert the resolved value because it
+  // is host-dependent; we only assert the call shape to lock in the production API.
+  test('returns a non-empty string', () => {
+    const result = getMicrosoftTenantPathSegment();
+    expect(typeof result).toBe('string');
+    expect(result.length).toBeGreaterThan(0);
   });
 });

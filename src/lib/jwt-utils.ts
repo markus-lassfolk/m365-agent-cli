@@ -1,13 +1,16 @@
 const VALID_TENANT_ID =
   /^(?:common|organizations|consumers|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+)$/;
 
-export function getMicrosoftTenantPathSegment(): string {
-  // Precedence: M365_TENANT_ID > MICROSOFT_TENANT_ID > EWS_TENANT_ID (legacy) > 'common'.
-  // The legacy `EWS_TENANT_ID` name predates the CLI's Graph scope and remains supported.
+/**
+ * Pure precedence resolver. Exported separately so tests can call it with a stub env
+ * (independent of any `mock.module('./jwt-utils.js', ...)` that parallel suites may
+ * install on the wrapper).
+ */
+export function resolveTenantPathSegment(envSource: NodeJS.ProcessEnv): string {
   const rawTenant =
-    process.env.M365_TENANT_ID?.trim() ||
-    process.env.MICROSOFT_TENANT_ID?.trim() ||
-    process.env.EWS_TENANT_ID?.trim() ||
+    envSource.M365_TENANT_ID?.trim() ||
+    envSource.MICROSOFT_TENANT_ID?.trim() ||
+    envSource.EWS_TENANT_ID?.trim() ||
     'common';
   if (!VALID_TENANT_ID.test(rawTenant)) {
     throw new Error(
@@ -15,6 +18,16 @@ export function getMicrosoftTenantPathSegment(): string {
     );
   }
   return rawTenant;
+}
+
+/**
+ * Resolve the Microsoft OAuth tenant path segment.
+ *
+ * Precedence: `M365_TENANT_ID` > `MICROSOFT_TENANT_ID` > `EWS_TENANT_ID` (legacy) > `'common'`.
+ * The legacy `EWS_TENANT_ID` name predates the CLI's Graph scope and remains supported.
+ */
+export function getMicrosoftTenantPathSegment(): string {
+  return resolveTenantPathSegment(process.env);
 }
 
 export function getJwtExpiration(token: string): number | null {
