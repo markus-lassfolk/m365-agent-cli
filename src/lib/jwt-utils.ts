@@ -94,6 +94,31 @@ export function getJwtPayloadAppId(token: string): string | undefined {
   }
 }
 
+/** Tenant id embedded in an access token (`tid` claim). */
+export function getJwtPayloadTenantId(token: string): string | undefined {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return undefined;
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as { tid?: string };
+    if (typeof payload.tid === 'string' && payload.tid.length > 0) return payload.tid;
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+const TENANT_GUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
+
+/**
+ * True when `tenant` is a concrete tenant GUID (as opposed to the `common`/`organizations`/`consumers`
+ * placeholders or a domain name, none of which ever appear as a token's `tid` claim). Used to gate
+ * cached-token tenant-mismatch checks: only enforce `tid` equality when the operator pinned a specific
+ * tenant, since placeholder/domain tenants resolve to a `tid` that legitimately varies per user.
+ */
+export function isPinnedTenantGuid(tenant: string): boolean {
+  return TENANT_GUID_RE.test(tenant);
+}
+
 /** Space-separated delegated scopes on a Graph access token (`scp` claim). */
 export function getJwtPayloadScopeSet(token: string): Set<string> {
   try {

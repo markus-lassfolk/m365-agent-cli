@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { createInterface } from 'node:readline/promises';
@@ -6,7 +6,7 @@ import { Command } from 'commander';
 import { atomicWriteUtf8File } from '../lib/atomic-write.js';
 import { persistRefreshTokenToEnv } from '../lib/env-persist.js';
 import { GRAPH_DEVICE_CODE_LOGIN_SCOPES } from '../lib/graph-oauth-scopes.js';
-import { getMicrosoftTenantPathSegment } from '../lib/jwt-utils.js';
+import { getMicrosoftTenantPathSegment, isValidJwtStructure } from '../lib/jwt-utils.js';
 import { applyEnvFileOverrides, getGlobalEnvFilePath, resolveEnvFilePathArgument } from '../lib/utils.js';
 
 async function performDeviceCodeFlow(
@@ -74,9 +74,8 @@ async function performDeviceCodeFlow(
       // Extract username from access token
 
       try {
-        const parts = tokenJson.access_token.split('.');
-
-        if (parts.length === 3) {
+        if (isValidJwtStructure(tokenJson.access_token)) {
+          const parts = tokenJson.access_token.split('.');
           const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
 
           const rawUsername = payload.upn || payload.email;
@@ -86,6 +85,7 @@ async function performDeviceCodeFlow(
             let envContent = '';
 
             mkdirSync(dirname(envPath), { recursive: true, mode: 0o700 });
+            chmodSync(dirname(envPath), 0o700);
 
             try {
               envContent = await readFile(envPath, 'utf8');
@@ -141,6 +141,7 @@ export const loginCommand = new Command('login')
 
     let clientId = process.env.EWS_CLIENT_ID;
     mkdirSync(dirname(envPath), { recursive: true, mode: 0o700 });
+    chmodSync(dirname(envPath), 0o700);
     let envContent = '';
     if (existsSync(envPath)) {
       envContent = await readFile(envPath, 'utf8');

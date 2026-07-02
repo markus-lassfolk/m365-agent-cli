@@ -98,6 +98,41 @@ describe('auth resolution', () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
+  test('ignores cached EWS token when app id does not match EWS_CLIENT_ID', async () => {
+    // Mirrors graph-auth.test.ts's "ignores cached Graph token when app id does not match
+    // EWS_CLIENT_ID": the EWS path lacked this binding check and could silently serve a
+    // token minted for a different Entra app registration after EWS_CLIENT_ID changes.
+    process.env.EWS_CLIENT_ID = '5f2abcea-d6ea-4460-b468-3d80d7a900eb';
+    process.env.M365_REFRESH_TOKEN = 'env-refresh';
+
+    function ewsFixtureAccessTokenWithAppId(appid: string): string {
+      const h = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url');
+      const p = Buffer.from(JSON.stringify({ exp: 2_000_000_000, appid })).toString('base64url');
+      return `${h}.${p}.x`;
+    }
+
+    await writePrimaryCache(testHome, cacheIdentity, {
+      version: 1,
+      refreshToken: 'cached-refresh-token',
+      ews: {
+        accessToken: ewsFixtureAccessTokenWithAppId('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
+        expiresAt: Date.now() + 1000_000
+      }
+    });
+
+    const newTok = ewsFixtureAccessTokenWithAppId('5f2abcea-d6ea-4460-b468-3d80d7a900eb');
+    mockFetch.mockResolvedValue(
+      new Response(JSON.stringify({ access_token: newTok, refresh_token: 'rotated', expires_in: 3600 }), {
+        status: 200
+      })
+    );
+
+    const result = await resolveAuth({ identity: cacheIdentity });
+    expect(result.success).toBe(true);
+    expect(result.token).toBe(newTok);
+    expect(mockFetch).toHaveBeenCalled();
+  });
+
   test('accepts legacy flat EWS cache shape', async () => {
     process.env.EWS_CLIENT_ID = 'client';
     process.env.EWS_REFRESH_TOKEN = 'refresh';
@@ -199,6 +234,39 @@ describe('auth resolution', () => {
     expect(result.error).toContain('AADSTS70000');
     expect(result.lastRefreshError).toBeDefined();
     expect(result.lastRefreshError).toContain('AADSTS70000');
+    // Secrets guard
+    expect(result.lastRefreshError ?? '').not.toContain('expired-rt');
+  });
+
+  test('surfaces interaction_required / AADSTS500133 re-authentication hint on EWS refresh failure (M-1)', async () => {
+    process.env.EWS_CLIENT_ID = 'client';
+    process.env.M365_REFRESH_TOKEN = 'expired-rt';
+
+    await writePrimaryCache(testHome, cacheIdentity, {
+      version: 1,
+      ews: { accessToken: ewsFixtureAccessToken('expired'), expiresAt: Date.now() - 1000_000 }
+    });
+
+    // EWS refresh tries two scopes in a loop, so provide a fresh Response on each call.
+    mockFetch.mockImplementation(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            error: 'interaction_required',
+            error_description: 'AADSTS500133: Assertion is not within its valid time range.',
+            error_codes: [500133]
+          }),
+          { status: 400 }
+        )
+      )
+    );
+
+    const result = await resolveAuth({ identity: cacheIdentity });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('AADSTS500133');
+    expect(result.error).toContain('interaction_required');
+    expect(result.error).toContain('re-authentication');
+    expect(result.lastRefreshError).toContain('AADSTS500133');
     // Secrets guard
     expect(result.lastRefreshError ?? '').not.toContain('expired-rt');
   });
