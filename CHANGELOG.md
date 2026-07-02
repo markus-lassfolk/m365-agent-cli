@@ -10,6 +10,27 @@ For install and tagging, see [docs/RELEASE.md](docs/RELEASE.md).
 
 ---
 
+## [2026.7.3] — 2026-07-02
+
+Patch release: **`interaction_required` surfacing on EWS token refresh**, cached-token app id / tenant mismatch checks, and secret-directory permission hardening. Upgrade with `npm install -g m365-agent-cli@2026.7.3` (or `@latest` once published).
+
+### Auth
+
+- **Surfaces AADSTS `interaction_required` (500133) on EWS refresh.** `resolveAuth` now detects `error: 'interaction_required'` or error code `500133` from the token endpoint and appends a re-authentication hint (`Run \`m365-agent-cli login\` again.`) to the failure message instead of a generic refresh error.
+- **Rejects cached EWS access tokens that don't match the configured client or pinned tenant.** Cached tokens are now checked against `EWS_CLIENT_ID` (`appid`/`azp` claim) and, when the operator pinned a concrete tenant GUID, the token's `tid` claim; a mismatch on either forces a refresh instead of silently returning a stale token for the wrong app or tenant.
+- **Hardens `sanitizeRefreshError`** to strip all Unicode control characters (`\p{Cc}`), not just `\r\n\t\0`, before surfacing OAuth error text.
+- **`login` device-code flow uses `isValidJwtStructure`** instead of a bare `parts.length === 3` check before decoding the access token payload.
+
+### Security
+
+- **Re-tightens secret-bearing config directories to `0700`** (and cache files to `0600`) after `mkdir`/`rename`, since `mkdir`'s `mode` only applies to directories it creates and `rename` preserves the source file's prior mode — both `atomic-write.ts` and the legacy token-cache migration paths in `m365-token-cache.ts` now re-`chmod` explicitly.
+
+### Tests
+
+- New tests cover `interaction_required` surfacing, cached-token app id / tenant mismatch, `isValidJwtStructure`/`getJwtPayloadTenantId`/`isPinnedTenantGuid`, and the control-character sanitizer in `src/test/auth.test.ts`, `src/test/graph-auth.test.ts`, `src/lib/jwt-utils.test.ts`, and `src/lib/m365-token-cache.test.ts`.
+
+---
+
 ## [2026.7.2] — 2026-07-02
 
 Patch release: **auth and token handling hardening** for active env-file refresh persistence, clearer Microsoft Entra refresh failures, stricter JWT validation, scope parity tests, and tenant-id precedence. Upgrade with `npm install -g m365-agent-cli@2026.7.2` (or `@latest` once published).
