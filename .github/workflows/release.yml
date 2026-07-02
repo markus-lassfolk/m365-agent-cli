@@ -4,6 +4,10 @@
 # Optional: add repository secret NPM_TOKEN (granular publish token) if OIDC publish still fails; the publish step uses it when set.
 # See: https://docs.npmjs.com/trusted-publishers
 # Tag must match package.json version exactly (e.g. tag v2026.4.50 and "version": "2026.4.50").
+#
+# workflow_dispatch lets auto-release.yml (or a maintainer) run this against an existing tag ref
+# without a local `git push origin vX.Y.Z` — tags created by the default GITHUB_TOKEN don't
+# themselves fire the `push: tags` trigger below, so that workflow dispatches this one explicitly.
 
 name: Release
 
@@ -11,6 +15,9 @@ on:
   push:
     tags:
       - 'v*.*.*'
+  # Dispatch with `--ref vX.Y.Z` (an existing tag) — GITHUB_REF inside the job then reads
+  # refs/tags/vX.Y.Z exactly as it would on a real tag push, so the verify step below is unchanged.
+  workflow_dispatch:
 
 permissions:
   contents: write
