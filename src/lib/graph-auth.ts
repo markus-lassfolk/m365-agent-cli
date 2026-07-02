@@ -5,7 +5,9 @@ import {
   getJwtExpiration,
   getJwtPayloadAppId,
   getJwtPayloadScopeSet,
+  getJwtPayloadTenantId,
   getMicrosoftTenantPathSegment,
+  isPinnedTenantGuid,
   isValidJwtStructure
 } from './jwt-utils.js';
 import {
@@ -152,10 +154,20 @@ export async function resolveGraphAuth(options?: {
       if (isValidJwtStructure(cached.graph.accessToken)) {
         const tokenAppId = getJwtPayloadAppId(cached.graph.accessToken);
         const expectId = clientId.trim();
-        const mismatch = tokenAppId && expectId && tokenAppId.toLowerCase() !== expectId.toLowerCase();
-        if (mismatch) {
+        const appIdMismatch = tokenAppId && expectId && tokenAppId.toLowerCase() !== expectId.toLowerCase();
+        const tokenTenantId = getJwtPayloadTenantId(cached.graph.accessToken);
+        // Only enforce tenant equality when the operator pinned a concrete tenant GUID — `common` /
+        // `organizations` / `consumers` / domain-name tenants resolve to a `tid` that legitimately
+        // varies per user, so comparing those would produce false-positive refreshes.
+        const tenantMismatch =
+          isPinnedTenantGuid(tenant) && tokenTenantId && tokenTenantId.toLowerCase() !== tenant.toLowerCase();
+        if (appIdMismatch) {
           console.warn(
             `[graph-auth] Ignoring cached Graph access token: token app id (${tokenAppId}) does not match EWS_CLIENT_ID (${expectId}). Refreshing.`
+          );
+        } else if (tenantMismatch) {
+          console.warn(
+            `[graph-auth] Ignoring cached Graph access token: token tenant (${tokenTenantId}) does not match configured tenant (${tenant}). Refreshing.`
           );
         } else {
           const scopeSet = getJwtPayloadScopeSet(cached.graph.accessToken);

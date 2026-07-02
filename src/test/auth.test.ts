@@ -98,6 +98,41 @@ describe('auth resolution', () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
+  test('ignores cached EWS token when app id does not match EWS_CLIENT_ID', async () => {
+    // Mirrors graph-auth.test.ts's "ignores cached Graph token when app id does not match
+    // EWS_CLIENT_ID": the EWS path lacked this binding check and could silently serve a
+    // token minted for a different Entra app registration after EWS_CLIENT_ID changes.
+    process.env.EWS_CLIENT_ID = '5f2abcea-d6ea-4460-b468-3d80d7a900eb';
+    process.env.M365_REFRESH_TOKEN = 'env-refresh';
+
+    function ewsFixtureAccessTokenWithAppId(appid: string): string {
+      const h = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url');
+      const p = Buffer.from(JSON.stringify({ exp: 2_000_000_000, appid })).toString('base64url');
+      return `${h}.${p}.x`;
+    }
+
+    await writePrimaryCache(testHome, cacheIdentity, {
+      version: 1,
+      refreshToken: 'cached-refresh-token',
+      ews: {
+        accessToken: ewsFixtureAccessTokenWithAppId('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
+        expiresAt: Date.now() + 1000_000
+      }
+    });
+
+    const newTok = ewsFixtureAccessTokenWithAppId('5f2abcea-d6ea-4460-b468-3d80d7a900eb');
+    mockFetch.mockResolvedValue(
+      new Response(JSON.stringify({ access_token: newTok, refresh_token: 'rotated', expires_in: 3600 }), {
+        status: 200
+      })
+    );
+
+    const result = await resolveAuth({ identity: cacheIdentity });
+    expect(result.success).toBe(true);
+    expect(result.token).toBe(newTok);
+    expect(mockFetch).toHaveBeenCalled();
+  });
+
   test('accepts legacy flat EWS cache shape', async () => {
     process.env.EWS_CLIENT_ID = 'client';
     process.env.EWS_REFRESH_TOKEN = 'refresh';

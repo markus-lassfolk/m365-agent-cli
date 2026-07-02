@@ -1,6 +1,13 @@
 import { getActiveEnvFilePath } from './active-env.js';
 import { persistRefreshTokenToEnv } from './env-persist.js';
-import { getJwtExpiration, getMicrosoftTenantPathSegment, isValidJwtStructure } from './jwt-utils.js';
+import {
+  getJwtExpiration,
+  getJwtPayloadAppId,
+  getJwtPayloadTenantId,
+  getMicrosoftTenantPathSegment,
+  isPinnedTenantGuid,
+  isValidJwtStructure
+} from './jwt-utils.js';
 import {
   getUnifiedRefreshTokenFromEnv,
   loadM365TokenCache,
@@ -136,7 +143,26 @@ export async function resolveAuth(options?: {
     const cached = await loadM365TokenCache(identity);
     if (cached?.ews && cached.ews.expiresAt > Date.now() + 60_000) {
       if (isValidJwtStructure(cached.ews.accessToken)) {
-        return { success: true, token: cached.ews.accessToken };
+        const tokenAppId = getJwtPayloadAppId(cached.ews.accessToken);
+        const expectId = clientId.trim();
+        const appIdMismatch = tokenAppId && expectId && tokenAppId.toLowerCase() !== expectId.toLowerCase();
+        const tokenTenantId = getJwtPayloadTenantId(cached.ews.accessToken);
+        // Only enforce tenant equality when the operator pinned a concrete tenant GUID — `common` /
+        // `organizations` / `consumers` / domain-name tenants resolve to a `tid` that legitimately
+        // varies per user, so comparing those would produce false-positive refreshes.
+        const tenantMismatch =
+          isPinnedTenantGuid(tenant) && tokenTenantId && tokenTenantId.toLowerCase() !== tenant.toLowerCase();
+        if (appIdMismatch) {
+          console.warn(
+            `[auth] Ignoring cached EWS access token: token app id (${tokenAppId}) does not match EWS_CLIENT_ID (${expectId}). Refreshing.`
+          );
+        } else if (tenantMismatch) {
+          console.warn(
+            `[auth] Ignoring cached EWS access token: token tenant (${tokenTenantId}) does not match configured tenant (${tenant}). Refreshing.`
+          );
+        } else {
+          return { success: true, token: cached.ews.accessToken };
+        }
       }
     }
 

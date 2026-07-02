@@ -2,7 +2,7 @@
  * Unified OAuth token cache: one file per identity with separate EWS and Graph access tokens
  * (different audiences) and a single refresh token. See docs/GOALS.md.
  */
-import { mkdir, readFile, rename, stat, unlink } from 'node:fs/promises';
+import { chmod, mkdir, readFile, rename, stat, unlink } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { atomicWriteUtf8File } from './atomic-write.js';
@@ -205,14 +205,19 @@ async function migrateLegacyGraphRootFiles(): Promise<void> {
       const legacyStats = await stat(rootLegacy).catch(() => null);
       if (legacyStats) {
         await mkdir(configDir(), { recursive: true, mode: 0o700 });
+        await chmod(configDir(), 0o700).catch(() => {});
         await rename(rootLegacy, defaultPath);
+        // `rename` preserves the source file's mode, which may predate 0600 hardening — re-tighten it.
+        await chmod(defaultPath, 0o600).catch(() => {});
         return;
       }
       const clippyGraph = legacyClippyGraphCacheFile();
       const oldClippyStats = await stat(clippyGraph).catch(() => null);
       if (oldClippyStats) {
         await mkdir(configDir(), { recursive: true, mode: 0o700 });
+        await chmod(configDir(), 0o700).catch(() => {});
         await rename(clippyGraph, defaultPath);
+        await chmod(defaultPath, 0o600).catch(() => {});
       }
     }
   } catch {
@@ -232,7 +237,10 @@ async function migrateLegacyEwsClippyCache(identity: string): Promise<void> {
     if (!legacyStats) return;
 
     await mkdir(configDir(), { recursive: true, mode: 0o700 });
+    await chmod(configDir(), 0o700).catch(() => {});
     await rename(legacy, dest);
+    // `rename` preserves the source file's mode, which may predate 0600 hardening — re-tighten it.
+    await chmod(dest, 0o600).catch(() => {});
   } catch {
     // ignore
   }

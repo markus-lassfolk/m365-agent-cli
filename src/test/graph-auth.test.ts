@@ -117,10 +117,11 @@ describe('resolveGraphAuth', () => {
     expect(r.error).toContain('Invalid identity');
   });
 
-  function makeAccessTokenJwt(appid: string, scp?: string): string {
+  function makeAccessTokenJwt(appid: string, scp?: string, tid?: string): string {
     const h = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url');
     const payload: Record<string, unknown> = { appid, exp: 2_000_000_000 };
     if (scp !== undefined) payload.scp = scp;
+    if (tid !== undefined) payload.tid = tid;
     const p = Buffer.from(JSON.stringify(payload)).toString('base64url');
     return `${h}.${p}.x`;
   }
@@ -160,6 +161,55 @@ describe('resolveGraphAuth', () => {
     expect(r.success).toBe(true);
     expect(mockFetch).toHaveBeenCalled();
     expect(mockSave).toHaveBeenCalled();
+  });
+
+  test('ignores cached Graph token when tenant does not match a pinned tenant GUID', async () => {
+    // `getMicrosoftTenantPathSegment` is forced to a concrete tenant GUID for this test only, so the
+    // new `isPinnedTenantGuid` gate engages (it's a no-op for the default 'common' used elsewhere).
+    const pinnedTenant = '11111111-2222-4333-8444-555555555555';
+    const staleTenant = '66666666-7777-8888-9999-000000000000';
+    mock.module('../lib/jwt-utils.js', () => ({
+      ...jwtUtilsReal,
+      getMicrosoftTenantPathSegment: mock(() => pinnedTenant)
+    }));
+    const pinnedMod = await import(`../lib/graph-auth.js?graphAuthTenantTest=${Date.now()}`);
+    const resolveGraphAuthPinned: typeof resolveGraphAuth = pinnedMod.resolveGraphAuth;
+
+    process.env.EWS_CLIENT_ID = '5f2abcea-d6ea-4460-b468-3d80d7a900eb';
+    process.env.M365_REFRESH_TOKEN = 'env-refresh';
+
+    mockLoad.mockResolvedValue({
+      version: 1,
+      graph: {
+        accessToken: makeAccessTokenJwt(
+          '5f2abcea-d6ea-4460-b468-3d80d7a900eb',
+          'Mail.ReadWrite Calendars.ReadWrite User.Read',
+          staleTenant
+        ),
+        expiresAt: Date.now() + 3_600_000
+      }
+    } as never);
+
+    mockFetch.mockImplementation(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            access_token: makeAccessTokenJwt(
+              '5f2abcea-d6ea-4460-b468-3d80d7a900eb',
+              'Mail.Send Mail.ReadWrite Contacts.ReadWrite Notes.ReadWrite.All OnlineMeetings.ReadWrite User.Read',
+              pinnedTenant
+            ),
+            refresh_token: 'rotated',
+            expires_in: 3600
+          }),
+          { status: 200 }
+        )
+      )
+    );
+
+    const r = await resolveGraphAuthPinned();
+    expect(r.success).toBe(true);
+    expect(mockFetch).toHaveBeenCalled();
   });
 
   test('ignores cached Graph token when critical scopes are missing (narrow token)', async () => {

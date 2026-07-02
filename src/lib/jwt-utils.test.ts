@@ -3,7 +3,9 @@ import { Buffer } from 'node:buffer';
 import {
   getJwtPayloadAppId,
   getJwtPayloadScopeSet,
+  getJwtPayloadTenantId,
   getMicrosoftTenantPathSegment,
+  isPinnedTenantGuid,
   isValidJwtStructure,
   resolveTenantPathSegment
 } from './jwt-utils.js';
@@ -25,6 +27,43 @@ describe('getJwtPayloadAppId', () => {
 
   test('returns undefined for malformed token', () => {
     expect(getJwtPayloadAppId('not-a-jwt')).toBeUndefined();
+  });
+});
+
+describe('getJwtPayloadTenantId', () => {
+  test('reads tid from payload', () => {
+    const h = Buffer.from(JSON.stringify({ alg: 'none' })).toString('base64url');
+    const p = Buffer.from(JSON.stringify({ tid: '11111111-2222-4333-8444-555555555555' })).toString('base64url');
+    const tok = `${h}.${p}.x`;
+    expect(getJwtPayloadTenantId(tok)).toBe('11111111-2222-4333-8444-555555555555');
+  });
+
+  test('returns undefined when tid is absent or malformed', () => {
+    const h = Buffer.from(JSON.stringify({ alg: 'none' })).toString('base64url');
+    const p = Buffer.from(JSON.stringify({ appid: 'x' })).toString('base64url');
+    expect(getJwtPayloadTenantId(`${h}.${p}.x`)).toBeUndefined();
+    expect(getJwtPayloadTenantId('not-a-jwt')).toBeUndefined();
+  });
+});
+
+describe('isPinnedTenantGuid', () => {
+  test('accepts a well-formed tenant GUID', () => {
+    expect(isPinnedTenantGuid('11111111-2222-4333-8444-555555555555')).toBe(true);
+  });
+
+  test('rejects the common/organizations/consumers placeholders', () => {
+    expect(isPinnedTenantGuid('common')).toBe(false);
+    expect(isPinnedTenantGuid('organizations')).toBe(false);
+    expect(isPinnedTenantGuid('consumers')).toBe(false);
+  });
+
+  test('rejects a domain-name tenant', () => {
+    expect(isPinnedTenantGuid('contoso.onmicrosoft.com')).toBe(false);
+  });
+
+  test('rejects a malformed GUID-shaped string', () => {
+    expect(isPinnedTenantGuid('not-a-guid')).toBe(false);
+    expect(isPinnedTenantGuid('11111111-2222-3333-4444-555555555555')).toBe(false); // bad version/variant nibbles
   });
 });
 
