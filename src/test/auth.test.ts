@@ -203,6 +203,39 @@ describe('auth resolution', () => {
     expect(result.lastRefreshError ?? '').not.toContain('expired-rt');
   });
 
+  test('surfaces interaction_required / AADSTS500133 re-authentication hint on EWS refresh failure (M-1)', async () => {
+    process.env.EWS_CLIENT_ID = 'client';
+    process.env.M365_REFRESH_TOKEN = 'expired-rt';
+
+    await writePrimaryCache(testHome, cacheIdentity, {
+      version: 1,
+      ews: { accessToken: ewsFixtureAccessToken('expired'), expiresAt: Date.now() - 1000_000 }
+    });
+
+    // EWS refresh tries two scopes in a loop, so provide a fresh Response on each call.
+    mockFetch.mockImplementation(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            error: 'interaction_required',
+            error_description: 'AADSTS500133: Assertion is not within its valid time range.',
+            error_codes: [500133]
+          }),
+          { status: 400 }
+        )
+      )
+    );
+
+    const result = await resolveAuth({ identity: cacheIdentity });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('AADSTS500133');
+    expect(result.error).toContain('interaction_required');
+    expect(result.error).toContain('re-authentication');
+    expect(result.lastRefreshError).toContain('AADSTS500133');
+    // Secrets guard
+    expect(result.lastRefreshError ?? '').not.toContain('expired-rt');
+  });
+
   test('persists rotated refresh token to caller-provided envPath (H-1/H-2 EWS)', async () => {
     const envHome = await mkdtemp(join(tmpdir(), 'm365-auth-envpath-'));
     try {

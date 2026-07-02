@@ -16,7 +16,7 @@ import {
 function sanitizeRefreshError(raw: string | undefined | null): string {
   if (!raw) return '';
   return raw
-    .replace(/[\r\n\t\0]/g, ' ')
+    .replace(/\p{Cc}/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 500);
@@ -40,6 +40,7 @@ async function refreshAccessToken(clientId: string, refreshToken: string, tenant
   ];
 
   let lastError = '';
+  let lastInteractionRequired = false;
 
   for (const scope of scopes) {
     const response = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, {
@@ -59,6 +60,8 @@ async function refreshAccessToken(clientId: string, refreshToken: string, tenant
       expires_in?: number;
       error?: string;
       error_description?: string;
+      error_codes?: number[];
+      suberror?: string;
     };
 
     if (response.ok && json.access_token) {
@@ -81,11 +84,20 @@ async function refreshAccessToken(clientId: string, refreshToken: string, tenant
     }
 
     lastError = [json.error, json.error_description].filter(Boolean).join(': ') || `HTTP ${response.status}`;
+    // AADSTS error code 500133 / sub error "interaction_required" means the user must re-authenticate
+    // (e.g. MFA, conditional access, or revoked grant). Track this so the caller can prompt re-login.
+    if (json.error === 'interaction_required' || (json.error_codes ?? []).includes(500133)) {
+      lastInteractionRequired = true;
+    }
   }
 
-  const error = new Error(`Token refresh failed: ${lastError}`) as Error & { lastRefreshError?: string };
+  const error = new Error(`Token refresh failed: ${lastError}`) as Error & {
+    lastRefreshError?: string;
+    interactionRequired?: boolean;
+  };
   // Preserve the most recent (last) OAuth error so callers can surface AADSTS / interaction_required details.
   error.lastRefreshError = sanitizeRefreshError(lastError);
+  error.interactionRequired = lastInteractionRequired;
   throw error;
 }
 
@@ -135,6 +147,7 @@ export async function resolveAuth(options?: {
     // can silently write rotated tokens to the default global .env.
     const activeEnvPath = getActiveEnvFilePath(options?.envPath);
     const lastRefreshErrors: string[] = [];
+    let interactionRequired = false;
 
     for (const rt of refreshTokens) {
       try {
@@ -159,6 +172,9 @@ export async function resolveAuth(options?: {
           err && typeof err === 'object' && 'lastRefreshError' in err
             ? (err as { lastRefreshError?: string }).lastRefreshError
             : undefined;
+        if (err && typeof err === 'object' && (err as { interactionRequired?: boolean }).interactionRequired) {
+          interactionRequired = true;
+        }
         lastRefreshErrors.push(sanitizeRefreshError(detailed || msg));
       }
     }
@@ -168,11 +184,15 @@ export async function resolveAuth(options?: {
     // re-resolves via getActiveEnvFilePath(options?.envPath) when envPath is omitted, so the
     // default path remains correct.
     const lastErrorDetail = lastRefreshErrors[lastRefreshErrors.length - 1] ?? '';
+    const interactiveHint = interactionRequired
+      ? ' Azure requires re-authentication (interaction_required / AADSTS500133). Run `m365-agent-cli login` again.'
+      : '';
     return {
       success: false,
       error:
         'Token refresh failed. Update M365_REFRESH_TOKEN (or GRAPH_REFRESH_TOKEN / EWS_REFRESH_TOKEN) in .env or run `login`.' +
-        (lastErrorDetail ? ` Last error: ${lastErrorDetail}` : ''),
+        (lastErrorDetail ? ` Last error: ${lastErrorDetail}` : '') +
+        interactiveHint,
       lastRefreshError: lastErrorDetail || undefined
     };
   } catch (err) {

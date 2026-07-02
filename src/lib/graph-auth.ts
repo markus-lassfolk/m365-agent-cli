@@ -34,7 +34,7 @@ export interface GraphAuthResult {
 function sanitizeRefreshError(raw: string | undefined | null): string {
   if (!raw) return '';
   return raw
-    .replace(/[\r\n\t\0]/g, ' ')
+    .replace(/\p{Cc}/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 500);
