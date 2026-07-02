@@ -13,7 +13,7 @@ import {
  * Strips control characters and truncates long error_descriptions to keep logs bounded.
  * Does NOT touch refresh tokens or access tokens — callers must not pass those here.
  */
-export function sanitizeRefreshError(raw: string | undefined | null): string {
+function sanitizeRefreshError(raw: string | undefined | null): string {
   if (!raw) return '';
   return raw
     .replace(/[\r\n\t\0]/g, ' ')
