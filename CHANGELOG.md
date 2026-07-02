@@ -8,7 +8,21 @@ For install and tagging, see [docs/RELEASE.md](docs/RELEASE.md).
 
 ## [Unreleased]
 
-_No user-facing changes logged yet._
+### Auth and token handling hardening
+
+- **Fixes rotated refresh token persistence to the active env file (H-1 / H-2).** `m365-agent-cli resolveAuth` and `resolveGraphAuth` now accept an `envPath` option and persist refreshed `M365_REFRESH_TOKEN` (plus legacy `EWS_REFRESH_TOKEN` / `GRAPH_REFRESH_TOKEN`) to that same file the CLI loaded from — including `login --env-file` and `verify-token --env-file` (and `M365_AGENT_ENV_FILE`). Previously, `login --env-file` followed by any token refresh wrote the rotated token to the default global `~/.config/m365-agent-cli/.env`, silently losing the file the user pointed at. A new `getActiveEnvFilePath(explicit?)` helper in `src/lib/active-env.ts` centralizes the precedence: explicit caller path > `M365_AGENT_ENV_FILE` > default global.
+- **Surfaces AADSTS / `interaction_required` / refresh errors in `AuthResult` and `GraphAuthResult` (M-1).** Failed token refreshes previously only emitted a `console.warn`; callers saw a generic `Token refresh failed.` message. The refreshed `AuthResult` and `GraphAuthResult` now carry a sanitized `lastRefreshError` field, and the human-facing `error` string includes the last `error: error_description` (or HTTP status) with a re-authentication hint when the response carries AADSTS code `500133` / `interaction_required`. Refresh tokens and access tokens are stripped before surfacing.
+- **M-3 regression test asserts Viva / Engage scope parity.** `EngagementRole.Read.All`, `EngagementRole.ReadWrite.All`, and `LearningAssignedCourse.Read` are checked to appear in BOTH `GRAPH_DEVICE_CODE_LOGIN_SCOPES` and `GRAPH_REFRESH_SCOPE_CANDIDATES`, with an additional allowlist-driven parity check for primary refresh scope URLs.
+- **Hardens JWT structure validation (M-5).** `isValidJwtStructure` now requires three non-empty base64url segments and JSON-decodable object header and payload. The previous implementation called `Buffer.from(parts[1], 'base64url').toString()` (which never throws and yields an empty string for malformed input), accepting strings like `"a.."` and `"...."` as valid tokens. New tests cover empty input, wrong part count, empty segments, non-JSON payload, JSON-array payload, non-object header, and undecodable base64url.
+- **Tenant ID precedence (M-2).** `getMicrosoftTenantPathSegment` now reads `M365_TENANT_ID` > `MICROSOFT_TENANT_ID` > `EWS_TENANT_ID` (legacy) > `common`. `EWS_TENANT_ID` remains supported for backwards compatibility. The error message lists all three names. Documented in `docs/AUTHENTICATION.md`.
+
+### Tests
+
+- New `src/lib/active-env.test.ts` covers `getActiveEnvFilePath` precedence and tilde expansion.
+- New `isValidJwtStructure` and tenant precedence test blocks in `src/lib/jwt-utils.test.ts`.
+- New AADSTS surfacing test in `src/test/graph-auth.test.ts` and `src/test/auth.test.ts`.
+- New envPath-threaded refresh tests in `src/test/auth.test.ts` and `src/test/graph-auth.test.ts`.
+- New M-3 scope parity test in `src/lib/graph-oauth-scopes.test.ts`.
 
 ---
 

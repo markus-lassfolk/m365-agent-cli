@@ -1,3 +1,4 @@
+import { getActiveEnvFilePath } from './active-env.js';
 import { persistRefreshTokenToEnv } from './env-persist.js';
 import { GRAPH_CRITICAL_DELEGATED_SCOPES, GRAPH_REFRESH_SCOPE_CANDIDATES } from './graph-oauth-scopes.js';
 import {
@@ -18,6 +19,25 @@ export interface GraphAuthResult {
   success: boolean;
   token?: string;
   error?: string;
+  /**
+   * Sanitized last refresh-token-exchange error (AADSTS code + description, HTTP status, etc.).
+   * Surfaces detailed OAuth failure context to callers and tests without leaking secrets.
+   */
+  lastRefreshError?: string;
+}
+
+/**
+ * Sanitize an OAuth token-endpoint error for surfacing in CLI output / tests.
+ * Strips control characters and truncates long error_descriptions to keep logs bounded.
+ * Does NOT touch refresh tokens or access tokens — callers must not pass those here.
+ */
+function sanitizeRefreshError(raw: string | undefined | null): string {
+  if (!raw) return '';
+  return raw
+    .replace(/[\r\n\t\0]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 500);
 }
 
 async function refreshGraphAccessToken(
@@ -26,6 +46,7 @@ async function refreshGraphAccessToken(
   tenant: string
 ): Promise<{ accessToken: string; refreshToken: string; expiresAt: number }> {
   let lastError = '';
+  let lastInteractionRequired = false;
 
   for (const scope of GRAPH_REFRESH_SCOPE_CANDIDATES) {
     const response = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, {
@@ -45,6 +66,8 @@ async function refreshGraphAccessToken(
       expires_in?: number;
       error?: string;
       error_description?: string;
+      error_codes?: number[];
+      suberror?: string;
     };
 
     if (response.ok && json.access_token) {
@@ -67,9 +90,20 @@ async function refreshGraphAccessToken(
     }
 
     lastError = [json.error, json.error_description].filter(Boolean).join(': ') || `HTTP ${response.status}`;
+    // AADSTS error code 500133 / sub error "interaction_required" means the user must re-authenticate
+    // (e.g. MFA, conditional access, or revoked grant). Track this so the caller can prompt re-login.
+    if (json.error === 'interaction_required' || (json.error_codes ?? []).includes(500133)) {
+      lastInteractionRequired = true;
+    }
   }
 
-  throw new Error(`Graph token refresh failed: ${lastError}`);
+  const err = new Error(`Graph token refresh failed: ${lastError}`) as Error & {
+    lastRefreshError?: string;
+    interactionRequired?: boolean;
+  };
+  err.lastRefreshError = sanitizeRefreshError(lastError);
+  err.interactionRequired = lastInteractionRequired;
+  throw err;
 }
 
 export async function resolveGraphAuth(options?: {
@@ -77,6 +111,8 @@ export async function resolveGraphAuth(options?: {
   identity?: string;
   /** When true, skip the "cached access token still valid" shortcut and refresh from the refresh token. */
   forceRefresh?: boolean;
+  /** Resolved env file path used to persist rotated refresh tokens (e.g. from `--env-file`). */
+  envPath?: string;
 }): Promise<GraphAuthResult> {
   if (options?.token) {
     return { success: true, token: options.token };
@@ -143,6 +179,13 @@ export async function resolveGraphAuth(options?: {
 
     const refreshTokens = [...new Set([cached?.refreshToken, envRefreshToken].filter((t): t is string => !!t))];
 
+    // Resolve the active env file once so all refresh attempts persist to the same file the
+    // CLI loaded from (M365_AGENT_ENV_FILE / --env-file / default). Without this, refreshes
+    // can silently write rotated tokens to the default global .env.
+    const activeEnvPath = getActiveEnvFilePath(options?.envPath);
+    const lastRefreshErrors: string[] = [];
+    let interactionRequired = false;
+
     for (let i = 0; i < refreshTokens.length; i++) {
       try {
         const result = await refreshGraphAccessToken(clientId, refreshTokens[i], tenant);
@@ -157,21 +200,41 @@ export async function resolveGraphAuth(options?: {
         };
         await saveM365TokenCache(identity, next);
         await persistRefreshTokenToEnv(result.refreshToken, {
+          envPath: activeEnvPath,
           previousRefreshToken: cached?.refreshToken ?? envRefreshToken
         });
         return { success: true, token: result.accessToken };
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         const isLast = i === refreshTokens.length - 1;
+        // Capture detailed OAuth error context (AADSTS codes, sub-error, descriptions) for
+        // surfacing in the returned `error` / `lastRefreshError` fields. Falls back to the
+        // formatted Error.message if the refresh helper did not attach a structured detail.
+        const detailed =
+          err && typeof err === 'object' && 'lastRefreshError' in err
+            ? (err as { lastRefreshError?: string }).lastRefreshError
+            : undefined;
+        if (err && typeof err === 'object' && (err as { interactionRequired?: boolean }).interactionRequired) {
+          interactionRequired = true;
+        }
+        lastRefreshErrors.push(sanitizeRefreshError(detailed || msg));
         console.warn(
           `[graph-auth] Token refresh attempt failed: ${msg}${isLast ? '.' : ' — trying next token candidate.'}`
         );
       }
     }
 
+    const lastErrorDetail = lastRefreshErrors[lastRefreshErrors.length - 1] ?? '';
+    const interactiveHint = interactionRequired
+      ? ' Azure requires re-authentication (interaction_required / AADSTS500133). Run `m365-agent-cli login` again.'
+      : '';
     return {
       success: false,
-      error: 'Graph token refresh failed. Update M365_REFRESH_TOKEN (or GRAPH_REFRESH_TOKEN) in .env or run `login`.'
+      error:
+        'Graph token refresh failed. Update M365_REFRESH_TOKEN (or GRAPH_REFRESH_TOKEN) in .env or run `login`.' +
+        (lastErrorDetail ? ` Last error: ${lastErrorDetail}` : '') +
+        interactiveHint,
+      lastRefreshError: lastErrorDetail || undefined
     };
   } catch (err) {
     return {

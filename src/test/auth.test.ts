@@ -10,8 +10,9 @@ const mockFetch = mock();
 
 /** Minimal three-part JWT so `isValidJwtStructure` passes with real `jwt-utils`. */
 function ewsFixtureAccessToken(seed: string): string {
+  const h = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url');
   const p = Buffer.from(JSON.stringify({ exp: 2_000_000_000, sub: seed })).toString('base64url');
-  return `e.${p}.x`;
+  return `${h}.${p}.x`;
 }
 
 function tokenCachePath(home: string, identity: string): string {
@@ -26,7 +27,7 @@ async function writePrimaryCache(home: string, identity: string, json: Record<st
 
 describe('auth resolution', () => {
   let originalEnv: NodeJS.ProcessEnv;
-  let resolveAuth: (options?: { token?: string; identity?: string }) => Promise<AuthResult>;
+  let resolveAuth: (options?: { token?: string; identity?: string; envPath?: string }) => Promise<AuthResult>;
   let testHome: string;
   /** Per-test identity avoids parallel tests clobbering the same default cache path via shared `HOME`. */
   let cacheIdentity: string;
@@ -167,5 +168,77 @@ describe('auth resolution', () => {
       refreshToken?: string;
     };
     expect(saved.refreshToken).toBe('new-refresh-token');
+  });
+
+  test('surfaces AADSTS error details on EWS refresh failure (M-1)', async () => {
+    process.env.EWS_CLIENT_ID = 'client';
+    process.env.M365_REFRESH_TOKEN = 'expired-rt';
+
+    await writePrimaryCache(testHome, cacheIdentity, {
+      version: 1,
+      ews: { accessToken: ewsFixtureAccessToken('expired'), expiresAt: Date.now() - 1000_000 }
+    });
+
+    // EWS refresh tries two scopes in a loop, so provide a fetch that returns a fresh
+    // Response (with its own .json() body) on each call to avoid "Body already used".
+    mockFetch.mockImplementation(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            error: 'invalid_grant',
+            error_description: 'AADSTS70000: Provided grant is invalid or malformed.'
+          }),
+          { status: 400 }
+        )
+      )
+    );
+
+    const result = await resolveAuth({ identity: cacheIdentity });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Token refresh failed');
+    expect(result.error).toContain('AADSTS70000');
+    expect(result.lastRefreshError).toBeDefined();
+    expect(result.lastRefreshError).toContain('AADSTS70000');
+    // Secrets guard
+    expect(result.lastRefreshError ?? '').not.toContain('expired-rt');
+  });
+
+  test('persists rotated refresh token to caller-provided envPath (H-1/H-2 EWS)', async () => {
+    const envHome = await mkdtemp(join(tmpdir(), 'm365-auth-envpath-'));
+    try {
+      const envPath = join(envHome, '.env.beta');
+      // Use the explicit envPath to persist; clear M365_AGENT_ENV_FILE so getActiveEnvFilePath
+      // returns the explicit one. We deliberately do NOT set M365_AGENT_SKIP_GLOBAL_ENV
+      // (the production flag) so the write to envPath happens.
+      delete process.env.M365_AGENT_ENV_FILE;
+      delete process.env.M365_AGENT_SKIP_GLOBAL_ENV;
+      delete process.env.NODE_ENV;
+      process.env.EWS_CLIENT_ID = 'beta-client';
+      process.env.M365_REFRESH_TOKEN = 'beta-old-refresh';
+
+      await writePrimaryCache(testHome, cacheIdentity, {
+        version: 1,
+        ews: { accessToken: ewsFixtureAccessToken('expired'), expiresAt: Date.now() - 1000_000 }
+      });
+
+      mockFetch.mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            access_token: ewsFixtureAccessToken('new'),
+            refresh_token: 'beta-rotated-refresh',
+            expires_in: 3600
+          }),
+          { status: 200 }
+        )
+      );
+
+      const result = await resolveAuth({ identity: cacheIdentity, envPath });
+      expect(result.success).toBe(true);
+      const written = await readFile(envPath, 'utf8');
+      expect(written).toContain('M365_REFRESH_TOKEN=beta-rotated-refresh');
+      expect(written).toContain('EWS_REFRESH_TOKEN=beta-rotated-refresh');
+    } finally {
+      await rm(envHome, { recursive: true, force: true }).catch(() => {});
+    }
   });
 });

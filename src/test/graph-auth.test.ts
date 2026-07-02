@@ -60,6 +60,7 @@ describe('resolveGraphAuth', () => {
     token?: string;
     identity?: string;
     forceRefresh?: boolean;
+    envPath?: string;
   }) => Promise<GraphAuthResult>;
 
   function applyJwtUtilsMock() {
@@ -269,6 +270,95 @@ describe('resolveGraphAuth', () => {
     expect(r.error).toContain('Graph token refresh failed');
   });
 
+  test('persists rotated refresh token to caller-provided envPath (H-1/H-2)', async () => {
+    // H-1/H-2: refreshes triggered by graph-auth should write the rotated refresh token
+    // to the active env file the caller passed in (e.g. `--env-file .env.beta`),
+    // NOT to the default global .env.
+    const testHome = await mkdtemp(join(tmpdir(), 'm365-graph-auth-envpath-'));
+    try {
+      const envPath = join(testHome, '.env.beta');
+      // The CLI is normally configured via `applyEnvFileOverrides(envPath)` first; here we
+      // simulate that by not exporting M365_AGENT_ENV_FILE and letting envPath drive the write.
+      // We deliberately do NOT set M365_AGENT_SKIP_GLOBAL_ENV or NODE_ENV=test so the persist
+      // call actually writes to envPath.
+      delete process.env.M365_AGENT_ENV_FILE;
+      delete process.env.M365_AGENT_SKIP_GLOBAL_ENV;
+      delete process.env.NODE_ENV;
+      process.env.EWS_CLIENT_ID = 'beta-client';
+      process.env.M365_REFRESH_TOKEN = 'beta-old-refresh';
+
+      mockLoad.mockResolvedValue({
+        version: 1,
+        graph: { accessToken: 'expired', expiresAt: Date.now() - 60_000 }
+      } as never);
+
+      mockFetch.mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            access_token: makeAccessTokenJwt('beta-client', 'User.Read Mail.Read'),
+            refresh_token: 'beta-rotated-refresh',
+            expires_in: 3600
+          }),
+          { status: 200 }
+        )
+      );
+
+      const r = await resolveGraphAuth({ envPath });
+      expect(r.success).toBe(true);
+      const written = await readFile(envPath, 'utf8');
+      expect(written).toContain('M365_REFRESH_TOKEN=beta-rotated-refresh');
+      expect(written).toContain('EWS_REFRESH_TOKEN=beta-rotated-refresh');
+    } finally {
+      await rm(testHome, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
+  test('surfaces AADSTS / interaction_required error details on refresh failure (M-1)', async () => {
+    process.env.EWS_CLIENT_ID = 'client';
+    process.env.M365_REFRESH_TOKEN = 'expired-rt';
+
+    mockLoad.mockResolvedValue({
+      version: 1,
+      graph: { accessToken: 'expired', expiresAt: Date.now() - 60_000 }
+    } as never);
+
+    // Realistic AADSTS500133 / interaction_required payload from Microsoft Entra:
+    // user must complete MFA / conditional access before a refresh can succeed.
+    // Graph refresh tries multiple scope candidates in a loop, so provide a fresh Response
+    // on every call (avoids "Body already used" from a single mocked Response being re-read).
+    mockFetch.mockImplementation(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            error: 'interaction_required',
+            error_description:
+              "AADSTS500133: Assertion is not within its valid time range. The current time is 2026-07-02T02:20:00.000Z, the assertion's not-before time is 2026-07-02T02:25:00.000Z.",
+            error_codes: [500133],
+            timestamp: '2026-07-02T02:20:00Z',
+            trace_id: 'abcd1234-5678-90ab-cdef-1234567890ab',
+            correlation_id: 'fedcba98-7654-3210-fedc-ba9876543210',
+            error_uri: 'https://login.microsoftonline.com/error?code=500133'
+          }),
+          { status: 400 }
+        )
+      )
+    );
+
+    const r = await resolveGraphAuth();
+    expect(r.success).toBe(false);
+    expect(r.error).toContain('Graph token refresh failed');
+    // Detailed AADSTS / interaction_required context must reach the caller (sanitized).
+    expect(r.error).toContain('AADSTS500133');
+    expect(r.error).toContain('interaction_required');
+    expect(r.error).toContain('re-authentication');
+    // lastRefreshError is the structured field for tests / machine-readable output.
+    expect(r.lastRefreshError).toBeDefined();
+    expect(r.lastRefreshError).toContain('AADSTS500133');
+    expect(r.lastRefreshError).toContain('interaction_required');
+    // Secrets guard: the new refresh token MUST NOT appear in the surfaced error.
+    expect(r.lastRefreshError ?? '').not.toContain('expired-rt');
+  });
+
   afterAll(() => {
     mock.restore();
     restoreRealM365TokenCacheModule();
@@ -278,8 +368,9 @@ describe('resolveGraphAuth', () => {
 
 /** EWS OAuth disk cache tests live in this file (after `resolveGraphAuth`) so Bun `mock.module` teardown stays scoped. */
 function ewsFixtureAccessToken(seed: string): string {
+  const h = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url');
   const p = Buffer.from(JSON.stringify({ exp: 2_000_000_000, sub: seed })).toString('base64url');
-  return `e.${p}.x`;
+  return `${h}.${p}.x`;
 }
 
 function tokenCachePath(home: string, identity: string): string {
@@ -294,7 +385,7 @@ async function writePrimaryCache(home: string, identity: string, json: Record<st
 
 describe('auth resolution', () => {
   let originalEnv: NodeJS.ProcessEnv;
-  let resolveAuth: (options?: { token?: string; identity?: string }) => Promise<AuthResult>;
+  let resolveAuth: (options?: { token?: string; identity?: string; envPath?: string }) => Promise<AuthResult>;
   let testHome: string;
   let cacheIdentity: string;
   let authFetchMock: ReturnType<typeof mock>;
