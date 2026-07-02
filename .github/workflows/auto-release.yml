@@ -1,0 +1,61 @@
+# Cuts a release automatically once CI is green on `main` for a commit that bumped
+# package.json's version and that version has no release tag yet (e.g. a merged
+# "chore(release): X" PR per docs/RELEASE.md). No-ops on every other green CI run on main.
+#
+# Tags are created with the default GITHUB_TOKEN, which does not itself trigger the
+# `push: tags` listener in release.yml (GITHUB_TOKEN-authored pushes don't cascade
+# other workflow triggers) — so this workflow explicitly dispatches release.yml afterward.
+
+name: Auto Release
+
+on:
+  workflow_run:
+    workflows: ['CI']
+    types: [completed]
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  tag-and-dispatch:
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - name: Check whether this version is already released
+        id: version
+        run: |
+          set -e
+          VER=$(node -p "require('./package.json').version")
+          TAG="v$VER"
+          if git ls-remote --tags origin "refs/tags/$TAG" | grep -q "refs/tags/$TAG$"; then
+            echo "Tag $TAG already exists — nothing new to release."
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "New version $VER on main with no $TAG tag yet — cutting a release."
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create and push release tag
+        if: steps.version.outputs.exists == 'false'
+        run: |
+          set -e
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git tag "${{ steps.version.outputs.tag }}" "${{ github.event.workflow_run.head_sha }}"
+          git push origin "${{ steps.version.outputs.tag }}"
+
+      - name: Dispatch release workflow
+        if: steps.version.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run release.yml --ref "${{ steps.version.outputs.tag }}"

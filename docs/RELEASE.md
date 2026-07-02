@@ -51,11 +51,19 @@ If the package name is already taken on npm, you must rename the package in `pac
 
 ## Cutting a release
 
+Releases are cut automatically — see **Automatic releases** below. You only need to do this manually if automation is disabled or you're releasing from a branch other than `main`.
+
 1. On `main` (or your release branch), set **`version`** in `package.json` to the new version (semver or calendar-style, e.g. `2026.4.50`). Update **`CHANGELOG.md`** for the release. Run **`npm run sync-skill`** so `skills/m365-agent-cli/SKILL.md` frontmatter `version:` matches the package (OpenClaw/ClawHub skill metadata). Commit, for example: `chore(release): 2026.4.50`.
 2. Tag that commit: `git tag v2026.4.50` (the tag **must** be `v` + the exact version string from `package.json`).
 3. Push the tag: `git push origin v2026.4.50` (and push the commit to `main` if needed).
 
 Pushing the tag runs **Release** in GitHub Actions (see [`.github/workflows/release.yml`](../.github/workflows/release.yml)): it checks that the tag matches `package.json`, runs checks, runs **`npm run embed-sha`**, publishes to npm with **`npm publish --access public`** (Trusted Publishing OIDC when **`NPM_TOKEN`** is unset), and creates a GitHub Release (with auto-generated notes; you can paste from **`CHANGELOG.md`** if you want richer text).
+
+## Automatic releases
+
+[`.github/workflows/auto-release.yml`](../.github/workflows/auto-release.yml) watches every **CI** run on `main`. When CI finishes green and `package.json`'s `version` has no matching `vX.Y.Z` tag yet, it creates that tag on the green commit and dispatches **Release** (via `workflow_dispatch`, since the default `GITHUB_TOKEN` used to push the tag doesn't itself fire the `push: tags` trigger — see the comments in both workflow files). Every other green CI run on `main` (no version bump) is a no-op.
+
+In practice: merge a `chore(release): X` PR (step 1 above, without steps 2–3) to `main`, and once CI passes the release ships on its own — no local tag push needed. Steps 2–3 above remain available as a manual fallback (e.g. from an environment without push access to trigger Actions, or to release a commit that isn't `main`'s tip).
 
 ## After publish
 
