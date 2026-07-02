@@ -8,6 +8,12 @@ For install and tagging, see [docs/RELEASE.md](docs/RELEASE.md).
 
 ## [Unreleased]
 
+---
+
+## [2026.7.2] — 2026-07-02
+
+Patch release: **auth and token handling hardening** for active env-file refresh persistence, clearer Microsoft Entra refresh failures, stricter JWT validation, scope parity tests, and tenant-id precedence. Upgrade with `npm install -g m365-agent-cli@2026.7.2` (or `@latest` once published).
+
 ### Auth and token handling hardening
 
 - **Fixes rotated refresh token persistence to the active env file (H-1 / H-2).** `m365-agent-cli resolveAuth` and `resolveGraphAuth` now accept an `envPath` option and persist refreshed `M365_REFRESH_TOKEN` (plus legacy `EWS_REFRESH_TOKEN` / `GRAPH_REFRESH_TOKEN`) to that same file the CLI loaded from — including `login --env-file` and `verify-token --env-file` (and `M365_AGENT_ENV_FILE`). Previously, `login --env-file` followed by any token refresh wrote the rotated token to the default global `~/.config/m365-agent-cli/.env`, silently losing the file the user pointed at. A new `getActiveEnvFilePath(explicit?)` helper in `src/lib/active-env.ts` centralizes the precedence: explicit caller path > `M365_AGENT_ENV_FILE` > default global.
