@@ -74,11 +74,11 @@ The table below matches **`checkReadOnly` in the source** (search the repo for `
 | `drafts` | `--create`, `--edit`, `--send`, `--delete` (plain list/read allowed) |
 | `folders` | `--create`, `--rename` (with `--to`), `--delete` (listing folders allowed) |
 | `files` | `upload`, `upload-large`, `delete`, `share` (including `--collab`), `invite`, `permission-remove`, `permission-update`, `copy`, `move`, `restore`, `checkout`, `checkin` (read/query: **`thumbnails`**, **`delta`**, **`shared-with-me`**, …) |
-| `planner` | `create-task`, `update-task`, `delete-task`, `create-plan` (`--group` or beta `--roster`), `update-plan`, `delete-plan`, `delete-plan-details`, `delete-task-details`, `plan-archive`, `plan-unarchive` (beta), `create-bucket`, `update-bucket`, `delete-bucket`, `list-user-tasks`, `list-user-plans`, `update-task-details`, `update-plan-details`, `add-checklist-item`, `update-checklist-item`, `remove-checklist-item`, `add-reference`, `remove-reference`, `update-task-board`, `add-favorite`, `remove-favorite`, `roster` (beta: `create`, `get`, `list-members`, `add-member`, `remove-member`) |
+| `planner` | `create-task`, `update-task`, `delete-task`, **`bulk-complete-task`**, `create-plan` (`--group` or beta `--roster`), `update-plan`, `delete-plan`, `delete-plan-details`, `delete-task-details`, `plan-archive`, `plan-unarchive` (beta), `create-bucket`, `update-bucket`, `delete-bucket`, `list-user-tasks`, `list-user-plans`, `update-task-details`, `update-plan-details`, `add-checklist-item`, `update-checklist-item`, `remove-checklist-item`, `add-reference`, `remove-reference`, `update-task-board`, `add-favorite`, `remove-favorite`, `roster` (beta: `create`, `get`, `list-members`, `add-member`, `remove-member`) |
 | `sharepoint` / `sp` | `create-item`, `update-item`, `delete-item`, `follow`, `unfollow`, `site-permission-update`, `site-permission-create`, `site-permission-delete` |
 | `pages` | `update`, `publish` |
 | `rules` | `create`, `update`, `delete` |
-| `todo` | `create`, `update`, `complete`, `delete`, `add-checklist`, `update-checklist`, `delete-checklist`, `get-checklist-item`, `create-list`, `update-list`, `delete-list`, `add-attachment`, `get-attachment`, `download-attachment`, `delete-attachment`, `add-reference-attachment`, `add-linked-resource`, `remove-linked-resource`, `upload-attachment-large`, `attachment-session` (patch/delete/content-put/content-delete), `root` (patch/delete), `linked-resource` (`create`, `update`, `delete`), `extension` (`set`, `update`, `delete`), `list-extension` (`set`, `update`, `delete`) |
+| `todo` | `create`, `update`, `complete`, `delete`, **`bulk-complete`**, **`bulk-delete`**, `add-checklist`, `update-checklist`, `delete-checklist`, `get-checklist-item`, `create-list`, `update-list`, `delete-list`, `add-attachment`, `get-attachment`, `download-attachment`, `delete-attachment`, `add-reference-attachment`, `add-linked-resource`, `remove-linked-resource`, `upload-attachment-large`, `attachment-session` (patch/delete/content-put/content-delete), `root` (patch/delete), `linked-resource` (`create`, `update`, `delete`), `extension` (`set`, `update`, `delete`), `list-extension` (`set`, `update`, `delete`) |
 | `subscribe` | Creating a subscription; `subscribe cancel <id>` |
 | `delegates` | `add`, `update`, `remove` |
 | `oof` | Write path only (when `--status`, `--internal-message`, `--external-message`, `--start`, or `--end` is used to change settings) |
@@ -883,6 +883,9 @@ m365-agent-cli planner update-task -i <taskId> --title "Updated Task" --percent 
 m365-agent-cli planner update-task -i <taskId> --label 2 --unlabel 1
 m365-agent-cli planner update-task -i <taskId> --clear-labels
 
+# Mark many tasks complete in one call (batched: GETs to fetch each @odata.etag, then PATCHes)
+m365-agent-cli planner bulk-complete-task --ids <taskId1>,<taskId2>,<taskId3>
+
 # Beta: archive / unarchive a plan (Graph requires a justification string)
 m365-agent-cli planner plan-archive -p <planId> -j "Project closed"
 m365-agent-cli planner plan-unarchive -p <planId> -j "Reopened for Q2"
@@ -908,6 +911,10 @@ m365-agent-cli todo download-attachment -l Tasks -t <taskId> -a <attachmentId> -
 
 # Incremental sync: tasks in a list (`todo delta`) vs task **lists** themselves (`todo lists-delta` + `--state-file`)
 m365-agent-cli todo lists-delta --state-file ./todo-lists-sync.json
+
+# Bulk complete / delete many tasks in one call (Graph JSON $batch, instead of one call per task)
+m365-agent-cli todo bulk-complete -l Tasks --ids <taskId1>,<taskId2>,<taskId3>
+m365-agent-cli todo bulk-delete -l Tasks --ids <taskId1>,<taskId2> --confirm
 ```
 
 ## Outlook Graph REST (`outlook-graph`)
