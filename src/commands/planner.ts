@@ -15,6 +15,7 @@ import {
   resolveDeltaContinuationUrl,
   writeDeltaStateFile
 } from '../lib/graph-delta-state-file.js';
+import { toJsonError } from '../lib/json-error.js';
 import {
   addPlannerChecklistItem,
   addPlannerFavoritePlan,
@@ -798,7 +799,11 @@ plannerCommand
       checkReadOnly(cmd);
       const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
       if (!auth.success || !auth.token) {
-        console.error(`Auth error: ${auth.error}`);
+        if (opts.json) {
+          console.log(JSON.stringify({ error: toJsonError(auth.error) }, null, 2));
+        } else {
+          console.error(`Auth error: ${auth.error}`);
+        }
         process.exit(1);
       }
       const taskIds = await parseBulkIdListOrExit(opts);
@@ -818,7 +823,13 @@ plannerCommand
         }
       );
       if (!getResult.ok || !getResult.data) {
-        console.error(`Error: ${getResult.error?.message || 'Failed to fetch tasks for etags'}`);
+        if (opts.json) {
+          console.log(
+            JSON.stringify({ error: toJsonError(getResult.error, 'Failed to fetch tasks for etags') }, null, 2)
+          );
+        } else {
+          console.error(`Error: ${getResult.error?.message || 'Failed to fetch tasks for etags'}`);
+        }
         process.exit(1);
       }
       const byIdResp = new Map(getResult.data.responses.map((r) => [r.id, r]));
@@ -848,7 +859,11 @@ plannerCommand
           pinAccessToken: !!opts.token
         });
         if (!patchResult.ok || !patchResult.data) {
-          console.error(`Error: ${patchResult.error?.message || 'Bulk complete failed'}`);
+          if (opts.json) {
+            console.log(JSON.stringify({ error: toJsonError(patchResult.error, 'Bulk complete failed') }, null, 2));
+          } else {
+            console.error(`Error: ${patchResult.error?.message || 'Bulk complete failed'}`);
+          }
           process.exit(1);
         }
         outcomes.push(...patchResult.data);

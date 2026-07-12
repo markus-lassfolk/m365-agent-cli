@@ -16,6 +16,7 @@ import {
   writeDeltaStateFile
 } from '../lib/graph-delta-state-file.js';
 import { graphUserPath } from '../lib/graph-user-path.js';
+import { toJsonError } from '../lib/json-error.js';
 import { getMessage } from '../lib/outlook-graph-client.js';
 import {
   addChecklistItem,
@@ -893,7 +894,11 @@ todoCommand
       checkReadOnly(cmd);
       const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
       if (!auth.success || !auth.token) {
-        console.error(`Auth error: ${auth.error}`);
+        if (opts.json) {
+          console.log(JSON.stringify({ error: toJsonError(auth.error) }, null, 2));
+        } else {
+          console.error(`Auth error: ${auth.error}`);
+        }
         process.exit(1);
       }
       const taskIds = await parseBulkIdListOrExit(opts);
@@ -913,7 +918,11 @@ todoCommand
         pinAccessToken: !!opts.token
       });
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message || 'Bulk complete failed'}`);
+        if (opts.json) {
+          console.log(JSON.stringify({ error: toJsonError(r.error, 'Bulk complete failed') }, null, 2));
+        } else {
+          console.error(`Error: ${r.error?.message || 'Bulk complete failed'}`);
+        }
         process.exit(1);
       }
       printBulkOutcomeSummary(r.data, opts.json);
@@ -951,7 +960,11 @@ todoCommand
       checkReadOnly(cmd);
       const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
       if (!auth.success || !auth.token) {
-        console.error(`Auth error: ${auth.error}`);
+        if (opts.json) {
+          console.log(JSON.stringify({ error: toJsonError(auth.error) }, null, 2));
+        } else {
+          console.error(`Auth error: ${auth.error}`);
+        }
         process.exit(1);
       }
       const taskIds = await parseBulkIdListOrExit(opts);
@@ -972,7 +985,11 @@ todoCommand
         pinAccessToken: !!opts.token
       });
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message || 'Bulk delete failed'}`);
+        if (opts.json) {
+          console.log(JSON.stringify({ error: toJsonError(r.error, 'Bulk delete failed') }, null, 2));
+        } else {
+          console.error(`Error: ${r.error?.message || 'Bulk delete failed'}`);
+        }
         process.exit(1);
       }
       printBulkOutcomeSummary(r.data, opts.json);

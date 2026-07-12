@@ -141,6 +141,7 @@ import { findCommand } from '../commands/find.js';
 import { findtimeCommand } from '../commands/findtime.js';
 import { foldersCommand } from '../commands/folders.js';
 import { forwardEventCommand } from '../commands/forward-event.js';
+import { groupsCommand } from '../commands/groups.js';
 import { loginCommand } from '../commands/login.js';
 import { mailCommand } from '../commands/mail.js';
 import { oofCommand } from '../commands/oof.js';
@@ -221,6 +222,7 @@ function makeProgram(): Command {
   p.addCommand(todoCommand);
   p.addCommand(bookingsCommand);
   p.addCommand(approvalsCommand);
+  p.addCommand(groupsCommand);
   installM365HelpOnCommandTree(p);
   return p;
 }
@@ -363,6 +365,11 @@ function resetSharedCommandOptionLeaks() {
     approvalsListCommand.setOptionValue('next', undefined);
     approvalsListCommand.setOptionValue('all', undefined);
     approvalsListCommand.setOptionValue('json', false);
+  }
+  // groups has 5 subcommands, each its own shared Command instance; --json leaking between tests
+  // would misroute the --json error-envelope branch.
+  for (const sub of groupsCommand.commands) {
+    sub.setOptionValue('json', false);
   }
 }
 
@@ -2064,5 +2071,45 @@ describe('approvals list --next (bug regression)', () => {
       'approvals list --next "https://graph.microsoft.com/beta/me/approvals?$skiptoken=x" --token test-graph-token'
     );
     expect(result.exitCode).toBe(0);
+  });
+});
+
+describe('groups --json error envelope (bug regression)', () => {
+  test('a failed Graph call returns the structured error envelope on stdout, not plain text on stderr', async () => {
+    setMockFetch((url) => {
+      if (!url.includes('graph.microsoft.com/v1.0')) return null;
+      if (url.includes('/me/memberOf/microsoft.graph.group')) {
+        return {
+          status: 403,
+          body: JSON.stringify({ error: { code: 'ErrorAccessDenied', message: 'Access denied' } }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    const result = await runM365AgentCli('groups list --json --token test-graph-token');
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toBe('');
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.error.status).toBe(403);
+    expect(data.error.code).toBe('ErrorAccessDenied');
+  });
+
+  test('without --json, still prints plain text to stderr (unchanged)', async () => {
+    setMockFetch((url) => {
+      if (!url.includes('graph.microsoft.com/v1.0')) return null;
+      if (url.includes('/me/memberOf/microsoft.graph.group')) {
+        return {
+          status: 403,
+          body: JSON.stringify({ error: { code: 'ErrorAccessDenied', message: 'Access denied' } }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    const result = await runM365AgentCli('groups list --token test-graph-token');
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toContain('Access denied');
   });
 });
