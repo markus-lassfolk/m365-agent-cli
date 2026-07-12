@@ -37,6 +37,7 @@ import {
   listCalendarView,
   updateCalendarEvent
 } from '../lib/graph-calendar-client.js';
+import { normalizeGraphDateTimeForParsing } from '../lib/graph-datetime.js';
 import { resolveRoomDisplayNameToPlace } from '../lib/graph-places-helpers.js';
 import { toJsonError } from '../lib/json-error.js';
 import { lookupMimeType } from '../lib/mime-type.js';
@@ -787,13 +788,18 @@ export const updateEventCommand = new Command('update-event')
               if (options.sensitivity) {
                 const s = SENSITIVITY_MAP[options.sensitivity.toLowerCase()];
                 if (!s) {
-                  console.error(`Invalid sensitivity: ${options.sensitivity}`);
+                  const msg = `Invalid sensitivity: ${options.sensitivity}`;
+                  if (options.json) {
+                    console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
+                  } else {
+                    console.error(`Error: ${msg}`);
+                  }
                   process.exit(1);
                 }
                 sensitivityEws = s;
               }
 
-              const eventDate = new Date(gd.start?.dateTime ?? '');
+              const eventDate = new Date(normalizeGraphDateTimeForParsing(gd.start?.dateTime, gd.start?.timeZone));
               let newStart: Date | undefined;
               let newEnd: Date | undefined;
               try {
@@ -888,7 +894,6 @@ export const updateEventCommand = new Command('update-event')
                 location: graphLocationsPatch?.length ? undefined : locationText,
                 graphLocations: graphLocationsPatch,
                 showAs: showAsPatch,
-                allDay: options.allDay,
                 sensitivity: sensitivityEws,
                 categories: options.category && options.category.length > 0 ? options.category : undefined,
                 clearCategories: options.clearCategories,
@@ -900,7 +905,7 @@ export const updateEventCommand = new Command('update-event')
               });
 
               if (newStart && !newEnd) {
-                const endD = new Date(gd.end?.dateTime ?? '');
+                const endD = new Date(normalizeGraphDateTimeForParsing(gd.end?.dateTime, gd.end?.timeZone));
                 patch.end = {
                   dateTime: options.timezone
                     ? toLocalUnzonedISOString(endD)
@@ -914,7 +919,7 @@ export const updateEventCommand = new Command('update-event')
                   timeZone: options.timezone?.trim() || gd.start?.timeZone || 'UTC'
                 };
               } else if (!newStart && newEnd) {
-                const startD = new Date(gd.start?.dateTime ?? '');
+                const startD = new Date(normalizeGraphDateTimeForParsing(gd.start?.dateTime, gd.start?.timeZone));
                 patch.start = {
                   dateTime: options.timezone
                     ? toLocalUnzonedISOString(startD)
@@ -1191,7 +1196,12 @@ export const updateEventCommand = new Command('update-event')
           if (options.sensitivity) {
             const sensitivity = SENSITIVITY_MAP[options.sensitivity.toLowerCase()];
             if (!sensitivity) {
-              console.error(`Invalid sensitivity: ${options.sensitivity}`);
+              const msg = `Invalid sensitivity: ${options.sensitivity}`;
+              if (options.json) {
+                console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
+              } else {
+                console.error(`Error: ${msg}`);
+              }
               process.exit(1);
             }
             updateOptions.sensitivity = sensitivity;
@@ -1218,7 +1228,12 @@ export const updateEventCommand = new Command('update-event')
                   roomEmail = found.Address;
                   roomName = found.Name;
                 } else {
-                  console.error(`Room not found: ${options.room}`);
+                  const msg = `Room not found: ${options.room}`;
+                  if (options.json) {
+                    console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
+                  } else {
+                    console.error(`Error: ${msg}`);
+                  }
                   process.exit(1);
                 }
               }

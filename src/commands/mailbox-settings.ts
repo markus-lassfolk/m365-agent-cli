@@ -104,7 +104,17 @@ mailboxSettingsCommand
         opts.workDays?.trim() || opts.workStart?.trim() || opts.workEnd?.trim() || opts.workTimezone?.trim();
       if (hasWork) {
         const cur = await getMailboxSettingsFull(auth.token, opts.user);
-        const existing = cur.ok && cur.data?.workingHours ? { ...cur.data.workingHours } : {};
+        if (!cur.ok) {
+          // workingHours is a nested object Graph replaces wholesale on PATCH, not merges — if we
+          // can't confirm what's already there, silently treating the fetch failure as "nothing
+          // configured" would let a partial --work-* update (e.g. only --work-start) wipe out the
+          // existing days/end-time/timezone instead of merging with them.
+          console.error(
+            `Error: could not fetch existing working hours to merge with --work-* flags: ${cur.error?.message || 'unknown error'}`
+          );
+          process.exit(1);
+        }
+        const existing = cur.data?.workingHours ? { ...cur.data.workingHours } : {};
         if (opts.workDays?.trim()) {
           const days = parseWorkDaysCsv(opts.workDays);
           if (days.length === 0) {

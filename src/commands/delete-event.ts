@@ -286,6 +286,22 @@ export const deleteEventCommand = new Command('delete-event')
         scope = 'this';
       }
 
+      // EWS has no operation that actually truncates a recurring series' RecurrenceRange — the
+      // DeleteItem call below only ever removes the single targeted occurrence regardless of
+      // scope, so silently proceeding here (as if this and all future occurrences were removed)
+      // would misrepresent what happened. Graph's --scope future path (below) does truncate
+      // properly via truncateRecurringSeriesBeforeCut.
+      if (!useGraph && scope === 'future') {
+        const msg =
+          '--scope future is not supported on the EWS backend (EWS has no operation to truncate a recurring series’ range — DeleteItem would only remove the single targeted occurrence, not this-and-future). Use --scope this, or M365_EXCHANGE_BACKEND=graph.';
+        if (options.json) {
+          console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
+        } else {
+          console.error(`Error: ${msg}`);
+        }
+        process.exit(1);
+      }
+
       if (useGraph) {
         targetGraph = events.find((e) => (e as GraphCalendarEvent).id === options.id) as GraphCalendarEvent | undefined;
         if (!targetGraph && options.id) {
@@ -430,11 +446,9 @@ export const deleteEventCommand = new Command('delete-event')
             targetEws = occEvent;
           }
           if (!options.json) {
-            if (scope === 'future') {
-              console.log(`\nTruncating series from occurrence: ${targetEws!.Subject}`);
-            } else {
-              console.log(`\nDeleting single occurrence: ${targetEws!.Subject}`);
-            }
+            // scope === 'future' already exited above (EWS can't truncate a series), so only
+            // 'this' reaches here.
+            console.log(`\nDeleting single occurrence: ${targetEws!.Subject}`);
             console.log(
               `  ${formatDate(targetEws!.Start.DateTime)} ${formatTime(targetEws!.Start.DateTime)} - ${formatTime(targetEws!.End.DateTime)}`
             );

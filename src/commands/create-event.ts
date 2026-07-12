@@ -3,7 +3,13 @@ import { Command } from 'commander';
 import { AttachmentLinkSpecError, parseAttachLinkSpec } from '../lib/attach-link-spec.js';
 import { AttachmentPathError, validateAttachmentPath } from '../lib/attachments.js';
 import { resolveAuth } from '../lib/auth.js';
-import { parseDay, parseTimeToDate, toLocalUnzonedISOString, toUTCISOString } from '../lib/dates.js';
+import {
+  parseDay,
+  parseTimeToDate,
+  toLocalUnzonedISOString,
+  toReinterpretedUTCISOString,
+  toUTCISOString
+} from '../lib/dates.js';
 import {
   areRoomsFree,
   createEvent,
@@ -497,8 +503,12 @@ export function buildCreateEventCommand(commandName: string, description = 'Crea
 
           const patternType = patternTypeMap[options.repeat.toLowerCase()];
           if (!patternType) {
-            console.error(`Invalid repeat type: ${options.repeat}`);
-            console.error('Valid options: daily, weekly, monthly, yearly');
+            const msg = `Invalid repeat type: ${options.repeat}. Valid options: daily, weekly, monthly, yearly`;
+            if (options.json) {
+              console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
+            } else {
+              console.error(`Error: ${msg}`);
+            }
             process.exit(1);
           }
 
@@ -568,7 +578,12 @@ export function buildCreateEventCommand(commandName: string, description = 'Crea
         const sensitivity = options.sensitivity ? SENSITIVITY_MAP[options.sensitivity.toLowerCase()] : undefined;
 
         if (options.sensitivity && !sensitivity) {
-          console.error(`Invalid sensitivity: ${options.sensitivity}`);
+          const msg = `Invalid sensitivity: ${options.sensitivity}`;
+          if (options.json) {
+            console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
+          } else {
+            console.error(`Error: ${msg}`);
+          }
           process.exit(1);
         }
 
@@ -884,12 +899,24 @@ export function buildCreateEventCommand(commandName: string, description = 'Crea
           ewsToken = ar.token;
         }
 
-        // Create the event (EWS)
+        // Create the event (EWS). All-day boundaries without --timezone must use the same
+        // calendar date's UTC midnight (not a raw toISOString of a local-midnight instant, which
+        // silently shifts to the previous day on hosts with a positive UTC offset).
+        const ewsStart = options.timezone
+          ? toLocalUnzonedISOString(start)
+          : options.allDay
+            ? toReinterpretedUTCISOString(start)
+            : toUTCISOString(start);
+        const ewsEnd = options.timezone
+          ? toLocalUnzonedISOString(end)
+          : options.allDay
+            ? toReinterpretedUTCISOString(end)
+            : toUTCISOString(end);
         const result = await createEvent({
           token: ewsToken!,
           subject: title,
-          start: options.timezone ? toLocalUnzonedISOString(start) : toUTCISOString(start),
-          end: options.timezone ? toLocalUnzonedISOString(end) : toUTCISOString(end),
+          start: ewsStart,
+          end: ewsEnd,
           body: options.description,
           location: roomName,
           attendees: attendees.length > 0 ? attendees : undefined,

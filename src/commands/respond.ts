@@ -56,6 +56,10 @@ function graphStartStr(e: GraphCalendarEvent): string {
   return normalizeGraphDateTimeForParsing(e.start?.dateTime, e.start?.timeZone);
 }
 
+function graphEndStr(e: GraphCalendarEvent): string {
+  return normalizeGraphDateTimeForParsing(e.end?.dateTime, e.end?.timeZone);
+}
+
 export const respondCommand = new Command('respond')
   .description('Respond to calendar invitations (accept/decline/tentative)')
   .argument('[action]', 'Action: list, accept, decline, tentative')
@@ -160,7 +164,7 @@ export const respondCommand = new Command('respond')
                   id: e.id,
                   subject: e.subject,
                   start: graphStartStr(e),
-                  end: e.end?.dateTime,
+                  end: graphEndStr(e),
                   organizer: e.organizer?.emailAddress?.name || e.organizer?.emailAddress?.address,
                   location: e.location?.displayName
                 }))
@@ -184,7 +188,7 @@ export const respondCommand = new Command('respond')
           const event = pendingEvents[i];
           const dateStr = formatDate(graphStartStr(event));
           const startTime = formatTime(graphStartStr(event));
-          const endTime = formatTime(event.end?.dateTime ?? '');
+          const endTime = formatTime(graphEndStr(event));
           const selfAtt = event.attendees?.find((a) => a.emailAddress?.address?.toLowerCase() === attendeeEmail);
           const respRaw = selfAtt?.status?.response ?? event.responseStatus?.response;
           const icon = getResponseIcon(graphResponseToIconKey(respRaw));
@@ -404,7 +408,7 @@ export const respondCommand = new Command('respond')
             if (!options.json) {
               console.log(`\nResponding to: ${ge.subject ?? '(no subject)'}`);
               console.log(
-                `  ${formatDate(graphStartStr(ge))} ${formatTime(graphStartStr(ge))} - ${formatTime(ge.end?.dateTime ?? '')}`
+                `  ${formatDate(graphStartStr(ge))} ${formatTime(graphStartStr(ge))} - ${formatTime(graphEndStr(ge))}`
               );
               console.log(`  Action: ${actionLower}`);
               if (options.comment) {

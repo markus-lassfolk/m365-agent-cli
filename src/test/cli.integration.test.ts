@@ -265,11 +265,15 @@ function tokenizeArgs(args: string): string[] {
  */
 function resetSharedCommandOptionLeaks() {
   whoamiCommand.setOptionValue('json', false);
+  createEventCommand.setOptionValue('repeat', undefined);
+  createEventCommand.setOptionValue('sensitivity', undefined);
   updateEventCommand.setOptionValue('json', false);
   updateEventCommand.setOptionValue('id', undefined);
   updateEventCommand.setOptionValue('title', undefined);
   updateEventCommand.setOptionValue('search', undefined);
   updateEventCommand.setOptionValue('day', 'today');
+  updateEventCommand.setOptionValue('sensitivity', undefined);
+  updateEventCommand.setOptionValue('room', undefined);
   deleteEventCommand.setOptionValue('json', false);
   deleteEventCommand.setOptionValue('id', undefined);
   deleteEventCommand.setOptionValue('day', 'today');
@@ -818,6 +822,51 @@ describe('create-event', () => {
     //     // (skip) expect(result.stdout).toContain('--teams');
     //     // (skip) expect(result.stdout).toContain('--day');
   });
+
+  test('--all-day without --timezone does not shift to the previous day on a positive-UTC-offset host (bug regression)', async () => {
+    const originalTz = process.env.TZ;
+    let capturedStart = '';
+    try {
+      process.env.TZ = 'Europe/Berlin';
+      setMockFetch((url, _request, body) => {
+        if (!url.includes('outlook.office365.com/EWS/Exchange.asmx')) return null;
+        if (body.includes('<m:CreateItem')) {
+          const m = body.match(/<t:Start>([^<]+)<\/t:Start>/);
+          capturedStart = m?.[1] ?? '';
+          return null; // fall through to the default mock response
+        }
+        return null;
+      });
+      const result = await runM365AgentCli(
+        'create-event "All Day" --day 2026-04-15 --all-day --token test-token-12345'
+      );
+      expect(result.exitCode).toBe(0);
+      expect(capturedStart).toBe('2026-04-15T00:00:00.000Z');
+    } finally {
+      if (originalTz === undefined) delete process.env.TZ;
+      else process.env.TZ = originalTz;
+    }
+  });
+
+  test('invalid --repeat --json returns the structured error envelope (bug regression)', async () => {
+    const result = await runM365AgentCli(
+      'create-event "Test" 10:00 11:00 --day today --repeat bogus --json --token test-token-12345'
+    );
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stdout.trim()).not.toBe('');
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.error.message).toContain('Invalid repeat type');
+  });
+
+  test('invalid --sensitivity --json returns the structured error envelope (bug regression)', async () => {
+    const result = await runM365AgentCli(
+      'create-event "Test" 10:00 11:00 --day today --sensitivity bogus --json --token test-token-12345'
+    );
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stdout.trim()).not.toBe('');
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.error.message).toContain('Invalid sensitivity');
+  });
 });
 
 // ─── 6. delete-event ───────────────────────────────────────────────────────
@@ -848,6 +897,19 @@ describe('delete-event', () => {
     expect(result.exitCode).toBe(0);
     //     // (skip) expect(result.stdout).toContain('--search');
     //     // (skip) expect(result.stdout).toContain('--id');
+  });
+
+  test('--scope future on EWS errors instead of only deleting the single occurrence while claiming to truncate (bug regression)', async () => {
+    const result = await runM365AgentCli('delete-event --id event-1 --scope future --token test-token-12345');
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain('--scope future is not supported on the EWS backend');
+  });
+
+  test('--scope future --json on EWS returns the structured error envelope', async () => {
+    const result = await runM365AgentCli('delete-event --id event-1 --scope future --json --token test-token-12345');
+    expect(result.exitCode).not.toBe(0);
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.error.message).toContain('--scope future is not supported on the EWS backend');
   });
 });
 
@@ -916,6 +978,26 @@ describe('update-event', () => {
     //     // (skip) expect(result.stdout).toContain('--id');
     //     // (skip) expect(result.stdout).toContain('--title');
     //     // (skip) expect(result.stdout).toContain('--day');
+  });
+
+  test('invalid --sensitivity on EWS --json returns the structured error envelope (bug regression)', async () => {
+    const result = await runM365AgentCli(
+      'update-event --id event-1 --sensitivity bogus --json --token test-token-12345'
+    );
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stdout.trim()).not.toBe('');
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.error.message).toContain('Invalid sensitivity');
+  });
+
+  test('--room not found on EWS --json returns the structured error envelope (bug regression)', async () => {
+    const result = await runM365AgentCli(
+      'update-event --id event-1 --room "Nonexistent Room" --json --token test-token-12345'
+    );
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stdout.trim()).not.toBe('');
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.error.message).toContain('Room not found');
   });
 });
 
@@ -1810,6 +1892,41 @@ describe('Graph backend (M365_EXCHANGE_BACKEND=graph)', () => {
     expect(data.action).toBe('truncated');
   });
 
+  test('does not corrupt the untouched end time when only --start is patched on a non-UTC host (bug regression)', async () => {
+    const originalTz = process.env.TZ;
+    try {
+      // Berlin is UTC+2 in April — parsing the mock event's unzoned "09:30:00.0000000" end time as
+      // local time (instead of normalizing it as UTC first) would shift it by 2 hours.
+      process.env.TZ = 'Europe/Berlin';
+      let patchBody = '';
+      setMockFetch((url, request, body) => {
+        if (!url.includes('graph.microsoft.com/v1.0')) return null;
+        const method = (request?.method || 'GET').toUpperCase();
+        const path = new URL(url).pathname;
+        if (method === 'PATCH' && /^\/v1\.0\/me\/events\/[^/]+$/.test(path)) {
+          patchBody = body;
+          return {
+            status: 200,
+            body: JSON.stringify({ id: 'graph-cal-event-1', subject: 'Standup', changeKey: 'ck2' }),
+            contentType: 'application/json'
+          };
+        }
+        return null;
+      });
+      const result = await runM365AgentCli(
+        'update-event --id graph-cal-event-1 --start 10:00 --token test-graph-token'
+      );
+      expect(result.exitCode).toBe(0);
+      expect(patchBody).not.toBe('');
+      const patch = JSON.parse(patchBody);
+      // Untouched end time must stay 09:30 UTC, not shift to 07:30 from a local-time misparse.
+      expect(patch.end.dateTime).toBe('2026-04-01T09:30:00');
+    } finally {
+      if (originalTz === undefined) delete process.env.TZ;
+      else process.env.TZ = originalTz;
+    }
+  });
+
   test('update-event --id --title patches event via Graph', async () => {
     const result = await runM365AgentCli(
       'update-event --id graph-cal-event-1 --title "Updated title" --token test-graph-token'
@@ -1860,6 +1977,40 @@ describe('Graph backend (M365_EXCHANGE_BACKEND=graph)', () => {
     const data = JSON.parse(result.stdout.trim());
     expect(data.backend).toBe('graph');
     expect(Array.isArray(data.pendingEvents)).toBe(true);
+  });
+
+  test('normalizes the pending invitation end time like the start time instead of leaving it unzoned (bug regression)', async () => {
+    setMockFetch((url) => {
+      if (!url.includes('graph.microsoft.com/v1.0')) return null;
+      const path = new URL(url).pathname;
+      if (path.includes('/calendar/calendarView')) {
+        return {
+          status: 200,
+          body: JSON.stringify({
+            value: [
+              {
+                id: 'pending-invite-1',
+                subject: 'Unzoned End Time',
+                isOrganizer: false,
+                isCancelled: false,
+                start: { dateTime: '2026-04-05T09:00:00.0000000', timeZone: 'UTC' },
+                end: { dateTime: '2026-04-05T10:00:00.0000000', timeZone: 'UTC' },
+                organizer: { emailAddress: { address: 'someone-else@example.com', name: 'Someone Else' } }
+              }
+            ]
+          }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    const result = await runM365AgentCli('respond list --json --token test-graph-token');
+    expect(result.exitCode).toBe(0);
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.pendingEvents).toHaveLength(1);
+    // Graph's timeZone:"UTC" with an unzoned dateTime must be normalized to a "Z"-suffixed string,
+    // the same way the start time already was — not passed through raw.
+    expect(data.pendingEvents[0].end).toBe('2026-04-05T10:00:00.0000000Z');
   });
 
   test('whoami does not fall back to EWS when GET /me returns 401 (graph-only mode)', async () => {

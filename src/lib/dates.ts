@@ -64,6 +64,28 @@ export function toUTCISOString(date: Date): string {
 }
 
 /**
+ * Reinterprets `date`'s *host-local* wall-clock components (year/month/day/hour/minute/second/ms)
+ * as if they were UTC, and returns the ISO string for that instant. For an all-day event boundary
+ * built via `.setHours(0, 0, 0, 0)` / `.setHours(23, 59, 59, 999)`, this preserves the intended
+ * calendar date and time-of-day regardless of the host's UTC offset. Plain `date.toISOString()`
+ * does not: on a host with a positive UTC offset, local midnight is still the previous UTC day,
+ * silently shifting an all-day boundary back one day.
+ */
+export function toReinterpretedUTCISOString(date: Date): string {
+  return new Date(
+    Date.UTC(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate(),
+      date.getHours(),
+      date.getMinutes(),
+      date.getSeconds(),
+      date.getMilliseconds()
+    )
+  ).toISOString();
+}
+
+/**
  * Parse a date string that may have a timezone offset suffix (e.g. "+01:00")
  * and return the local date components in the user's system timezone.
  * This avoids the bug where `new Date("2026-03-29")` defaults to midnight UTC
