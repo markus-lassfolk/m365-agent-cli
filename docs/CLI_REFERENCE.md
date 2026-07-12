@@ -868,6 +868,10 @@ m365-agent-cli files checkin <fileId> --comment "Updated Q1 numbers"
 
 Legacy Office formats such as `.doc`, `.xls`, and `.ppt` must be converted first.
 
+`--collab` is always an edit/organization link — it does not accept `--expiration`, `--password`,
+or `--no-retain-inherited-permissions` (those apply to the plain `share` link created without
+`--collab`); combining them is an error rather than a silently-ignored flag.
+
 **Important clarification:**
 
 - m365-agent-cli does **not** participate in the real-time editing session

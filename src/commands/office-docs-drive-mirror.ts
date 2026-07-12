@@ -233,6 +233,12 @@ export function registerOfficeDriveMirroredCommands(parent: Command): void {
         console.error('Error: --lock is only supported together with --collab.');
         process.exit(1);
       }
+      if (opts.collab && (opts.expiration || opts.password || opts.retainInheritedPermissions === false)) {
+        console.error(
+          'Error: --expiration/--password/--no-retain-inherited-permissions are not supported together with --collab (collaboration links are always edit/organization).'
+        );
+        process.exit(1);
+      }
       const loc = parseLoc(opts);
       if (opts.collab) {
         const result = await createOfficeCollaborationLink(

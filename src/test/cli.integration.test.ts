@@ -324,6 +324,17 @@ function resetSharedCommandOptionLeaks() {
   // update reuses a shared instance; --check leaking from one test into a later test that omits
   // it would misroute the version-check branch (which exits 1 on stdout) ahead of any real logic.
   updateCommand.setOptionValue('check', undefined);
+  // files share reuses a shared subcommand instance; --collab/--lock/--expiration/--password/
+  // --no-retain-inherited-permissions leaking between tests would misroute the --collab
+  // validation (or the --lock-without-collab check) for a later test that omits them.
+  const filesShareCommand = filesCommand.commands.find((c) => c.name() === 'share');
+  if (filesShareCommand) {
+    filesShareCommand.setOptionValue('collab', undefined);
+    filesShareCommand.setOptionValue('lock', undefined);
+    filesShareCommand.setOptionValue('expiration', undefined);
+    filesShareCommand.setOptionValue('password', undefined);
+    filesShareCommand.setOptionValue('retainInheritedPermissions', true);
+  }
 }
 
 async function runM365AgentCli(args: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
@@ -1161,10 +1172,30 @@ describe('files', () => {
       expect(result.exitCode).toBe(0);
     });
 
+    test('--collab with --expiration/--password/--no-retain-inherited-permissions errors instead of silently dropping them', async () => {
+      const expiration = await runM365AgentCli(
+        'files share drive-item-1 --collab --expiration 2026-01-01T00:00:00Z --token test-token-12345'
+      );
+      expect(expiration.exitCode).not.toBe(0);
+      expect(expiration.stderr).toContain('--collab');
+
+      const password = await runM365AgentCli(
+        'files share drive-item-1 --collab --password hunter2 --token test-token-12345'
+      );
+      expect(password.exitCode).not.toBe(0);
+      expect(password.stderr).toContain('--collab');
+
+      const noRetain = await runM365AgentCli(
+        'files share drive-item-1 --collab --no-retain-inherited-permissions --token test-token-12345'
+      );
+      expect(noRetain.exitCode).not.toBe(0);
+      expect(noRetain.stderr).toContain('--collab');
+    });
+
     test('--lock without --collab shows error', async () => {
       const result = await runM365AgentCli('files share drive-item-1 --lock --token test-token-12345');
-      expect(result.exitCode).toBe(0); // exitCode check;
-      // stderr checked
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toContain('--lock is only supported together with --collab');
     });
 
     test('--json outputs valid JSON', async () => {

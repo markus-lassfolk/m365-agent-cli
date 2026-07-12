@@ -582,6 +582,13 @@ withDriveOptions(filesCommand.command('share <fileId>'))
         process.exit(1);
       }
 
+      if (options.collab && (options.expiration || options.password || options.retainInheritedPermissions === false)) {
+        console.error(
+          'Error: --expiration/--password/--no-retain-inherited-permissions are not supported together with --collab (collaboration links are always edit/organization).'
+        );
+        process.exit(1);
+      }
+
       const loc = parseDriveLocation(options);
 
       if (options.collab) {
