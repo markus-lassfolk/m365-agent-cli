@@ -25,6 +25,7 @@ import { insightsCommand } from '../commands/insights.js';
 import { loginCommand } from '../commands/login.js';
 import { mailCommand } from '../commands/mail.js';
 import { mailboxSettingsCommand } from '../commands/mailbox-settings.js';
+import { mcpCommand } from '../commands/mcp.js';
 import { meetingCommand } from '../commands/meeting.js';
 import { onenoteCommand } from '../commands/onenote.js';
 import { oofCommand } from '../commands/oof.js';
@@ -91,6 +92,7 @@ function registerM365Commands(program: Command): void {
 
   program.addCommand(whoamiCommand);
   program.addCommand(describeCommand);
+  program.addCommand(mcpCommand);
   program.addCommand(updateCommand);
   program.addCommand(loginCommand);
   program.addCommand(sitePagesCommand);
