@@ -398,6 +398,8 @@ plannerCommand
       if (opts.conversationThread !== undefined) extras.conversationThreadId = opts.conversationThread;
       if (opts.orderHint !== undefined) extras.orderHint = opts.orderHint;
       if (opts.assigneePriority !== undefined) extras.assigneePriority = opts.assigneePriority;
+      if (opts.priority !== undefined) extras.priority = parseInt(opts.priority, 10);
+      if (opts.previewType !== undefined) extras.previewType = opts.previewType;
       const extrasOut = Object.keys(extras).length > 0 ? extras : undefined;
       const result = await createTask(auth.token!, opts.plan, opts.title, opts.bucket, assignments, applied, extrasOut);
       if (!result.ok || !result.data) {
@@ -565,10 +567,17 @@ plannerCommand
         }
         updates.percentComplete = percentValue;
       }
+      // `assignments` is an open-type dictionary merged per-key on PATCH: an entry is only removed
+      // when its key is sent with value null. Sending {} (clear) or just the new assignees (replace)
+      // leaves previously-assigned users in place, so null out the current assignees explicitly.
+      const currentAssignments = (taskRes.data.assignments as Record<string, unknown> | undefined) ?? {};
       if (opts.clearAssign) {
-        updates.assignments = {};
+        updates.assignments = Object.fromEntries(Object.keys(currentAssignments).map((id) => [id, null]));
       } else if (assignReplace) {
-        updates.assignments = buildPlannerAssignments(opts.assign!);
+        const replaced: Record<string, unknown> = {};
+        for (const id of Object.keys(currentAssignments)) replaced[id] = null;
+        Object.assign(replaced, buildPlannerAssignments(opts.assign!));
+        updates.assignments = replaced;
       } else if (assignMerge) {
         updates.assignments = mergePlannerAssignments(
           taskRes.data.assignments as Record<string, unknown> | undefined,
@@ -635,14 +644,11 @@ plannerCommand
         process.exit(1);
       }
 
-      // Since PATCH returns 204 No Content, get task again to show updated state
+      // Since PATCH returns 204 No Content, get task again to show updated state. The update already
+      // succeeded, so a failed display-refetch must NOT be reported as a failure (mirrors update-plan
+      // / update-bucket / update-task-details).
       const updatedTaskRes = await getTask(auth.token!, opts.id);
-      if (!updatedTaskRes.ok || !updatedTaskRes.data) {
-        console.error(`Error fetching updated task: ${updatedTaskRes.error?.message}`);
-        process.exit(1);
-      }
-
-      if (opts.json) {
+      if (opts.json && updatedTaskRes.ok && updatedTaskRes.data) {
         console.log(JSON.stringify(updatedTaskRes.data, null, 2));
       } else {
         console.log(`Updated task: ${opts.id}`);

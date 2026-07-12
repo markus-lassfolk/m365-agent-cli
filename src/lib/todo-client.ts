@@ -1264,23 +1264,11 @@ export async function listTodoListOpenExtensions(
   listId: string,
   user?: string
 ): Promise<GraphResponse<Array<Record<string, unknown>>>> {
-  try {
-    const result = await callGraph<{ value: Array<Record<string, unknown>> }>(
-      token,
-      listListExtensionsPath(listId, user)
-    );
-    if (!result.ok || !result.data) {
-      return graphError(
-        result.error?.message || 'Failed to list list extensions',
-        result.error?.code,
-        result.error?.status
-      );
-    }
-    return graphResult(result.data.value || []);
-  } catch (err) {
-    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
-    return graphError(err instanceof Error ? err.message : 'Failed to list list extensions');
-  }
+  return fetchAllPages<Record<string, unknown>>(
+    token,
+    listListExtensionsPath(listId, user),
+    'Failed to list list extensions'
+  );
 }
 
 export async function getTodoListOpenExtension(
@@ -1563,19 +1551,11 @@ export async function listTaskOpenExtensions(
   taskId: string,
   user?: string
 ): Promise<GraphResponse<Array<Record<string, unknown>>>> {
-  try {
-    const result = await callGraph<{ value: Array<Record<string, unknown>> }>(
-      token,
-      extensionsPath(listId, taskId, user)
-    );
-    if (!result.ok || !result.data) {
-      return graphError(result.error?.message || 'Failed to list extensions', result.error?.code, result.error?.status);
-    }
-    return graphResult(result.data.value || []);
-  } catch (err) {
-    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
-    return graphError(err instanceof Error ? err.message : 'Failed to list extensions');
-  }
+  return fetchAllPages<Record<string, unknown>>(
+    token,
+    extensionsPath(listId, taskId, user),
+    'Failed to list extensions'
+  );
 }
 
 export async function getTaskOpenExtension(

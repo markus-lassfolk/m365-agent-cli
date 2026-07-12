@@ -20,6 +20,15 @@ describe('deepMergeSearchRequest', () => {
     const merged = deepMergeSearchRequest({ fields: ['a'] }, { fields: ['b', 'c'] });
     expect(merged.fields).toEqual(['b', 'c']);
   });
+
+  test('ignores prototype-polluting keys from the overlay', () => {
+    const overlay = JSON.parse('{"query":{"queryString":"x"},"__proto__":{"polluted":true},"constructor":{"bad":1}}');
+    const merged = deepMergeSearchRequest({ from: 0 }, overlay);
+    expect(merged).toEqual({ from: 0, query: { queryString: 'x' } });
+    // No prototype pollution of plain objects.
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+    expect(Object.hasOwn(merged, '__proto__')).toBe(false);
+  });
 });
 
 describe('buildMicrosoftSearchRequest', () => {

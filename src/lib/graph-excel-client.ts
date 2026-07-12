@@ -1,6 +1,13 @@
 import type { DriveLocation } from './drive-location.js';
 import { DEFAULT_DRIVE_LOCATION, driveRootPrefix } from './drive-location.js';
-import { callGraph, GraphApiError, type GraphResponse, graphError, graphResult } from './graph-client.js';
+import {
+  callGraph,
+  GraphApiError,
+  type GraphResponse,
+  graphError,
+  graphResult,
+  listGraphCollection
+} from './graph-client.js';
 
 export interface ExcelWorksheet {
   id?: string;
@@ -78,17 +85,11 @@ export async function listExcelWorksheets(
   itemId: string,
   location: DriveLocation = DEFAULT_DRIVE_LOCATION
 ): Promise<GraphResponse<ExcelWorksheet[]>> {
-  try {
-    const path = `${driveItemWorkbookPrefix(location, itemId)}/worksheets`;
-    const r = await callGraph<{ value: ExcelWorksheet[] }>(token, path);
-    if (!r.ok || !r.data) {
-      return graphError(r.error?.message || 'Failed to list worksheets', r.error?.code, r.error?.status);
-    }
-    return graphResult(r.data.value ?? []);
-  } catch (err) {
-    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
-    return graphError(err instanceof Error ? err.message : 'Failed to list worksheets');
-  }
+  return listGraphCollection<ExcelWorksheet>(
+    token,
+    `${driveItemWorkbookPrefix(location, itemId)}/worksheets`,
+    'Failed to list worksheets'
+  );
 }
 
 /**
@@ -124,7 +125,9 @@ export async function getExcelUsedRange(
 ): Promise<GraphResponse<ExcelRange>> {
   try {
     const sheetEnc = encodeURIComponent(sheet.trim());
-    const q = valuesOnly ? '?valuesOnly=true' : '';
+    // `valuesOnly` is an OData function parameter (usedRange(valuesOnly=true)), NOT a query option;
+    // sent as `?valuesOnly=true` Graph ignores it and returns the formatting-inclusive range.
+    const q = valuesOnly ? '(valuesOnly=true)' : '';
     const path = `${driveItemWorkbookPrefix(location, itemId)}/worksheets/${sheetEnc}/usedRange${q}`;
     const r = await callGraph<ExcelRange>(token, path);
     if (!r.ok || !r.data) {
@@ -144,18 +147,9 @@ export async function listExcelTables(
   worksheet?: string,
   location: DriveLocation = DEFAULT_DRIVE_LOCATION
 ): Promise<GraphResponse<ExcelTable[]>> {
-  try {
-    const base = driveItemWorkbookPrefix(location, itemId);
-    const path = worksheet ? `${base}/worksheets/${encodeURIComponent(worksheet.trim())}/tables` : `${base}/tables`;
-    const r = await callGraph<{ value: ExcelTable[] }>(token, path);
-    if (!r.ok || !r.data) {
-      return graphError(r.error?.message || 'Failed to list tables', r.error?.code, r.error?.status);
-    }
-    return graphResult(r.data.value ?? []);
-  } catch (err) {
-    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
-    return graphError(err instanceof Error ? err.message : 'Failed to list tables');
-  }
+  const base = driveItemWorkbookPrefix(location, itemId);
+  const path = worksheet ? `${base}/worksheets/${encodeURIComponent(worksheet.trim())}/tables` : `${base}/tables`;
+  return listGraphCollection<ExcelTable>(token, path, 'Failed to list tables');
 }
 
 export async function getExcelWorksheet(
@@ -386,17 +380,11 @@ export async function listExcelWorkbookNames(
   itemId: string,
   location: DriveLocation = DEFAULT_DRIVE_LOCATION
 ): Promise<GraphResponse<ExcelNamedItem[]>> {
-  try {
-    const path = `${driveItemWorkbookPrefix(location, itemId)}/names`;
-    const r = await callGraph<{ value: ExcelNamedItem[] }>(token, path);
-    if (!r.ok || !r.data) {
-      return graphError(r.error?.message || 'Failed to list names', r.error?.code, r.error?.status);
-    }
-    return graphResult(r.data.value ?? []);
-  } catch (err) {
-    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
-    return graphError(err instanceof Error ? err.message : 'Failed to list names');
-  }
+  return listGraphCollection<ExcelNamedItem>(
+    token,
+    `${driveItemWorkbookPrefix(location, itemId)}/names`,
+    'Failed to list names'
+  );
 }
 
 /** GET …/workbook/names/{nameId} — `nameId` is the named item id from `names` list. */
@@ -426,17 +414,11 @@ export async function listExcelWorksheetNames(
   sheet: string,
   location: DriveLocation = DEFAULT_DRIVE_LOCATION
 ): Promise<GraphResponse<ExcelNamedItem[]>> {
-  try {
-    const path = `${driveItemWorkbookPrefix(location, itemId)}${worksheetSegment(sheet)}/names`;
-    const r = await callGraph<{ value: ExcelNamedItem[] }>(token, path);
-    if (!r.ok || !r.data) {
-      return graphError(r.error?.message || 'Failed to list worksheet names', r.error?.code, r.error?.status);
-    }
-    return graphResult(r.data.value ?? []);
-  } catch (err) {
-    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
-    return graphError(err instanceof Error ? err.message : 'Failed to list worksheet names');
-  }
+  return listGraphCollection<ExcelNamedItem>(
+    token,
+    `${driveItemWorkbookPrefix(location, itemId)}${worksheetSegment(sheet)}/names`,
+    'Failed to list worksheet names'
+  );
 }
 
 /** GET …/worksheets/{sheet}/names/{nameId} */
@@ -569,17 +551,11 @@ export async function listExcelTableColumns(
   tableId: string,
   location: DriveLocation = DEFAULT_DRIVE_LOCATION
 ): Promise<GraphResponse<ExcelTableColumn[]>> {
-  try {
-    const path = `${driveItemWorkbookPrefix(location, itemId)}/tables/${encodeURIComponent(tableId.trim())}/columns`;
-    const r = await callGraph<{ value: ExcelTableColumn[] }>(token, path);
-    if (!r.ok || !r.data) {
-      return graphError(r.error?.message || 'Failed to list table columns', r.error?.code, r.error?.status);
-    }
-    return graphResult(r.data.value ?? []);
-  } catch (err) {
-    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
-    return graphError(err instanceof Error ? err.message : 'Failed to list table columns');
-  }
+  return listGraphCollection<ExcelTableColumn>(
+    token,
+    `${driveItemWorkbookPrefix(location, itemId)}/tables/${encodeURIComponent(tableId.trim())}/columns`,
+    'Failed to list table columns'
+  );
 }
 
 export async function getExcelTableColumn(
@@ -641,19 +617,8 @@ export async function listExcelTableRows(
   top?: number,
   location: DriveLocation = DEFAULT_DRIVE_LOCATION
 ): Promise<GraphResponse<ExcelTableRow[]>> {
-  try {
-    const t = top && top > 0 ? Math.min(top, 9999) : undefined;
-    const qs = t ? `?$top=${t}` : '';
-    const path = `${driveItemWorkbookPrefix(location, itemId)}/tables/${encodeURIComponent(tableId.trim())}/rows${qs}`;
-    const r = await callGraph<{ value: ExcelTableRow[] }>(token, path);
-    if (!r.ok || !r.data) {
-      return graphError(r.error?.message || 'Failed to list table rows', r.error?.code, r.error?.status);
-    }
-    return graphResult(r.data.value ?? []);
-  } catch (err) {
-    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
-    return graphError(err instanceof Error ? err.message : 'Failed to list table rows');
-  }
+  const basePath = `${driveItemWorkbookPrefix(location, itemId)}/tables/${encodeURIComponent(tableId.trim())}/rows`;
+  return listGraphCollection<ExcelTableRow>(token, basePath, 'Failed to list table rows', { top, maxTop: 9999 });
 }
 
 /** POST …/tables/{id}/rows/add — body e.g. `{ index: null, values: [["a","b"]] }`. */
@@ -748,17 +713,11 @@ export async function listExcelWorksheetCharts(
   sheet: string,
   location: DriveLocation = DEFAULT_DRIVE_LOCATION
 ): Promise<GraphResponse<ExcelChart[]>> {
-  try {
-    const path = `${driveItemWorkbookPrefix(location, itemId)}${worksheetSegment(sheet)}/charts`;
-    const r = await callGraph<{ value: ExcelChart[] }>(token, path);
-    if (!r.ok || !r.data) {
-      return graphError(r.error?.message || 'Failed to list charts', r.error?.code, r.error?.status);
-    }
-    return graphResult(r.data.value ?? []);
-  } catch (err) {
-    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
-    return graphError(err instanceof Error ? err.message : 'Failed to list charts');
-  }
+  return listGraphCollection<ExcelChart>(
+    token,
+    `${driveItemWorkbookPrefix(location, itemId)}${worksheetSegment(sheet)}/charts`,
+    'Failed to list charts'
+  );
 }
 
 /** POST …/worksheets/{sheet}/charts — body is a [workbookChart](https://learn.microsoft.com/en-us/graph/api/resources/workbookchart) JSON object. */
@@ -863,17 +822,11 @@ export async function listExcelWorksheetPivotTables(
   sheet: string,
   location: DriveLocation = DEFAULT_DRIVE_LOCATION
 ): Promise<GraphResponse<ExcelPivotTable[]>> {
-  try {
-    const path = pivotTablesBase(location, itemId, sheet);
-    const r = await callGraph<{ value: ExcelPivotTable[] }>(token, path);
-    if (!r.ok || !r.data) {
-      return graphError(r.error?.message || 'Failed to list pivot tables', r.error?.code, r.error?.status);
-    }
-    return graphResult(r.data.value ?? []);
-  } catch (err) {
-    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
-    return graphError(err instanceof Error ? err.message : 'Failed to list pivot tables');
-  }
+  return listGraphCollection<ExcelPivotTable>(
+    token,
+    pivotTablesBase(location, itemId, sheet),
+    'Failed to list pivot tables'
+  );
 }
 
 export async function getExcelWorksheetPivotTable(

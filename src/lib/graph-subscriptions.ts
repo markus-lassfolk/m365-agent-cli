@@ -1,5 +1,5 @@
 import { resolveGraphAuth } from './graph-auth.js';
-import { callGraph, type GraphResponse, graphError } from './graph-client.js';
+import { callGraph, fetchAllPages, type GraphResponse, graphError } from './graph-client.js';
 
 export interface Subscription {
   id: string;
@@ -53,11 +53,7 @@ export async function createSubscription(
 export async function listSubscriptions(token?: string, identity?: string): Promise<GraphResponse<Subscription[]>> {
   try {
     const authToken = await getAuthToken(token, identity);
-    const res = await callGraph<{ value: Subscription[] }>(authToken, '/subscriptions', {
-      method: 'GET'
-    });
-    if (!res.ok) return res as unknown as GraphResponse<Subscription[]>;
-    return { ok: true, data: res.data!.value };
+    return await fetchAllPages<Subscription>(authToken, '/subscriptions', 'Failed to list subscriptions');
   } catch (err: any) {
     return graphError(err.message, err.code, err.status);
   }

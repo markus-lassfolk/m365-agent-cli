@@ -600,7 +600,14 @@ excelCommand
         console.error(`Auth error: ${auth.error}`);
         process.exit(1);
       }
-      const top = opts.top ? parseInt(opts.top, 10) : undefined;
+      let top: number | undefined;
+      if (opts.top !== undefined) {
+        top = parseInt(opts.top, 10);
+        if (Number.isNaN(top) || top < 0) {
+          console.error('Error: --top must be a non-negative integer');
+          process.exit(1);
+        }
+      }
       const r = await listExcelTableRows(auth.token, itemId, tableId, top, resolveDriveLocationForCli(opts));
       if (!r.ok || !r.data) {
         console.error(`Error: ${r.error?.message}`);
@@ -650,7 +657,11 @@ excelCommand
         console.error(`Error: ${r.error?.message}`);
         process.exit(1);
       }
-      console.log(opts.json && r.data !== undefined ? JSON.stringify(r.data, null, 2) : 'OK');
+      if (opts.json) {
+        console.log(JSON.stringify(r.data ?? { ok: true }, null, 2));
+      } else {
+        console.log('OK');
+      }
     }
   );
 

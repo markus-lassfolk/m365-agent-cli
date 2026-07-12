@@ -256,7 +256,7 @@ export const sendCommand = new Command('send')
       const anyLargeFile =
         attachments?.some((a) => {
           try {
-            return Buffer.from(a.contentBytes, 'base64').byteLength > GRAPH_OUTLOOK_ATTACHMENT_SESSION_THRESHOLD_BYTES;
+            return Buffer.from(a.contentBytes, 'base64').byteLength >= GRAPH_OUTLOOK_ATTACHMENT_SESSION_THRESHOLD_BYTES;
           } catch {
             return false;
           }

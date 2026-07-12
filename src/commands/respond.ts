@@ -395,15 +395,17 @@ export const respondCommand = new Command('respond')
               process.exit(1);
             }
 
-            console.log(`\nResponding to: ${ge.subject ?? '(no subject)'}`);
-            console.log(
-              `  ${formatDate(graphStartStr(ge))} ${formatTime(graphStartStr(ge))} - ${formatTime(ge.end?.dateTime ?? '')}`
-            );
-            console.log(`  Action: ${actionLower}`);
-            if (options.comment) {
-              console.log(`  Comment: ${options.comment}`);
+            if (!options.json) {
+              console.log(`\nResponding to: ${ge.subject ?? '(no subject)'}`);
+              console.log(
+                `  ${formatDate(graphStartStr(ge))} ${formatTime(graphStartStr(ge))} - ${formatTime(ge.end?.dateTime ?? '')}`
+              );
+              console.log(`  Action: ${actionLower}`);
+              if (options.comment) {
+                console.log(`  Comment: ${options.comment}`);
+              }
+              console.log('');
             }
-            console.log('');
 
             const base = {
               token: ga.token,
@@ -507,15 +509,17 @@ export const respondCommand = new Command('respond')
 
       const targetEvent = eventResult.data;
 
-      console.log(`\nResponding to: ${targetEvent.Subject}`);
-      console.log(
-        `  ${formatDate(targetEvent.Start.DateTime)} ${formatTime(targetEvent.Start.DateTime)} - ${formatTime(targetEvent.End.DateTime)}`
-      );
-      console.log(`  Action: ${actionLower}`);
-      if (options.comment) {
-        console.log(`  Comment: ${options.comment}`);
+      if (!options.json) {
+        console.log(`\nResponding to: ${targetEvent.Subject}`);
+        console.log(
+          `  ${formatDate(targetEvent.Start.DateTime)} ${formatTime(targetEvent.Start.DateTime)} - ${formatTime(targetEvent.End.DateTime)}`
+        );
+        console.log(`  Action: ${actionLower}`);
+        if (options.comment) {
+          console.log(`  Comment: ${options.comment}`);
+        }
+        console.log('');
       }
-      console.log('');
 
       const response = await respondToEvent({
         token: authResult.token!,

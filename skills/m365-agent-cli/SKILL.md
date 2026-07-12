@@ -1,6 +1,6 @@
 ---
 name: m365-agent-cli
-version: 2026.7.3
+version: 2026.7.4
 description: Microsoft 365 CLI (EWS + Graph) for calendar, mail, OneDrive, Planner, SharePoint, To Do, Teams, Bookings, Excel-on-drive, presence, inbox rules, delegates, subscriptions, Graph Search, Microsoft Viva / employee experience (`viva` — Graph beta: tenant `/employeeExperience`, user work time/insights/roles/learning, admin+org itemInsights, workHoursAndLocations, meeting Engage Q&A), Microsoft 365 Copilot APIs (`copilot` — retrieval, search, chat, reports, packages, meeting insights, interaction export, notify-help), and raw `graph invoke`/`graph batch`. Use when the user needs Outlook/Exchange, Graph, or M365 automation from the terminal.
 # `version` matches the npm CLI release; run `npm run sync-skill` after bumping package.json.
 metadata:
@@ -86,6 +86,7 @@ File and link attachments in the **EWS** flows below apply to **messages** and *
 | Drafts | **`drafts --create` / `--edit`** with **`--attach`** and **`--attach-link`** (same pattern as `send`) |
 | Download from a message | **`mail -d <id>`** (or **`--download`**), **`--output <dir>`** for save location |
 | Reply / forward with attachments or outgoing categories | **`mail --reply` / `--reply-all` / `--forward`** with **`--attach`**, **`--attach-link`**, **`--with-category`** (uses draft + send; **`--draft`** to save only). Use **message id** from list/read, not the numeric index, for non-interactive scripts. |
+| Add CC / BCC recipients when replying or forwarding | **`mail --reply` / `--reply-all` / `--forward`** with **`--cc <emails>`** and/or **`--bcc <emails>`** (comma-separated). These **add** recipients on top of the To/Cc a reply-all already includes. |
 | Calendar event files / links | **`create-event`** / **`update-event`**: **`--attach`**, **`--attach-link`** (adds after the item exists; paths relative to cwd where documented) |
 | List or download event attachments | **`calendar --list-attachments <eventId>`**, **`calendar --download-attachments <eventId>`** with **`--output`**, **`--force`** to overwrite |
 | Inbox rules | **`rules`**: conditions like **`--hasAttachments`**, actions like **`--forwardAsAttachmentTo`** (see **`rules --help`**) |

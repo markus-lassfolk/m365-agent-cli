@@ -51,7 +51,9 @@ export function buildTeamsHtmlBodyWithMentions(
         `Text must contain "${plainNeedle}" for mention ${i} (user ${m.userId}). Use @-prefix matching the display name after each --at.`
       );
     }
-    escaped = escaped.replace(needle, `<at id="${i}">${escapeHtml(m.displayName)}</at>`);
+    // Use a function replacer so `$`-sequences (e.g. `$&`, `$$`) in the display name are
+    // inserted literally rather than interpreted by String.prototype.replace.
+    escaped = escaped.replace(needle, () => `<at id="${i}">${escapeHtml(m.displayName)}</at>`);
   }
 
   for (let i = 0; i < mentions.length; i++) {

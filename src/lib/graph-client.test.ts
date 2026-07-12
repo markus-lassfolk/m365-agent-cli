@@ -219,6 +219,54 @@ describe('callGraphAt throttling and errors', () => {
     }
   });
 
+  it('does NOT retry a POST on 503 even with Retry-After (avoids duplicate side effects)', async () => {
+    let n = 0;
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = (async () => {
+        n++;
+        return new Response(JSON.stringify({ error: { code: 'serviceNotAvailable', message: 'down' } }), {
+          status: 503,
+          headers: { 'retry-after': '0', 'content-type': 'application/json' }
+        });
+      }) as unknown as typeof fetch;
+
+      await expect(
+        callGraphAt(baseUrl, token, '/me/sendMail', { method: 'POST', body: JSON.stringify({}) })
+      ).rejects.toBeInstanceOf(GraphApiError);
+      // A 503 can occur after the server began processing, so a non-idempotent POST must not be re-sent.
+      expect(n).toBe(1);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('DOES retry a GET on 503 with Retry-After then succeeds', async () => {
+    let n = 0;
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = (async () => {
+        n++;
+        if (n === 1) {
+          return new Response(JSON.stringify({ error: { code: 'serviceNotAvailable', message: 'down' } }), {
+            status: 503,
+            headers: { 'retry-after': '0', 'content-type': 'application/json' }
+          });
+        }
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as unknown as typeof fetch;
+
+      const r = await callGraphAt<{ ok: boolean }>(baseUrl, token, '/me', { method: 'GET' });
+      expect(r.ok).toBe(true);
+      expect(n).toBe(2);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it('includes request-id in GraphApiError when header present', async () => {
     const originalFetch = globalThis.fetch;
     try {
@@ -441,6 +489,157 @@ describe('Graph v1.0 404 beta hint', () => {
       await expect(callGraphAt(baseUrl, token, '/me/drive/root/children')).rejects.toMatchObject({
         message: 'Forbidden'
       });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+describe('fetchAllPages pagination safety', () => {
+  const token = 'test-token';
+  const baseUrl = 'https://graph.microsoft.com/v1.0';
+
+  it('follows same-origin nextLink across pages and concatenates', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    const originalFetch = globalThis.fetch;
+    try {
+      let n = 0;
+      globalThis.fetch = (async () => {
+        n++;
+        if (n === 1) {
+          return new Response(
+            JSON.stringify({ value: [{ id: 'a' }], '@odata.nextLink': `${baseUrl}/me/messages?$skiptoken=2` }),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          );
+        }
+        return new Response(JSON.stringify({ value: [{ id: 'b' }] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as unknown as typeof fetch;
+
+      const { fetchAllPages } = await import('./graph-client.js');
+      const r = await fetchAllPages<{ id: string }>(token, '/me/messages', 'Failed to list');
+      expect(r.ok).toBe(true);
+      expect(r.data?.map((x) => x.id)).toEqual(['a', 'b']);
+      expect(n).toBe(2);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('errors (not silent truncation) when a nextLink cannot be resolved against the base URL', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = (async () =>
+        new Response(
+          JSON.stringify({
+            value: [{ id: 'a' }],
+            // Different origin than baseUrl -> resolveNextPath returns '' -> must error, not truncate.
+            '@odata.nextLink': 'https://evil.example.com/v1.0/me/messages?$skiptoken=2'
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        )) as unknown as typeof fetch;
+
+      const { fetchAllPages } = await import('./graph-client.js');
+      const r = await fetchAllPages<{ id: string }>(token, '/me/messages', 'Failed to list');
+      expect(r.ok).toBe(false);
+      expect(r.error?.code).toBe('NextLinkUnresolved');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+describe('callGraphAt body handling', () => {
+  const token = 'test-token';
+  const baseUrl = 'https://graph.microsoft.com/v1.0';
+
+  it('treats an empty 200 body as no content', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = (async () => new Response('', { status: 200 })) as unknown as typeof fetch;
+      const r = await callGraphAt(baseUrl, token, '/me', { method: 'GET' });
+      expect(r.ok).toBe(true);
+      expect(r.data).toBeUndefined();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('shapes a non-JSON 200 body as a GraphApiError with status', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = (async () =>
+        new Response('<html>nope</html>', {
+          status: 200,
+          headers: { 'content-type': 'text/html' }
+        })) as unknown as typeof fetch;
+      await expect(callGraphAt(baseUrl, token, '/me', { method: 'GET' })).rejects.toMatchObject({
+        code: 'InvalidJsonResponse',
+        status: 200
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+describe('listGraphCollection shared pagination helper', () => {
+  const token = 'test-token';
+  const baseUrl = 'https://graph.microsoft.com/v1.0';
+
+  it('with an explicit top does a single bounded page ($top clamped)', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    const urls: string[] = [];
+    const originalFetch = globalThis.fetch;
+    try {
+      let n = 0;
+      globalThis.fetch = (async (input: string | URL | Request) => {
+        n++;
+        urls.push(typeof input === 'string' ? input : input.toString());
+        return new Response(JSON.stringify({ value: [{ id: 'a' }], '@odata.nextLink': `${baseUrl}/x?$skiptoken=2` }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as unknown as typeof fetch;
+      const { listGraphCollection } = await import('./graph-client.js');
+      const r = await listGraphCollection<{ id: string }>(token, '/things', 'fail', { top: 5000, maxTop: 999 });
+      expect(r.ok).toBe(true);
+      expect(r.data?.map((x) => x.id)).toEqual(['a']); // single page even though nextLink present
+      expect(n).toBe(1);
+      expect(urls[0]).toContain('$top=999'); // clamped to maxTop
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('without top pages through @odata.nextLink to completion', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    const originalFetch = globalThis.fetch;
+    try {
+      let n = 0;
+      globalThis.fetch = (async () => {
+        n++;
+        if (n === 1) {
+          return new Response(
+            JSON.stringify({ value: [{ id: 'a' }], '@odata.nextLink': `${baseUrl}/things?$skiptoken=2` }),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          );
+        }
+        return new Response(JSON.stringify({ value: [{ id: 'b' }] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as unknown as typeof fetch;
+      const { listGraphCollection } = await import('./graph-client.js');
+      const r = await listGraphCollection<{ id: string }>(token, '/things', 'fail');
+      expect(r.ok).toBe(true);
+      expect(r.data?.map((x) => x.id)).toEqual(['a', 'b']);
+      expect(n).toBe(2);
     } finally {
       globalThis.fetch = originalFetch;
     }

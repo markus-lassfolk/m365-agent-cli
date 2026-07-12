@@ -1,4 +1,3 @@
-import { readFile } from 'node:fs/promises';
 import { Command } from 'commander';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
 import type { GraphResponse } from '../lib/graph-client.js';
@@ -34,13 +33,15 @@ import {
   type OnlineMeeting,
   updateOnlineMeeting
 } from '../lib/online-meetings-graph-client.js';
+import { readJsonFileOrExit } from '../lib/read-json-file.js';
 import { checkReadOnly } from '../lib/utils.js';
 
 function parseOptionalRecordingsTop(raw?: string): number | undefined {
   if (!raw?.trim()) return undefined;
   const n = Number.parseInt(raw.trim(), 10);
   if (!Number.isFinite(n) || n < 1) {
-    return undefined;
+    console.error(`Error: --top must be a positive integer (got "${raw.trim()}")`);
+    process.exit(1);
   }
   return Math.min(999, n);
 }
@@ -108,8 +109,7 @@ meetingCommand
 
       let r: GraphResponse<OnlineMeeting>;
       if (opts.jsonFile?.trim()) {
-        const raw = await readFile(opts.jsonFile.trim(), 'utf-8');
-        const body = JSON.parse(raw) as Record<string, unknown>;
+        const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
         r = await createOnlineMeetingFromBody(auth.token!, body, opts.user);
       } else {
         if (!opts.start?.trim() || !opts.end?.trim()) {
@@ -192,8 +192,7 @@ meetingCommand
         console.error(`Auth error: ${auth.error}`);
         process.exit(1);
       }
-      const raw = await readFile(opts.jsonFile, 'utf-8');
-      const patch = JSON.parse(raw) as Record<string, unknown>;
+      const patch = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const r = await updateOnlineMeeting(auth.token!, meetingId, patch, opts.user);
       if (!r.ok || !r.data) {
         console.error(`Error: ${r.error?.message}`);

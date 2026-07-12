@@ -50,6 +50,8 @@ export function deepMergeSearchRequest(
 ): Record<string, unknown> {
   const out: Record<string, unknown> = { ...base };
   for (const [k, v] of Object.entries(overlay)) {
+    // Never merge prototype-polluting keys from user-supplied JSON.
+    if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
     if (
       v !== null &&
       typeof v === 'object' &&

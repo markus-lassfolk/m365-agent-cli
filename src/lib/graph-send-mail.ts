@@ -27,7 +27,7 @@ export function buildGraphSendMailPayload(opts: {
   fileAttachments?: GraphSendFileAttachment[];
   referenceAttachments?: GraphSendReferenceAttachment[];
 }): { message: Record<string, unknown>; saveToSentItems: boolean } {
-  const toRecipients = opts.to.map((address) => ({ emailAddress: { address } }));
+  const toRecipients = opts.to.filter(Boolean).map((address) => ({ emailAddress: { address } }));
   const ccRecipients = opts.cc?.filter(Boolean).map((address) => ({ emailAddress: { address } }));
   const bccRecipients = opts.bcc?.filter(Boolean).map((address) => ({ emailAddress: { address } }));
 

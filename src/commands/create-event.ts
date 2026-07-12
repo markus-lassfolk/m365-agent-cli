@@ -210,7 +210,7 @@ export function buildCreateEventCommand(commandName: string, description = 'Crea
             process.exit(1);
           }
 
-          console.log('\nFetching available meeting rooms (EWS)...\n');
+          if (!options.json) console.log('\nFetching available meeting rooms (EWS)...\n');
 
           // Search with multiple queries to find more rooms
           const allRooms = new Map<string, { Name: string; Address: string }>();
@@ -227,20 +227,32 @@ export function buildCreateEventCommand(commandName: string, description = 'Crea
             }
           }
 
-          if (allRooms.size > 0) {
-            console.log('Available rooms:');
-            const sortedRooms = [...allRooms.values()].sort((a, b) => a.Name.localeCompare(b.Name));
-            for (const room of sortedRooms) {
-              console.log(`  - ${room.Name} (${room.Address})`);
+          if (allRooms.size === 0) {
+            // Fallback to REST API before giving up.
+            const roomsResult = await getRooms(authResult.token!);
+            if (roomsResult.ok && roomsResult.data) {
+              for (const room of roomsResult.data) {
+                if (!allRooms.has(room.Address)) allRooms.set(room.Address, room);
+              }
             }
+          }
+
+          const sortedRooms = [...allRooms.values()].sort((a, b) => a.Name.localeCompare(b.Name));
+
+          if (options.json) {
+            console.log(
+              JSON.stringify(
+                { backend: 'ews', rooms: sortedRooms.map((r) => ({ name: r.Name, email: r.Address })) },
+                null,
+                2
+              )
+            );
             return;
           }
 
-          // Fallback to REST API
-          const roomsResult = await getRooms(authResult.token!);
-          if (roomsResult.ok && roomsResult.data && roomsResult.data.length > 0) {
+          if (sortedRooms.length > 0) {
             console.log('Available rooms:');
-            for (const room of roomsResult.data) {
+            for (const room of sortedRooms) {
               console.log(`  - ${room.Name} (${room.Address})`);
             }
           } else {
@@ -312,7 +324,13 @@ export function buildCreateEventCommand(commandName: string, description = 'Crea
 
         // Parse attendees
         const attendees: Array<{ email: string; name?: string; type?: 'Required' | 'Optional' | 'Resource' }> =
-          options.attendees ? options.attendees.split(',').map((e) => ({ email: e.trim() })) : [];
+          options.attendees
+            ? options.attendees
+                .split(',')
+                .map((e) => e.trim())
+                .filter(Boolean)
+                .map((email) => ({ email }))
+            : [];
 
         const roomNeedsEwsLookup = Boolean(options.room && !options.room.includes('@'));
 
@@ -528,8 +546,15 @@ export function buildCreateEventCommand(commandName: string, description = 'Crea
             range.Type = 'EndDate';
             range.EndDate = options.until;
           } else if (options.count) {
+            const count = parseInt(options.count, 10);
+            if (!Number.isFinite(count) || count < 1) {
+              const msg = `Invalid --count: "${options.count}" (must be a positive integer)`;
+              if (options.json) console.log(JSON.stringify({ error: msg }, null, 2));
+              else console.error(msg);
+              process.exit(1);
+            }
             range.Type = 'Numbered';
-            range.NumberOfOccurrences = parseInt(options.count, 10);
+            range.NumberOfOccurrences = count;
           }
 
           recurrence = { Pattern: pattern, Range: range };

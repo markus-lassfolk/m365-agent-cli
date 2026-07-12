@@ -1,4 +1,11 @@
-import { callGraph, GraphApiError, type GraphResponse, graphError, graphResult } from './graph-client.js';
+import {
+  callGraph,
+  fetchAllPages,
+  GraphApiError,
+  type GraphResponse,
+  graphError,
+  graphResult
+} from './graph-client.js';
 import { graphUserPath } from './graph-user-path.js';
 
 /** Preset color name from Graph (`preset0`..`preset24`). */
@@ -47,24 +54,11 @@ export async function listOutlookMasterCategories(
   token: string,
   user?: string
 ): Promise<GraphResponse<OutlookMasterCategory[]>> {
-  const path = graphUserPath(user, 'outlook/masterCategories');
-  let result: GraphResponse<{ value: OutlookMasterCategory[] }>;
-  try {
-    result = await callGraph<{ value: OutlookMasterCategory[] }>(token, path);
-  } catch (err) {
-    if (err instanceof GraphApiError) {
-      return graphError(err.message, err.code, err.status);
-    }
-    return graphError(err instanceof Error ? err.message : 'Failed to list master categories');
-  }
-  if (!result.ok || !result.data) {
-    return graphError(
-      result.error?.message || 'Failed to list master categories',
-      result.error?.code,
-      result.error?.status
-    );
-  }
-  return graphResult(result.data.value);
+  return fetchAllPages<OutlookMasterCategory>(
+    token,
+    graphUserPath(user, 'outlook/masterCategories'),
+    'Failed to list master categories'
+  );
 }
 
 export async function createOutlookMasterCategory(

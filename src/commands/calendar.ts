@@ -170,13 +170,14 @@ function getDateRange(startDay: string, endDay?: string): { start: string; end: 
     }
   }
 
-  // Single day or start of range
-  const startDate = parseDay(startDay, { weekdayDirection: 'previous' });
+  // Single day or start of range. throwOnInvalid so a garbage date argument surfaces a clean
+  // error instead of being silently coerced to "today".
+  const startDate = parseDay(startDay, { weekdayDirection: 'previous', throwOnInvalid: true });
   startDate.setHours(0, 0, 0, 0);
 
   if (endDay) {
     // Date range - use nearestForward for end date
-    const endDate = parseDay(endDay, { baseDate: startDate, weekdayDirection: 'nearestForward' });
+    const endDate = parseDay(endDay, { baseDate: startDate, weekdayDirection: 'nearestForward', throwOnInvalid: true });
     endDate.setHours(0, 0, 0, 0);
     // Exclusive end: next day's midnight
     const endExclusive = new Date(endDate);
@@ -230,7 +231,7 @@ function parseBusinessDaysOption(options: {
 }
 
 function parseAnchorDateForDynamicRange(startDay: string): Date {
-  const startDate = parseDay(startDay, { weekdayDirection: 'previous' });
+  const startDate = parseDay(startDay, { weekdayDirection: 'previous', throwOnInvalid: true });
   startDate.setHours(0, 0, 0, 0);
   return startDate;
 }
@@ -668,26 +669,40 @@ function buildCalendarListCommand(): Command {
               const eventId = options.downloadAttachments.trim();
               const eventRes = await getEvent(ga.token, eventId, mailbox);
               if (!eventRes.ok || !eventRes.data) {
-                console.error(`Error: ${eventRes.error?.message || 'Event not found'}`);
+                if (options.json)
+                  console.log(JSON.stringify({ error: eventRes.error?.message || 'Event not found' }, null, 2));
+                else console.error(`Error: ${eventRes.error?.message || 'Event not found'}`);
                 process.exit(1);
               }
               if (!eventRes.data.hasAttachments) {
-                console.log('This event has no attachments.');
+                if (options.json)
+                  console.log(JSON.stringify({ output: options.output, written: [], failed: [] }, null, 2));
+                else console.log('This event has no attachments.');
                 return;
               }
               const attsRes = await listEventAttachments(ga.token, eventId, mailbox);
               if (!attsRes.ok || !attsRes.data) {
-                console.error(`Error: ${attsRes.error?.message || 'Failed to fetch attachments'}`);
+                if (options.json)
+                  console.log(
+                    JSON.stringify({ error: attsRes.error?.message || 'Failed to fetch attachments' }, null, 2)
+                  );
+                else console.error(`Error: ${attsRes.error?.message || 'Failed to fetch attachments'}`);
                 process.exit(1);
               }
               const attachments = attsRes.data.filter((a) => !a.isInline);
               if (attachments.length === 0) {
-                console.log('No downloadable attachments (inline-only).');
+                if (options.json)
+                  console.log(JSON.stringify({ output: options.output, written: [], failed: [] }, null, 2));
+                else console.log('No downloadable attachments (inline-only).');
                 return;
               }
               await mkdir(options.output, { recursive: true });
               const usedPaths = new Set<string>();
-              console.log(`\nDownloading ${attachments.length} attachment(s) to ${options.output}/ (Graph)\n`);
+              const written: Array<{ name: string; path: string; kind: 'file' | 'link'; sizeKB?: number }> = [];
+              const failed: Array<{ name: string; error: string }> = [];
+              if (!options.json) {
+                console.log(`\nDownloading ${attachments.length} attachment(s) to ${options.output}/ (Graph)\n`);
+              }
               for (const att of attachments) {
                 const kind = graphAttachmentKind(att);
                 if (kind === 'reference') {
@@ -704,7 +719,8 @@ function buildCalendarListCommand(): Command {
                     }
                   }
                   if (!url) {
-                    console.error(`  Failed to resolve link: ${att.name || att.id}`);
+                    failed.push({ name: att.name || att.id || 'link', error: 'could not resolve link URL' });
+                    if (!options.json) console.error(`  Failed to resolve link: ${att.name || att.id}`);
                     continue;
                   }
                   const filePath = await writeLinkFile(
@@ -717,16 +733,22 @@ function buildCalendarListCommand(): Command {
                   if (!filePath) {
                     continue;
                   }
-                  console.log(`  ✓ ${filePath.split(/[\\/]/).pop()} (link)`);
+                  written.push({ name: att.name || 'link', path: filePath, kind: 'link' });
+                  if (!options.json) console.log(`  ✓ ${filePath.split(/[\\/]/).pop()} (link)`);
                   continue;
                 }
                 if (kind !== 'file') {
-                  console.warn(`  Skipping non-file attachment: ${att.name || att.id}`);
+                  if (!options.json) console.warn(`  Skipping non-file attachment: ${att.name || att.id}`);
                   continue;
                 }
                 const dl = await downloadEventAttachmentBytes(ga.token, eventId, att.id, mailbox);
                 if (!dl.ok || !dl.data) {
-                  console.error(`  Failed to download: ${att.name || att.id} (${dl.error?.message})`);
+                  failed.push({
+                    name: att.name || att.id || 'attachment',
+                    error: dl.error?.message || 'download failed'
+                  });
+                  if (!options.json)
+                    console.error(`  Failed to download: ${att.name || att.id} (${dl.error?.message})`);
                   continue;
                 }
                 const content = Buffer.from(dl.data);
@@ -740,9 +762,14 @@ function buildCalendarListCommand(): Command {
                 usedPaths.add(filePath);
                 await writeFile(filePath, content);
                 const sizeKB = Math.round(content.length / 1024);
-                console.log(`  ✓ ${filePath.split(/[\\/]/).pop()} (${sizeKB} KB)`);
+                written.push({ name: att.name || safeName, path: filePath, kind: 'file', sizeKB });
+                if (!options.json) console.log(`  ✓ ${filePath.split(/[\\/]/).pop()} (${sizeKB} KB)`);
               }
-              console.log('\nDone.\n');
+              if (options.json) {
+                console.log(JSON.stringify({ output: options.output, written, failed }, null, 2));
+              } else {
+                console.log('\nDone.\n');
+              }
               return;
             }
             if (backend === 'graph') {
@@ -780,26 +807,36 @@ function buildCalendarListCommand(): Command {
           const eventId = options.downloadAttachments.trim();
           const eventRes = await getCalendarEvent(token, eventId, mailbox);
           if (!eventRes.ok || !eventRes.data) {
-            console.error(`Error: ${eventRes.error?.message || 'Event not found'}`);
+            if (options.json)
+              console.log(JSON.stringify({ error: eventRes.error?.message || 'Event not found' }, null, 2));
+            else console.error(`Error: ${eventRes.error?.message || 'Event not found'}`);
             process.exit(1);
           }
           if (!eventRes.data.HasAttachments) {
-            console.log('This event has no attachments.');
+            if (options.json) console.log(JSON.stringify({ output: options.output, written: [], failed: [] }, null, 2));
+            else console.log('This event has no attachments.');
             return;
           }
           const attsRes = await getAttachments(token, eventId, mailbox);
           if (!attsRes.ok || !attsRes.data) {
-            console.error(`Error: ${attsRes.error?.message || 'Failed to fetch attachments'}`);
+            if (options.json)
+              console.log(JSON.stringify({ error: attsRes.error?.message || 'Failed to fetch attachments' }, null, 2));
+            else console.error(`Error: ${attsRes.error?.message || 'Failed to fetch attachments'}`);
             process.exit(1);
           }
           const attachments = attsRes.data.value.filter((a) => !a.IsInline);
           if (attachments.length === 0) {
-            console.log('No downloadable attachments (inline-only).');
+            if (options.json) console.log(JSON.stringify({ output: options.output, written: [], failed: [] }, null, 2));
+            else console.log('No downloadable attachments (inline-only).');
             return;
           }
           await mkdir(options.output, { recursive: true });
           const usedPaths = new Set<string>();
-          console.log(`\nDownloading ${attachments.length} attachment(s) to ${options.output}/\n`);
+          const written: Array<{ name: string; path: string; kind: 'file' | 'link'; sizeKB?: number }> = [];
+          const failed: Array<{ name: string; error: string }> = [];
+          if (!options.json) {
+            console.log(`\nDownloading ${attachments.length} attachment(s) to ${options.output}/\n`);
+          }
           for (const att of attachments) {
             if (att.Kind === 'reference' || att.AttachLongPathName) {
               let url = att.AttachLongPathName;
@@ -810,7 +847,8 @@ function buildCalendarListCommand(): Command {
                 }
               }
               if (!url) {
-                console.error(`  Failed to resolve link: ${att.Name}`);
+                failed.push({ name: att.Name || 'link', error: 'could not resolve link URL' });
+                if (!options.json) console.error(`  Failed to resolve link: ${att.Name}`);
                 continue;
               }
               const filePath = await writeLinkFile(
@@ -823,13 +861,15 @@ function buildCalendarListCommand(): Command {
               if (!filePath) {
                 continue;
               }
-              console.log(`  ✓ ${filePath.split(/[\\/]/).pop()} (link)`);
+              written.push({ name: att.Name || 'link', path: filePath, kind: 'link' });
+              if (!options.json) console.log(`  ✓ ${filePath.split(/[\\/]/).pop()} (link)`);
               continue;
             }
 
             const fullAtt = await getAttachment(token, eventId, att.Id, mailbox);
             if (!fullAtt.ok || !fullAtt.data?.ContentBytes) {
-              console.error(`  Failed to download: ${att.Name}`);
+              failed.push({ name: att.Name || 'attachment', error: 'download failed' });
+              if (!options.json) console.error(`  Failed to download: ${att.Name}`);
               continue;
             }
             const content = Buffer.from(fullAtt.data.ContentBytes, 'base64');
@@ -837,9 +877,14 @@ function buildCalendarListCommand(): Command {
             usedPaths.add(filePath);
             await writeFile(filePath, content);
             const sizeKB = Math.round(content.length / 1024);
-            console.log(`  ✓ ${filePath.split(/[\\/]/).pop()} (${sizeKB} KB)`);
+            written.push({ name: att.Name, path: filePath, kind: 'file', sizeKB });
+            if (!options.json) console.log(`  ✓ ${filePath.split(/[\\/]/).pop()} (${sizeKB} KB)`);
           }
-          console.log('\nDone.\n');
+          if (options.json) {
+            console.log(JSON.stringify({ output: options.output, written, failed }, null, 2));
+          } else {
+            console.log('\nDone.\n');
+          }
           return;
         }
 

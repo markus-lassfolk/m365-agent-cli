@@ -391,6 +391,7 @@ export const draftsCommand = new Command('drafts')
 
               if (!attachResult.ok) {
                 console.error(`Failed to attach ${validated.fileName}: ${attachResult.error?.message}`);
+                process.exit(1);
               } else if (!options.json) {
                 console.log(`  Attached: ${validated.fileName}`);
               }
@@ -531,7 +532,7 @@ export const draftsCommand = new Command('drafts')
               const content = await readFile(validated.absolutePath);
               const contentType = lookupMimeType(validated.fileName) || 'application/octet-stream';
 
-              await addAttachmentToDraft(
+              const attachResult = await addAttachmentToDraft(
                 authResult.token!,
                 id,
                 {
@@ -542,7 +543,10 @@ export const draftsCommand = new Command('drafts')
                 options.mailbox
               );
 
-              if (!options.json) {
+              if (!attachResult.ok) {
+                console.error(`Failed to attach ${validated.fileName}: ${attachResult.error?.message}`);
+                process.exit(1);
+              } else if (!options.json) {
                 console.log(`  Attached: ${validated.fileName}`);
               }
             } catch (err) {
@@ -581,7 +585,11 @@ export const draftsCommand = new Command('drafts')
           }
         }
 
-        console.log(`\u2713 Draft updated: ${id}`);
+        if (options.json) {
+          console.log(JSON.stringify({ success: true, draftId: id, action: 'updated' }, null, 2));
+        } else {
+          console.log(`\u2713 Draft updated: ${id}`);
+        }
         return;
       }
 
@@ -595,7 +603,11 @@ export const draftsCommand = new Command('drafts')
           process.exit(1);
         }
 
-        console.log(`\u2713 Draft sent: ${id}`);
+        if (options.json) {
+          console.log(JSON.stringify({ success: true, draftId: id, action: 'sent' }, null, 2));
+        } else {
+          console.log(`\u2713 Draft sent: ${id}`);
+        }
         return;
       }
 
@@ -613,7 +625,11 @@ export const draftsCommand = new Command('drafts')
           process.exit(1);
         }
 
-        console.log(`\u2713 Draft deleted: ${id}`);
+        if (options.json) {
+          console.log(JSON.stringify({ success: true, draftId: id, action: 'deleted' }, null, 2));
+        } else {
+          console.log(`\u2713 Draft deleted: ${id}`);
+        }
         return;
       }
 

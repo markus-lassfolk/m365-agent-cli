@@ -148,7 +148,9 @@ export function mergePlannerAssignments(
   removeUserIds: string[]
 ): Record<string, unknown> {
   const out: Record<string, unknown> = { ...(current || {}) };
-  for (const r of removeUserIds) delete out[r];
+  // `assignments` is an open-type dictionary merged per-key on PATCH; a key must be set to null to
+  // be removed. Omitting/deleting the key leaves the assignee in place (a silent no-op).
+  for (const r of removeUserIds) out[r] = null;
   for (const a of addUserIds) {
     out[a] = {
       '@odata.type': '#microsoft.graph.plannerAssignment',
@@ -677,7 +679,8 @@ export async function getPlannerTaskDetails(token: string, taskId: string): Prom
 
 export interface UpdatePlannerTaskDetailsParams {
   description?: string | null;
-  checklist?: Record<string, PlannerTaskDetailsChecklistItem> | null;
+  // Open-type dictionary: a per-key null value removes that checklist item on PATCH.
+  checklist?: Record<string, PlannerTaskDetailsChecklistItem | null> | null;
   references?: Record<string, unknown> | null;
   previewType?: string;
 }
@@ -897,9 +900,20 @@ export async function removePlannerChecklistItem(
   }
   const etag = dr.data['@odata.etag'];
   if (!etag) return graphError('Task details missing ETag', 'MISSING_ETAG', 500);
-  const checklist = { ...(dr.data.checklist || {}) };
-  delete checklist[checklistItemId];
+  // `checklist` is an open-type dictionary merged per-key; set the item to null to remove it
+  // (deleting/omitting the key is a silent no-op — the item stays).
+  const checklist = { ...(dr.data.checklist || {}), [checklistItemId]: null };
   return updatePlannerTaskDetails(token, dr.data.id, etag, { checklist });
+}
+
+/**
+ * Encode a reference URL for use as a `plannerExternalReferences` open-type property name.
+ * OData forbids `.`, `:`, `%`, `@`, `#` in Open Type property names, so they must be
+ * percent-encoded (encode `%` first to avoid double-encoding).
+ * @see https://learn.microsoft.com/graph/api/resources/plannerexternalreferences
+ */
+function encodePlannerReferenceKey(url: string): string {
+  return url.replace(/%/g, '%25').replace(/\./g, '%2E').replace(/:/g, '%3A').replace(/@/g, '%40').replace(/#/g, '%23');
 }
 
 /** Add or replace a reference URL entry on task details. */
@@ -917,7 +931,7 @@ export async function addPlannerReference(
   const etag = dr.data['@odata.etag'];
   if (!etag) return graphError('Task details missing ETag', 'MISSING_ETAG', 500);
   const references = { ...(dr.data.references || {}) };
-  references[resourceUrl] = {
+  references[encodePlannerReferenceKey(resourceUrl)] = {
     '@odata.type': '#microsoft.graph.plannerExternalReference',
     alias,
     ...(type ? { type } : {}),
@@ -938,8 +952,10 @@ export async function removePlannerReference(
   }
   const etag = dr.data['@odata.etag'];
   if (!etag) return graphError('Task details missing ETag', 'MISSING_ETAG', 500);
-  const references = { ...(dr.data.references || {}) };
-  delete references[resourceUrl];
+  // `references` is an open-type dictionary merged per-key; set the key to null to remove it
+  // (deleting/omitting the key is a silent no-op). Stored keys are percent-encoded, so encode
+  // the incoming URL the same way to match.
+  const references = { ...(dr.data.references || {}), [encodePlannerReferenceKey(resourceUrl)]: null };
   return updatePlannerTaskDetails(token, dr.data.id, etag, { references });
 }
 

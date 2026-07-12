@@ -26,7 +26,11 @@ function parseEmailAddresses(raw: string): { emailAddress: { name?: string; addr
     }
     return parsed;
   } catch {
-    return raw.split(',').map((s) => ({ emailAddress: { address: s.trim() } }));
+    return raw
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((address) => ({ emailAddress: { address } }));
   }
 }
 
@@ -56,7 +60,8 @@ function parseAction(key: string, raw: any): MessageRuleAction[keyof MessageRule
   if (key === 'assignCategories') {
     return String(raw)
       .split(',')
-      .map((s: string) => s.trim());
+      .map((s: string) => s.trim())
+      .filter(Boolean);
   }
   return raw;
 }
@@ -383,8 +388,8 @@ const createCmd = new Command('create')
       actions
     };
 
-    console.log('Creating rule…');
     if (!opts.json) {
+      console.log('Creating rule…');
       console.log(`  Name:      ${payload.displayName}`);
       console.log(`  Priority:  ${payload.priority ?? 'default'}`);
       console.log(`  Enabled:   ${payload.isEnabled}`);
@@ -462,7 +467,7 @@ const updateCmd = new Command('update')
     if (conditions) payload.conditions = conditions;
     if (Object.keys(actions).length > 0) payload.actions = actions;
 
-    console.log(`Updating rule ${opts.id}…`);
+    if (!opts.json) console.log(`Updating rule ${opts.id}…`);
     const result = await updateMessageRule(auth.token!, opts.id, payload, opts.user);
     if (!result.ok) {
       console.error(`Error: ${result.error?.message}`);

@@ -182,7 +182,10 @@ export async function resolveAuth(options?: {
           version: 1,
           refreshToken: result.refreshToken,
           ews: { accessToken: result.accessToken, expiresAt: result.expiresAt },
-          graph: cached?.graph
+          graph: cached?.graph,
+          // Preserve the narrow-scope acceptance flag across EWS refreshes so a later Graph
+          // auth doesn't force a redundant refresh believing the scope was never accepted.
+          graphNarrowScopeAccepted: cached?.graphNarrowScopeAccepted
         };
         await saveM365TokenCache(identity, next);
         await persistRefreshTokenToEnv(result.refreshToken, {

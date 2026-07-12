@@ -95,10 +95,8 @@ describe('isValidJwtStructure', () => {
   });
 
   test('rejects a non-string input defensively', () => {
-    // biome-ignore lint/suspicious/noExplicitAny: defensive guard branch coverage
-    expect(isValidJwtStructure(undefined as any)).toBe(false);
-    // biome-ignore lint/suspicious/noExplicitAny: defensive guard branch coverage
-    expect(isValidJwtStructure(null as any)).toBe(false);
+    expect(isValidJwtStructure(undefined as unknown as string)).toBe(false);
+    expect(isValidJwtStructure(null as unknown as string)).toBe(false);
   });
 
   test('rejects tokens without exactly three parts', () => {

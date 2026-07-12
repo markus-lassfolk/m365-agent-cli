@@ -6,7 +6,84 @@ For install and tagging, see [docs/RELEASE.md](docs/RELEASE.md).
 
 ---
 
-## [Unreleased]
+## [2026.7.4] — 2026-07-12
+
+### Mail
+
+- **`mail --reply` / `--reply-all` / `--forward` now accept `--cc` and `--bcc`** (comma-separated) to add CC/BCC recipients to the outgoing reply or forward. Previously these commands had no way to set CC/BCC, so agents could only reply to the original participants. Recipients are **added** on top of the To/Cc a reply-all already carries (deduped case-insensitively), rather than replacing them. Works on both the Microsoft Graph path (patches the reply/forward draft before send) and the EWS path (adds `CcRecipients`/`BccRecipients` to the response object).
+
+### Fixed (QA sweep)
+
+Correctness and robustness fixes surfaced by a full-repo review:
+
+- **Graph large-attachment threshold was 2 MB, below Graph's 3 MB minimum.** Files sized 2–3 MB were routed to an upload session and rejected with `ErrorAttachmentSizeShouldNotBeLessThanMinimumSize`. The crossover is now the correct 3 MB (single POST below, upload session at/above).
+- **Large (upload-session) attachments now return the real attachment id** parsed from the final PUT's `Location` header instead of the placeholder string `"uploaded"`.
+- **EWS multi-attachment sends used a stale ChangeKey.** `CreateAttachment` returns the parent's new change key as attributes on `<t:AttachmentId>` (`RootItemId` / `RootItemChangeKey`), not as a `<RootItemId>` element — the previous extraction always missed it, so a second attachment or the final `SendItem` could fail with `ErrorIrresolvableConflict`.
+- **EWS `sendEmail` with attachments dropped all BCC recipients** — the attachment path built the draft via `createDraft`, which had no `bcc` parameter. BCC is now threaded through.
+- **`drafts --create` / `--edit` (EWS) reported success when a file attachment failed.** The create path logged the error but didn't exit; the edit path discarded the result entirely. Both now exit non-zero on attachment failure.
+- **`planner create-task --priority` / `--preview-type` were parsed (and `--priority` range-checked) but never sent.** Both are now applied to the created task.
+- **Planner `reference add`/`remove` sent raw URLs as Open Type property names.** OData forbids `.`, `:`, `%`, `@`, `#` in those names; they are now percent-encoded, so adding/removing a normal `https://` reference works.
+- **`copilot packages zip-download`** now refuses to overwrite an existing output file unless `--force` is passed.
+- **`mail --force`** (used by the attachment-download overwrite logic) was referenced but never registered as an option; it is now a real flag.
+- **`update-event` (auto backend)** no longer crashes with no message when a Graph attachments-only attempt fails without an EWS fallback context — it now exits with a clear, actionable error.
+- **Date parsing** (`--day`) no longer silently rolls over out-of-range values (`2026-02-30` → Mar 2); invalid calendar dates are rejected.
+- **Markdown → HTML** no longer corrupts link URLs/labels containing `_` or `*` (emphasis was applied after links were restored, rewriting `href` internals); links are now restored after all other transforms.
+- **Input validation:** empty comma-split entries are dropped for `mail`/`create-event`/`suggest` attendee/recipient lists and `presence bulk --json-file`; `excel table-rows --top` rejects non-numeric values; `excel table-rows-add --json` always emits JSON; `todo create` validates `--importance`/`--status`; `onenote` and `presence` file reads report a clear error instead of an empty non-zero exit.
+- **Webhook receiver hardening (`serve`):** caps request body size, sets request/header timeouts (slow-loris), handles bind errors (`EADDRINUSE`/`EACCES`) gracefully, redacts `clientState` from logs, compares `clientState` in constant time, warns when verification is disabled, and logs the actual bind interface.
+- **Auth:** EWS token refresh now preserves the `graphNarrowScopeAccepted` flag, avoiding a redundant Graph refresh on the next call.
+- **Mime types:** `.tgz` now maps to `application/gzip`.
+
+Second review pass:
+
+- **Graph pagination (`fetchAllPages`)** no longer silently truncates a collection and reports success when a `@odata.nextLink` can't be resolved against the configured base URL — it now returns a clear `NextLinkUnresolved` error. Added a page cap (`GRAPH_MAX_PAGES`, default 10000) to guard against nextLink cycles/runaway.
+- **Graph retries with a one-shot stream body** (large uploads via `Readable.toWeb`) are no longer retried on 401-refresh/throttle — the drained stream can't be replayed, so a retry would have sent an empty/corrupt body; the original error is surfaced so the caller restarts with a fresh stream.
+- **EWS free/busy times were parsed in the host's local time zone.** `GetUserAvailability` returns zone-less times (in the request's UTC zone); they are now normalized to UTC so room-free / schedule-overlap checks are correct on non-UTC hosts.
+- **EWS recurrence validation:** weekly and relative monthly/yearly patterns now require at least one day-of-week (an empty `DaysOfWeek` was rejected by EWS with an opaque error); yearly patterns no longer require an `Interval` (their schema has none); relative monthly/yearly emit a single day-of-week (the element is single-valued) instead of a space-joined list.
+- **Attachment id from the upload-session `Location` header** is parsed correctly even when the URL uses percent-encoded OData key quotes.
+- **Graph responses with an empty or non-JSON 2xx body** no longer throw a raw `SyntaxError`: an empty body is treated as no content, and a non-JSON body becomes a `GraphApiError` (`InvalidJsonResponse`) carrying the status.
+- **Attachment download temp files** now `basename()` the server-supplied name, so a name with path separators can't relocate the temp file.
+- **`find` / directory `expandGroup`** no longer misclassifies mail-enabled groups / distribution lists as users (it now keys off the `@odata.type` discriminator instead of the presence of a `mail` property).
+- **Directory `search-users` / `search-groups`** now page through all matches instead of silently returning only the first page.
+- **`bookings staff-availability`** reads the `staffAvailabilityItem` collection from the correct `value` property (human output was always empty), and every Bookings `--json-file` read reports a clear error instead of an unhandled stack trace.
+- **Teams `@`-mention composition** inserts display names literally, so a name containing `$&`/`$$` is no longer mangled by `String.replace` substitution patterns.
+
+Pagination consistency pass (list/collection endpoints no longer silently truncate to the first page):
+
+- Added a shared `listGraphCollection` helper so every list endpoint follows the same rule: an explicit `--top`/`top` is a deliberate single bounded page; otherwise the call pages through `@odata.nextLink` to completion (and fails loudly on an unresolvable link, with the cycle/page cap).
+- Converted previously first-page-only functions to full pagination: groups (`groups`, `conversations`, `threads`, `posts`), insights (`trending`/`used`/`shared`, drive-item activities, followed sites), Teams (`team members`, `my chats`, app catalog), Excel (`table rows`), SharePoint (`lists`), and directory `search-people`.
+- **`rooms`/room-availability (`isRoomFree`)** now pages the whole calendar window, fixing a false "free" result when a busy event fell on a later `calendarView` page.
+- Completed the sweep by moving the remaining Teams (`joined teams`, channels, channel/chat members, installed apps, message/chat replies) and Excel (worksheets, tables, workbook/worksheet names, table columns, charts, pivot tables) list functions onto the same `listGraphCollection` pattern. Conversation-history listings (chat/channel messages) intentionally remain bounded recent-N pages.
+- Final grep-verified sweep caught the last truncating list functions: Bookings (businesses, appointments, services, staff, calendar view, customers, custom questions, currencies), Outlook master categories, Graph subscriptions, and the contact/todo open-extension lists — all now page to completion.
+
+### Fixed (misc)
+
+- `microsoftSearch` request-patch merge ignores `__proto__`/`constructor`/`prototype` keys from user-supplied JSON (no prototype pollution).
+- EWS auto-reply rule lookup (`oof`/auto-reply) matches the existing template rule regardless of XML namespace prefix, preventing a duplicate rule + orphaned template when Exchange returns a non-`t:` prefix.
+
+Additional review pass:
+
+- **`respond accept|decline|tentative --json`** no longer prints human-readable preamble lines before the JSON object (both Graph and EWS backends), so `--json` output is parseable.
+- **`findtime`** validates `--duration`/`--start`/`--end` as numbers in range; a non-numeric work-hour window used to silently drop every slot and exit 0 ("no available times") instead of erroring.
+- **`graph batch`** rejects a JSON file without a `requests` array with a clear message instead of crashing with `TypeError: undefined is not iterable`.
+- **Unguarded `--json-file`/`--body-file`/`--data` reads** in `graph`, `meeting`, and `outlook-graph` now report a clean `Error:` (missing file or invalid JSON) instead of an unhandled stack trace.
+- **Delta sync state** is written atomically (temp + rename), so an interrupted `*-delta` run can't truncate the state file and force a full resync; and the `meeting recordings/transcripts --delta` scope check compares the organizer id case-insensitively (a UPN casing difference no longer rejects a valid cursor).
+
+### Fixed (extended QA review)
+
+Deeper multi-pass review across the whole CLI:
+
+- **EWS reply / reply-all / forward with `--cc`/`--bcc` produced schema-invalid SOAP and failed.** The response object emitted `ReferenceItemId` before the recipient/body elements, violating the EWS `Types.xsd` child-order for `ReplyToItem`/`ForwardItem`/`AcceptItem`. Recipients/body now precede `ReferenceItemId` (verified against the published schema), so CC/BCC on EWS replies and forwards work. Plain forward and accept/decline/tentative-with-comment were affected too.
+- **Path traversal / `.url` injection via EWS attachment names.** `mail download-attachments` (EWS) joined the raw, sender-controlled attachment name onto the output dir and hand-built `.url` shortcuts from a raw URL. Names are now reduced to a safe path component and `.url` writes go through the http(s)-validating helper (matching the Graph and calendar paths).
+- **Planner `remove-reference` / `checklist remove` / `--remove-assign` / `--clear-assign` / `--assign` were silent no-ops.** Graph open-type dictionaries are merged per-key on PATCH, so a removed entry must be sent as `null`; the code deleted/omitted the key, leaving it in place while reporting success. All five paths now null the removed keys.
+- **`calendar <date>` silently coerced an invalid date to "today".** A garbage date argument is now rejected with a clean error instead of listing today's events.
+- **EWS folder listings always showed 0 unread / 0 total.** `parseFolder` read the Microsoft Graph property names (`UnreadItemCount`/`TotalItemCount`) instead of the EWS elements (`UnreadCount`/`TotalCount`) the request asks for.
+- **Excel `usedRange --values-only` was ignored.** `valuesOnly` was sent as a query option; it is an OData function parameter (`usedRange(valuesOnly=true)`), so Graph returned the formatting-inclusive range.
+- **Graph did not retry-storm mutations into duplicates on 503.** Non-idempotent POST/PATCH/DELETE were retried on 503 when `Retry-After` was present; a 503 can occur after the server began processing, so `sendMail`/`createEvent` could send twice. 503 retry is now idempotent-only (429 behavior unchanged).
+- **`--json` stdout corruption fixed across many commands** (`mail` reply/forward/move, `drafts`, `rules`, `rooms`, `update-event`, `delete-event`, `calendar --download-attachments`, `create-event --list-rooms`, `auto-reply`): a human-readable preamble or confirmation printed before/instead of the JSON branch is now suppressed or emitted as JSON, so piping `--json` to a parser works.
+- **`CalendarView` (EWS) no longer silently truncates** at the server's ~1000-item page cap — it pages by advancing `StartDate` (de-duping the boundary item) to the end of the range.
+- **`--json-file` handling unified**: ~60 sites in `copilot`/`teams`/`presence` that read+parsed a user file with no guard now report a clean error instead of a silent `exit 1` plus a spurious exception report.
+- **Assorted validation/exit-code/parity fixes**: empty recipients from a trailing comma (`rules`), `folders` mutually-exclusive action flags, `whoami` EWS/Graph exit parity, `onenote operation` / `planner update-task` exit codes, `meeting --top` / `create-event --count` numeric validation, and the CLI now prints a clean message instead of exiting silently on an uncaught error.
+- **Removed a duplicate no-assertion test file** and corrected several tests whose expectations were wrong or vacuous (e.g. the calendar invalid-date tests now actually assert the error).
 
 ---
 

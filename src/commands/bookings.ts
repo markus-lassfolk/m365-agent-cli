@@ -42,6 +42,23 @@ import {
 } from '../lib/graph-bookings-client.js';
 import { checkReadOnly } from '../lib/utils.js';
 
+/** Read and parse a Bookings `--json-file` body, exiting with a clear message on read/parse error. */
+async function readBookingsJson(jsonFile: string): Promise<Record<string, unknown>> {
+  let raw: string;
+  try {
+    raw = await readFile(jsonFile.trim(), 'utf-8');
+  } catch (err) {
+    console.error(`Error: could not read --json-file: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  }
+  try {
+    return JSON.parse(raw) as Record<string, unknown>;
+  } catch (err) {
+    console.error(`Error: --json-file must contain valid JSON: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  }
+}
+
 export const bookingsCommand = new Command('bookings').description(
   'Microsoft Bookings (Graph): full v1 surface under `/solutions/bookingBusinesses` (`Bookings.ReadWrite.All`) — create/delete business, publish/unpublish page, appointments, customers, services, staff, custom questions, currencies, calendar; **`staff-availability`** is app-only per Microsoft (see GRAPH_SCOPES.md)'
 );
@@ -111,7 +128,7 @@ bookingsCommand
       console.error(`Auth error: ${auth.error}`);
       process.exit(1);
     }
-    const body = JSON.parse(await readFile(opts.jsonFile.trim(), 'utf-8')) as Record<string, unknown>;
+    const body = await readBookingsJson(opts.jsonFile);
     const r = await createBookingBusiness(auth.token, body);
     if (!r.ok || !r.data) {
       console.error(`Error: ${r.error?.message}`);
@@ -162,7 +179,7 @@ bookingsCommand
     }
     let body: Record<string, unknown> = {};
     if (opts.jsonFile?.trim()) {
-      body = JSON.parse(await readFile(opts.jsonFile.trim(), 'utf-8')) as Record<string, unknown>;
+      body = await readBookingsJson(opts.jsonFile);
     }
     const r = await publishBookingBusiness(auth.token, businessId, body);
     if (!r.ok) {
@@ -188,7 +205,7 @@ bookingsCommand
     }
     let body: Record<string, unknown> = {};
     if (opts.jsonFile?.trim()) {
-      body = JSON.parse(await readFile(opts.jsonFile.trim(), 'utf-8')) as Record<string, unknown>;
+      body = await readBookingsJson(opts.jsonFile);
     }
     const r = await unpublishBookingBusiness(auth.token, businessId, body);
     if (!r.ok) {
@@ -585,7 +602,7 @@ bookingsCommand
         console.error(`Auth error: ${auth.error}`);
         process.exit(1);
       }
-      const body = JSON.parse(await readFile(opts.jsonFile.trim(), 'utf-8')) as Record<string, unknown>;
+      const body = await readBookingsJson(opts.jsonFile);
       const r = await updateBookingBusiness(auth.token, businessId, body);
       if (!r.ok || !r.data) {
         console.error(`Error: ${r.error?.message}`);
@@ -615,7 +632,7 @@ bookingsCommand
         console.error(`Auth error: ${auth.error}`);
         process.exit(1);
       }
-      const body = JSON.parse(await readFile(opts.jsonFile.trim(), 'utf-8')) as Record<string, unknown>;
+      const body = await readBookingsJson(opts.jsonFile);
       const r = await createBookingAppointment(auth.token, businessId, body);
       if (!r.ok || !r.data) {
         console.error(`Error: ${r.error?.message}`);
@@ -647,7 +664,7 @@ bookingsCommand
         console.error(`Auth error: ${auth.error}`);
         process.exit(1);
       }
-      const body = JSON.parse(await readFile(opts.jsonFile.trim(), 'utf-8')) as Record<string, unknown>;
+      const body = await readBookingsJson(opts.jsonFile);
       const r = await updateBookingAppointment(auth.token, businessId, appointmentId, body);
       if (!r.ok || !r.data) {
         console.error(`Error: ${r.error?.message}`);
@@ -714,7 +731,7 @@ bookingsCommand
       }
       let body: Record<string, unknown> | undefined;
       if (opts.jsonFile?.trim()) {
-        body = JSON.parse(await readFile(opts.jsonFile.trim(), 'utf-8')) as Record<string, unknown>;
+        body = await readBookingsJson(opts.jsonFile);
       }
       const r = await cancelBookingAppointment(auth.token, businessId, appointmentId, body);
       if (!r.ok) {
@@ -741,7 +758,7 @@ bookingsCommand
       console.error(`Auth error: ${auth.error}`);
       process.exit(1);
     }
-    const body = JSON.parse(await readFile(opts.jsonFile.trim(), 'utf-8')) as Record<string, unknown>;
+    const body = await readBookingsJson(opts.jsonFile);
     const r = await getBookingStaffAvailability(auth.token, businessId, body);
     if (!r.ok || !r.data) {
       console.error(`Error: ${r.error?.message}`);
@@ -751,7 +768,8 @@ bookingsCommand
       console.log(JSON.stringify(r.data, null, 2));
       return;
     }
-    const items = (r.data as any).staffAvailabilityItem ?? [];
+    // getStaffAvailability returns a staffAvailabilityItem collection under the standard `value`.
+    const items = (r.data as any).value ?? [];
     for (const item of items) {
       const staffId = item.staffId ?? '';
       const availCount = item.availabilityItems?.length ?? 0;
@@ -785,7 +803,7 @@ function jsonFileAction(
       console.error(`Auth error: ${auth.error}`);
       process.exit(1);
     }
-    const body = JSON.parse(await readFile(opts.jsonFile.trim(), 'utf-8')) as Record<string, unknown>;
+    const body = await readBookingsJson(opts.jsonFile);
     const r = await fn(auth.token, businessId, id, body);
     if (!r.ok || !r.data) {
       console.error(`Error: ${r.error?.message}`);
@@ -815,7 +833,7 @@ bookingsCommand
         console.error(`Auth error: ${auth.error}`);
         process.exit(1);
       }
-      const body = JSON.parse(await readFile(opts.jsonFile.trim(), 'utf-8')) as Record<string, unknown>;
+      const body = await readBookingsJson(opts.jsonFile);
       const r = await createBookingCustomer(auth.token, businessId, body);
       if (!r.ok || !r.data) {
         console.error(`Error: ${r.error?.message}`);
@@ -894,7 +912,7 @@ bookingsCommand
         console.error(`Auth error: ${auth.error}`);
         process.exit(1);
       }
-      const body = JSON.parse(await readFile(opts.jsonFile.trim(), 'utf-8')) as Record<string, unknown>;
+      const body = await readBookingsJson(opts.jsonFile);
       const r = await createBookingService(auth.token, businessId, body);
       if (!r.ok || !r.data) {
         console.error(`Error: ${r.error?.message}`);
@@ -973,7 +991,7 @@ bookingsCommand
         console.error(`Auth error: ${auth.error}`);
         process.exit(1);
       }
-      const body = JSON.parse(await readFile(opts.jsonFile.trim(), 'utf-8')) as Record<string, unknown>;
+      const body = await readBookingsJson(opts.jsonFile);
       const r = await createBookingStaffMember(auth.token, businessId, body);
       if (!r.ok || !r.data) {
         console.error(`Error: ${r.error?.message}`);
@@ -1052,7 +1070,7 @@ bookingsCommand
         console.error(`Auth error: ${auth.error}`);
         process.exit(1);
       }
-      const body = JSON.parse(await readFile(opts.jsonFile.trim(), 'utf-8')) as Record<string, unknown>;
+      const body = await readBookingsJson(opts.jsonFile);
       const r = await createBookingCustomQuestion(auth.token, businessId, body);
       if (!r.ok || !r.data) {
         console.error(`Error: ${r.error?.message}`);

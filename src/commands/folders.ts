@@ -50,6 +50,16 @@ export const foldersCommand = new Command('folders')
       const backend = getExchangeBackend();
       const user = options.mailbox?.trim() || undefined;
 
+      // The action flags are dispatched first-wins below; reject more than one so a second
+      // (e.g. --delete alongside --create) is not silently ignored.
+      const actionCount = [options.create, options.rename, options.delete].filter((v) => v !== undefined).length;
+      if (actionCount > 1) {
+        const msg = 'Error: use only one of --create, --rename, or --delete at a time.';
+        if (options.json) console.log(JSON.stringify({ error: msg }, null, 2));
+        else console.error(msg);
+        process.exit(1);
+      }
+
       async function runGraph(token: string): Promise<void> {
         const foldersResult = await listAllMailFoldersRecursive(token, user);
         if (!foldersResult.ok || !foldersResult.data) {

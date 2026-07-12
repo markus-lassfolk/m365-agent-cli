@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
 import { Command } from 'commander';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
 import {
@@ -13,6 +12,7 @@ import {
   setPresenceStatusMessage,
   setUserPresence
 } from '../lib/graph-presence-client.js';
+import { readJsonFileOrExit } from '../lib/read-json-file.js';
 import { checkReadOnly } from '../lib/utils.js';
 
 export const presenceCommand = new Command('presence').description(
@@ -76,8 +76,13 @@ presenceCommand
     }
     let idList: string[];
     if (opts.jsonFile?.trim()) {
-      const raw = JSON.parse(await readFile(opts.jsonFile.trim(), 'utf-8')) as unknown;
-      idList = Array.isArray(raw) ? (raw as string[]).map(String) : [];
+      const raw = await readJsonFileOrExit<unknown>(opts.jsonFile, '--json-file');
+      idList = Array.isArray(raw)
+        ? raw
+            .map(String)
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : [];
     } else if (opts.ids?.trim()) {
       idList = opts.ids
         .split(',')
@@ -85,6 +90,10 @@ presenceCommand
         .filter(Boolean);
     } else {
       console.error('Error: provide --ids or --json-file with a JSON array of GUIDs');
+      process.exit(1);
+    }
+    if (idList.length === 0) {
+      console.error('Error: no user ids provided (list was empty after removing blanks)');
       process.exit(1);
     }
     const r = await getPresencesByUserIds(auth.token, idList);
@@ -270,7 +279,7 @@ presenceCommand
       }
       let body: Record<string, unknown>;
       if (opts.jsonFile?.trim()) {
-        body = JSON.parse(await readFile(opts.jsonFile.trim(), 'utf-8')) as Record<string, unknown>;
+        body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       } else if (opts.text?.trim()) {
         const statusMessage: Record<string, unknown> = {
           message: { contentType: 'text', content: opts.text.trim() }

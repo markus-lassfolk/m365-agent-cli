@@ -122,10 +122,11 @@ export const whoamiCommand = new Command('whoami')
             )
           );
         } else {
-          console.log('\u2713 Authenticated');
-          console.log('  Could not fetch user details from EWS API');
+          console.error('\u2713 Authenticated, but could not fetch user details from EWS API');
         }
-        process.exit(0);
+        // whoami's purpose is to report identity; if it can't be resolved this is a failure, and
+        // the exit code must match the Graph path (which exits 1 for the same condition).
+        process.exit(1);
       }
 
       const { displayName, email } = userInfo.data;

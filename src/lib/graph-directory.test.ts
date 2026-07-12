@@ -126,3 +126,35 @@ describe('graph-directory', () => {
     }
   });
 });
+
+describe('graph-directory expandGroup member classification', () => {
+  const token = 'tok';
+  const baseUrl = 'https://graph.microsoft.com/v1.0';
+
+  it('includes users but excludes mail-enabled groups / other member types', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = (async () =>
+        new Response(
+          JSON.stringify({
+            value: [
+              { '@odata.type': '#microsoft.graph.user', id: 'u1', mail: 'u1@x.com' },
+              // Mail-enabled group: has a `mail` property but must NOT be treated as a user.
+              { '@odata.type': '#microsoft.graph.group', id: 'g1', mail: 'dl@x.com', displayName: 'DL' },
+              { '@odata.type': '#microsoft.graph.servicePrincipal', id: 'sp1' },
+              // Missing discriminator but user-shaped -> included via fallback.
+              { id: 'u2', userPrincipalName: 'u2@x.com' }
+            ]
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        )) as unknown as typeof fetch;
+      const d = await import('./graph-directory.js');
+      const r = await d.expandGroup(token, 'group-1');
+      expect(r.ok).toBe(true);
+      expect((r.data ?? []).map((m: any) => m.id).sort()).toEqual(['u1', 'u2']);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});

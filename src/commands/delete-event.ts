@@ -523,13 +523,15 @@ export const deleteEventCommand = new Command('delete-event')
         let action: string;
 
         if (hasAttendees && !options.forceDelete && scope === 'all') {
-          console.log(
-            `  Attendees: ${attendees
-              .map((a) => a.emailAddress?.address)
-              .filter(Boolean)
-              .join(', ')}`
-          );
-          console.log(`  Sending cancellation notices...`);
+          if (!options.json) {
+            console.log(
+              `  Attendees: ${attendees
+                .map((a) => a.emailAddress?.address)
+                .filter(Boolean)
+                .join(', ')}`
+            );
+            console.log(`  Sending cancellation notices...`);
+          }
           graphRes = await cancelCalendarEvent(graphToken, deletionId, {
             comment: options.message,
             user: options.mailbox
@@ -580,8 +582,10 @@ export const deleteEventCommand = new Command('delete-event')
       let action: string;
 
       if (hasAttendees && !options.forceDelete && scope === 'all') {
-        console.log(`  Attendees: ${attendeesEws.map((a) => a.EmailAddress?.Address).join(', ')}`);
-        console.log(`  Sending cancellation notices...`);
+        if (!options.json) {
+          console.log(`  Attendees: ${attendeesEws.map((a) => a.EmailAddress?.Address).join(', ')}`);
+          console.log(`  Sending cancellation notices...`);
+        }
         deleteResult = await cancelEvent({
           token: ewsToken!,
           eventId: targetEws!.Id,

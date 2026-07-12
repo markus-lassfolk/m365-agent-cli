@@ -84,12 +84,14 @@ export const suggestCommand = new Command('suggest')
       const endDateTimeISO = endDateTime.toISOString().replace('Z', '');
 
       const attendeesList: AttendeeBase[] = options.attendees
-        ? options.attendees.split(',').map((email) => ({
-            type: 'required' as const,
-            emailAddress: {
-              address: email.trim()
-            }
-          }))
+        ? options.attendees
+            .split(',')
+            .map((email) => email.trim())
+            .filter(Boolean)
+            .map((address) => ({
+              type: 'required' as const,
+              emailAddress: { address }
+            }))
         : [];
 
       let request: FindMeetingTimesRequest = {

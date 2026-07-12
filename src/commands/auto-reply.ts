@@ -118,9 +118,7 @@ export const autoReplyCommand = new Command('auto-reply')
           }
         }
 
-        if (options.json) {
-          console.log(JSON.stringify({ status: 'updating', enabled }, null, 2));
-        } else {
+        if (!options.json) {
           console.log(`Setting auto-reply rule (enabled: ${enabled})...`);
         }
         const result = await setAutoReplyRule(auth.token, messageText!, enabled, start, end, options.mailbox);

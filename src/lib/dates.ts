@@ -74,7 +74,16 @@ export function parseLocalDate(dateStr: string): Date {
   const dateOnlyMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (dateOnlyMatch) {
     const [, yearStr, monthStr, dayOfMonthStr] = dateOnlyMatch;
-    return new Date(parseInt(yearStr, 10), parseInt(monthStr, 10) - 1, parseInt(dayOfMonthStr, 10), 0, 0, 0, 0);
+    const year = parseInt(yearStr, 10);
+    const month = parseInt(monthStr, 10);
+    const dayOfMonth = parseInt(dayOfMonthStr, 10);
+    const d = new Date(year, month - 1, dayOfMonth, 0, 0, 0, 0);
+    // Reject out-of-range values that JS would otherwise silently roll over
+    // (e.g. 2026-02-30 → Mar 2). Return an Invalid Date so callers surface the error.
+    if (d.getFullYear() !== year || d.getMonth() !== month - 1 || d.getDate() !== dayOfMonth) {
+      return new Date(Number.NaN);
+    }
+    return d;
   }
   // Handle the "+01:00" suffix format by inserting a 'T' before the time
   const withTime = dateStr.replace(' ', 'T');

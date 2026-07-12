@@ -1,4 +1,21 @@
 import { describe, expect, it } from 'bun:test';
+import { mergePlannerAssignments } from './planner-client.js';
+
+describe('mergePlannerAssignments', () => {
+  it('removes an assignee by setting the key to null (open-type merge), not by omitting it', () => {
+    const current = {
+      a: { '@odata.type': '#microsoft.graph.plannerAssignment', orderHint: 'x' },
+      b: { '@odata.type': '#microsoft.graph.plannerAssignment', orderHint: 'y' }
+    };
+    const out = mergePlannerAssignments(current, ['c'], ['a']);
+    // Removed 'a' must be present as null so the server actually drops it.
+    expect(Object.hasOwn(out, 'a')).toBe(true);
+    expect(out.a).toBeNull();
+    // Unchanged 'b' kept; added 'c' is a full assignment object.
+    expect(out.b).not.toBeNull();
+    expect((out.c as { '@odata.type': string })['@odata.type']).toBe('#microsoft.graph.plannerAssignment');
+  });
+});
 
 describe('createPlannerPlanForSignedInUser', () => {
   it('resolves /me then POSTs beta /me/planner/plans with user container', async () => {
@@ -334,6 +351,7 @@ describe('planner batch coverage', () => {
   it('checklist items and references on planner task', async () => {
     process.env.GRAPH_BASE_URL = v1;
     const originalFetch = globalThis.fetch;
+    const patchBodies: Record<string, unknown>[] = [];
     try {
       globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
         const u = typeof input === 'string' ? input : input.toString();
@@ -352,6 +370,7 @@ describe('planner batch coverage', () => {
           );
         }
         if (u.includes('/planner/taskDetails/') && m === 'PATCH') {
+          if (init?.body && typeof init.body === 'string') patchBodies.push(JSON.parse(init.body));
           return new Response(null, { status: 204 });
         }
         return new Response('{}', { status: 404 });
@@ -362,6 +381,14 @@ describe('planner batch coverage', () => {
       expect((await p.addPlannerReference('tok', 'task-1', 'https://ref', 'alias')).ok).toBe(true);
       expect((await p.removePlannerReference('tok', 'task-1', 'https://x')).ok).toBe(true);
       expect((await p.updatePlannerChecklistItem('tok', 'task-1', 'ck', { isChecked: true })).ok).toBe(true);
+
+      // Open-type dictionaries are merged per-key: removal MUST send the key as null, not omit it.
+      const removeChecklist = patchBodies[1] as { checklist: Record<string, unknown> };
+      expect(removeChecklist.checklist.ck).toBeNull();
+      const removeRef = patchBodies[3] as { references: Record<string, unknown> };
+      // 'https://x' → key encoded as 'https%3A//x'; it must be present with a null value.
+      expect(removeRef.references['https%3A//x']).toBeNull();
+      expect(Object.hasOwn(removeRef.references, 'https%3A//x')).toBe(true);
     } finally {
       globalThis.fetch = originalFetch;
     }

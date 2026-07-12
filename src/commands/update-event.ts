@@ -429,10 +429,12 @@ export const updateEventCommand = new Command('update-event')
               process.exit(1);
             }
             targetGraph = occEvent;
-            console.log(`\nUpdating single occurrence of: ${occEvent.subject ?? '(no subject)'}`);
-            console.log(
-              `  ${formatDate(graphStartDt(occEvent))} ${formatTime(graphStartDt(occEvent))} - ${formatTime(occEvent.end?.dateTime ?? '')}`
-            );
+            if (!options.json) {
+              console.log(`\nUpdating single occurrence of: ${occEvent.subject ?? '(no subject)'}`);
+              console.log(
+                `  ${formatDate(graphStartDt(occEvent))} ${formatTime(graphStartDt(occEvent))} - ${formatTime(occEvent.end?.dateTime ?? '')}`
+              );
+            }
           } else if (options.occurrence) {
             const idx = parseInt(options.occurrence, 10);
             if (Number.isNaN(idx) || idx < 1 || idx > events.length) {
@@ -445,10 +447,12 @@ export const updateEventCommand = new Command('update-event')
               process.exit(1);
             }
             targetGraph = occEvent;
-            console.log(`\nUpdating occurrence ${idx} of: ${occEvent.subject ?? '(no subject)'}`);
-            console.log(
-              `  ${formatDate(graphStartDt(occEvent))} ${formatTime(graphStartDt(occEvent))} - ${formatTime(occEvent.end?.dateTime ?? '')}`
-            );
+            if (!options.json) {
+              console.log(`\nUpdating occurrence ${idx} of: ${occEvent.subject ?? '(no subject)'}`);
+              console.log(
+                `  ${formatDate(graphStartDt(occEvent))} ${formatTime(graphStartDt(occEvent))} - ${formatTime(occEvent.end?.dateTime ?? '')}`
+              );
+            }
           }
         }
       } else {
@@ -483,10 +487,12 @@ export const updateEventCommand = new Command('update-event')
             }
             occurrenceItemId = occEvent.Id;
             displayEws = occEvent;
-            console.log(`\nUpdating single occurrence of: ${occEvent.Subject}`);
-            console.log(
-              `  ${formatDate(occEvent.Start.DateTime)} ${formatTime(occEvent.Start.DateTime)} - ${formatTime(occEvent.End.DateTime)}`
-            );
+            if (!options.json) {
+              console.log(`\nUpdating single occurrence of: ${occEvent.Subject}`);
+              console.log(
+                `  ${formatDate(occEvent.Start.DateTime)} ${formatTime(occEvent.Start.DateTime)} - ${formatTime(occEvent.End.DateTime)}`
+              );
+            }
           } else if (options.occurrence) {
             const idx = parseInt(options.occurrence, 10);
             if (Number.isNaN(idx) || idx < 1 || idx > events.length) {
@@ -500,10 +506,12 @@ export const updateEventCommand = new Command('update-event')
             }
             occurrenceItemId = occEvent.Id;
             displayEws = occEvent;
-            console.log(`\nUpdating occurrence ${idx} of: ${occEvent.Subject}`);
-            console.log(
-              `  ${formatDate(occEvent.Start.DateTime)} ${formatTime(occEvent.Start.DateTime)} - ${formatTime(occEvent.End.DateTime)}`
-            );
+            if (!options.json) {
+              console.log(`\nUpdating occurrence ${idx} of: ${occEvent.Subject}`);
+              console.log(
+                `  ${formatDate(occEvent.Start.DateTime)} ${formatTime(occEvent.Start.DateTime)} - ${formatTime(occEvent.End.DateTime)}`
+              );
+            }
           }
         } else if (!targetEws && options.id) {
           const fetched = await getCalendarEvent(authResult!.token!, options.id!, options.mailbox);
@@ -920,7 +928,7 @@ export const updateEventCommand = new Command('update-event')
                 }
                 process.exit(1);
               } else {
-                console.log(`\nUpdating: ${gd.subject ?? '(no subject)'}`);
+                if (!options.json) console.log(`\nUpdating: ${gd.subject ?? '(no subject)'}`);
                 const ur = await updateCalendarEvent(ga.token, gd.id, patch, options.mailbox);
                 if (ur.ok && ur.data) {
                   const files = fileAttachments ?? [];
@@ -1235,7 +1243,7 @@ export const updateEventCommand = new Command('update-event')
             updateOptions.isOnlineMeeting = options.teams;
           }
 
-          console.log(`\nUpdating: ${displayEws!.Subject}`);
+          if (!options.json) console.log(`\nUpdating: ${displayEws!.Subject}`);
 
           updateResult = await updateEvent(updateOptions);
 
@@ -1250,11 +1258,24 @@ export const updateEventCommand = new Command('update-event')
         }
       }
 
-      const eventIdForAttach = occurrenceItemId || updateResult?.data?.Id || displayEws!.Id;
+      const eventIdForAttach = occurrenceItemId || updateResult?.data?.Id || displayEws?.Id;
 
       if (wantsAttachments) {
+        // If we reached here without EWS state (e.g. an auto-mode Graph attachments-only
+        // attempt failed and no EWS fallback context was established), fail with a clear,
+        // actionable message instead of dereferencing undefined and crashing silently.
+        if (!eventIdForAttach || !authResult?.token) {
+          const msg =
+            'Failed to add attachments: the Graph attachment attempt failed and no EWS fallback was available. Retry with M365_EXCHANGE_BACKEND=ews.';
+          if (options.json) {
+            console.log(JSON.stringify({ error: msg }, null, 2));
+          } else {
+            console.error(`\nError: ${msg}`);
+          }
+          process.exit(1);
+        }
         const attachResult = await addCalendarEventAttachments(
-          authResult!.token!,
+          authResult.token,
           eventIdForAttach,
           options.mailbox,
           fileAttachments ?? [],

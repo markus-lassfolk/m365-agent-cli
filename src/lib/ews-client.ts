@@ -52,6 +52,21 @@ export function extractAttribute(xml: string, tagName: string, attrName: string)
   return match ? xmlDecode(match[1]) : '';
 }
 
+/**
+ * Parse an EWS availability time to epoch ms as UTC.
+ *
+ * `GetUserAvailability` returns `CalendarEvent`/`Suggestion` times in the request's
+ * `<t:TimeZone>` (we send UTC/Bias 0) but WITHOUT a trailing `Z`/offset. `new Date(s)` would
+ * otherwise parse such a zone-less value in the host's local time zone, shifting overlap
+ * comparisons on non-UTC machines. Append `Z` when the value carries no explicit zone.
+ */
+export function ewsAvailabilityTimeToUtcMs(value: string | undefined | null): number {
+  if (!value) return Number.NaN;
+  const s = value.trim();
+  const zoneless = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(s);
+  return new Date(zoneless ? `${s}Z` : s).getTime();
+}
+
 export function extractBlocks(xml: string, tagName: string): string[] {
   const regex = new RegExp(`<(?:[A-Za-z0-9_]+:)?${tagName}\\b[\\s\\S]*?<\\/(?:[A-Za-z0-9_]+:)?${tagName}>`, 'g');
   return [...xml.matchAll(regex)].map((m) => m[0]);
@@ -787,8 +802,11 @@ function parseFolder(block: string): MailFolder {
     DisplayName: extractTag(block, 'DisplayName'),
     ParentFolderId: extractAttribute(block, 'ParentFolderId', 'Id') || undefined,
     ChildFolderCount: parseInt(extractTag(block, 'ChildFolderCount') || '0', 10),
-    UnreadItemCount: parseInt(extractTag(block, 'UnreadItemCount') || '0', 10),
-    TotalItemCount: parseInt(extractTag(block, 'TotalItemCount') || '0', 10)
+    // EWS folder counts are <t:UnreadCount>/<t:TotalCount> (matching the folder:UnreadCount /
+    // folder:TotalCount FieldURIs requested); UnreadItemCount/TotalItemCount are Graph names that
+    // never appear in an EWS response, so reading those always yielded 0.
+    UnreadItemCount: parseInt(extractTag(block, 'UnreadCount') || '0', 10),
+    TotalItemCount: parseInt(extractTag(block, 'TotalCount') || '0', 10)
   };
 }
 
@@ -892,9 +910,7 @@ export async function getCalendarEvents(
       ? `<t:DistinguishedFolderId Id="calendar"><t:Mailbox><t:EmailAddress>${xmlEscape(mailbox)}</t:EmailAddress></t:Mailbox></t:DistinguishedFolderId>`
       : `<t:DistinguishedFolderId Id="calendar" />`;
 
-    const envelope = soapEnvelope(`
-    <m:FindItem Traversal="Shallow">
-      <m:ItemShape>
+    const itemShapeXml = `<m:ItemShape>
         <t:BaseShape>Default</t:BaseShape>
         <t:AdditionalProperties>
           <t:FieldURI FieldURI="calendar:Location" />
@@ -918,16 +934,47 @@ export async function getCalendarEvents(
           <t:FieldURI FieldURI="calendar:EndTimeZone" />
           <t:FieldURI FieldURI="item:HasAttachments" />
         </t:AdditionalProperties>
-      </m:ItemShape>
-      <m:CalendarView StartDate="${xmlEscape(startDateTime)}" EndDate="${xmlEscape(endDateTime)}" />
+      </m:ItemShape>`;
+
+    // CalendarView returns at most the server's FindItem page cap (default ~1000) per request and
+    // cannot be combined with an IndexedPageItemView. To avoid silently truncating a busy window, we
+    // page by advancing StartDate to the last occurrence returned (CalendarView is StartDate-inclusive,
+    // so the boundary item repeats and is de-duped by ItemId) until IncludesLastItemInRange is true.
+    const EWS_CALENDAR_MAX_PAGES = Math.max(1, Number(process.env.EWS_CALENDAR_MAX_PAGES) || 1000);
+    const events: CalendarEvent[] = [];
+    const seen = new Set<string>();
+    let cursorStart = startDateTime;
+
+    for (let page = 0; page < EWS_CALENDAR_MAX_PAGES; page++) {
+      const envelope = soapEnvelope(`
+    <m:FindItem Traversal="Shallow">
+      ${itemShapeXml}
+      <m:CalendarView StartDate="${xmlEscape(cursorStart)}" EndDate="${xmlEscape(endDateTime)}" />
       <m:ParentFolderIds>
         ${calendarFolderXml}
       </m:ParentFolderIds>
     </m:FindItem>`);
 
-    const xml = await callEws(token, envelope, mailbox);
-    const blocks = extractBlocks(xml, 'CalendarItem');
-    const events = blocks.map((block) => parseCalendarItem(block, mailbox));
+      const xml = await callEws(token, envelope, mailbox);
+      const blocks = extractBlocks(xml, 'CalendarItem');
+      let lastStart: string | undefined;
+      for (const block of blocks) {
+        const ev = parseCalendarItem(block, mailbox);
+        if (ev.Start.DateTime) lastStart = ev.Start.DateTime;
+        const key = ev.Id || `${ev.Subject}|${ev.Start.DateTime}|${ev.End.DateTime}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        events.push(ev);
+      }
+
+      const includesLast = extractAttribute(xml, 'RootFolder', 'IncludesLastItemInRange').toLowerCase();
+      // Done when the server says this page reached the end of the range, or nothing more came back,
+      // or the window can no longer advance (a full page sharing one StartDate — avoids an infinite loop).
+      if (includesLast === 'true' || blocks.length === 0 || !lastStart || lastStart === cursorStart) {
+        break;
+      }
+      cursorStart = lastStart;
+    }
 
     return ewsResult(events);
   } catch (err) {
@@ -1022,8 +1069,19 @@ function validateRecurrenceInput(recurrence: Recurrence): void {
     throw new Error('[Recurrence] recurrence.Range.EndDate is required when Range.Type is "EndDate"');
   }
 
-  if (p.Interval === undefined || p.Interval <= 0) {
+  // Yearly patterns have no Interval element in the EWS schema; don't require one.
+  const isYearly = p.Type === 'AbsoluteYearly' || p.Type === 'RelativeYearly';
+  if (!isYearly && (p.Interval === undefined || p.Interval <= 0)) {
     throw new Error('[Recurrence] recurrence.Pattern.Interval must be a positive integer');
+  }
+
+  // Weekly and relative monthly/yearly patterns require at least one day-of-week; an empty
+  // <t:DaysOfWeek> is rejected by EWS with an opaque ErrorSchemaValidation.
+  if (
+    (p.Type === 'Weekly' || p.Type === 'RelativeMonthly' || p.Type === 'RelativeYearly') &&
+    (!p.DaysOfWeek || p.DaysOfWeek.length === 0)
+  ) {
+    throw new Error(`[Recurrence] recurrence.Pattern.DaysOfWeek is required for ${p.Type} patterns`);
   }
 }
 
@@ -1057,10 +1115,12 @@ function buildRecurrenceXml(recurrence: Recurrence): string {
       patternXml = `<t:AbsoluteYearlyRecurrence><t:DayOfMonth>${p.DayOfMonth || 1}</t:DayOfMonth><t:Month>${['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][(p.Month || 1) - 1]}</t:Month></t:AbsoluteYearlyRecurrence>`;
       break;
     case 'RelativeMonthly':
-      patternXml = `<t:RelativeMonthlyRecurrence><t:Interval>${p.Interval}</t:Interval><t:DaysOfWeek>${(p.DaysOfWeek || []).map((d) => xmlEscape(d)).join(' ')}</t:DaysOfWeek><t:DayOfWeekIndex>${p.Index || 'First'}</t:DayOfWeekIndex></t:RelativeMonthlyRecurrence>`;
+      // RelativeMonthly/RelativeYearly DaysOfWeek is the single-valued DayOfWeekType (not the
+      // list-valued weekly form), so emit only the first day.
+      patternXml = `<t:RelativeMonthlyRecurrence><t:Interval>${p.Interval}</t:Interval><t:DaysOfWeek>${xmlEscape((p.DaysOfWeek || [])[0] || 'Monday')}</t:DaysOfWeek><t:DayOfWeekIndex>${p.Index || 'First'}</t:DayOfWeekIndex></t:RelativeMonthlyRecurrence>`;
       break;
     case 'RelativeYearly':
-      patternXml = `<t:RelativeYearlyRecurrence><t:DaysOfWeek>${(p.DaysOfWeek || []).map((d) => xmlEscape(d)).join(' ')}</t:DaysOfWeek><t:DayOfWeekIndex>${p.Index || 'First'}</t:DayOfWeekIndex><t:Month>${['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][(p.Month || 1) - 1]}</t:Month></t:RelativeYearlyRecurrence>`;
+      patternXml = `<t:RelativeYearlyRecurrence><t:DaysOfWeek>${xmlEscape((p.DaysOfWeek || [])[0] || 'Monday')}</t:DaysOfWeek><t:DayOfWeekIndex>${p.Index || 'First'}</t:DayOfWeekIndex><t:Month>${['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][(p.Month || 1) - 1]}</t:Month></t:RelativeYearlyRecurrence>`;
       break;
     default:
       if (!validTypes.includes(p.Type)) {
@@ -1189,6 +1249,13 @@ export async function createEvent(options: CreateEventOptions): Promise<OwaRespo
 
     const files = fileAttachments ?? [];
     const refs = referenceAttachments ?? [];
+    // KNOWN LIMITATION (EWS only): when the event has both attendees and attachments, the invitation
+    // is already sent by CreateItem above (SendMeetingInvitations) BEFORE these attachments are added,
+    // because EWS cannot inline attachments in CreateItem. Invitees therefore receive an
+    // attachment-less invite. The correct flow (create with SendToNone → add attachments → UpdateItem
+    // with SendMeetingInvitationsOrCancellations=SendToAllAndSaveCopy to deliver the complete item)
+    // depends on runtime resend behavior that can't be validated without a live Exchange, so it is
+    // deferred to a change that can be verified end-to-end. The Graph backend is not affected.
     if (files.length > 0 || refs.length > 0) {
       let itemState: { id: string; changeKey?: string } = { id: id.trim(), changeKey: changeKey || undefined };
       for (const att of files) {
@@ -1562,8 +1629,8 @@ export async function respondToEvent(options: RespondToEventOptions): Promise<Ow
     <m:CreateItem MessageDisposition="${disposition}">
       <m:Items>
         <t:${tag}>
-          ${referenceItemIdXml(calId, calCk)}
           ${comment ? `<t:Body BodyType="Text">${xmlEscape(comment)}</t:Body>` : ''}
+          ${referenceItemIdXml(calId, calCk)}
         </t:${tag}>
       </m:Items>
     </m:CreateItem>`);
@@ -1782,6 +1849,7 @@ export async function sendEmail(
     const draftResult = await createDraft(token, {
       to: options.to,
       cc: options.cc,
+      bcc: options.bcc,
       subject: options.subject,
       body: options.body,
       bodyType,
@@ -1808,13 +1876,28 @@ export async function sendEmail(
   }
 }
 
+/** Optional recipients (cc/bcc) added to a reply/reply-all/forward response object. */
+export interface ReplyForwardRecipients {
+  cc?: string[];
+  bcc?: string[];
+}
+
+/** Build a `<t:CcRecipients>`/`<t:BccRecipients>` block, or `''` when the list is empty. */
+function recipientsBlockXml(tag: 'CcRecipients' | 'BccRecipients', addresses?: string[]): string {
+  const list = (addresses ?? []).map((e) => e.trim()).filter(Boolean);
+  if (list.length === 0) return '';
+  const inner = list.map((e) => `<t:Mailbox><t:EmailAddress>${xmlEscape(e)}</t:EmailAddress></t:Mailbox>`).join('');
+  return `<t:${tag}>${inner}</t:${tag}>`;
+}
+
 export async function replyToEmail(
   token: string,
   messageId: string,
   comment: string,
   replyAll: boolean = false,
   isHtml: boolean = false,
-  mailbox?: string
+  mailbox?: string,
+  recipients?: ReplyForwardRecipients
 ): Promise<OwaResponse<void>> {
   try {
     const resolved = await resolveMessageForWrite(token, messageId, mailbox);
@@ -1825,11 +1908,15 @@ export async function replyToEmail(
 
     const tag = replyAll ? 'ReplyAllToItem' : 'ReplyToItem';
     const bodyType = isHtml ? 'HTML' : 'Text';
+    const ccXml = recipientsBlockXml('CcRecipients', recipients?.cc);
+    const bccXml = recipientsBlockXml('BccRecipients', recipients?.bcc);
 
     const envelope = soapEnvelope(`
     <m:CreateItem MessageDisposition="SendAndSaveCopy">
       <m:Items>
         <t:${tag}>
+          ${ccXml}
+          ${bccXml}
           ${referenceItemIdXml(refId, refCk)}
           <t:NewBodyContent BodyType="${bodyType}">${xmlEscape(comment)}</t:NewBodyContent>
         </t:${tag}>
@@ -1849,7 +1936,8 @@ export async function replyToEmailDraft(
   comment: string,
   replyAll: boolean = false,
   isHtml: boolean = false,
-  mailbox?: string
+  mailbox?: string,
+  recipients?: ReplyForwardRecipients
 ): Promise<OwaResponse<{ draftId: string }>> {
   try {
     const resolved = await resolveMessageForWrite(token, messageId, mailbox);
@@ -1860,11 +1948,15 @@ export async function replyToEmailDraft(
 
     const tag = replyAll ? 'ReplyAllToItem' : 'ReplyToItem';
     const bodyType = isHtml ? 'HTML' : 'Text';
+    const ccXml = recipientsBlockXml('CcRecipients', recipients?.cc);
+    const bccXml = recipientsBlockXml('BccRecipients', recipients?.bcc);
 
     const envelope = soapEnvelope(`
     <m:CreateItem MessageDisposition="SaveOnly">
       <m:Items>
         <t:${tag}>
+          ${ccXml}
+          ${bccXml}
           ${referenceItemIdXml(refId, refCk)}
           <t:NewBodyContent BodyType="${bodyType}">${xmlEscape(comment)}</t:NewBodyContent>
         </t:${tag}>
@@ -1891,7 +1983,8 @@ export async function forwardEmail(
   messageId: string,
   toRecipients: string[],
   comment?: string,
-  mailbox?: string
+  mailbox?: string,
+  recipients?: ReplyForwardRecipients
 ): Promise<OwaResponse<void>> {
   try {
     const resolved = await resolveMessageForWrite(token, messageId, mailbox);
@@ -1903,13 +1996,17 @@ export async function forwardEmail(
     const toXml = toRecipients
       .map((e) => `<t:Mailbox><t:EmailAddress>${xmlEscape(e)}</t:EmailAddress></t:Mailbox>`)
       .join('');
+    const ccXml = recipientsBlockXml('CcRecipients', recipients?.cc);
+    const bccXml = recipientsBlockXml('BccRecipients', recipients?.bcc);
 
     const envelope = soapEnvelope(`
     <m:CreateItem MessageDisposition="SendAndSaveCopy">
       <m:Items>
         <t:ForwardItem>
-          ${referenceItemIdXml(refId, refCk)}
           <t:ToRecipients>${toXml}</t:ToRecipients>
+          ${ccXml}
+          ${bccXml}
+          ${referenceItemIdXml(refId, refCk)}
           ${comment ? `<t:NewBodyContent BodyType="Text">${xmlEscape(comment)}</t:NewBodyContent>` : ''}
         </t:ForwardItem>
       </m:Items>
@@ -1928,7 +2025,8 @@ export async function forwardEmailDraft(
   messageId: string,
   toRecipients: string[],
   comment?: string,
-  mailbox?: string
+  mailbox?: string,
+  recipients?: ReplyForwardRecipients
 ): Promise<OwaResponse<{ draftId: string }>> {
   try {
     const resolved = await resolveMessageForWrite(token, messageId, mailbox);
@@ -1940,13 +2038,17 @@ export async function forwardEmailDraft(
     const toXml = toRecipients
       .map((e) => `<t:Mailbox><t:EmailAddress>${xmlEscape(e)}</t:EmailAddress></t:Mailbox>`)
       .join('');
+    const ccXml = recipientsBlockXml('CcRecipients', recipients?.cc);
+    const bccXml = recipientsBlockXml('BccRecipients', recipients?.bcc);
 
     const envelope = soapEnvelope(`
     <m:CreateItem MessageDisposition="SaveOnly">
       <m:Items>
         <t:ForwardItem>
-          ${referenceItemIdXml(refId, refCk)}
           <t:ToRecipients>${toXml}</t:ToRecipients>
+          ${ccXml}
+          ${bccXml}
+          ${referenceItemIdXml(refId, refCk)}
           ${comment ? `<t:NewBodyContent BodyType="Text">${xmlEscape(comment)}</t:NewBodyContent>` : ''}
         </t:ForwardItem>
       </m:Items>
@@ -2106,6 +2208,7 @@ export async function createDraft(
   options: {
     to?: string[];
     cc?: string[];
+    bcc?: string[];
     subject?: string;
     body?: string;
     bodyType?: 'Text' | 'HTML';
@@ -2131,6 +2234,13 @@ export async function createDraft(
             .join('')}</t:CcRecipients>`
         : '';
 
+    const bccXml =
+      options.bcc && options.bcc.length > 0
+        ? `<t:BccRecipients>${options.bcc
+            .map((e) => `<t:Mailbox><t:EmailAddress>${xmlEscape(e)}</t:EmailAddress></t:Mailbox>`)
+            .join('')}</t:BccRecipients>`
+        : '';
+
     const bodyType = options.bodyType || 'Text';
 
     const savedDraftFolderXml = mailbox
@@ -2147,6 +2257,7 @@ export async function createDraft(
           ${options.categories && options.categories.length > 0 ? `<t:Categories>${options.categories.map((c) => `<t:String>${xmlEscape(c)}</t:String>`).join('')}</t:Categories>` : ''}
           ${toXml}
           ${ccXml}
+          ${bccXml}
         </t:Message>
       </m:Items>
     </m:CreateItem>`);
@@ -2371,8 +2482,12 @@ async function addAttachmentToItem(
   </m:CreateAttachment>`);
   const xml = await callEws(token, envelope, mailbox);
 
-  const rootId = extractAttribute(xml, 'RootItemId', 'Id')?.trim();
-  const rootCk = extractAttribute(xml, 'RootItemId', 'ChangeKey')?.trim();
+  // CreateAttachment returns the parent's new id/change key as attributes on
+  // <t:AttachmentId> (RootItemId / RootItemChangeKey) — NOT as a <RootItemId> element.
+  // Capturing them keeps the change key fresh so a subsequent attachment or SendItem
+  // doesn't fail with ErrorIrresolvableConflict.
+  const rootId = extractAttribute(xml, 'AttachmentId', 'RootItemId')?.trim();
+  const rootCk = extractAttribute(xml, 'AttachmentId', 'RootItemChangeKey')?.trim();
   if (rootId) {
     return { id: rootId, changeKey: rootCk || pck };
   }
@@ -2416,8 +2531,9 @@ async function addReferenceAttachmentToItem(
   </m:CreateAttachment>`);
   const xml = await callEws(token, envelope, mailbox);
 
-  const rootId = extractAttribute(xml, 'RootItemId', 'Id')?.trim();
-  const rootCk = extractAttribute(xml, 'RootItemId', 'ChangeKey')?.trim();
+  // See addAttachmentToItem: parent id/change key come back as attributes on <t:AttachmentId>.
+  const rootId = extractAttribute(xml, 'AttachmentId', 'RootItemId')?.trim();
+  const rootCk = extractAttribute(xml, 'AttachmentId', 'RootItemChangeKey')?.trim();
   if (rootId) {
     return { id: rootId, changeKey: rootCk || pck };
   }
@@ -2936,7 +3052,7 @@ export async function getScheduleViaOutlook(
     for (const suggestion of suggestions) {
       const meetingTime = extractTag(suggestion, 'MeetingTime');
       if (meetingTime) {
-        const startTime = new Date(meetingTime);
+        const startTime = new Date(ewsAvailabilityTimeToUtcMs(meetingTime));
         const endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000);
         freeSlots.push({
           start: startTime.toISOString(),
@@ -2972,8 +3088,8 @@ export async function getScheduleViaOutlook(
           const endTime = extractTag(event, 'EndTime');
 
           if (startTime && endTime) {
-            const evStart = new Date(startTime).getTime();
-            const evEnd = new Date(endTime).getTime();
+            const evStart = ewsAvailabilityTimeToUtcMs(startTime);
+            const evEnd = ewsAvailabilityTimeToUtcMs(endTime);
             // Only include events that overlap with the requested window
             if (evStart < reqEnd && evEnd > reqStart) {
               items.push({
@@ -3177,8 +3293,8 @@ export async function areRoomsFree(
           const busyType = extractTag(event, 'BusyType');
           if (busyType === 'Free') continue;
 
-          const evStart = new Date(extractTag(event, 'StartTime') || '').getTime();
-          const evEnd = new Date(extractTag(event, 'EndTime') || '').getTime();
+          const evStart = ewsAvailabilityTimeToUtcMs(extractTag(event, 'StartTime'));
+          const evEnd = ewsAvailabilityTimeToUtcMs(extractTag(event, 'EndTime'));
 
           if (evStart < reqEnd && evEnd > reqStart) {
             isFree = false;
@@ -3217,16 +3333,13 @@ export async function getAutoReplyRule(token: string, mailbox?: string): Promise
 
     const xml = await callEws(token, envelope, address);
 
-    // Parse the rules
-    // Find the rule with DisplayName = "AutoReplyTemplate"
-    const rulesRegex = /<t:Rule>(.*?)<\/t:Rule>/gs;
-    let match: RegExpExecArray | null;
-    let ruleXml = null;
-    while (true) {
-      match = rulesRegex.exec(xml);
-      if (match === null) break;
-      if (match[1].includes('<t:DisplayName>AutoReplyTemplate</t:DisplayName>')) {
-        ruleXml = match[1];
+    // Find the rule with DisplayName = "AutoReplyTemplate". Use the prefix-agnostic block/tag
+    // extractors (not a hardcoded `<t:Rule>` regex) so a differing namespace prefix can't cause
+    // the existing rule to be missed — which would create a duplicate rule + orphaned template.
+    let ruleXml: string | null = null;
+    for (const block of extractBlocks(xml, 'Rule')) {
+      if (extractTag(block, 'DisplayName') === 'AutoReplyTemplate') {
+        ruleXml = block;
         break;
       }
     }
@@ -3302,14 +3415,12 @@ export async function setAutoReplyRule(
 
     let ruleIdStr = '';
     let oldTemplateId = '';
-    const rulesRegex = /<t:Rule>(.*?)<\/t:Rule>/gs;
-    let match: RegExpExecArray | null;
-    while (true) {
-      match = rulesRegex.exec(rulesXml);
-      if (match === null) break;
-      if (match[1].includes('<t:DisplayName>AutoReplyTemplate</t:DisplayName>')) {
-        ruleIdStr = extractTag(match[1], 'RuleId');
-        oldTemplateId = extractAttribute(match[1], 'ItemId', 'Id');
+    // Prefix-agnostic match (see getAutoReplyRule) so an existing template rule is always found
+    // and replaced rather than duplicated.
+    for (const block of extractBlocks(rulesXml, 'Rule')) {
+      if (extractTag(block, 'DisplayName') === 'AutoReplyTemplate') {
+        ruleIdStr = extractTag(block, 'RuleId');
+        oldTemplateId = extractAttribute(block, 'ItemId', 'Id');
         break;
       }
     }
