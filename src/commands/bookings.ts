@@ -40,7 +40,26 @@ import {
   updateBookingService,
   updateBookingStaffMember
 } from '../lib/graph-bookings-client.js';
+import { toJsonError } from '../lib/json-error.js';
 import { checkReadOnly } from '../lib/utils.js';
+
+/**
+ * Prints the `--json` structured error envelope (or the matching plain-text "Auth error: .../
+ * Error: ...") for the two failure shapes nearly every one of this file's ~25 subcommands hits —
+ * an auth failure from `resolveGraphAuth` (a plain string) or a Graph API failure
+ * (`GraphResponse.error`, a GraphError-shaped object) — then exits 1. Without this, a `--json`
+ * bookings call that fails printed plain text on stderr instead of `{ error: {...} } ` on stdout
+ * like every other --json-supporting command, leaving an agent piping the output nothing valid to parse.
+ */
+export function failBookings(json: boolean | undefined, prefix: 'Auth error' | 'Error', error: unknown): never {
+  if (json) {
+    console.log(JSON.stringify({ error: toJsonError(error) }, null, 2));
+  } else {
+    const message = typeof error === 'string' ? error : (error as { message?: string } | undefined)?.message;
+    console.error(`${prefix}: ${message}`);
+  }
+  process.exit(1);
+}
 
 /** Read and parse a Bookings `--json-file` body, exiting with a clear message on read/parse error. */
 async function readBookingsJson(jsonFile: string): Promise<Record<string, unknown>> {
@@ -72,13 +91,11 @@ bookingsCommand
   .action(async (opts: { json?: boolean; token?: string; identity?: string }) => {
     const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success || !auth.token) {
-      console.error(`Auth error: ${auth.error}`);
-      process.exit(1);
+      failBookings(opts.json, 'Auth error', auth.error);
     }
     const r = await listBookingBusinesses(auth.token);
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failBookings(opts.json, 'Error', r.error);
     }
     if (opts.json) {
       console.log(JSON.stringify(r.data, null, 2));
@@ -99,13 +116,11 @@ bookingsCommand
   .action(async (businessId: string, opts: { json?: boolean; token?: string; identity?: string }) => {
     const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success || !auth.token) {
-      console.error(`Auth error: ${auth.error}`);
-      process.exit(1);
+      failBookings(opts.json, 'Auth error', auth.error);
     }
     const r = await getBookingBusiness(auth.token, businessId);
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failBookings(opts.json, 'Error', r.error);
     }
     console.log(
       opts.json
@@ -125,14 +140,12 @@ bookingsCommand
     checkReadOnly(cmd);
     const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success || !auth.token) {
-      console.error(`Auth error: ${auth.error}`);
-      process.exit(1);
+      failBookings(opts.json, 'Auth error', auth.error);
     }
     const body = await readBookingsJson(opts.jsonFile);
     const r = await createBookingBusiness(auth.token, body);
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failBookings(opts.json, 'Error', r.error);
     }
     console.log(opts.json ? JSON.stringify(r.data, null, 2) : `${r.data.displayName ?? ''}\t${r.data.id}`);
   });
@@ -224,13 +237,11 @@ bookingsCommand
   .action(async (opts: { json?: boolean; token?: string; identity?: string }) => {
     const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success || !auth.token) {
-      console.error(`Auth error: ${auth.error}`);
-      process.exit(1);
+      failBookings(opts.json, 'Auth error', auth.error);
     }
     const r = await listBookingCurrencies(auth.token);
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failBookings(opts.json, 'Error', r.error);
     }
     if (opts.json) {
       console.log(JSON.stringify(r.data, null, 2));
@@ -251,13 +262,11 @@ bookingsCommand
   .action(async (currencyId: string, opts: { json?: boolean; token?: string; identity?: string }) => {
     const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success || !auth.token) {
-      console.error(`Auth error: ${auth.error}`);
-      process.exit(1);
+      failBookings(opts.json, 'Auth error', auth.error);
     }
     const r = await getBookingCurrency(auth.token, currencyId);
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failBookings(opts.json, 'Error', r.error);
     }
     console.log(opts.json ? JSON.stringify(r.data, null, 2) : `${r.data.id ?? currencyId}\t${r.data.symbol ?? ''}`);
   });
@@ -272,13 +281,11 @@ bookingsCommand
   .action(async (businessId: string, opts: { json?: boolean; token?: string; identity?: string }) => {
     const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success || !auth.token) {
-      console.error(`Auth error: ${auth.error}`);
-      process.exit(1);
+      failBookings(opts.json, 'Auth error', auth.error);
     }
     const r = await listBookingAppointments(auth.token, businessId);
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failBookings(opts.json, 'Error', r.error);
     }
     if (opts.json) {
       console.log(JSON.stringify(r.data, null, 2));
@@ -302,13 +309,11 @@ bookingsCommand
   .action(async (businessId: string, opts: { json?: boolean; token?: string; identity?: string }) => {
     const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success || !auth.token) {
-      console.error(`Auth error: ${auth.error}`);
-      process.exit(1);
+      failBookings(opts.json, 'Auth error', auth.error);
     }
     const r = await listBookingServices(auth.token, businessId);
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failBookings(opts.json, 'Error', r.error);
     }
     if (opts.json) {
       console.log(JSON.stringify(r.data, null, 2));
@@ -331,13 +336,11 @@ bookingsCommand
     async (businessId: string, serviceId: string, opts: { json?: boolean; token?: string; identity?: string }) => {
       const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
       if (!auth.success || !auth.token) {
-        console.error(`Auth error: ${auth.error}`);
-        process.exit(1);
+        failBookings(opts.json, 'Auth error', auth.error);
       }
       const r = await getBookingService(auth.token, businessId, serviceId);
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
+        failBookings(opts.json, 'Error', r.error);
       }
       console.log(
         opts.json
@@ -357,13 +360,11 @@ bookingsCommand
   .action(async (businessId: string, opts: { json?: boolean; token?: string; identity?: string }) => {
     const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success || !auth.token) {
-      console.error(`Auth error: ${auth.error}`);
-      process.exit(1);
+      failBookings(opts.json, 'Auth error', auth.error);
     }
     const r = await listBookingStaffMembers(auth.token, businessId);
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failBookings(opts.json, 'Error', r.error);
     }
     if (opts.json) {
       console.log(JSON.stringify(r.data, null, 2));
@@ -385,13 +386,11 @@ bookingsCommand
   .action(async (businessId: string, staffId: string, opts: { json?: boolean; token?: string; identity?: string }) => {
     const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success || !auth.token) {
-      console.error(`Auth error: ${auth.error}`);
-      process.exit(1);
+      failBookings(opts.json, 'Auth error', auth.error);
     }
     const r = await getBookingStaffMember(auth.token, businessId, staffId);
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failBookings(opts.json, 'Error', r.error);
     }
     console.log(
       opts.json
@@ -416,13 +415,11 @@ bookingsCommand
     ) => {
       const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
       if (!auth.success || !auth.token) {
-        console.error(`Auth error: ${auth.error}`);
-        process.exit(1);
+        failBookings(opts.json, 'Auth error', auth.error);
       }
       const r = await listBookingCalendarView(auth.token, businessId, opts.start, opts.end);
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
+        failBookings(opts.json, 'Error', r.error);
       }
       if (opts.json) {
         console.log(JSON.stringify(r.data, null, 2));
@@ -447,13 +444,11 @@ bookingsCommand
   .action(async (businessId: string, opts: { json?: boolean; token?: string; identity?: string }) => {
     const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success || !auth.token) {
-      console.error(`Auth error: ${auth.error}`);
-      process.exit(1);
+      failBookings(opts.json, 'Auth error', auth.error);
     }
     const r = await listBookingCustomers(auth.token, businessId);
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failBookings(opts.json, 'Error', r.error);
     }
     if (opts.json) {
       console.log(JSON.stringify(r.data, null, 2));
@@ -476,13 +471,11 @@ bookingsCommand
     async (businessId: string, customerId: string, opts: { json?: boolean; token?: string; identity?: string }) => {
       const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
       if (!auth.success || !auth.token) {
-        console.error(`Auth error: ${auth.error}`);
-        process.exit(1);
+        failBookings(opts.json, 'Auth error', auth.error);
       }
       const r = await getBookingCustomer(auth.token, businessId, customerId);
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
+        failBookings(opts.json, 'Error', r.error);
       }
       console.log(
         opts.json
@@ -502,13 +495,11 @@ bookingsCommand
   .action(async (businessId: string, opts: { json?: boolean; token?: string; identity?: string }) => {
     const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success || !auth.token) {
-      console.error(`Auth error: ${auth.error}`);
-      process.exit(1);
+      failBookings(opts.json, 'Auth error', auth.error);
     }
     const r = await listBookingCustomQuestions(auth.token, businessId);
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failBookings(opts.json, 'Error', r.error);
     }
     if (opts.json) {
       console.log(JSON.stringify(r.data, null, 2));
@@ -532,13 +523,11 @@ bookingsCommand
     async (businessId: string, questionId: string, opts: { json?: boolean; token?: string; identity?: string }) => {
       const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
       if (!auth.success || !auth.token) {
-        console.error(`Auth error: ${auth.error}`);
-        process.exit(1);
+        failBookings(opts.json, 'Auth error', auth.error);
       }
       const r = await getBookingCustomQuestion(auth.token, businessId, questionId);
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
+        failBookings(opts.json, 'Error', r.error);
       }
       const q = r.data;
       if (opts.json) {
@@ -562,13 +551,11 @@ bookingsCommand
     async (businessId: string, appointmentId: string, opts: { json?: boolean; token?: string; identity?: string }) => {
       const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
       if (!auth.success || !auth.token) {
-        console.error(`Auth error: ${auth.error}`);
-        process.exit(1);
+        failBookings(opts.json, 'Auth error', auth.error);
       }
       const r = await getBookingAppointment(auth.token, businessId, appointmentId);
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
+        failBookings(opts.json, 'Error', r.error);
       }
       if (opts.json) {
         console.log(JSON.stringify(r.data, null, 2));
@@ -599,14 +586,12 @@ bookingsCommand
       checkReadOnly(cmd);
       const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
       if (!auth.success || !auth.token) {
-        console.error(`Auth error: ${auth.error}`);
-        process.exit(1);
+        failBookings(opts.json, 'Auth error', auth.error);
       }
       const body = await readBookingsJson(opts.jsonFile);
       const r = await updateBookingBusiness(auth.token, businessId, body);
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
+        failBookings(opts.json, 'Error', r.error);
       }
       console.log(opts.json ? JSON.stringify(r.data, null, 2) : `${r.data.displayName ?? ''}\t${r.data.id}`);
     }
@@ -629,14 +614,12 @@ bookingsCommand
       checkReadOnly(cmd);
       const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
       if (!auth.success || !auth.token) {
-        console.error(`Auth error: ${auth.error}`);
-        process.exit(1);
+        failBookings(opts.json, 'Auth error', auth.error);
       }
       const body = await readBookingsJson(opts.jsonFile);
       const r = await createBookingAppointment(auth.token, businessId, body);
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
+        failBookings(opts.json, 'Error', r.error);
       }
       console.log(opts.json ? JSON.stringify(r.data, null, 2) : `${r.data.id ?? ''}`);
     }
@@ -661,14 +644,12 @@ bookingsCommand
       checkReadOnly(cmd);
       const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
       if (!auth.success || !auth.token) {
-        console.error(`Auth error: ${auth.error}`);
-        process.exit(1);
+        failBookings(opts.json, 'Auth error', auth.error);
       }
       const body = await readBookingsJson(opts.jsonFile);
       const r = await updateBookingAppointment(auth.token, businessId, appointmentId, body);
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
+        failBookings(opts.json, 'Error', r.error);
       }
       console.log(opts.json ? JSON.stringify(r.data, null, 2) : `${r.data.id ?? ''}`);
     }
@@ -755,14 +736,12 @@ bookingsCommand
   .action(async (businessId: string, opts: { jsonFile: string; json?: boolean; token?: string; identity?: string }) => {
     const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success || !auth.token) {
-      console.error(`Auth error: ${auth.error}`);
-      process.exit(1);
+      failBookings(opts.json, 'Auth error', auth.error);
     }
     const body = await readBookingsJson(opts.jsonFile);
     const r = await getBookingStaffAvailability(auth.token, businessId, body);
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failBookings(opts.json, 'Error', r.error);
     }
     if (opts.json) {
       console.log(JSON.stringify(r.data, null, 2));
@@ -800,14 +779,12 @@ function jsonFileAction(
     checkReadOnly(cmd);
     const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success || !auth.token) {
-      console.error(`Auth error: ${auth.error}`);
-      process.exit(1);
+      failBookings(opts.json, 'Auth error', auth.error);
     }
     const body = await readBookingsJson(opts.jsonFile);
     const r = await fn(auth.token, businessId, id, body);
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failBookings(opts.json, 'Error', r.error);
     }
     console.log(opts.json ? JSON.stringify(r.data, null, 2) : `${(r.data as any).id ?? ''}`);
   };
@@ -830,14 +807,12 @@ bookingsCommand
       checkReadOnly(cmd);
       const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
       if (!auth.success || !auth.token) {
-        console.error(`Auth error: ${auth.error}`);
-        process.exit(1);
+        failBookings(opts.json, 'Auth error', auth.error);
       }
       const body = await readBookingsJson(opts.jsonFile);
       const r = await createBookingCustomer(auth.token, businessId, body);
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
+        failBookings(opts.json, 'Error', r.error);
       }
       console.log(opts.json ? JSON.stringify(r.data, null, 2) : `${r.data.id ?? ''}`);
     }
@@ -909,14 +884,12 @@ bookingsCommand
       checkReadOnly(cmd);
       const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
       if (!auth.success || !auth.token) {
-        console.error(`Auth error: ${auth.error}`);
-        process.exit(1);
+        failBookings(opts.json, 'Auth error', auth.error);
       }
       const body = await readBookingsJson(opts.jsonFile);
       const r = await createBookingService(auth.token, businessId, body);
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
+        failBookings(opts.json, 'Error', r.error);
       }
       console.log(opts.json ? JSON.stringify(r.data, null, 2) : `${r.data.id ?? ''}`);
     }
@@ -988,14 +961,12 @@ bookingsCommand
       checkReadOnly(cmd);
       const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
       if (!auth.success || !auth.token) {
-        console.error(`Auth error: ${auth.error}`);
-        process.exit(1);
+        failBookings(opts.json, 'Auth error', auth.error);
       }
       const body = await readBookingsJson(opts.jsonFile);
       const r = await createBookingStaffMember(auth.token, businessId, body);
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
+        failBookings(opts.json, 'Error', r.error);
       }
       console.log(opts.json ? JSON.stringify(r.data, null, 2) : `${r.data.id ?? ''}`);
     }
@@ -1067,14 +1038,12 @@ bookingsCommand
       checkReadOnly(cmd);
       const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
       if (!auth.success || !auth.token) {
-        console.error(`Auth error: ${auth.error}`);
-        process.exit(1);
+        failBookings(opts.json, 'Auth error', auth.error);
       }
       const body = await readBookingsJson(opts.jsonFile);
       const r = await createBookingCustomQuestion(auth.token, businessId, body);
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
+        failBookings(opts.json, 'Error', r.error);
       }
       console.log(opts.json ? JSON.stringify(r.data, null, 2) : `${r.data.id ?? ''}`);
     }

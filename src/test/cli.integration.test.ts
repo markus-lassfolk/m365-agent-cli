@@ -128,6 +128,7 @@ afterEach(() => {
 // ─── Import commands ───────────────────────────────────────────────────────
 
 import { autoReplyCommand } from '../commands/auto-reply.js';
+import { bookingsCommand } from '../commands/bookings.js';
 import { calendarCommand } from '../commands/calendar.js';
 import { counterCommand } from '../commands/counter.js';
 import { createEventCommand } from '../commands/create-event.js';
@@ -217,6 +218,7 @@ function makeProgram(): Command {
   p.addCommand(rulesCommand);
   p.addCommand(delegatesCommand);
   p.addCommand(todoCommand);
+  p.addCommand(bookingsCommand);
   installM365HelpOnCommandTree(p);
   return p;
 }
@@ -334,6 +336,12 @@ function resetSharedCommandOptionLeaks() {
     filesShareCommand.setOptionValue('expiration', undefined);
     filesShareCommand.setOptionValue('password', undefined);
     filesShareCommand.setOptionValue('retainInheritedPermissions', true);
+  }
+  // bookings has ~25 subcommands, each its own shared Command instance; --json leaking from one
+  // test into a later one that omits it would misroute the --json error-envelope branch.
+  for (const sub of bookingsCommand.commands) {
+    sub.setOptionValue('json', false);
+    sub.setOptionValue('confirm', false);
   }
 }
 
@@ -1917,5 +1925,47 @@ describe('Auto backend (M365_EXCHANGE_BACKEND=auto)', () => {
     expect(data.backend).toBe('graph');
     expect(Array.isArray(data.events)).toBe(true);
     expect(data.events.length).toBeGreaterThan(0);
+  });
+});
+
+describe('bookings --json error envelope (bug regression)', () => {
+  test('a failed Graph call returns the structured error envelope on stdout, not plain text on stderr', async () => {
+    setMockFetch((url) => {
+      if (!url.includes('graph.microsoft.com/v1.0')) return null;
+      const path = new URL(url).pathname;
+      if (path.includes('/solutions/bookingBusinesses')) {
+        return {
+          status: 403,
+          body: JSON.stringify({ error: { code: 'ErrorAccessDenied', message: 'Access denied' } }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    const result = await runM365AgentCli('bookings businesses --json --token test-graph-token');
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toBe('');
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.error.status).toBe(403);
+    expect(data.error.code).toBe('ErrorAccessDenied');
+  });
+
+  test('without --json, still prints plain text to stderr (unchanged)', async () => {
+    setMockFetch((url) => {
+      if (!url.includes('graph.microsoft.com/v1.0')) return null;
+      const path = new URL(url).pathname;
+      if (path.includes('/solutions/bookingBusinesses')) {
+        return {
+          status: 403,
+          body: JSON.stringify({ error: { code: 'ErrorAccessDenied', message: 'Access denied' } }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    const result = await runM365AgentCli('bookings businesses --token test-graph-token');
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toContain('Access denied');
   });
 });
