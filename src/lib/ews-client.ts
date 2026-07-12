@@ -907,9 +907,7 @@ export async function getCalendarEvents(
       ? `<t:DistinguishedFolderId Id="calendar"><t:Mailbox><t:EmailAddress>${xmlEscape(mailbox)}</t:EmailAddress></t:Mailbox></t:DistinguishedFolderId>`
       : `<t:DistinguishedFolderId Id="calendar" />`;
 
-    const envelope = soapEnvelope(`
-    <m:FindItem Traversal="Shallow">
-      <m:ItemShape>
+    const itemShapeXml = `<m:ItemShape>
         <t:BaseShape>Default</t:BaseShape>
         <t:AdditionalProperties>
           <t:FieldURI FieldURI="calendar:Location" />
@@ -933,16 +931,47 @@ export async function getCalendarEvents(
           <t:FieldURI FieldURI="calendar:EndTimeZone" />
           <t:FieldURI FieldURI="item:HasAttachments" />
         </t:AdditionalProperties>
-      </m:ItemShape>
-      <m:CalendarView StartDate="${xmlEscape(startDateTime)}" EndDate="${xmlEscape(endDateTime)}" />
+      </m:ItemShape>`;
+
+    // CalendarView returns at most the server's FindItem page cap (default ~1000) per request and
+    // cannot be combined with an IndexedPageItemView. To avoid silently truncating a busy window, we
+    // page by advancing StartDate to the last occurrence returned (CalendarView is StartDate-inclusive,
+    // so the boundary item repeats and is de-duped by ItemId) until IncludesLastItemInRange is true.
+    const EWS_CALENDAR_MAX_PAGES = Math.max(1, Number(process.env.EWS_CALENDAR_MAX_PAGES) || 1000);
+    const events: CalendarEvent[] = [];
+    const seen = new Set<string>();
+    let cursorStart = startDateTime;
+
+    for (let page = 0; page < EWS_CALENDAR_MAX_PAGES; page++) {
+      const envelope = soapEnvelope(`
+    <m:FindItem Traversal="Shallow">
+      ${itemShapeXml}
+      <m:CalendarView StartDate="${xmlEscape(cursorStart)}" EndDate="${xmlEscape(endDateTime)}" />
       <m:ParentFolderIds>
         ${calendarFolderXml}
       </m:ParentFolderIds>
     </m:FindItem>`);
 
-    const xml = await callEws(token, envelope, mailbox);
-    const blocks = extractBlocks(xml, 'CalendarItem');
-    const events = blocks.map((block) => parseCalendarItem(block, mailbox));
+      const xml = await callEws(token, envelope, mailbox);
+      const blocks = extractBlocks(xml, 'CalendarItem');
+      let lastStart: string | undefined;
+      for (const block of blocks) {
+        const ev = parseCalendarItem(block, mailbox);
+        if (ev.Start.DateTime) lastStart = ev.Start.DateTime;
+        const key = ev.Id || `${ev.Subject}|${ev.Start.DateTime}|${ev.End.DateTime}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        events.push(ev);
+      }
+
+      const includesLast = extractAttribute(xml, 'RootFolder', 'IncludesLastItemInRange').toLowerCase();
+      // Done when the server says this page reached the end of the range, or nothing more came back,
+      // or the window can no longer advance (a full page sharing one StartDate — avoids an infinite loop).
+      if (includesLast === 'true' || blocks.length === 0 || !lastStart || lastStart === cursorStart) {
+        break;
+      }
+      cursorStart = lastStart;
+    }
 
     return ewsResult(events);
   } catch (err) {
@@ -1590,8 +1619,8 @@ export async function respondToEvent(options: RespondToEventOptions): Promise<Ow
     <m:CreateItem MessageDisposition="${disposition}">
       <m:Items>
         <t:${tag}>
-          ${referenceItemIdXml(calId, calCk)}
           ${comment ? `<t:Body BodyType="Text">${xmlEscape(comment)}</t:Body>` : ''}
+          ${referenceItemIdXml(calId, calCk)}
         </t:${tag}>
       </m:Items>
     </m:CreateItem>`);
@@ -1876,9 +1905,9 @@ export async function replyToEmail(
     <m:CreateItem MessageDisposition="SendAndSaveCopy">
       <m:Items>
         <t:${tag}>
-          ${referenceItemIdXml(refId, refCk)}
           ${ccXml}
           ${bccXml}
+          ${referenceItemIdXml(refId, refCk)}
           <t:NewBodyContent BodyType="${bodyType}">${xmlEscape(comment)}</t:NewBodyContent>
         </t:${tag}>
       </m:Items>
@@ -1916,9 +1945,9 @@ export async function replyToEmailDraft(
     <m:CreateItem MessageDisposition="SaveOnly">
       <m:Items>
         <t:${tag}>
-          ${referenceItemIdXml(refId, refCk)}
           ${ccXml}
           ${bccXml}
+          ${referenceItemIdXml(refId, refCk)}
           <t:NewBodyContent BodyType="${bodyType}">${xmlEscape(comment)}</t:NewBodyContent>
         </t:${tag}>
       </m:Items>
@@ -1964,10 +1993,10 @@ export async function forwardEmail(
     <m:CreateItem MessageDisposition="SendAndSaveCopy">
       <m:Items>
         <t:ForwardItem>
-          ${referenceItemIdXml(refId, refCk)}
           <t:ToRecipients>${toXml}</t:ToRecipients>
           ${ccXml}
           ${bccXml}
+          ${referenceItemIdXml(refId, refCk)}
           ${comment ? `<t:NewBodyContent BodyType="Text">${xmlEscape(comment)}</t:NewBodyContent>` : ''}
         </t:ForwardItem>
       </m:Items>
@@ -2006,10 +2035,10 @@ export async function forwardEmailDraft(
     <m:CreateItem MessageDisposition="SaveOnly">
       <m:Items>
         <t:ForwardItem>
-          ${referenceItemIdXml(refId, refCk)}
           <t:ToRecipients>${toXml}</t:ToRecipients>
           ${ccXml}
           ${bccXml}
+          ${referenceItemIdXml(refId, refCk)}
           ${comment ? `<t:NewBodyContent BodyType="Text">${xmlEscape(comment)}</t:NewBodyContent>` : ''}
         </t:ForwardItem>
       </m:Items>

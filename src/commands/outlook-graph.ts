@@ -1,4 +1,4 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
 import { Command } from 'commander';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
 import {
@@ -39,24 +39,8 @@ import {
   updateContact,
   updateMailFolder
 } from '../lib/outlook-graph-client.js';
+import { readJsonFileOrExit } from '../lib/read-json-file.js';
 import { checkReadOnly } from '../lib/utils.js';
-
-/** Read + parse a JSON file, exiting with a clean message (not a raw stack trace) on failure. */
-async function readJsonFileOrExit<T = Record<string, unknown>>(path: string, label: string): Promise<T> {
-  let raw: string;
-  try {
-    raw = await readFile(path.trim(), 'utf-8');
-  } catch (err) {
-    console.error(`Error: could not read ${label}: ${err instanceof Error ? err.message : String(err)}`);
-    process.exit(1);
-  }
-  try {
-    return JSON.parse(raw) as T;
-  } catch (err) {
-    console.error(`Error: ${label} must contain valid JSON: ${err instanceof Error ? err.message : String(err)}`);
-    process.exit(1);
-  }
-}
 
 export const outlookGraphCommand = new Command('outlook-graph').description(
   'Microsoft Graph Outlook REST: mail folders, messages (list/send/patch/move/copy/attachments/reply), contacts (distinct from EWS mail/folders)'

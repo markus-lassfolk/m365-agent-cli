@@ -1,4 +1,3 @@
-import { readFile } from 'node:fs/promises';
 import { Command } from 'commander';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
 import type { GraphResponse } from '../lib/graph-client.js';
@@ -34,24 +33,8 @@ import {
   type OnlineMeeting,
   updateOnlineMeeting
 } from '../lib/online-meetings-graph-client.js';
+import { readJsonFileOrExit } from '../lib/read-json-file.js';
 import { checkReadOnly } from '../lib/utils.js';
-
-/** Read + parse a JSON file, exiting with a clean message (not a raw stack trace) on failure. */
-async function readJsonFileOrExit(path: string, label: string): Promise<Record<string, unknown>> {
-  let raw: string;
-  try {
-    raw = await readFile(path.trim(), 'utf-8');
-  } catch (err) {
-    console.error(`Error: could not read ${label}: ${err instanceof Error ? err.message : String(err)}`);
-    process.exit(1);
-  }
-  try {
-    return JSON.parse(raw) as Record<string, unknown>;
-  } catch (err) {
-    console.error(`Error: ${label} must contain valid JSON: ${err instanceof Error ? err.message : String(err)}`);
-    process.exit(1);
-  }
-}
 
 function parseOptionalRecordingsTop(raw?: string): number | undefined {
   if (!raw?.trim()) return undefined;

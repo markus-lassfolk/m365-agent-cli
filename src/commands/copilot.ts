@@ -119,6 +119,7 @@ import {
   copilotSettingsPeoplePatch
 } from '../lib/copilot-graph-client.js';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
+import { readJsonFileOrExit } from '../lib/read-json-file.js';
 import { checkReadOnly } from '../lib/utils.js';
 
 export const copilotCommand = new Command('copilot').description(
@@ -181,8 +182,7 @@ copilotCommand
       const token = await resolveTokenOrExit(opts);
       let body: Record<string, unknown>;
       if (opts.jsonFile) {
-        const raw = await readFile(resolve(process.cwd(), opts.jsonFile.trim()), 'utf8');
-        body = JSON.parse(raw) as Record<string, unknown>;
+        body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       } else {
         try {
           body = buildCopilotRetrievalBody({
@@ -232,8 +232,7 @@ copilotCommand
       const token = await resolveTokenOrExit(opts);
       let body: Record<string, unknown>;
       if (opts.jsonFile) {
-        const raw = await readFile(resolve(process.cwd(), opts.jsonFile.trim()), 'utf8');
-        body = JSON.parse(raw) as Record<string, unknown>;
+        body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       } else {
         try {
           body = buildCopilotSearchBody({
@@ -325,8 +324,7 @@ copilotCommand
     ) => {
       checkReadOnly(cmd);
       const token = await resolveTokenOrExit(opts);
-      const raw = await readFile(resolve(process.cwd(), opts.jsonFile.trim()), 'utf8');
-      const body = JSON.parse(raw) as Record<string, unknown>;
+      const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const r = await copilotConversationPatch(token, conversationId, body, !opts.v1, ifMatchHeader(opts.ifMatch));
       if (!r.ok) exitGraphError('Error: ', r.error?.message);
       if (r.data !== undefined) printJson(r.data);
@@ -369,8 +367,7 @@ copilotCommand
   .action(async (opts: { jsonFile: string; beta?: boolean; v1?: boolean; token?: string; identity?: string }, cmd) => {
     checkReadOnly(cmd);
     const token = await resolveTokenOrExit(opts);
-    const raw = await readFile(resolve(process.cwd(), opts.jsonFile.trim()), 'utf8');
-    const body = JSON.parse(raw) as Record<string, unknown>;
+    const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
     const r = await copilotConversationDeleteByThreadId(token, body, !opts.v1);
     if (!r.ok) exitGraphError('Error: ', r.error?.message);
     if (r.data !== undefined) printJson(r.data);
@@ -438,8 +435,7 @@ copilotCommand
     ) => {
       checkReadOnly(cmd);
       const token = await resolveTokenOrExit(opts);
-      const raw = await readFile(resolve(process.cwd(), opts.jsonFile.trim()), 'utf8');
-      const body = JSON.parse(raw) as Record<string, unknown>;
+      const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const r = await copilotConversationMessageCreate(token, conversationId, body, !opts.v1);
       if (!r.ok) exitGraphError('Error: ', r.error?.message);
       printJson(r.data);
@@ -466,8 +462,7 @@ copilotCommand
     ) => {
       checkReadOnly(cmd);
       const token = await resolveTokenOrExit(opts);
-      const raw = await readFile(resolve(process.cwd(), opts.jsonFile.trim()), 'utf8');
-      const body = JSON.parse(raw) as Record<string, unknown>;
+      const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const r = await copilotConversationMessagePatch(
         token,
         conversationId,
@@ -576,8 +571,7 @@ copilotCommand
   .action(async (opts: { jsonFile: string; beta?: boolean; v1?: boolean; token?: string; identity?: string }, cmd) => {
     checkReadOnly(cmd);
     const token = await resolveTokenOrExit(opts);
-    const raw = await readFile(resolve(process.cwd(), opts.jsonFile.trim()), 'utf8');
-    const body = JSON.parse(raw) as Record<string, unknown>;
+    const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
     const r = await copilotSettingsPatch(token, body, !opts.v1);
     if (!r.ok) exitGraphError('Error: ', r.error?.message);
     if (r.data !== undefined) printJson(r.data);
@@ -610,8 +604,7 @@ copilotCommand
   .action(async (opts: { jsonFile: string; beta?: boolean; v1?: boolean; token?: string; identity?: string }, cmd) => {
     checkReadOnly(cmd);
     const token = await resolveTokenOrExit(opts);
-    const raw = await readFile(resolve(process.cwd(), opts.jsonFile.trim()), 'utf8');
-    const body = JSON.parse(raw) as Record<string, unknown>;
+    const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
     const r = await copilotSettingsPeoplePatch(token, body, !opts.v1);
     if (!r.ok) exitGraphError('Error: ', r.error?.message);
     if (r.data !== undefined) printJson(r.data);
@@ -644,8 +637,7 @@ copilotCommand
   .action(async (opts: { jsonFile: string; beta?: boolean; v1?: boolean; token?: string; identity?: string }, cmd) => {
     checkReadOnly(cmd);
     const token = await resolveTokenOrExit(opts);
-    const raw = await readFile(resolve(process.cwd(), opts.jsonFile.trim()), 'utf8');
-    const body = JSON.parse(raw) as Record<string, unknown>;
+    const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
     const r = await copilotSettingsEnhancedPersonalizationPatch(token, body, !opts.v1);
     if (!r.ok) exitGraphError('Error: ', r.error?.message);
     if (r.data !== undefined) printJson(r.data);
@@ -725,8 +717,7 @@ copilotCommand
   .action(async (opts: { jsonFile: string; token?: string; identity?: string }, cmd) => {
     checkReadOnly(cmd);
     const token = await resolveTokenOrExit(opts);
-    const raw = await readFile(resolve(process.cwd(), opts.jsonFile.trim()), 'utf8');
-    const body = JSON.parse(raw) as Record<string, unknown>;
+    const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
     const r = await copilotAdminSettingsPatch(token, body);
     if (!r.ok) exitGraphError('Error: ', r.error?.message);
     if (r.data !== undefined) printJson(r.data);
@@ -755,8 +746,7 @@ copilotCommand
   .action(async (opts: { jsonFile: string; token?: string; identity?: string }, cmd) => {
     checkReadOnly(cmd);
     const token = await resolveTokenOrExit(opts);
-    const raw = await readFile(resolve(process.cwd(), opts.jsonFile.trim()), 'utf8');
-    const body = JSON.parse(raw) as Record<string, unknown>;
+    const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
     const r = await copilotAdminLimitedModePatch(token, body);
     if (!r.ok) exitGraphError('Error: ', r.error?.message);
     if (r.data !== undefined) printJson(r.data);
@@ -819,8 +809,7 @@ copilotCommand
   .action(async (opts: { jsonFile: string; beta?: boolean; v1?: boolean; token?: string; identity?: string }, cmd) => {
     checkReadOnly(cmd);
     const token = await resolveTokenOrExit(opts);
-    const raw = await readFile(resolve(process.cwd(), opts.jsonFile.trim()), 'utf8');
-    const body = JSON.parse(raw) as Record<string, unknown>;
+    const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
     const r = await copilotRootPatch(token, body, !opts.v1);
     if (!r.ok) exitGraphError('Error: ', r.error?.message);
     if (r.data !== undefined) printJson(r.data);
@@ -849,8 +838,7 @@ copilotCommand
   .action(async (opts: { jsonFile: string; token?: string; identity?: string }, cmd) => {
     checkReadOnly(cmd);
     const token = await resolveTokenOrExit(opts);
-    const raw = await readFile(resolve(process.cwd(), opts.jsonFile.trim()), 'utf8');
-    const body = JSON.parse(raw) as Record<string, unknown>;
+    const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
     const r = await copilotAdminNavPatch(token, body);
     if (!r.ok) exitGraphError('Error: ', r.error?.message);
     if (r.data !== undefined) printJson(r.data);
@@ -894,8 +882,7 @@ copilotCommand
   .action(async (opts: { jsonFile: string; token?: string; identity?: string }, cmd) => {
     checkReadOnly(cmd);
     const token = await resolveTokenOrExit(opts);
-    const raw = await readFile(resolve(process.cwd(), opts.jsonFile.trim()), 'utf8');
-    const body = JSON.parse(raw) as Record<string, unknown>;
+    const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
     const r = await copilotAdminCatalogPatch(token, body);
     if (!r.ok) exitGraphError('Error: ', r.error?.message);
     if (r.data !== undefined) printJson(r.data);
@@ -943,8 +930,7 @@ copilotCommand
   .action(async (opts: { jsonFile: string; beta?: boolean; v1?: boolean; token?: string; identity?: string }, cmd) => {
     checkReadOnly(cmd);
     const token = await resolveTokenOrExit(opts);
-    const raw = await readFile(resolve(process.cwd(), opts.jsonFile.trim()), 'utf8');
-    const body = JSON.parse(raw) as Record<string, unknown>;
+    const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
     const r = await copilotCommunicationsPatch(token, body, !opts.v1);
     if (!r.ok) exitGraphError('Error: ', r.error?.message);
     if (r.data !== undefined) printJson(r.data);
@@ -992,8 +978,7 @@ copilotCommand
   .action(async (opts: { jsonFile: string; beta?: boolean; token?: string; identity?: string }, cmd) => {
     checkReadOnly(cmd);
     const token = await resolveTokenOrExit(opts);
-    const raw = await readFile(resolve(process.cwd(), opts.jsonFile.trim()), 'utf8');
-    const body = JSON.parse(raw) as Record<string, unknown>;
+    const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
     const r = await copilotInteractionHistoryNavPatch(token, body, Boolean(opts.beta));
     if (!r.ok) exitGraphError('Error: ', r.error?.message);
     if (r.data !== undefined) printJson(r.data);
@@ -1160,8 +1145,7 @@ copilotCommand
       const token = await resolveTokenOrExit(opts);
       let body: Record<string, unknown>;
       if (opts.jsonFile) {
-        const raw = await readFile(resolve(process.cwd(), opts.jsonFile.trim()), 'utf8');
-        body = JSON.parse(raw) as Record<string, unknown>;
+        body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       } else {
         const text = (opts.message ?? '').trim();
         const tz = (opts.timezone ?? '').trim();
@@ -1210,8 +1194,7 @@ copilotCommand
       const token = await resolveTokenOrExit(opts);
       let body: Record<string, unknown>;
       if (opts.jsonFile) {
-        const raw = await readFile(resolve(process.cwd(), opts.jsonFile.trim()), 'utf8');
-        body = JSON.parse(raw) as Record<string, unknown>;
+        body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       } else {
         const text = (opts.message ?? '').trim();
         const tz = (opts.timezone ?? '').trim();
@@ -1350,8 +1333,7 @@ copilotCommand
     ) => {
       checkReadOnly(cmd);
       const token = await resolveTokenOrExit(opts);
-      const raw = await readFile(resolve(process.cwd(), opts.jsonFile.trim()), 'utf8');
-      const body = JSON.parse(raw) as Record<string, unknown>;
+      const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const r = await copilotMeetingAiInsightsCreate(token, opts.user, opts.meeting, body, Boolean(opts.beta));
       if (!r.ok) exitGraphError('Error: ', r.error?.message);
       printJson(r.data);
@@ -1385,8 +1367,7 @@ copilotCommand
     ) => {
       checkReadOnly(cmd);
       const token = await resolveTokenOrExit(opts);
-      const raw = await readFile(resolve(process.cwd(), opts.jsonFile.trim()), 'utf8');
-      const body = JSON.parse(raw) as Record<string, unknown>;
+      const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const r = await copilotMeetingAiInsightPatch(
         token,
         opts.user,
@@ -1546,8 +1527,7 @@ reportsCmd.addCommand(
       async (opts: { jsonFile: string; beta?: boolean; v1?: boolean; token?: string; identity?: string }, cmd) => {
         checkReadOnly(cmd);
         const token = await resolveTokenOrExit(opts);
-        const raw = await readFile(resolve(process.cwd(), opts.jsonFile.trim()), 'utf8');
-        const body = JSON.parse(raw) as Record<string, unknown>;
+        const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
         const beta = Boolean(opts.beta) && !opts.v1;
         const r = await copilotReportsNavPatch(token, body, beta);
         if (!r.ok) exitGraphError('Error: ', r.error?.message);
@@ -1606,8 +1586,7 @@ packagesCmd
   .action(async (opts: { jsonFile: string; token?: string; identity?: string }, cmd) => {
     checkReadOnly(cmd);
     const token = await resolveTokenOrExit(opts);
-    const raw = await readFile(resolve(process.cwd(), opts.jsonFile.trim()), 'utf8');
-    const body = JSON.parse(raw) as Record<string, unknown>;
+    const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
     const r = await copilotPackagesCreate(token, body);
     if (!r.ok) exitGraphError('Error: ', r.error?.message);
     printJson(r.data);
@@ -1636,8 +1615,7 @@ packagesCmd
   .action(async (packageId: string, opts: AuthOpts & { jsonFile: string }, cmd) => {
     checkReadOnly(cmd);
     const token = await resolveTokenOrExit(opts);
-    const raw = await readFile(resolve(process.cwd(), opts.jsonFile.trim()), 'utf8');
-    const body = JSON.parse(raw) as Record<string, unknown>;
+    const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
     const r = await copilotPackagesUpdate(token, packageId, body);
     if (!r.ok) exitGraphError('Error: ', r.error?.message);
     if (r.data !== undefined) printJson(r.data);
@@ -1796,8 +1774,7 @@ activityFeedCmd
     ) => {
       checkReadOnly(cmd);
       const token = await resolveTokenOrExit(opts);
-      const raw = await readFile(resolve(process.cwd(), opts.jsonFile.trim()), 'utf8');
-      const body = JSON.parse(raw) as Record<string, unknown>;
+      const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const r = await copilotRealtimeActivityFeedPatch(token, body, !opts.v1, ifMatchHeader(opts.ifMatch));
       if (!r.ok) exitGraphError('Error: ', r.error?.message);
       if (r.data !== undefined) printJson(r.data);
@@ -1863,8 +1840,7 @@ activityFeedCmd
   .action(async (opts: { jsonFile: string; beta?: boolean; v1?: boolean; token?: string; identity?: string }, cmd) => {
     checkReadOnly(cmd);
     const token = await resolveTokenOrExit(opts);
-    const raw = await readFile(resolve(process.cwd(), opts.jsonFile.trim()), 'utf8');
-    const body = JSON.parse(raw) as Record<string, unknown>;
+    const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
     const r = await copilotRealtimeMeetingCreate(token, body, !opts.v1);
     if (!r.ok) exitGraphError('Error: ', r.error?.message);
     printJson(r.data);
@@ -1916,8 +1892,7 @@ activityFeedCmd
     ) => {
       checkReadOnly(cmd);
       const token = await resolveTokenOrExit(opts);
-      const raw = await readFile(resolve(process.cwd(), opts.jsonFile.trim()), 'utf8');
-      const body = JSON.parse(raw) as Record<string, unknown>;
+      const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const r = await copilotRealtimeMeetingPatch(token, meetingId, body, !opts.v1, ifMatchHeader(opts.ifMatch));
       if (!r.ok) exitGraphError('Error: ', r.error?.message);
       if (r.data !== undefined) printJson(r.data);
@@ -1990,8 +1965,7 @@ activityFeedCmd
   .action(async (opts: { jsonFile: string; beta?: boolean; v1?: boolean; token?: string; identity?: string }, cmd) => {
     checkReadOnly(cmd);
     const token = await resolveTokenOrExit(opts);
-    const raw = await readFile(resolve(process.cwd(), opts.jsonFile.trim()), 'utf8');
-    const body = JSON.parse(raw) as Record<string, unknown>;
+    const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
     const r = await copilotRealtimeSubscriptionCreate(token, body, !opts.v1);
     if (!r.ok) exitGraphError('Error: ', r.error?.message);
     printJson(r.data);
@@ -2043,8 +2017,7 @@ activityFeedCmd
     ) => {
       checkReadOnly(cmd);
       const token = await resolveTokenOrExit(opts);
-      const raw = await readFile(resolve(process.cwd(), opts.jsonFile.trim()), 'utf8');
-      const body = JSON.parse(raw) as Record<string, unknown>;
+      const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const r = await copilotRealtimeSubscriptionPatch(
         token,
         subscriptionId,
@@ -2099,8 +2072,7 @@ activityFeedCmd
       const token = await resolveTokenOrExit(opts);
       let body: Record<string, unknown> | undefined;
       if (opts.jsonFile?.trim()) {
-        const raw = await readFile(resolve(process.cwd(), opts.jsonFile.trim()), 'utf8');
-        body = JSON.parse(raw) as Record<string, unknown>;
+        body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       }
       const r = await copilotRealtimeSubscriptionGetArtifacts(token, subscriptionId, body, !opts.v1);
       if (!r.ok) exitGraphError('Error: ', r.error?.message);
@@ -2167,8 +2139,7 @@ activityFeedCmd
     ) => {
       checkReadOnly(cmd);
       const token = await resolveTokenOrExit(opts);
-      const raw = await readFile(resolve(process.cwd(), opts.jsonFile.trim()), 'utf8');
-      const body = JSON.parse(raw) as Record<string, unknown>;
+      const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const r = await copilotRealtimeTranscriptCreate(token, meetingId, body, !opts.v1);
       if (!r.ok) exitGraphError('Error: ', r.error?.message);
       printJson(r.data);
@@ -2225,8 +2196,7 @@ activityFeedCmd
     ) => {
       checkReadOnly(cmd);
       const token = await resolveTokenOrExit(opts);
-      const raw = await readFile(resolve(process.cwd(), opts.jsonFile.trim()), 'utf8');
-      const body = JSON.parse(raw) as Record<string, unknown>;
+      const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const r = await copilotRealtimeTranscriptPatch(
         token,
         meetingId,
@@ -2318,8 +2288,7 @@ aiUserCmd
   .action(async (opts: { jsonFile: string; beta?: boolean; v1?: boolean; token?: string; identity?: string }, cmd) => {
     checkReadOnly(cmd);
     const token = await resolveTokenOrExit(opts);
-    const raw = await readFile(resolve(process.cwd(), opts.jsonFile.trim()), 'utf8');
-    const body = JSON.parse(raw) as Record<string, unknown>;
+    const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
     const r = await copilotAiUserCreate(token, body, !opts.v1);
     if (!r.ok) exitGraphError('Error: ', r.error?.message);
     printJson(r.data);
@@ -2371,8 +2340,7 @@ aiUserCmd
     ) => {
       checkReadOnly(cmd);
       const token = await resolveTokenOrExit(opts);
-      const raw = await readFile(resolve(process.cwd(), opts.jsonFile.trim()), 'utf8');
-      const body = JSON.parse(raw) as Record<string, unknown>;
+      const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const r = await copilotAiUserPatch(token, aiUserId, body, !opts.v1, ifMatchHeader(opts.ifMatch));
       if (!r.ok) exitGraphError('Error: ', r.error?.message);
       if (r.data !== undefined) printJson(r.data);
@@ -2438,8 +2406,7 @@ aiUserCmd
     ) => {
       checkReadOnly(cmd);
       const token = await resolveTokenOrExit(opts);
-      const raw = await readFile(resolve(process.cwd(), opts.jsonFile.trim()), 'utf8');
-      const body = JSON.parse(raw) as Record<string, unknown>;
+      const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const r = await copilotAiUserInteractionHistoryPatch(token, opts.user, body, !opts.v1);
       if (!r.ok) exitGraphError('Error: ', r.error?.message);
       if (r.data !== undefined) printJson(r.data);
@@ -2522,8 +2489,7 @@ aiUserCmd
     ) => {
       checkReadOnly(cmd);
       const token = await resolveTokenOrExit(opts);
-      const raw = await readFile(resolve(process.cwd(), opts.jsonFile.trim()), 'utf8');
-      const body = JSON.parse(raw) as Record<string, unknown>;
+      const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const r = await copilotAiUserOnlineMeetingCreate(token, opts.user, body, !opts.v1);
       if (!r.ok) exitGraphError('Error: ', r.error?.message);
       printJson(r.data);
@@ -2579,8 +2545,7 @@ aiUserCmd
     ) => {
       checkReadOnly(cmd);
       const token = await resolveTokenOrExit(opts);
-      const raw = await readFile(resolve(process.cwd(), opts.jsonFile.trim()), 'utf8');
-      const body = JSON.parse(raw) as Record<string, unknown>;
+      const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const r = await copilotAiUserOnlineMeetingPatch(
         token,
         opts.user,

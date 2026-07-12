@@ -220,6 +220,54 @@ describe('ews-client safety and conflict behavior', () => {
     expect(result.data?.End.TimeZone).toBe('Pacific Standard Time');
   });
 
+  it('getCalendarEvents pages a truncated CalendarView by advancing StartDate and de-dupes the boundary item', async () => {
+    const startDates: string[] = [];
+    let callCount = 0;
+    const calItem = (id: string, start: string, end: string) =>
+      `<t:CalendarItem><t:ItemId Id="${id}" ChangeKey="ck" /><t:Subject>E ${id}</t:Subject><t:Start>${start}</t:Start><t:End>${end}</t:End><t:IsAllDayEvent>false</t:IsAllDayEvent><t:IsCancelled>false</t:IsCancelled></t:CalendarItem>`;
+    const findResp = (includesLast: boolean, items: string) =>
+      `<?xml version="1.0"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages" xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types"><soap:Body><m:ResponseCode>NoError</m:ResponseCode><m:FindItemResponse><m:ResponseMessages><m:FindItemResponseMessage ResponseClass="Success"><m:ResponseCode>NoError</m:ResponseCode><m:RootFolder TotalItemsInView="3" IncludesLastItemInRange="${includesLast}"><t:Items>${items}</t:Items></m:RootFolder></m:FindItemResponseMessage></m:ResponseMessages></m:FindItemResponse></soap:Body></soap:Envelope>`;
+
+    globalThis.fetch = mock(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = String(init?.body || '');
+      const m = body.match(/StartDate="([^"]+)"/);
+      if (m) startDates.push(m[1]);
+      callCount += 1;
+      if (callCount === 1) {
+        // First page truncated: two items, last starts at 2026-01-02T09:00:00Z.
+        return new Response(
+          findResp(
+            false,
+            calItem('a', '2026-01-01T09:00:00Z', '2026-01-01T10:00:00Z') +
+              calItem('b', '2026-01-02T09:00:00Z', '2026-01-02T10:00:00Z')
+          ),
+          { status: 200 }
+        );
+      }
+      // Second page (StartDate advanced): boundary item 'b' repeats (de-duped) + new item 'c'; end of range.
+      return new Response(
+        findResp(
+          true,
+          calItem('b', '2026-01-02T09:00:00Z', '2026-01-02T10:00:00Z') +
+            calItem('c', '2026-01-03T09:00:00Z', '2026-01-03T10:00:00Z')
+        ),
+        { status: 200 }
+      );
+    }) as unknown as typeof fetch;
+
+    const { getCalendarEvents } = await import('../lib/ews-client.js');
+    const result = await getCalendarEvents('token', '2026-01-01T00:00:00Z', '2026-01-31T00:00:00Z');
+
+    expect(result.ok).toBe(true);
+    // Three unique events, boundary 'b' counted once.
+    expect(result.data?.length).toBe(3);
+    expect(result.data?.map((e) => e.Id).sort()).toEqual(['a', 'b', 'c']);
+    // Two requests: first at the window start, second advanced to the last item's start.
+    expect(callCount).toBe(2);
+    expect(startDates[0]).toBe('2026-01-01T00:00:00Z');
+    expect(startDates[1]).toBe('2026-01-02T09:00:00Z');
+  });
+
   it('replyToEmail sends ReferenceItemId with ChangeKey after GetItem', async () => {
     const fetchCalls: string[] = [];
     let callCount = 0;
@@ -320,6 +368,21 @@ describe('ews-client safety and conflict behavior', () => {
     expect(fetchCalls[1]).toContain('<t:BccRecipients>');
     expect(fetchCalls[1]).toContain('bcc1@contoso.com');
     expect(fetchCalls[1]).toContain('bcc2@contoso.com');
+
+    // The EWS Types.xsd ReplyToItem sequence requires Cc/BccRecipients BEFORE ReferenceItemId,
+    // and NewBodyContent AFTER it. Out-of-order elements => ErrorSchemaValidation (reply never sends).
+    const xml = fetchCalls[1];
+    const iCc = xml.indexOf('<t:CcRecipients>');
+    const iBcc = xml.indexOf('<t:BccRecipients>');
+    const iRef = xml.indexOf('ReferenceItemId');
+    const iBody = xml.indexOf('<t:NewBodyContent');
+    expect(iCc).toBeGreaterThan(-1);
+    expect(iBcc).toBeGreaterThan(-1);
+    expect(iRef).toBeGreaterThan(-1);
+    expect(iBody).toBeGreaterThan(-1);
+    expect(iCc).toBeLessThan(iRef);
+    expect(iBcc).toBeLessThan(iRef);
+    expect(iRef).toBeLessThan(iBody);
   });
 
   it('sendEmail with an attachment threads the CreateAttachment change key into SendItem', async () => {
@@ -469,5 +532,78 @@ describe('ewsAvailabilityTimeToUtcMs', () => {
     expect(result.ok).toBe(true);
     expect(result.data).not.toBeNull();
     expect(result.data?.enabled).toBe(true);
+  });
+
+  it('forwardEmail emits ToRecipients/Cc/Bcc before ReferenceItemId and NewBodyContent after (Types.xsd order)', async () => {
+    const fetchCalls: string[] = [];
+    let callCount = 0;
+    globalThis.fetch = mock(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      fetchCalls.push(String(init?.body || ''));
+      callCount += 1;
+      if (callCount === 1) {
+        return new Response(
+          `<?xml version="1.0"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages" xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types"><soap:Body><m:ResponseCode>NoError</m:ResponseCode><m:GetItemResponse><m:Items><t:Message><t:ItemId Id="msg-9" ChangeKey="ck-9" /></t:Message></m:Items></m:GetItemResponse></soap:Body></soap:Envelope>`,
+          { status: 200 }
+        );
+      }
+      return new Response(
+        `<?xml version="1.0"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages"><soap:Body><m:ResponseCode>NoError</m:ResponseCode></soap:Body></soap:Envelope>`,
+        { status: 200 }
+      );
+    }) as unknown as typeof fetch;
+
+    const { forwardEmail } = await import('../lib/ews-client.js');
+    const result = await forwardEmail('token', 'msg-9', ['to@contoso.com'], 'FYI', undefined, {
+      cc: ['cc@contoso.com'],
+      bcc: ['bcc@contoso.com']
+    });
+    expect(result.ok).toBe(true);
+    const xml = fetchCalls[1];
+    const iTo = xml.indexOf('<t:ToRecipients>');
+    const iCc = xml.indexOf('<t:CcRecipients>');
+    const iBcc = xml.indexOf('<t:BccRecipients>');
+    const iRef = xml.indexOf('ReferenceItemId');
+    const iBody = xml.indexOf('<t:NewBodyContent');
+    for (const idx of [iTo, iCc, iBcc, iRef, iBody]) expect(idx).toBeGreaterThan(-1);
+    expect(iTo).toBeLessThan(iCc);
+    expect(iCc).toBeLessThan(iBcc);
+    expect(iBcc).toBeLessThan(iRef);
+    expect(iRef).toBeLessThan(iBody);
+  });
+
+  it('respondToEvent emits Body before ReferenceItemId (AcceptItem Types.xsd order)', async () => {
+    const fetchCalls: string[] = [];
+    let callCount = 0;
+    globalThis.fetch = mock(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      fetchCalls.push(String(init?.body || ''));
+      callCount += 1;
+      if (callCount === 1) {
+        return new Response(
+          `<?xml version="1.0"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages" xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types"><soap:Body><m:ResponseCode>NoError</m:ResponseCode><m:GetItemResponse><m:Items><t:CalendarItem><t:ItemId Id="cal-1" ChangeKey="ck-c" /></t:CalendarItem></m:Items></m:GetItemResponse></soap:Body></soap:Envelope>`,
+          { status: 200 }
+        );
+      }
+      return new Response(
+        `<?xml version="1.0"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages"><soap:Body><m:ResponseCode>NoError</m:ResponseCode></soap:Body></soap:Envelope>`,
+        { status: 200 }
+      );
+    }) as unknown as typeof fetch;
+
+    const { respondToEvent } = await import('../lib/ews-client.js');
+    const result = await respondToEvent({
+      token: 'token',
+      eventId: 'cal-1',
+      response: 'accept',
+      comment: 'See you there',
+      sendResponse: true
+    });
+    expect(result.ok).toBe(true);
+    const xml = fetchCalls[1];
+    const iBody = xml.indexOf('<t:Body');
+    const iRef = xml.indexOf('ReferenceItemId');
+    expect(iBody).toBeGreaterThan(-1);
+    expect(iRef).toBeGreaterThan(-1);
+    expect(iBody).toBeLessThan(iRef);
+    expect(xml).toContain('<t:AcceptItem>');
   });
 });

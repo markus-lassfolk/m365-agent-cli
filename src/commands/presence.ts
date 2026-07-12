@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
 import { Command } from 'commander';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
 import {
@@ -13,6 +12,7 @@ import {
   setPresenceStatusMessage,
   setUserPresence
 } from '../lib/graph-presence-client.js';
+import { readJsonFileOrExit } from '../lib/read-json-file.js';
 import { checkReadOnly } from '../lib/utils.js';
 
 export const presenceCommand = new Command('presence').description(
@@ -76,13 +76,7 @@ presenceCommand
     }
     let idList: string[];
     if (opts.jsonFile?.trim()) {
-      let raw: unknown;
-      try {
-        raw = JSON.parse(await readFile(opts.jsonFile.trim(), 'utf-8'));
-      } catch (err) {
-        console.error(`Error: could not read --json-file: ${err instanceof Error ? err.message : String(err)}`);
-        process.exit(1);
-      }
+      const raw = await readJsonFileOrExit<unknown>(opts.jsonFile, '--json-file');
       idList = Array.isArray(raw)
         ? raw
             .map(String)
@@ -285,7 +279,7 @@ presenceCommand
       }
       let body: Record<string, unknown>;
       if (opts.jsonFile?.trim()) {
-        body = JSON.parse(await readFile(opts.jsonFile.trim(), 'utf-8')) as Record<string, unknown>;
+        body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       } else if (opts.text?.trim()) {
         const statusMessage: Record<string, unknown> = {
           message: { contentType: 'text', content: opts.text.trim() }

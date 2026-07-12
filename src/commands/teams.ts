@@ -1,4 +1,3 @@
-import { readFile } from 'node:fs/promises';
 import { Command } from 'commander';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
 import type { GraphResponse } from '../lib/graph-client.js';
@@ -79,6 +78,7 @@ import {
   upgradeChatInstalledApp,
   upgradeTeamInstalledApp
 } from '../lib/graph-teams-client.js';
+import { readJsonFileOrExit } from '../lib/read-json-file.js';
 import { buildTeamsHtmlBodyWithMentions, parseAtSpecs } from '../lib/teams-message-compose.js';
 import { checkReadOnly } from '../lib/utils.js';
 
@@ -522,7 +522,7 @@ teamsCommand
       let body: Record<string, unknown>;
       const atList = opts.at ?? [];
       if (opts.jsonFile?.trim()) {
-        body = JSON.parse(await readFile(opts.jsonFile.trim(), 'utf-8')) as Record<string, unknown>;
+        body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       } else if (atList.length > 0) {
         if (!opts.text?.trim()) {
           console.error('Error: --at requires --text (with @displayName tokens matching each mention)');
@@ -645,7 +645,7 @@ teamsCommand
       let body: Record<string, unknown>;
       const atList = opts.at ?? [];
       if (opts.jsonFile?.trim()) {
-        body = JSON.parse(await readFile(opts.jsonFile.trim(), 'utf-8')) as Record<string, unknown>;
+        body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       } else if (atList.length > 0) {
         if (!opts.text?.trim()) {
           console.error('Error: --at requires --text (with @displayName tokens matching each mention)');
@@ -912,7 +912,7 @@ teamsCommand
       let body: Record<string, unknown>;
       const atList = opts.at ?? [];
       if (opts.jsonFile?.trim()) {
-        body = JSON.parse(await readFile(opts.jsonFile.trim(), 'utf-8')) as Record<string, unknown>;
+        body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       } else if (atList.length > 0) {
         if (!opts.text?.trim()) {
           console.error('Error: --at requires --text (with @displayName tokens matching each mention)');
@@ -990,7 +990,7 @@ teamsCommand
       let body: Record<string, unknown>;
       const atList = opts.at ?? [];
       if (opts.jsonFile?.trim()) {
-        body = JSON.parse(await readFile(opts.jsonFile.trim(), 'utf-8')) as Record<string, unknown>;
+        body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       } else if (atList.length > 0) {
         if (!opts.text?.trim()) {
           console.error('Error: --at requires --text (with @displayName tokens matching each mention)');
@@ -1235,7 +1235,7 @@ teamsCommand
       }
       let body: Record<string, unknown>;
       if (opts.jsonFile?.trim()) {
-        body = JSON.parse(await readFile(opts.jsonFile.trim(), 'utf-8')) as Record<string, unknown>;
+        body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       } else if (opts.teamsAppId?.trim()) {
         body = buildAddTeamsAppInstallationBody(opts.teamsAppId.trim());
       } else {
@@ -1274,7 +1274,7 @@ teamsCommand
         console.error(`Auth error: ${auth.error}`);
         process.exit(1);
       }
-      const body = JSON.parse(await readFile(opts.jsonFile.trim(), 'utf-8')) as Record<string, unknown>;
+      const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const r = await patchTeamInstalledApp(auth.token, teamId, installationId, body);
       if (!r.ok || !r.data) {
         console.error(`Error: ${r.error?.message}`);
@@ -1419,7 +1419,7 @@ teamsCommand
       }
       let body: Record<string, unknown>;
       if (opts.jsonFile?.trim()) {
-        body = JSON.parse(await readFile(opts.jsonFile.trim(), 'utf-8')) as Record<string, unknown>;
+        body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       } else if (opts.teamsAppId?.trim()) {
         body = buildAddTeamsAppInstallationBody(opts.teamsAppId.trim());
       } else {
@@ -1458,7 +1458,7 @@ teamsCommand
         console.error(`Auth error: ${auth.error}`);
         process.exit(1);
       }
-      const body = JSON.parse(await readFile(opts.jsonFile.trim(), 'utf-8')) as Record<string, unknown>;
+      const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const r = await patchChatInstalledApp(auth.token, chatId, installationId, body);
       if (!r.ok || !r.data) {
         console.error(`Error: ${r.error?.message}`);
@@ -1604,7 +1604,7 @@ teamsCommand
       }
       let body: Record<string, unknown>;
       if (opts.jsonFile?.trim()) {
-        body = JSON.parse(await readFile(opts.jsonFile.trim(), 'utf-8')) as Record<string, unknown>;
+        body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       } else if (opts.teamsAppId?.trim()) {
         body = buildAddTeamsAppInstallationBody(opts.teamsAppId.trim());
       } else {
@@ -1681,7 +1681,7 @@ teamsCommand
         console.error(`Auth error: ${auth.error}`);
         process.exit(1);
       }
-      const body = JSON.parse(await readFile(opts.jsonFile.trim(), 'utf-8')) as Record<string, unknown>;
+      const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const r = chat
         ? await sendChatActivityNotification(auth.token, chat, body)
         : uid
@@ -1729,7 +1729,7 @@ teamsCommand
         console.error(`Auth error: ${auth.error}`);
         process.exit(1);
       }
-      const body = JSON.parse(await readFile(opts.jsonFile.trim(), 'utf-8')) as Record<string, unknown>;
+      const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const useBeta = !!opts.beta;
       const r = opts.parent?.trim()
         ? await updateChannelMessageReply(auth.token, teamId, channelId, opts.parent.trim(), messageId, body, useBeta)
@@ -1830,7 +1830,7 @@ teamsCommand
         console.error(`Auth error: ${auth.error}`);
         process.exit(1);
       }
-      const body = JSON.parse(await readFile(opts.jsonFile.trim(), 'utf-8')) as Record<string, unknown>;
+      const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const r = await updateChatMessage(auth.token, chatId, messageId, body, !!opts.beta);
       if (!r.ok || !r.data) {
         console.error(`Error: ${r.error?.message}`);
@@ -1866,7 +1866,7 @@ teamsCommand
         console.error(`Auth error: ${auth.error}`);
         process.exit(1);
       }
-      const body = JSON.parse(await readFile(opts.jsonFile.trim(), 'utf-8')) as Record<string, unknown>;
+      const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const r = await updateChatMessageReply(auth.token, chatId, parentMessageId, replyId, body, !!opts.beta);
       if (!r.ok || !r.data) {
         console.error(`Error: ${r.error?.message}`);
@@ -1953,7 +1953,7 @@ teamsCommand
       console.error(`Auth error: ${auth.error}`);
       process.exit(1);
     }
-    const body = JSON.parse(await readFile(opts.jsonFile.trim(), 'utf-8')) as Record<string, unknown>;
+    const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
     const r = await createChat(auth.token, body);
     if (!r.ok || !r.data) {
       console.error(`Error: ${r.error?.message}`);
@@ -1984,7 +1984,7 @@ teamsCommand
         console.error(`Auth error: ${auth.error}`);
         process.exit(1);
       }
-      const body = JSON.parse(await readFile(opts.jsonFile.trim(), 'utf-8')) as Record<string, unknown>;
+      const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const r = await addChatMember(auth.token, chatId, body);
       if (!r.ok || !r.data) {
         console.error(`Error: ${r.error?.message}`);
@@ -2017,7 +2017,7 @@ teamsCommand
         console.error(`Auth error: ${auth.error}`);
         process.exit(1);
       }
-      const body = JSON.parse(await readFile(opts.jsonFile.trim(), 'utf-8')) as Record<string, unknown>;
+      const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const r = await addTeamMember(auth.token, teamId, body);
       if (!r.ok || !r.data) {
         console.error(`Error: ${r.error?.message}`);
@@ -2050,7 +2050,7 @@ teamsCommand
         console.error(`Auth error: ${auth.error}`);
         process.exit(1);
       }
-      const body = JSON.parse(await readFile(opts.jsonFile.trim(), 'utf-8')) as Record<string, unknown>;
+      const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const r = await addChannelMember(auth.token, teamId, channelId, body);
       if (!r.ok || !r.data) {
         console.error(`Error: ${r.error?.message}`);
@@ -2114,7 +2114,7 @@ teamsCommand
         console.error(`Auth error: ${auth.error}`);
         process.exit(1);
       }
-      const body = JSON.parse(await readFile(opts.jsonFile.trim(), 'utf-8')) as Record<string, unknown>;
+      const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const r = await createChannelTab(auth.token, teamId, channelId, body);
       if (!r.ok || !r.data) {
         console.error(`Error: ${r.error?.message}`);
@@ -2149,7 +2149,7 @@ teamsCommand
         console.error(`Auth error: ${auth.error}`);
         process.exit(1);
       }
-      const body = JSON.parse(await readFile(opts.jsonFile.trim(), 'utf-8')) as Record<string, unknown>;
+      const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const r = await updateChannelTab(auth.token, teamId, channelId, tabId, body);
       if (!r.ok || !r.data) {
         console.error(`Error: ${r.error?.message}`);
