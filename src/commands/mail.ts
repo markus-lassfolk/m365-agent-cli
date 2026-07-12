@@ -819,7 +819,11 @@ Shared mailbox: add --mailbox shared@contoso.com. Full flags: docs/CLI_REFERENCE
         }
 
         const folderDisplay = options.to.charAt(0).toUpperCase() + options.to.slice(1);
-        console.log(`\u2713 Moved to ${folderDisplay}: ${id}`);
+        if (options.json) {
+          console.log(JSON.stringify({ success: true, moved: true, messageId: id, folder: folderDisplay }, null, 2));
+        } else {
+          console.log(`\u2713 Moved to ${folderDisplay}: ${id}`);
+        }
         return;
       }
 
@@ -871,7 +875,11 @@ Shared mailbox: add --mailbox shared@contoso.com. Full flags: docs/CLI_REFERENCE
           }
 
           const replyType = isReplyAll ? 'Reply all' : 'Reply';
-          console.log(`\u2713 ${replyType} draft created: ${result.data.draftId}`);
+          if (options.json) {
+            console.log(JSON.stringify({ success: true, draftId: result.data.draftId, kind: replyType }, null, 2));
+          } else {
+            console.log(`\u2713 ${replyType} draft created: ${result.data.draftId}`);
+          }
           return;
         }
 
@@ -898,7 +906,11 @@ Shared mailbox: add --mailbox shared@contoso.com. Full flags: docs/CLI_REFERENCE
           });
           if (options.draft) {
             const replyType = isReplyAll ? 'Reply all' : 'Reply';
-            console.log(`\u2713 ${replyType} draft created: ${draftId}`);
+            if (options.json) {
+              console.log(JSON.stringify({ success: true, draftId, kind: replyType }, null, 2));
+            } else {
+              console.log(`\u2713 ${replyType} draft created: ${draftId}`);
+            }
             return;
           }
           const sendR = await sendDraftById(authResult.token!, draftId, options.mailbox);
@@ -907,7 +919,11 @@ Shared mailbox: add --mailbox shared@contoso.com. Full flags: docs/CLI_REFERENCE
             process.exit(1);
           }
           const replyType = isReplyAll ? 'Reply all' : 'Reply';
-          console.log(`\u2713 ${replyType} sent (with attachments/categories): ${id}`);
+          if (options.json) {
+            console.log(JSON.stringify({ success: true, sent: true, sourceMessageId: id, kind: replyType }, null, 2));
+          } else {
+            console.log(`\u2713 ${replyType} sent (with attachments/categories): ${id}`);
+          }
           return;
         }
 
@@ -927,7 +943,11 @@ Shared mailbox: add --mailbox shared@contoso.com. Full flags: docs/CLI_REFERENCE
         }
 
         const replyType = isReplyAll ? 'Reply all' : 'Reply';
-        console.log(`\u2713 ${replyType} sent to: ${id}`);
+        if (options.json) {
+          console.log(JSON.stringify({ success: true, sent: true, sourceMessageId: id, kind: replyType }, null, 2));
+        } else {
+          console.log(`\u2713 ${replyType} sent to: ${id}`);
+        }
         return;
       }
 
@@ -970,7 +990,11 @@ Shared mailbox: add --mailbox shared@contoso.com. Full flags: docs/CLI_REFERENCE
             console.error(`Error: ${result.error?.message || 'Failed to create forward draft'}`);
             process.exit(1);
           }
-          console.log(`\u2713 Forward draft created: ${result.data.draftId}`);
+          if (options.json) {
+            console.log(JSON.stringify({ success: true, draftId: result.data.draftId, kind: 'Forward' }, null, 2));
+          } else {
+            console.log(`\u2713 Forward draft created: ${result.data.draftId}`);
+          }
           return;
         }
 
@@ -995,7 +1019,11 @@ Shared mailbox: add --mailbox shared@contoso.com. Full flags: docs/CLI_REFERENCE
             json: options.json
           });
           if (options.draft) {
-            console.log(`\u2713 Forward draft created: ${draftId}`);
+            if (options.json) {
+              console.log(JSON.stringify({ success: true, draftId, kind: 'Forward' }, null, 2));
+            } else {
+              console.log(`\u2713 Forward draft created: ${draftId}`);
+            }
             return;
           }
           const sendR = await sendDraftById(authResult.token!, draftId, options.mailbox);
@@ -1003,7 +1031,13 @@ Shared mailbox: add --mailbox shared@contoso.com. Full flags: docs/CLI_REFERENCE
             console.error(`Error: ${sendR.error?.message || 'Failed to send forward'}`);
             process.exit(1);
           }
-          console.log(`\u2713 Forwarded to ${recipients.join(', ')} (with attachments/categories): ${id}`);
+          if (options.json) {
+            console.log(
+              JSON.stringify({ success: true, sent: true, sourceMessageId: id, recipients, kind: 'Forward' }, null, 2)
+            );
+          } else {
+            console.log(`\u2713 Forwarded to ${recipients.join(', ')} (with attachments/categories): ${id}`);
+          }
           return;
         }
 
@@ -1021,7 +1055,13 @@ Shared mailbox: add --mailbox shared@contoso.com. Full flags: docs/CLI_REFERENCE
           process.exit(1);
         }
 
-        console.log(`\u2713 Forwarded to ${recipients.join(', ')}: ${id}`);
+        if (options.json) {
+          console.log(
+            JSON.stringify({ success: true, sent: true, sourceMessageId: id, recipients, kind: 'Forward' }, null, 2)
+          );
+        } else {
+          console.log(`\u2713 Forwarded to ${recipients.join(', ')}: ${id}`);
+        }
         return;
       }
 

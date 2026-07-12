@@ -585,7 +585,11 @@ export const draftsCommand = new Command('drafts')
           }
         }
 
-        console.log(`\u2713 Draft updated: ${id}`);
+        if (options.json) {
+          console.log(JSON.stringify({ success: true, draftId: id, action: 'updated' }, null, 2));
+        } else {
+          console.log(`\u2713 Draft updated: ${id}`);
+        }
         return;
       }
 
@@ -599,7 +603,11 @@ export const draftsCommand = new Command('drafts')
           process.exit(1);
         }
 
-        console.log(`\u2713 Draft sent: ${id}`);
+        if (options.json) {
+          console.log(JSON.stringify({ success: true, draftId: id, action: 'sent' }, null, 2));
+        } else {
+          console.log(`\u2713 Draft sent: ${id}`);
+        }
         return;
       }
 
@@ -617,7 +625,11 @@ export const draftsCommand = new Command('drafts')
           process.exit(1);
         }
 
-        console.log(`\u2713 Draft deleted: ${id}`);
+        if (options.json) {
+          console.log(JSON.stringify({ success: true, draftId: id, action: 'deleted' }, null, 2));
+        } else {
+          console.log(`\u2713 Draft deleted: ${id}`);
+        }
         return;
       }
 

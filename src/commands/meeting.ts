@@ -40,7 +40,8 @@ function parseOptionalRecordingsTop(raw?: string): number | undefined {
   if (!raw?.trim()) return undefined;
   const n = Number.parseInt(raw.trim(), 10);
   if (!Number.isFinite(n) || n < 1) {
-    return undefined;
+    console.error(`Error: --top must be a positive integer (got "${raw.trim()}")`);
+    process.exit(1);
   }
   return Math.min(999, n);
 }

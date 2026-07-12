@@ -64,7 +64,7 @@ export const roomsCommand = new Command('rooms')
       }
 
       if (action === 'lists' || action === undefined) {
-        console.log('Fetching room lists...');
+        if (!options.json) console.log('Fetching room lists...');
         const result = await listPlaceRoomLists({ token: authResult.token, identity: options.identity });
         if (!result.ok || !result.data) {
           console.error(`Error: ${result.error?.message || 'Failed to fetch room lists'}`);
@@ -98,7 +98,7 @@ export const roomsCommand = new Command('rooms')
           console.error('Use "m365-agent-cli rooms lists" to see available room lists.');
           process.exit(1);
         }
-        console.log(`Fetching rooms from list: ${idOrEmail}...`);
+        if (!options.json) console.log(`Fetching rooms from list: ${idOrEmail}...`);
         const result = await listRoomsInRoomList(idOrEmail, {
           token: authResult.token,
           identity: options.identity
@@ -184,7 +184,7 @@ export const roomsCommand = new Command('rooms')
           );
           process.exit(1);
         }
-        console.log('Searching for rooms...');
+        if (!options.json) console.log('Searching for rooms...');
         const result = await findRooms(filters, { token: authResult.token, identity: options.identity });
         if (!result.ok || !result.data) {
           console.error(`Error: ${result.error?.message || 'Failed to search rooms'}`);

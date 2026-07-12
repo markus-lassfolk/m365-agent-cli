@@ -219,6 +219,54 @@ describe('callGraphAt throttling and errors', () => {
     }
   });
 
+  it('does NOT retry a POST on 503 even with Retry-After (avoids duplicate side effects)', async () => {
+    let n = 0;
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = (async () => {
+        n++;
+        return new Response(JSON.stringify({ error: { code: 'serviceNotAvailable', message: 'down' } }), {
+          status: 503,
+          headers: { 'retry-after': '0', 'content-type': 'application/json' }
+        });
+      }) as unknown as typeof fetch;
+
+      await expect(
+        callGraphAt(baseUrl, token, '/me/sendMail', { method: 'POST', body: JSON.stringify({}) })
+      ).rejects.toBeInstanceOf(GraphApiError);
+      // A 503 can occur after the server began processing, so a non-idempotent POST must not be re-sent.
+      expect(n).toBe(1);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('DOES retry a GET on 503 with Retry-After then succeeds', async () => {
+    let n = 0;
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = (async () => {
+        n++;
+        if (n === 1) {
+          return new Response(JSON.stringify({ error: { code: 'serviceNotAvailable', message: 'down' } }), {
+            status: 503,
+            headers: { 'retry-after': '0', 'content-type': 'application/json' }
+          });
+        }
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as unknown as typeof fetch;
+
+      const r = await callGraphAt<{ ok: boolean }>(baseUrl, token, '/me', { method: 'GET' });
+      expect(r.ok).toBe(true);
+      expect(n).toBe(2);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it('includes request-id in GraphApiError when header present', async () => {
     const originalFetch = globalThis.fetch;
     try {

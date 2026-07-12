@@ -351,15 +351,20 @@ function shouldRetryThrottle(
   if (throttleAttempt >= GRAPH_RETRY_MAX_ATTEMPTS) return false;
   const idem = isIdempotentMethod(method);
   if (status === 429) {
+    // 429 means the request was throttled/rejected before processing, so retrying a mutation is safe.
     if (idem) return true;
     return parseRetryAfterMs(headers) !== null;
   }
   if (status === 503) {
-    if (idem) return true;
-    return parseRetryAfterMs(headers) !== null;
+    // 503 (unlike 429) can occur AFTER the server began processing the request, so retrying a
+    // non-idempotent mutation risks a duplicate side effect (e.g. a second sent mail / created event).
+    return idem;
   }
-  if (code === 'tooManyRequests' || code === 'serviceNotAvailable' || code === 'ServiceUnavailable') {
+  if (code === 'tooManyRequests') {
     return idem || parseRetryAfterMs(headers) !== null;
+  }
+  if (code === 'serviceNotAvailable' || code === 'ServiceUnavailable') {
+    return idem;
   }
   return false;
 }
