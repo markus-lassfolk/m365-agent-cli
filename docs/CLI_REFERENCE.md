@@ -17,6 +17,7 @@ Complete command-line reference for **m365-agent-cli**: global flags, read-only 
 ```bash
 --read-only         # Run in read-only mode, blocking mutating operations
 --dry-run           # Preview the resolved request for a mutating command without sending it
+--cache <duration>  # Cache idempotent Graph GET responses on disk (e.g. 30s, 5m, 1h). Off by default.
 --version, -V       # CLI version (semver from package)
 ```
 
@@ -140,6 +141,30 @@ mutating request is shown — the CLI exits immediately after printing it, exact
 would if that first call failed, so nothing downstream can execute against state that was never
 actually written. Re-run without `--dry-run` to send it, or run again after fixing the previewed
 request. GET-only commands are unaffected by `--dry-run` (there's nothing to preview).
+
+### Read Cache
+
+`--cache <duration>` (root flag — works before or after the subcommand; or `M365_CACHE_TTL=<duration>`
+in the environment) opt-in caches successful Microsoft Graph **GET** responses on disk for
+`<duration>`, so repeated agent calls to the same read (folder lists, room lists, user lookups,
+etc.) within that window skip the network round trip. Off by default — without `--cache`, every
+run hits Graph fresh, same as today.
+
+`<duration>` accepts a bare number (seconds), or a number with a unit suffix: `30s`, `5m`, `2h`, `1d`.
+
+```bash
+m365-agent-cli folders --cache 5m
+# first call hits Graph and populates the cache; a second identical call within 5 minutes
+# returns the cached response without a network request
+```
+
+Only `GET` requests are cached — mutating requests (POST/PATCH/PUT/DELETE) always go straight to
+Graph. The cache lives at `~/.config/m365-agent-cli/graph-cache/` (or under `XDG_CONFIG_HOME`),
+keyed by a hash of the bearer token, HTTP method, and full URL, so two different signed-in
+identities on the same machine never share cache entries, and different query parameters (e.g.
+`$top`, `$filter`) get separate entries. Entries past their TTL are treated as a miss and pruned
+opportunistically. EWS requests are not cached (EWS operations are POST/SOAP, not idempotent GETs
+in the way Graph's REST API is).
 
 ---
 

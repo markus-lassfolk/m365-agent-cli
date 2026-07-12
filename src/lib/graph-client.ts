@@ -13,6 +13,7 @@ import {
   driveRootSearchPath
 } from './drive-location.js';
 import { haltForDryRun, isDryRunActive, previewableBody } from './dry-run.js';
+import { activeCacheTtlMs, readGraphCache, writeGraphCache } from './graph-cache.js';
 import { getGraphBaseUrl } from './graph-constants.js';
 
 /** Shown after HTTP 404 on a v1.0-style Graph URL (preview APIs are often beta-only). */
@@ -545,6 +546,14 @@ async function callGraphUrlWithRetries<T>(
     });
   }
 
+  const cacheTtlMs = method === 'GET' ? activeCacheTtlMs() : null;
+  if (cacheTtlMs) {
+    const cached = await readGraphCache(token, method, fullUrl);
+    if (cached) {
+      return graphResult(cached.body as T);
+    }
+  }
+
   let accessToken = token;
   let throttleAttempt = 0;
   let did401Refresh = false;
@@ -649,6 +658,9 @@ async function callGraphUrlWithRetries<T>(
 
     if (responseMode === 'text') {
       const text = await response.text();
+      if (cacheTtlMs) {
+        await writeGraphCache(token, method, fullUrl, response.status, text, cacheTtlMs);
+      }
       return graphResult(text as unknown as T);
     }
 
@@ -664,7 +676,11 @@ async function callGraphUrlWithRetries<T>(
       return graphResult(undefined as T);
     }
     try {
-      return graphResult(JSON.parse(raw) as T);
+      const parsed = JSON.parse(raw) as T;
+      if (cacheTtlMs) {
+        await writeGraphCache(token, method, fullUrl, response.status, parsed, cacheTtlMs);
+      }
+      return graphResult(parsed);
     } catch {
       throw new GraphApiError(
         `Microsoft Graph returned a non-JSON ${response.status} response`,

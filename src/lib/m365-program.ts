@@ -69,13 +69,21 @@ function registerM365Commands(program: Command): void {
     '--dry-run',
     'Preview the exact request a mutating command would send (Graph URL/body or EWS SOAP envelope) without sending it, then exit 0. For a multi-step command, only the first mutating request is shown.'
   );
+  program.option(
+    '--cache <duration>',
+    'Cache idempotent Microsoft Graph GET responses on disk for this long (e.g. 30s, 5m, 1h; bare number = seconds), keyed by identity token + URL. Off by default.'
+  );
 
-  // Sync --dry-run into a process-wide env var before the action runs: the transport layer
-  // (graph-client.ts / ews-client.ts) has no access to the parsed Command instance, so this is
-  // the only way to carry the flag down to where requests are actually built and sent.
+  // Sync --dry-run / --cache into process-wide env vars before the action runs: the transport
+  // layer (graph-client.ts / ews-client.ts) has no access to the parsed Command instance, so this
+  // is the only way to carry the flags down to where requests are actually built and sent.
   program.hook('preAction', (_thisCommand, actionCommand) => {
-    if (actionCommand.optsWithGlobals().dryRun) {
+    const opts = actionCommand.optsWithGlobals();
+    if (opts.dryRun) {
       process.env.M365_DRY_RUN = '1';
+    }
+    if (opts.cache) {
+      process.env.M365_CACHE_TTL = String(opts.cache);
     }
   });
 

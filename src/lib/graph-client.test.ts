@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, it } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { writeFileSync } from 'node:fs';
-import { mkdtemp, unlink } from 'node:fs/promises';
+import { mkdtemp, rm, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { callGraphAt, GraphApiError, pollGraphAsyncJob, uploadLargeFile } from './graph-client.js';
@@ -737,6 +737,113 @@ describe('--dry-run (M365_DRY_RUN)', () => {
       const r = await callGraphAt(baseUrl, token, '/me/sendMail', { method: 'POST', body: '{}' });
       expect(fetchCalled).toBe(true);
       expect(r.ok).toBe(true);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+describe('read cache (M365_CACHE_TTL)', () => {
+  const originalTtl = process.env.M365_CACHE_TTL;
+  let testHome: string;
+  let originalConfigDir: string | undefined;
+
+  beforeEach(async () => {
+    testHome = await mkdtemp(join(tmpdir(), 'm365-graph-client-cache-'));
+    originalConfigDir = process.env.M365_AGENT_CLI_CONFIG_DIR;
+    process.env.M365_AGENT_CLI_CONFIG_DIR = testHome;
+  });
+
+  afterEach(async () => {
+    if (originalTtl === undefined) delete process.env.M365_CACHE_TTL;
+    else process.env.M365_CACHE_TTL = originalTtl;
+    if (originalConfigDir === undefined) delete process.env.M365_AGENT_CLI_CONFIG_DIR;
+    else process.env.M365_AGENT_CLI_CONFIG_DIR = originalConfigDir;
+    await rm(testHome, { recursive: true, force: true }).catch(() => {});
+  });
+
+  it('serves a repeated GET from cache without calling fetch again', async () => {
+    process.env.M365_CACHE_TTL = '1m';
+    const originalFetch = globalThis.fetch;
+    let fetchCalls = 0;
+    try {
+      globalThis.fetch = (async () => {
+        fetchCalls++;
+        return new Response(JSON.stringify({ id: 'u1' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as unknown as typeof fetch;
+
+      const r1 = await callGraphAt<{ id: string }>(baseUrl, token, '/me', { method: 'GET' });
+      const r2 = await callGraphAt<{ id: string }>(baseUrl, token, '/me', { method: 'GET' });
+      expect(fetchCalls).toBe(1);
+      expect(r1.ok).toBe(true);
+      expect(r2.ok).toBe(true);
+      expect(r2.data).toEqual({ id: 'u1' });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('never caches a mutating request', async () => {
+    process.env.M365_CACHE_TTL = '1m';
+    const originalFetch = globalThis.fetch;
+    let fetchCalls = 0;
+    try {
+      globalThis.fetch = (async () => {
+        fetchCalls++;
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as unknown as typeof fetch;
+
+      await callGraphAt(baseUrl, token, '/me/sendMail', { method: 'POST', body: '{}' });
+      await callGraphAt(baseUrl, token, '/me/sendMail', { method: 'POST', body: '{}' });
+      expect(fetchCalls).toBe(2);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('does not use the cache when M365_CACHE_TTL is unset (default off)', async () => {
+    delete process.env.M365_CACHE_TTL;
+    const originalFetch = globalThis.fetch;
+    let fetchCalls = 0;
+    try {
+      globalThis.fetch = (async () => {
+        fetchCalls++;
+        return new Response(JSON.stringify({ id: 'u1' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as unknown as typeof fetch;
+
+      await callGraphAt(baseUrl, token, '/me', { method: 'GET' });
+      await callGraphAt(baseUrl, token, '/me', { method: 'GET' });
+      expect(fetchCalls).toBe(2);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('does not share cache entries across different bearer tokens', async () => {
+    process.env.M365_CACHE_TTL = '1m';
+    const originalFetch = globalThis.fetch;
+    let fetchCalls = 0;
+    try {
+      globalThis.fetch = (async () => {
+        fetchCalls++;
+        return new Response(JSON.stringify({ id: 'u1' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as unknown as typeof fetch;
+
+      await callGraphAt(baseUrl, 'token-a', '/me', { method: 'GET' });
+      await callGraphAt(baseUrl, 'token-b', '/me', { method: 'GET' });
+      expect(fetchCalls).toBe(2);
     } finally {
       globalThis.fetch = originalFetch;
     }
