@@ -6,6 +6,49 @@ For install and tagging, see [docs/RELEASE.md](docs/RELEASE.md).
 
 ---
 
+## [2026.7.5] — 2026-07-12
+
+### Added (feature roadmap)
+
+- **`describe`** — machine-readable CLI manifest (commands, options, defaults) for scripting/agent discovery.
+- **Native MCP server mode** — exposes every command as an MCP tool over stdio.
+- **`--dry-run`** on mutating commands — preview the Graph/EWS request that would be sent without sending it.
+- **Output shaping** — `--select`/`--fields` projection and `--ndjson` streaming output.
+- **Structured error envelope in `--json` mode** — failures emit `{ "error": {...} }` instead of a bare stack trace or plain-text message (this release extends the envelope across most of the remaining command surface — see Fixed below).
+- **Auto-chunking `$batch` helper** — Graph batch requests beyond the 20-per-call cap are split and reassembled automatically.
+- **Opt-in read cache with TTL** for idempotent Graph GETs.
+- **`whoami --capabilities`** — cross-references the resolved token's scopes against what the CLI can actually do.
+- **OneDrive/SharePoint sharing & permissions** — `get`/`create-link` options, site create/delete.
+- **Bulk mutation commands** for `todo` and `planner` via `$batch`.
+- **`findtime`** — multi-attendee scheduling depth: optional attendees, per-attendee availability, timezone handling across both Graph and EWS backends.
+- **Reusable mail/draft templates** with variable substitution.
+- **`teams chat-message-react --reply`** — parity with the channel-message variant.
+- **EWS draft `--bcc`** parity (create/edit/read).
+- **`excel comments-*`** — clarified these always use the Graph beta root; no separate `--beta` flag needed.
+
+### Fixed (four-pass QA review)
+
+An extended, iterative review pass (code-review → adversarial verification → fix → re-review) across nearly the entire command surface:
+
+- **`--json` structured error envelope swept across most remaining commands** — `bookings`, `groups`, `planner`, `todo`, `rooms`, `onenote`, `contacts`, `copilot`, `viva`/`viva-extra`/`viva-tenant`, `create-event`, and `update-event` previously called `console.error(...); process.exit(1)` unconditionally on auth/Graph failures even with `--json` set, producing empty stdout instead of parseable JSON. All now emit the same `{ "error": {...} }` envelope used elsewhere.
+- **All-day calendar events silently shifted back one day** on hosts with a positive UTC offset (most of Europe/Asia/Australia), on both the EWS and Graph `create-event` paths — a local-midnight boundary was re-snapped via `setUTCHours(0,0,0,0)`/`setUTCDate`, which lands on the previous UTC calendar day. Boundaries are now built by reinterpreting the local wall-clock date as UTC directly.
+- **`update-event` could corrupt the untouched start/end time when patching only the other one**, and **`respond`'s pending-invitation list showed the wrong end time** — both parsed Graph's zone-less `dateTime` with a bare `new Date(...)` (interpreted as host-local time) instead of normalizing it against the accompanying `timeZone` first; wrong on any non-UTC host.
+- **`mailbox-settings --work-*` could silently wipe existing working hours** if the pre-update fetch (needed to merge the partial change) failed — the failure was swallowed and treated as "nothing configured," so e.g. `--work-start` alone would blank out the existing days/end-time/timezone on PATCH (Graph replaces the `workingHours` object wholesale, not per-field).
+- **`delete-event --scope future` on the EWS backend deleted only the single targeted occurrence** while reporting the series as truncated — EWS has no operation to truncate a `RecurrenceRange`; this now errors clearly instead of misrepresenting what happened (Graph's `--scope future` path already truncates correctly).
+- **`describe`'s manifest dropped argument defaults and never reported negatable/implicit-true options.**
+- **Output-shaping (`--fields`/`--select`) array traversal (`getByPath`) had both a false-negative and a false-positive bug**: it couldn't traverse arrays at all in one pass of fixes, then (after that fix) reported `found: true` with an empty array even when zero elements resolved the remaining path — masking genuine typos/missing fields.
+- **`--ndjson` printed a blank line for zero rows.**
+- **`toJsonError` dropped `code`/`status`/`requestId`** when passed a bare `Error` instance, and `calendar`'s error path reduced a structured Graph error to a string before calling it, losing the same fields.
+- **Reusable mail/draft template rendering scanned its own rendered output for malformed `{{placeholder}}` syntax**, producing false positives whenever a `--var` value itself happened to contain `{{...}}`.
+- **MCP server hardening**: `--json` argv reconstruction could match an option's own literal `"--"` value; the Windows `taskkill` child-process spawn used to kill a runaway child tree had no error listener and could crash the whole server; both fixed.
+- **Graph response cache key collisions** from an unescaped header-delimiter, plus `--dry-run` over-halting a would-be multi-request mutation, a batch call silently losing partial results on a mixed-success response, and template placeholder validation gaps — all fixed with regression coverage.
+- **`teams chat-message-react --reply`** now rejects cleanly instead of building a request against an endpoint that doesn't exist for 1:1/group chats (channel messages only).
+- **`rooms find`** silently ignored a lone `--start`/`--end`, and folded rooms whose availability check itself failed into the "free" set instead of marking them unknown.
+- **`todo get --expand`** was silently dropped (never wired into the underlying Graph call); **`approvals list --next`** silently ignored `--top`/`--no-expand` on the continuation page.
+- **Test-harness Commander singleton leaks**: several command modules (including `create-event`, which wasn't reset at all) retained stale option values across test runs in the same process, occasionally letting one test's `--repeat`/`--sensitivity`/etc. leak into and break an unrelated later test.
+
+---
+
 ## [2026.7.4] — 2026-07-12
 
 ### Mail
