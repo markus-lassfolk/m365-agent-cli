@@ -39,7 +39,7 @@ verification / a product decision)
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
 | 13 | EWS `createEvent` attendees+attachments ordering fix | ⏭️ | Documented as a known limitation in `ews-client.ts` (2026.7.4). Needs a live Exchange to verify the create→attach→resend-invite flow before shipping. |
-| 14 | `teams chat-message-react --reply` (chat variant lacks what `channel-message-react` has) | ⬜ | |
+| 14 | `teams chat-message-react --reply` (chat variant lacks what `channel-message-react` has) | ✅ | Added `--reply <replyId>` to `chat-message-react` (both set/unset), targeting `/chats/{id}/messages/{id}/replies/{id}/(un)setReaction` — verified against Microsoft's Graph SDK endpoint reference before implementing, matching the existing `channel-message-react --reply` pattern. |
 | 15 | EWS draft BCC parity (`drafts --edit` has `--cc` but no `--bcc`; `parseEmailMessage` doesn't read `BccRecipients`) | ✅ | Added `--bcc` to `drafts` (both `--create` and `--edit`, EWS backend); `updateDraft` gained a `bcc` param + `message:BccRecipients` `SetItemField`; `getEmail` now requests and parses `BccRecipients` (visible in `drafts --read --json`). |
 | 16 | `excel comments-*` `--beta` flag (help text says "requires beta" but no flag exists; only `GRAPH_BETA_URL` works) | ⬜ | |
 

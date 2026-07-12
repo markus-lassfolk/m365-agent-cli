@@ -1,7 +1,7 @@
 {
   "version": 1,
   "description": "Graph path patterns from static analysis of callGraph*, graphInvoke*, fetchAllPages, fetchGraphRaw, graphPostBatch. Regenerate: npm run graph:inventory",
-  "generatedAt": "2026-07-12T15:21:50.999Z",
+  "generatedAt": "2026-07-12T15:25:12.847Z",
   "entryCount": 709,
   "entries": [
     {
@@ -2526,287 +2526,287 @@
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 970,
+      "line": 974,
       "callee": "callGraph",
-      "pattern": "/chats/{dynamic}/messages/{dynamic}/setReaction",
-      "kind": "template"
+      "pattern": "{dynamic}",
+      "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 995,
+      "line": 1003,
       "callee": "callGraph",
-      "pattern": "/chats/{dynamic}/messages/{dynamic}/unsetReaction",
-      "kind": "template"
+      "pattern": "{dynamic}",
+      "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1017,
+      "line": 1025,
       "callee": "callGraph",
       "pattern": "/me/teamwork/sendActivityNotification",
       "kind": "literal"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1044,
+      "line": 1052,
       "callee": "callGraph",
       "pattern": "/users/{dynamic}/teamwork/sendActivityNotification",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1075,
+      "line": 1083,
       "callee": "callGraph",
       "pattern": "/chats/{dynamic}/sendActivityNotification",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1113,
+      "line": 1121,
       "callee": "callGraphAt",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1117,
+      "line": 1125,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1148,
+      "line": 1156,
       "callee": "callGraphAt",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1152,
+      "line": 1160,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1180,
+      "line": 1188,
       "callee": "callGraph",
       "pattern": "/teams/{dynamic}/channels/{dynamic}/messages/{dynamic}",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1212,
+      "line": 1220,
       "callee": "callGraph",
       "pattern": "/teams/{dynamic}/channels/{dynamic}/messages/{dynamic}/replies/{dynamic}",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1242,
+      "line": 1250,
       "callee": "callGraphAt",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1243,
+      "line": 1251,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1267,
+      "line": 1275,
       "callee": "callGraphAt",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1268,
+      "line": 1276,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1294,
+      "line": 1302,
       "callee": "callGraphAt",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1295,
+      "line": 1303,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1321,
+      "line": 1329,
       "callee": "callGraphAt",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1322,
+      "line": 1330,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1345,
+      "line": 1353,
       "callee": "callGraphAt",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1349,
+      "line": 1357,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1377,
+      "line": 1385,
       "callee": "callGraphAt",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1381,
+      "line": 1389,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1406,
+      "line": 1414,
       "callee": "callGraph",
       "pattern": "/chats/{dynamic}/messages/{dynamic}",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1430,
+      "line": 1438,
       "callee": "callGraph",
       "pattern": "/chats/{dynamic}/messages/{dynamic}/replies/{dynamic}",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1457,
+      "line": 1465,
       "callee": "callGraphAt",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1458,
+      "line": 1466,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1480,
+      "line": 1488,
       "callee": "callGraphAt",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1481,
+      "line": 1489,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1505,
+      "line": 1513,
       "callee": "callGraphAt",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1506,
+      "line": 1514,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1530,
+      "line": 1538,
       "callee": "callGraphAt",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1531,
+      "line": 1539,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1552,
+      "line": 1560,
       "callee": "callGraph",
       "pattern": "/chats",
       "kind": "literal"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1574,
+      "line": 1582,
       "callee": "callGraph",
       "pattern": "/chats/{dynamic}/members",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1596,
+      "line": 1604,
       "callee": "callGraph",
       "pattern": "/teams/{dynamic}/members",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1620,
+      "line": 1628,
       "callee": "callGraph",
       "pattern": "/teams/{dynamic}/channels/{dynamic}/members",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1645,
+      "line": 1653,
       "callee": "callGraph",
       "pattern": "/teams/{dynamic}/channels/{dynamic}/tabs/{dynamic}?$expand=teamsApp",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1665,
+      "line": 1673,
       "callee": "callGraph",
       "pattern": "/teams/{dynamic}/channels/{dynamic}/tabs",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1690,
+      "line": 1698,
       "callee": "callGraph",
       "pattern": "/teams/{dynamic}/channels/{dynamic}/tabs/{dynamic}",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-teams-client.ts",
-      "line": 1714,
+      "line": 1722,
       "callee": "callGraph",
       "pattern": "/teams/{dynamic}/channels/{dynamic}/tabs/{dynamic}",
       "kind": "template"

@@ -962,14 +962,18 @@ export async function setChatMessageReaction(
   token: string,
   chatId: string,
   messageId: string,
-  reactionType: string
+  reactionType: string,
+  replyId?: string
 ): Promise<GraphResponse<void>> {
   try {
     const c = encodeURIComponent(chatId.trim());
     const m = encodeURIComponent(messageId.trim());
+    const path = replyId?.trim()
+      ? `/chats/${c}/messages/${m}/replies/${encodeURIComponent(replyId.trim())}/setReaction`
+      : `/chats/${c}/messages/${m}/setReaction`;
     const r = await callGraph<void>(
       token,
-      `/chats/${c}/messages/${m}/setReaction`,
+      path,
       { method: 'POST', body: JSON.stringify({ reactionType: reactionType.trim() }) },
       false
     );
@@ -987,14 +991,18 @@ export async function unsetChatMessageReaction(
   token: string,
   chatId: string,
   messageId: string,
-  reactionType: string
+  reactionType: string,
+  replyId?: string
 ): Promise<GraphResponse<void>> {
   try {
     const c = encodeURIComponent(chatId.trim());
     const m = encodeURIComponent(messageId.trim());
+    const path = replyId?.trim()
+      ? `/chats/${c}/messages/${m}/replies/${encodeURIComponent(replyId.trim())}/unsetReaction`
+      : `/chats/${c}/messages/${m}/unsetReaction`;
     const r = await callGraph<void>(
       token,
-      `/chats/${c}/messages/${m}/unsetReaction`,
+      path,
       { method: 'POST', body: JSON.stringify({ reactionType: reactionType.trim() }) },
       false
     );
