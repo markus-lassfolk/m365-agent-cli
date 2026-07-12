@@ -1521,8 +1521,19 @@ describe('Graph backend (M365_EXCHANGE_BACKEND=graph)', () => {
     });
     // The Graph 401 surfaces as a failure; the key contract is that NO EWS/SOAP request is attempted.
     await expect(runM365AgentCli('whoami --token test-graph-token')).rejects.toThrow();
-    expect(requestedUrls.some((u) => /EWS\/Exchange\.asmx|outlook\.office365\.com/i.test(u))).toBe(false);
-    expect(requestedUrls.some((u) => u.includes('graph.microsoft.com'))).toBe(true);
+    // Compare parsed hostnames (not substrings) so the assertion can't be satisfied by a lookalike
+    // host like graph.microsoft.com.evil.example.
+    const hostOf = (u: string): string => {
+      try {
+        return new URL(u).hostname.toLowerCase();
+      } catch {
+        return '';
+      }
+    };
+    expect(requestedUrls.some((u) => hostOf(u) === 'outlook.office365.com' || u.includes('/EWS/Exchange.asmx'))).toBe(
+      false
+    );
+    expect(requestedUrls.some((u) => hostOf(u) === 'graph.microsoft.com')).toBe(true);
   });
 
   test('auto-reply exits on graph backend with JSON hint to use oof', async () => {
