@@ -330,10 +330,13 @@ export async function getTask(
   listId: string,
   taskId: string,
   user?: string,
-  options?: { select?: string }
+  options?: { select?: string; expand?: string }
 ): Promise<GraphResponse<TodoTask>> {
   try {
-    const qs = options?.select ? `?$select=${encodeURIComponent(options.select)}` : '';
+    const params = new URLSearchParams();
+    if (options?.select) params.set('$select', options.select);
+    if (options?.expand) params.set('$expand', options.expand);
+    const qs = params.toString() ? `?${params.toString()}` : '';
     return await callGraph<TodoTask>(
       token,
       `${todoRoot(user)}/lists/${encodeURIComponent(listId)}/tasks/${encodeURIComponent(taskId)}${qs}`

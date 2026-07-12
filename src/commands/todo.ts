@@ -325,7 +325,7 @@ todoCommand
           listId,
           opts.task,
           opts.user,
-          opts.select ? { select: opts.select } : undefined
+          opts.select || opts.expand ? { select: opts.select, expand: opts.expand } : undefined
         );
         if (!r.ok || !r.data) {
           console.error(`Error: ${r.error?.message}`);

@@ -127,6 +127,7 @@ afterEach(() => {
 
 // ─── Import commands ───────────────────────────────────────────────────────
 
+import { approvalsCommand } from '../commands/approvals.js';
 import { autoReplyCommand } from '../commands/auto-reply.js';
 import { bookingsCommand } from '../commands/bookings.js';
 import { calendarCommand } from '../commands/calendar.js';
@@ -219,6 +220,7 @@ function makeProgram(): Command {
   p.addCommand(delegatesCommand);
   p.addCommand(todoCommand);
   p.addCommand(bookingsCommand);
+  p.addCommand(approvalsCommand);
   installM365HelpOnCommandTree(p);
   return p;
 }
@@ -342,6 +344,25 @@ function resetSharedCommandOptionLeaks() {
   for (const sub of bookingsCommand.commands) {
     sub.setOptionValue('json', false);
     sub.setOptionValue('confirm', false);
+  }
+  // rooms reuses a shared instance; --start/--end leaking from one test into a later test that
+  // omits one of them would defeat the "both or neither" validation (both would appear set).
+  roomsCommand.setOptionValue('start', undefined);
+  roomsCommand.setOptionValue('end', undefined);
+  roomsCommand.setOptionValue('query', undefined);
+  roomsCommand.setOptionValue('building', undefined);
+  roomsCommand.setOptionValue('capacity', undefined);
+  roomsCommand.setOptionValue('equipment', undefined);
+  roomsCommand.setOptionValue('json', false);
+  // approvals list reuses a shared instance; --top/--no-expand leaking from one test into a later
+  // test that omits them would trip the "--next has no effect with --top/--no-expand" guard.
+  const approvalsListCommand = approvalsCommand.commands.find((c) => c.name() === 'list');
+  if (approvalsListCommand) {
+    approvalsListCommand.setOptionValue('top', undefined);
+    approvalsListCommand.setOptionValue('expand', true);
+    approvalsListCommand.setOptionValue('next', undefined);
+    approvalsListCommand.setOptionValue('all', undefined);
+    approvalsListCommand.setOptionValue('json', false);
   }
 }
 
@@ -1967,5 +1988,81 @@ describe('bookings --json error envelope (bug regression)', () => {
     expect(result.exitCode).toBe(1);
     expect(result.stdout).toBe('');
     expect(result.stderr).toContain('Access denied');
+  });
+});
+
+describe('rooms find (bug regressions)', () => {
+  test('--start without --end errors instead of silently ignoring --start', async () => {
+    const result = await runM365AgentCli(
+      'rooms find --query conf --start 2026-01-01T09:00:00Z --token test-graph-token'
+    );
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain('--start and --end must be used together');
+  });
+
+  test('--end without --start errors the same way', async () => {
+    const result = await runM365AgentCli('rooms find --query conf --end 2026-01-01T10:00:00Z --token test-graph-token');
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain('--start and --end must be used together');
+  });
+
+  test('marks a room whose availability check failed as availabilityUnknown instead of confirmed-free', async () => {
+    setMockFetch((url) => {
+      if (!url.includes('graph.microsoft.com/v1.0')) return null;
+      const path = new URL(url).pathname;
+      if (path === '/v1.0/places/microsoft.graph.room') {
+        return {
+          status: 200,
+          body: JSON.stringify({
+            value: [{ id: 'room-1', displayName: 'Conf Room', emailAddress: 'conf@contoso.com' }]
+          }),
+          contentType: 'application/json'
+        };
+      }
+      if (path === '/v1.0/users/conf%40contoso.com/calendar/calendarView') {
+        return {
+          status: 403,
+          body: JSON.stringify({ error: { code: 'ErrorAccessDenied', message: 'Access denied' } }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    const result = await runM365AgentCli(
+      'rooms find --query conf --start 2026-01-01T09:00:00Z --end 2026-01-01T10:00:00Z --json --token test-graph-token'
+    );
+    expect(result.exitCode).toBe(0);
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.rooms).toHaveLength(1);
+    expect(data.rooms[0].availabilityUnknown).toBe(true);
+  });
+});
+
+describe('approvals list --next (bug regression)', () => {
+  test('--next combined with --top errors instead of silently ignoring --top', async () => {
+    const result = await runM365AgentCli(
+      'approvals list --next "https://graph.microsoft.com/beta/me/approvals?$skiptoken=x" --top 5 --token test-graph-token'
+    );
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain('--next');
+  });
+
+  test('--next combined with --no-expand errors the same way', async () => {
+    const result = await runM365AgentCli(
+      'approvals list --next "https://graph.microsoft.com/beta/me/approvals?$skiptoken=x" --no-expand --token test-graph-token'
+    );
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain('--next');
+  });
+
+  test('--next alone (no --top/--no-expand) is unaffected', async () => {
+    setMockFetch((url) => {
+      if (!url.includes('graph.microsoft.com/beta/me/approvals')) return null;
+      return { status: 200, body: JSON.stringify({ value: [] }), contentType: 'application/json' };
+    });
+    const result = await runM365AgentCli(
+      'approvals list --next "https://graph.microsoft.com/beta/me/approvals?$skiptoken=x" --token test-graph-token'
+    );
+    expect(result.exitCode).toBe(0);
   });
 });

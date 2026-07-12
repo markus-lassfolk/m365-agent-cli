@@ -1,7 +1,7 @@
 {
   "version": 1,
   "description": "Graph path patterns from static analysis of callGraph*, graphInvoke*, fetchAllPages, fetchGraphRaw, graphPostBatch. Regenerate: npm run graph:inventory",
-  "generatedAt": "2026-07-12T18:41:58.570Z",
+  "generatedAt": "2026-07-12T19:09:13.975Z",
   "entryCount": 713,
   "entries": [
     {
@@ -4682,315 +4682,315 @@
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 337,
+      "line": 340,
       "callee": "callGraph",
       "pattern": "{dynamic}/lists/{dynamic}/tasks/{dynamic}{dynamic}",
       "kind": "template"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 405,
+      "line": 408,
       "callee": "callGraph",
       "pattern": "{dynamic}/lists/{dynamic}/tasks",
       "kind": "template"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 491,
+      "line": 494,
       "callee": "callGraph",
       "pattern": "{dynamic}/lists/{dynamic}/tasks/{dynamic}",
       "kind": "template"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 515,
+      "line": 518,
       "callee": "callGraph",
       "pattern": "{dynamic}/lists/{dynamic}/tasks/{dynamic}",
       "kind": "template"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 538,
+      "line": 541,
       "callee": "callGraph",
       "pattern": "{dynamic}/lists/{dynamic}/tasks/{dynamic}/checklistItems",
       "kind": "template"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 567,
+      "line": 570,
       "callee": "callGraph",
       "pattern": "{dynamic}/lists/{dynamic}/tasks/{dynamic}/checklistItems/{dynamic}",
       "kind": "template"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 591,
+      "line": 594,
       "callee": "callGraph",
       "pattern": "{dynamic}/lists/{dynamic}/tasks/{dynamic}/checklistItems/{dynamic}",
       "kind": "template"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 618,
+      "line": 621,
       "callee": "fetchAllPages",
       "pattern": "{dynamic}/lists/{dynamic}/tasks/{dynamic}/attachments",
       "kind": "template"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 642,
+      "line": 645,
       "callee": "callGraph",
       "pattern": "{dynamic}/lists/{dynamic}/tasks/{dynamic}/attachments",
       "kind": "template"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 667,
+      "line": 670,
       "callee": "callGraph",
       "pattern": "{dynamic}/lists/{dynamic}/tasks/{dynamic}/attachments/{dynamic}",
       "kind": "template"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 689,
+      "line": 692,
       "callee": "callGraph",
       "pattern": "{dynamic}/lists/{dynamic}/tasks/{dynamic}/attachments/{dynamic}",
       "kind": "template"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 719,
+      "line": 722,
       "callee": "callGraph",
       "pattern": "{dynamic}/lists/{dynamic}/tasks/{dynamic}/attachments",
       "kind": "template"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 788,
+      "line": 791,
       "callee": "fetchAllPages",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 804,
+      "line": 807,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 832,
+      "line": 835,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 867,
+      "line": 870,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 896,
+      "line": 899,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 916,
+      "line": 919,
       "callee": "fetchAllPages",
       "pattern": "{dynamic}/lists/{dynamic}/tasks/{dynamic}/checklistItems",
       "kind": "template"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 932,
+      "line": 935,
       "callee": "callGraph",
       "pattern": "{dynamic}/lists/{dynamic}/tasks/{dynamic}/checklistItems/{dynamic}",
       "kind": "template"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 963,
+      "line": 966,
       "callee": "fetchGraphRaw",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 1008,
+      "line": 1011,
       "callee": "fetchAllPages",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 1023,
+      "line": 1026,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 1053,
+      "line": 1056,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 1087,
+      "line": 1090,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 1111,
+      "line": 1114,
       "callee": "fetchGraphRaw",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 1138,
+      "line": 1141,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 1172,
+      "line": 1175,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 1193,
+      "line": 1196,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 1215,
+      "line": 1218,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 1242,
+      "line": 1245,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 1267,
+      "line": 1270,
       "callee": "fetchAllPages",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 1281,
+      "line": 1284,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 1310,
+      "line": 1313,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 1338,
+      "line": 1341,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 1370,
+      "line": 1373,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 1398,
+      "line": 1401,
       "callee": "callGraphAbsolute",
       "pattern": "{dynamic}",
       "kind": "absolute-url"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 1400,
+      "line": 1403,
       "callee": "callGraph",
       "pattern": "{dynamic}/lists/{dynamic}/tasks/delta",
       "kind": "template"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 1424,
+      "line": 1427,
       "callee": "callGraphAbsolute",
       "pattern": "{dynamic}",
       "kind": "absolute-url"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 1426,
+      "line": 1429,
       "callee": "callGraph",
       "pattern": "{dynamic}/lists/delta()",
       "kind": "template"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 1448,
+      "line": 1451,
       "callee": "callGraph",
       "pattern": "{dynamic}/lists/{dynamic}/tasks/{dynamic}/attachments/createUploadSession",
       "kind": "template"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 1554,
+      "line": 1557,
       "callee": "fetchAllPages",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 1569,
+      "line": 1572,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 1595,
+      "line": 1598,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 1620,
+      "line": 1623,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/todo-client.ts",
-      "line": 1653,
+      "line": 1656,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"

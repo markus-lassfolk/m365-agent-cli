@@ -46,6 +46,15 @@ baseFlags(approvalsCommand.command('list'))
       console.error('Error: use only one of --all or --next');
       process.exit(1);
     }
+    // @odata.nextLink is a full, self-contained continuation URL — it already carries the
+    // $top/$expand from the page that produced it, so combining --next with --top/--no-expand
+    // would silently do nothing rather than apply a new value.
+    if (opts.next && (opts.top || opts.expand === false)) {
+      console.error(
+        "Error: --top and --no-expand have no effect with --next (the continuation URL already carries the original page's $top/$expand). Omit --next, or drop --top/--no-expand."
+      );
+      process.exit(1);
+    }
     const top = opts.top ? Number.parseInt(opts.top, 10) : undefined;
     if (opts.top && (!Number.isFinite(top) || (top as number) <= 0)) {
       console.error('Error: --top must be a positive integer');

@@ -75,6 +75,22 @@ describe('projectFields', () => {
       toRecipients: { emailAddress: { address: ['x@y.com', 'z@y.com'] } }
     });
   });
+
+  it('omits an array-of-objects field entirely when the remaining path resolves on none of its elements, instead of a spurious empty array (bug regression)', () => {
+    const row = {
+      subject: 'hi',
+      toRecipients: [{ emailAddress: { address: 'x@y.com' } }, { emailAddress: { address: 'z@y.com' } }]
+    };
+    // Typo'd sub-field ("email" instead of "emailAddress") — must be omitted like any other
+    // nonexistent path, not silently reported as an empty array that masks the typo.
+    expect(projectFields(row, ['subject', 'toRecipients.email.address'])).toEqual({ subject: 'hi' });
+  });
+
+  it('reports an empty array as found (distinct from "no elements resolved the path")', () => {
+    expect(projectFields({ toRecipients: [] }, ['toRecipients.emailAddress.address'])).toEqual({
+      toRecipients: { emailAddress: { address: [] } }
+    });
+  });
 });
 
 describe('shapeRows', () => {

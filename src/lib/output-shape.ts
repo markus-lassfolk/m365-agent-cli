@@ -26,6 +26,10 @@ function getByPath(obj: unknown, segments: string[]): { found: boolean; value?: 
     if (Array.isArray(cur)) {
       const remaining = segments.slice(i);
       const resolved = cur.map((el) => getByPath(el, remaining)).filter((r) => r.found);
+      // A non-empty array where none of its elements resolved the remaining path means the path
+      // doesn't exist (e.g. a typo'd field name) — omit it like the scalar case, rather than
+      // reporting found:true with a spurious empty array that masks the typo.
+      if (cur.length > 0 && resolved.length === 0) return { found: false };
       return { found: true, value: resolved.map((r) => r.value) };
     }
     const seg = segments[i];
