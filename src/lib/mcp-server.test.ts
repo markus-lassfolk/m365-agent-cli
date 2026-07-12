@@ -1,4 +1,5 @@
 import { describe, expect, it, test } from 'bun:test';
+import { spawn } from 'node:child_process';
 import { Command } from 'commander';
 import { describeProgram } from './command-manifest.js';
 import {
@@ -6,6 +7,7 @@ import {
   buildMcpTools,
   buildToolDefForCommand,
   handleMcpMessage,
+  killChildTree,
   mcpToolNameForPath,
   type RunCliResult,
   toolArgsToArgv
@@ -96,12 +98,13 @@ describe('toolArgsToArgv', () => {
   const mailTool = buildMcpTools(manifest).find((t) => t.name === 'mail')!;
   const createTool = buildMcpTools(manifest).find((t) => t.name === 'rules_create')!;
 
-  test('emits the command path, then positional args, then flags', () => {
+  test('emits the command path, then flags, then a -- separator, then positional args', () => {
     expect(toolArgsToArgv(mailTool, { folder: 'inbox', reply: 'msg-1' })).toEqual([
       'mail',
-      'inbox',
       '--reply',
-      'msg-1'
+      'msg-1',
+      '--',
+      'inbox'
     ]);
   });
 
@@ -120,6 +123,14 @@ describe('toolArgsToArgv', () => {
 
   test('emits required-option flags for a subcommand path', () => {
     expect(toolArgsToArgv(createTool, { name: 'Auto-archive' })).toEqual(['rules', 'create', '--name', 'Auto-archive']);
+  });
+
+  test('omits the -- separator entirely when there are no positional args', () => {
+    expect(toolArgsToArgv(mailTool, { reply: 'msg-1' })).toEqual(['mail', '--reply', 'msg-1']);
+  });
+
+  test('does not misparse a positional value that looks like a flag (bug regression)', () => {
+    expect(toolArgsToArgv(mailTool, { folder: '--not-a-flag' })).toEqual(['mail', '--', '--not-a-flag']);
   });
 });
 
@@ -165,7 +176,7 @@ describe('handleMcpMessage', () => {
       { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'mail', arguments: { folder: 'inbox' } } },
       ctx
     );
-    expect(capturedArgv).toEqual(['mail', 'inbox', '--json']);
+    expect(capturedArgv).toEqual(['mail', '--json', '--', 'inbox']);
     expect(res?.result).toEqual({ content: [{ type: 'text', text: '{"ok":true}' }], isError: false });
   });
 
@@ -182,6 +193,23 @@ describe('handleMcpMessage', () => {
       ctx
     );
     expect(capturedArgv.filter((a) => a === '--json')).toHaveLength(1);
+  });
+
+  test('injects --json before the -- separator, not after it (bug regression)', async () => {
+    let capturedArgv: string[] = [];
+    const ctx = buildMcpContext(manifest, {
+      runCli: async (argv) => {
+        capturedArgv = argv;
+        return okResult('{}');
+      }
+    });
+    await handleMcpMessage(
+      { jsonrpc: '2.0', id: 9, method: 'tools/call', params: { name: 'mail', arguments: { folder: '--weird' } } },
+      ctx
+    );
+    // If --json landed after --, Commander would treat it as a literal positional value instead
+    // of the flag, and the CLI would run without --json.
+    expect(capturedArgv).toEqual(['mail', '--json', '--', '--weird']);
   });
 
   test('tools/call surfaces a non-zero exit code as isError with stderr text', async () => {
@@ -234,4 +262,63 @@ describe('handleMcpMessage', () => {
     expect(await handleMcpMessage(null, ctx)).toBeNull();
     expect(await handleMcpMessage('a string', ctx)).toBeNull();
   });
+});
+
+describe('killChildTree', () => {
+  test.skipIf(process.platform === 'win32')(
+    'signals the whole process group (negative pid), not just the direct child, on POSIX (bug regression)',
+    () => {
+      const originalKill = process.kill;
+      const calls: Array<[number, string]> = [];
+      process.kill = ((pid: number, signal?: string) => {
+        calls.push([pid, String(signal)]);
+        return true;
+      }) as typeof process.kill;
+      try {
+        const fakeChild = { pid: 4242, kill: () => true } as unknown as ReturnType<typeof spawn>;
+        killChildTree(fakeChild, 'SIGTERM');
+        // -pid targets the process group created by spawn's `detached: true` (see runCli), which
+        // includes any descendants the child itself spawned — a bare child.kill() would not.
+        expect(calls).toEqual([[-4242, 'SIGTERM']]);
+      } finally {
+        process.kill = originalKill;
+      }
+    }
+  );
+
+  test('falls back to child.kill() when process.kill(-pid) throws (e.g. no such process group)', () => {
+    const originalKill = process.kill;
+    process.kill = (() => {
+      throw new Error('ESRCH');
+    }) as typeof process.kill;
+    let childKillCalledWith: string | undefined;
+    try {
+      const fakeChild = {
+        pid: 4242,
+        kill: (signal?: string) => {
+          childKillCalledWith = signal;
+          return true;
+        }
+      } as unknown as ReturnType<typeof spawn>;
+      killChildTree(fakeChild, 'SIGKILL');
+      expect(childKillCalledWith).toBe('SIGKILL');
+    } finally {
+      process.kill = originalKill;
+    }
+  });
+
+  test.skipIf(process.platform === 'win32')(
+    'actually terminates a real spawned child process',
+    async () => {
+      const child = spawn('sh', ['-c', 'sleep 30'], { detached: true, stdio: 'ignore' });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const exited = new Promise<boolean>((resolve) => {
+        child.on('exit', () => resolve(true));
+        setTimeout(() => resolve(false), 3000);
+      });
+      killChildTree(child, 'SIGTERM');
+      expect(await exited).toBe(true);
+    },
+    5_000
+  );
 });

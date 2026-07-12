@@ -140,18 +140,23 @@ function asArray(v: unknown): unknown[] {
   return Array.isArray(v) ? v : [v];
 }
 
-/** Reconstructs CLI argv (`[...commandPath.split(' '), ...positionals, ...flags]`) from an MCP tool call's arguments object. */
+/** Reconstructs CLI argv (`[...commandPath.split(' '), ...flags, '--', ...positionals]`) from an
+ *  MCP tool call's arguments object. Options come before a `--` separator and positionals after it
+ *  so a positional value that happens to start with `-` (e.g. free-text search query) is never
+ *  misparsed by Commander as an unknown option. */
 export function toolArgsToArgv(tool: McpToolDef, args: Record<string, unknown>): string[] {
-  const argv = tool.commandPath.split(/\s+/).filter(Boolean);
+  const commandPath = tool.commandPath.split(/\s+/).filter(Boolean);
+  const positionalArgv: string[] = [];
+  const optionArgv: string[] = [];
 
   for (const spec of tool.argSpecs) {
     if (spec.kind !== 'argument') continue;
     const v = args[spec.propName];
     if (v === undefined || v === null) continue;
     if (spec.variadic) {
-      for (const item of asArray(v)) argv.push(String(item));
+      for (const item of asArray(v)) positionalArgv.push(String(item));
     } else {
-      argv.push(String(v));
+      positionalArgv.push(String(v));
     }
   }
 
@@ -160,19 +165,21 @@ export function toolArgsToArgv(tool: McpToolDef, args: Record<string, unknown>):
     const v = args[spec.propName];
     if (v === undefined || v === null) continue;
     if (spec.isBoolean) {
-      if (v === true) argv.push(spec.flag as string);
+      if (v === true) optionArgv.push(spec.flag as string);
     } else if (spec.variadic) {
       for (const item of asArray(v)) {
-        argv.push(spec.flag as string);
-        argv.push(String(item));
+        optionArgv.push(spec.flag as string);
+        optionArgv.push(String(item));
       }
     } else {
-      argv.push(spec.flag as string);
-      argv.push(String(v));
+      optionArgv.push(spec.flag as string);
+      optionArgv.push(String(v));
     }
   }
 
-  return argv;
+  return positionalArgv.length > 0
+    ? [...commandPath, ...optionArgv, '--', ...positionalArgv]
+    : [...commandPath, ...optionArgv];
 }
 
 export interface RunCliResult {
@@ -187,21 +194,43 @@ const CLI_ENTRY = fileURLToPath(new URL('../cli.ts', import.meta.url));
 const MCP_TOOL_TIMEOUT_MS =
   Number(process.env.M365_MCP_TOOL_TIMEOUT_MS) > 0 ? Number(process.env.M365_MCP_TOOL_TIMEOUT_MS) : 120_000;
 
+const MCP_TOOL_KILL_GRACE_MS = 5000;
+
+/** Sends `signal` to the whole child process tree, not just the direct child — a CLI subprocess
+ *  can itself spawn (e.g. a helper process), and a lone `child.kill()` would leave it running past
+ *  the tool timeout. POSIX: negative pid targets the process group created by `detached: true`
+ *  below. Windows: `taskkill /t` walks the tree by pid. */
+export function killChildTree(child: ReturnType<typeof spawn>, signal: NodeJS.Signals): void {
+  if (process.platform === 'win32') {
+    if (child.pid) spawn('taskkill', ['/pid', String(child.pid), '/t', '/f']);
+    return;
+  }
+  try {
+    if (child.pid) process.kill(-child.pid, signal);
+  } catch {
+    child.kill(signal);
+  }
+}
+
 /** Spawns `bun src/cli.ts <argv>` (the same entry point a human runs) and captures its output. */
 function runCli(argv: string[]): Promise<RunCliResult> {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [CLI_ENTRY, ...argv], {
       env: process.env,
-      stdio: ['ignore', 'pipe', 'pipe']
+      stdio: ['ignore', 'pipe', 'pipe'],
+      detached: process.platform !== 'win32'
     });
     let stdout = '';
     let stderr = '';
     let settled = false;
+    let killGraceTimer: ReturnType<typeof setTimeout> | undefined;
 
     const timer = setTimeout(() => {
       if (settled) return;
       settled = true;
-      child.kill('SIGTERM');
+      killChildTree(child, 'SIGTERM');
+      // The child (or a descendant) may ignore SIGTERM; escalate if it's still alive shortly after.
+      killGraceTimer = setTimeout(() => killChildTree(child, 'SIGKILL'), MCP_TOOL_KILL_GRACE_MS);
       resolve({ stdout, stderr, exitCode: 1, timedOut: true });
     }, MCP_TOOL_TIMEOUT_MS);
 
@@ -212,12 +241,14 @@ function runCli(argv: string[]): Promise<RunCliResult> {
       stderr += d.toString('utf8');
     });
     child.on('close', (code) => {
+      clearTimeout(killGraceTimer);
       if (settled) return;
       settled = true;
       clearTimeout(timer);
       resolve({ stdout, stderr, exitCode: code ?? 1, timedOut: false });
     });
     child.on('error', (err) => {
+      clearTimeout(killGraceTimer);
       if (settled) return;
       settled = true;
       clearTimeout(timer);
@@ -299,7 +330,16 @@ export async function handleMcpMessage(msg: unknown, ctx: McpContext): Promise<R
     }
     const argv = toolArgsToArgv(tool, params.arguments ?? {});
     const supportsJson = tool.argSpecs.some((s) => s.kind === 'option' && s.flag === '--json');
-    if (supportsJson && !argv.includes('--json')) argv.push('--json');
+    if (supportsJson && !argv.includes('--json')) {
+      // Insert before the `--` positional separator (if any) — appending after it would make
+      // Commander treat "--json" as a literal positional value instead of the flag.
+      const sepIndex = argv.indexOf('--');
+      if (sepIndex === -1) {
+        argv.push('--json');
+      } else {
+        argv.splice(sepIndex, 0, '--json');
+      }
+    }
 
     const result = await ctx.runCli(argv);
     const text = result.stdout.trim() || result.stderr.trim() || '(no output)';
