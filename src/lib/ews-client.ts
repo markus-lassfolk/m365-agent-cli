@@ -802,8 +802,11 @@ function parseFolder(block: string): MailFolder {
     DisplayName: extractTag(block, 'DisplayName'),
     ParentFolderId: extractAttribute(block, 'ParentFolderId', 'Id') || undefined,
     ChildFolderCount: parseInt(extractTag(block, 'ChildFolderCount') || '0', 10),
-    UnreadItemCount: parseInt(extractTag(block, 'UnreadItemCount') || '0', 10),
-    TotalItemCount: parseInt(extractTag(block, 'TotalItemCount') || '0', 10)
+    // EWS folder counts are <t:UnreadCount>/<t:TotalCount> (matching the folder:UnreadCount /
+    // folder:TotalCount FieldURIs requested); UnreadItemCount/TotalItemCount are Graph names that
+    // never appear in an EWS response, so reading those always yielded 0.
+    UnreadItemCount: parseInt(extractTag(block, 'UnreadCount') || '0', 10),
+    TotalItemCount: parseInt(extractTag(block, 'TotalCount') || '0', 10)
   };
 }
 

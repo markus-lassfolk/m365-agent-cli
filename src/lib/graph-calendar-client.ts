@@ -684,7 +684,7 @@ async function addFileAttachmentToCalendarEvent(
   if (!raw) {
     return graphError('Invalid base64 in attachment contentBytes', undefined, 400);
   }
-  if (raw.byteLength > GRAPH_OUTLOOK_ATTACHMENT_SESSION_THRESHOLD_BYTES) {
+  if (raw.byteLength >= GRAPH_OUTLOOK_ATTACHMENT_SESSION_THRESHOLD_BYTES) {
     const sess = await createCalendarEventFileAttachmentUploadSession(
       token,
       eventId,

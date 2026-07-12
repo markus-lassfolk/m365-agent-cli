@@ -606,4 +606,23 @@ describe('ewsAvailabilityTimeToUtcMs', () => {
     expect(iBody).toBeLessThan(iRef);
     expect(xml).toContain('<t:AcceptItem>');
   });
+
+  it('getMailFolders parses EWS <t:UnreadCount>/<t:TotalCount> (not the Graph names)', async () => {
+    globalThis.fetch = mock(
+      async () =>
+        new Response(
+          `<?xml version="1.0"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages" xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types"><soap:Body><m:ResponseCode>NoError</m:ResponseCode><m:FindFolderResponse><m:ResponseMessages><m:FindFolderResponseMessage ResponseClass="Success"><m:ResponseCode>NoError</m:ResponseCode><m:RootFolder><t:Folders><t:Folder><t:FolderId Id="inbox-1" ChangeKey="ck" /><t:DisplayName>Inbox</t:DisplayName><t:TotalCount>42</t:TotalCount><t:ChildFolderCount>3</t:ChildFolderCount><t:UnreadCount>7</t:UnreadCount></t:Folder></t:Folders></m:RootFolder></m:FindFolderResponseMessage></m:ResponseMessages></m:FindFolderResponse></soap:Body></soap:Envelope>`,
+          { status: 200 }
+        )
+    ) as unknown as typeof fetch;
+
+    const { getMailFolders } = await import('../lib/ews-client.js');
+    const result = await getMailFolders('token');
+    expect(result.ok).toBe(true);
+    const inbox = result.data?.value[0];
+    expect(inbox?.DisplayName).toBe('Inbox');
+    expect(inbox?.UnreadItemCount).toBe(7);
+    expect(inbox?.TotalItemCount).toBe(42);
+    expect(inbox?.ChildFolderCount).toBe(3);
+  });
 });
