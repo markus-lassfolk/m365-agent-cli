@@ -427,3 +427,17 @@ describe('ews-client safety and conflict behavior', () => {
     expect(fetchCalls[1]).toContain('MessageDisposition="SaveOnly"');
   });
 });
+
+describe('ewsAvailabilityTimeToUtcMs', () => {
+  it('parses zone-less EWS availability times as UTC (not host-local)', async () => {
+    const { ewsAvailabilityTimeToUtcMs } = await import('../lib/ews-client.js');
+    // A zone-less value must equal the same instant with an explicit Z.
+    expect(ewsAvailabilityTimeToUtcMs('2026-07-12T10:00:00')).toBe(Date.UTC(2026, 6, 12, 10, 0, 0));
+    expect(ewsAvailabilityTimeToUtcMs('2026-07-12T10:00:00.000')).toBe(Date.UTC(2026, 6, 12, 10, 0, 0));
+    // A value that already carries Z or an offset is respected.
+    expect(ewsAvailabilityTimeToUtcMs('2026-07-12T10:00:00Z')).toBe(Date.UTC(2026, 6, 12, 10, 0, 0));
+    expect(ewsAvailabilityTimeToUtcMs('2026-07-12T12:00:00+02:00')).toBe(Date.UTC(2026, 6, 12, 10, 0, 0));
+    expect(Number.isNaN(ewsAvailabilityTimeToUtcMs(''))).toBe(true);
+    expect(Number.isNaN(ewsAvailabilityTimeToUtcMs(undefined))).toBe(true);
+  });
+});

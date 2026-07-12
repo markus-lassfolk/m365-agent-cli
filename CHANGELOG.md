@@ -33,6 +33,14 @@ Correctness and robustness fixes surfaced by a full-repo review:
 - **Auth:** EWS token refresh now preserves the `graphNarrowScopeAccepted` flag, avoiding a redundant Graph refresh on the next call.
 - **Mime types:** `.tgz` now maps to `application/gzip`.
 
+Second review pass:
+
+- **Graph pagination (`fetchAllPages`)** no longer silently truncates a collection and reports success when a `@odata.nextLink` can't be resolved against the configured base URL — it now returns a clear `NextLinkUnresolved` error. Added a page cap (`GRAPH_MAX_PAGES`, default 10000) to guard against nextLink cycles/runaway.
+- **Graph retries with a one-shot stream body** (large uploads via `Readable.toWeb`) are no longer retried on 401-refresh/throttle — the drained stream can't be replayed, so a retry would have sent an empty/corrupt body; the original error is surfaced so the caller restarts with a fresh stream.
+- **EWS free/busy times were parsed in the host's local time zone.** `GetUserAvailability` returns zone-less times (in the request's UTC zone); they are now normalized to UTC so room-free / schedule-overlap checks are correct on non-UTC hosts.
+- **EWS recurrence validation:** weekly and relative monthly/yearly patterns now require at least one day-of-week (an empty `DaysOfWeek` was rejected by EWS with an opaque error); yearly patterns no longer require an `Interval` (their schema has none); relative monthly/yearly emit a single day-of-week (the element is single-valued) instead of a space-joined list.
+- **Attachment id from the upload-session `Location` header** is parsed correctly even when the URL uses percent-encoded OData key quotes.
+
 ---
 
 ## [2026.7.3] — 2026-07-02

@@ -446,3 +446,60 @@ describe('Graph v1.0 404 beta hint', () => {
     }
   });
 });
+
+describe('fetchAllPages pagination safety', () => {
+  const token = 'test-token';
+  const baseUrl = 'https://graph.microsoft.com/v1.0';
+
+  it('follows same-origin nextLink across pages and concatenates', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    const originalFetch = globalThis.fetch;
+    try {
+      let n = 0;
+      globalThis.fetch = (async () => {
+        n++;
+        if (n === 1) {
+          return new Response(
+            JSON.stringify({ value: [{ id: 'a' }], '@odata.nextLink': `${baseUrl}/me/messages?$skiptoken=2` }),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          );
+        }
+        return new Response(JSON.stringify({ value: [{ id: 'b' }] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as unknown as typeof fetch;
+
+      const { fetchAllPages } = await import('./graph-client.js');
+      const r = await fetchAllPages<{ id: string }>(token, '/me/messages', 'Failed to list');
+      expect(r.ok).toBe(true);
+      expect(r.data?.map((x) => x.id)).toEqual(['a', 'b']);
+      expect(n).toBe(2);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('errors (not silent truncation) when a nextLink cannot be resolved against the base URL', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = (async () =>
+        new Response(
+          JSON.stringify({
+            value: [{ id: 'a' }],
+            // Different origin than baseUrl -> resolveNextPath returns '' -> must error, not truncate.
+            '@odata.nextLink': 'https://evil.example.com/v1.0/me/messages?$skiptoken=2'
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        )) as unknown as typeof fetch;
+
+      const { fetchAllPages } = await import('./graph-client.js');
+      const r = await fetchAllPages<{ id: string }>(token, '/me/messages', 'Failed to list');
+      expect(r.ok).toBe(false);
+      expect(r.error?.code).toBe('NextLinkUnresolved');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});

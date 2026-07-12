@@ -76,6 +76,9 @@ const GRAPH_TIMEOUT_MS = Number(process.env.GRAPH_TIMEOUT_MS) > 0 ? Number(proce
 /** Optional delay between `@odata.nextLink` pages (milliseconds). Default 0. */
 const GRAPH_PAGE_DELAY_MS = Math.max(0, Number(process.env.GRAPH_PAGE_DELAY_MS) || 0);
 
+/** Hard cap on pages followed in one `fetchAllPages` call — guards against nextLink cycles/runaway. */
+const GRAPH_MAX_PAGES = Math.max(1, Number(process.env.GRAPH_MAX_PAGES) || 10_000);
+
 const GRAPH_RETRY_MAX_ATTEMPTS = Math.min(8, Math.max(1, Number(process.env.GRAPH_MAX_RETRIES) || 4));
 
 const GRAPH_RETRY_MAX_WAIT_MS = Math.max(1000, Number(process.env.GRAPH_RETRY_MAX_WAIT_MS) || 60_000);
@@ -394,8 +397,18 @@ export async function fetchAllPages<T>(
 ): Promise<GraphResponse<T[]>> {
   const items: T[] = [];
   let path = initialPath;
+  let pageCount = 0;
 
   while (path) {
+    // Runaway/cycle guard: a buggy or hostile server returning a perpetually-advancing or
+    // self-referential nextLink must not loop or grow memory forever.
+    if (++pageCount > GRAPH_MAX_PAGES) {
+      return graphError(
+        `${errorMessage}: pagination exceeded ${GRAPH_MAX_PAGES} pages (possible nextLink cycle). Set GRAPH_MAX_PAGES to raise the limit.`,
+        'TooManyPages',
+        508
+      ) as GraphResponse<T[]>;
+    }
     let result: GraphResponse<{ value: T[]; '@odata.nextLink'?: string }>;
     try {
       result = await callGraphAt<{ value: T[]; '@odata.nextLink'?: string }>(baseUrl, token, path, requestInit ?? {});
@@ -416,8 +429,22 @@ export async function fetchAllPages<T>(
     }
     items.push(...(result.data.value || []));
     const nextLink = result.data['@odata.nextLink'];
-    path = nextLink ? resolveNextPath(nextLink, baseUrl) : '';
-    if (path && GRAPH_PAGE_DELAY_MS > 0) {
+    if (!nextLink) {
+      break;
+    }
+    const resolved = resolveNextPath(nextLink, baseUrl);
+    if (!resolved) {
+      // A nextLink was returned but couldn't be mapped to the configured base URL. Returning
+      // the pages gathered so far would silently truncate the collection and report success —
+      // fail loudly instead so callers don't act on incomplete data.
+      return graphError(
+        `${errorMessage}: could not resolve pagination link against base URL '${baseUrl}' (result would be incomplete). Ensure GRAPH_BASE_URL matches the Graph endpoint.`,
+        'NextLinkUnresolved',
+        502
+      ) as GraphResponse<T[]>;
+    }
+    path = resolved;
+    if (GRAPH_PAGE_DELAY_MS > 0) {
       await sleep(GRAPH_PAGE_DELAY_MS);
     }
   }
@@ -459,6 +486,18 @@ async function callGraphUrlWithRetries<T>(
   let throttleAttempt = 0;
   let did401Refresh = false;
   let networkAttempt = 0;
+
+  // A one-shot stream body (e.g. Readable.toWeb() for uploads) is drained by the first
+  // fetch and cannot be replayed, so any 401-refresh / throttle retry would send an empty
+  // body and silently corrupt the upload. Detect it and refuse to retry — surface the
+  // original error so the caller can restart the whole operation with a fresh stream.
+  const b = fetchInit.body as { getReader?: unknown } | null | undefined;
+  const bodyIsOneShotStream =
+    b != null &&
+    typeof b !== 'string' &&
+    !(b instanceof Uint8Array) &&
+    !(b instanceof ArrayBuffer) &&
+    typeof b.getReader === 'function';
 
   for (;;) {
     const controller = new AbortController();
@@ -508,7 +547,7 @@ async function callGraphUrlWithRetries<T>(
     }
     clearTimeout(timeout);
 
-    if (response.status === 401 && onUnauthorized && !did401Refresh) {
+    if (response.status === 401 && onUnauthorized && !did401Refresh && !bodyIsOneShotStream) {
       await response.text().catch(() => {});
       const nextTok = await onUnauthorized();
       if (nextTok) {
@@ -525,7 +564,10 @@ async function callGraphUrlWithRetries<T>(
 
     if (!response.ok) {
       const parsed = await parseGraphFailureResponse(response);
-      if (shouldRetryThrottle(response.status, parsed.code, response.headers, method, throttleAttempt)) {
+      if (
+        !bodyIsOneShotStream &&
+        shouldRetryThrottle(response.status, parsed.code, response.headers, method, throttleAttempt)
+      ) {
         throttleAttempt++;
         await delayBeforeThrottleRetry(response.headers, throttleAttempt);
         continue;

@@ -52,6 +52,21 @@ export function extractAttribute(xml: string, tagName: string, attrName: string)
   return match ? xmlDecode(match[1]) : '';
 }
 
+/**
+ * Parse an EWS availability time to epoch ms as UTC.
+ *
+ * `GetUserAvailability` returns `CalendarEvent`/`Suggestion` times in the request's
+ * `<t:TimeZone>` (we send UTC/Bias 0) but WITHOUT a trailing `Z`/offset. `new Date(s)` would
+ * otherwise parse such a zone-less value in the host's local time zone, shifting overlap
+ * comparisons on non-UTC machines. Append `Z` when the value carries no explicit zone.
+ */
+export function ewsAvailabilityTimeToUtcMs(value: string | undefined | null): number {
+  if (!value) return Number.NaN;
+  const s = value.trim();
+  const zoneless = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(s);
+  return new Date(zoneless ? `${s}Z` : s).getTime();
+}
+
 export function extractBlocks(xml: string, tagName: string): string[] {
   const regex = new RegExp(`<(?:[A-Za-z0-9_]+:)?${tagName}\\b[\\s\\S]*?<\\/(?:[A-Za-z0-9_]+:)?${tagName}>`, 'g');
   return [...xml.matchAll(regex)].map((m) => m[0]);
@@ -1022,8 +1037,19 @@ function validateRecurrenceInput(recurrence: Recurrence): void {
     throw new Error('[Recurrence] recurrence.Range.EndDate is required when Range.Type is "EndDate"');
   }
 
-  if (p.Interval === undefined || p.Interval <= 0) {
+  // Yearly patterns have no Interval element in the EWS schema; don't require one.
+  const isYearly = p.Type === 'AbsoluteYearly' || p.Type === 'RelativeYearly';
+  if (!isYearly && (p.Interval === undefined || p.Interval <= 0)) {
     throw new Error('[Recurrence] recurrence.Pattern.Interval must be a positive integer');
+  }
+
+  // Weekly and relative monthly/yearly patterns require at least one day-of-week; an empty
+  // <t:DaysOfWeek> is rejected by EWS with an opaque ErrorSchemaValidation.
+  if (
+    (p.Type === 'Weekly' || p.Type === 'RelativeMonthly' || p.Type === 'RelativeYearly') &&
+    (!p.DaysOfWeek || p.DaysOfWeek.length === 0)
+  ) {
+    throw new Error(`[Recurrence] recurrence.Pattern.DaysOfWeek is required for ${p.Type} patterns`);
   }
 }
 
@@ -1057,10 +1083,12 @@ function buildRecurrenceXml(recurrence: Recurrence): string {
       patternXml = `<t:AbsoluteYearlyRecurrence><t:DayOfMonth>${p.DayOfMonth || 1}</t:DayOfMonth><t:Month>${['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][(p.Month || 1) - 1]}</t:Month></t:AbsoluteYearlyRecurrence>`;
       break;
     case 'RelativeMonthly':
-      patternXml = `<t:RelativeMonthlyRecurrence><t:Interval>${p.Interval}</t:Interval><t:DaysOfWeek>${(p.DaysOfWeek || []).map((d) => xmlEscape(d)).join(' ')}</t:DaysOfWeek><t:DayOfWeekIndex>${p.Index || 'First'}</t:DayOfWeekIndex></t:RelativeMonthlyRecurrence>`;
+      // RelativeMonthly/RelativeYearly DaysOfWeek is the single-valued DayOfWeekType (not the
+      // list-valued weekly form), so emit only the first day.
+      patternXml = `<t:RelativeMonthlyRecurrence><t:Interval>${p.Interval}</t:Interval><t:DaysOfWeek>${xmlEscape((p.DaysOfWeek || [])[0] || 'Monday')}</t:DaysOfWeek><t:DayOfWeekIndex>${p.Index || 'First'}</t:DayOfWeekIndex></t:RelativeMonthlyRecurrence>`;
       break;
     case 'RelativeYearly':
-      patternXml = `<t:RelativeYearlyRecurrence><t:DaysOfWeek>${(p.DaysOfWeek || []).map((d) => xmlEscape(d)).join(' ')}</t:DaysOfWeek><t:DayOfWeekIndex>${p.Index || 'First'}</t:DayOfWeekIndex><t:Month>${['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][(p.Month || 1) - 1]}</t:Month></t:RelativeYearlyRecurrence>`;
+      patternXml = `<t:RelativeYearlyRecurrence><t:DaysOfWeek>${xmlEscape((p.DaysOfWeek || [])[0] || 'Monday')}</t:DaysOfWeek><t:DayOfWeekIndex>${p.Index || 'First'}</t:DayOfWeekIndex><t:Month>${['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][(p.Month || 1) - 1]}</t:Month></t:RelativeYearlyRecurrence>`;
       break;
     default:
       if (!validTypes.includes(p.Type)) {
@@ -2985,7 +3013,7 @@ export async function getScheduleViaOutlook(
     for (const suggestion of suggestions) {
       const meetingTime = extractTag(suggestion, 'MeetingTime');
       if (meetingTime) {
-        const startTime = new Date(meetingTime);
+        const startTime = new Date(ewsAvailabilityTimeToUtcMs(meetingTime));
         const endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000);
         freeSlots.push({
           start: startTime.toISOString(),
@@ -3021,8 +3049,8 @@ export async function getScheduleViaOutlook(
           const endTime = extractTag(event, 'EndTime');
 
           if (startTime && endTime) {
-            const evStart = new Date(startTime).getTime();
-            const evEnd = new Date(endTime).getTime();
+            const evStart = ewsAvailabilityTimeToUtcMs(startTime);
+            const evEnd = ewsAvailabilityTimeToUtcMs(endTime);
             // Only include events that overlap with the requested window
             if (evStart < reqEnd && evEnd > reqStart) {
               items.push({
@@ -3226,8 +3254,8 @@ export async function areRoomsFree(
           const busyType = extractTag(event, 'BusyType');
           if (busyType === 'Free') continue;
 
-          const evStart = new Date(extractTag(event, 'StartTime') || '').getTime();
-          const evEnd = new Date(extractTag(event, 'EndTime') || '').getTime();
+          const evStart = ewsAvailabilityTimeToUtcMs(extractTag(event, 'StartTime'));
+          const evEnd = ewsAvailabilityTimeToUtcMs(extractTag(event, 'EndTime'));
 
           if (evStart < reqEnd && evEnd > reqStart) {
             isFree = false;
