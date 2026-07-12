@@ -409,7 +409,18 @@ m365-agent-cli findtime nextweek alice@company.com --duration 60 --start 10 --en
 
 # Only check specified people (exclude yourself from availability check)
 m365-agent-cli findtime nextweek alice@company.com --solo
+
+# Graph: mark some attendees optional, require only a percentage of attendees free,
+# and search/filter working hours in a specific time zone instead of UTC
+m365-agent-cli findtime nextweek alice@company.com bob@company.com --optional bob@company.com --min-attendee-percentage 50 --timezone America/New_York
 ```
+
+`--optional`, `--min-attendee-percentage`, and `--timezone` apply to the Graph `findMeetingTimes` /
+`getSchedule` paths (backend `graph` or `auto` with a working Graph token); the EWS fallback path
+ignores them. `--json` output for both Graph strategies now includes attendee-level detail: with
+`findMeetingTimes`, each suggestion's `attendeeAvailability` (`free`/`busy`/`tentative`/… per
+attendee); with the `getSchedule` fallback, a top-level `attendeeAvailability` array with each
+attendee's raw `availabilityView` string, not just the merged free/busy result.
 
 ---
 

@@ -9,6 +9,7 @@ import { callGraph } from '../lib/graph-client.js';
 import type { FindMeetingTimesRequest } from '../lib/graph-schedule.js';
 import { toJsonError } from '../lib/json-error.js';
 import { buildFindMeetingTimesLocationConstraint } from '../lib/meeting-location-constraint.js';
+import { assertValidTimeZone } from '../lib/timezone-wallclock.js';
 import { runFindTimeGraph, runFindTimeGraphSchedule } from './findtime-graph.js';
 
 function formatTime(dateStr: string): string {
@@ -98,6 +99,21 @@ export const findtimeCommand = new Command('findtime')
   )
   .option('--resolve-location-availability', 'Graph: resolveAvailability on location constraint entries')
   .option('--find-meeting-json <path>', 'Graph: merge JSON into findMeetingTimes request body')
+  .option(
+    '--optional <email>',
+    'Graph: mark an attendee optional rather than required for findMeetingTimes (repeatable)',
+    (v: string, prev: string[]) => [...prev, v],
+    [] as string[]
+  )
+  .option(
+    '--min-attendee-percentage <n>',
+    'Graph findMeetingTimes: minimum percentage of attendees who must be free (1-100)',
+    '100'
+  )
+  .option(
+    '--timezone <iana>',
+    'IANA time zone (e.g. America/New_York) for the search window, working hours, and results. Default: UTC.'
+  )
   .action(
     async (
       startDay: string,
@@ -116,6 +132,9 @@ export const findtimeCommand = new Command('findtime')
         meetingLocation?: string[];
         resolveLocationAvailability?: boolean;
         findMeetingJson?: string;
+        optional?: string[];
+        minAttendeePercentage: string;
+        timezone?: string;
       },
       _cmd: any
     ) => {
@@ -306,6 +325,26 @@ export const findtimeCommand = new Command('findtime')
         console.error(`Error: --end must be an hour from 1 to 24 and greater than --start (got "${options.end}")`);
         process.exit(1);
       }
+      const minAttendeePercentage = parseInt(options.minAttendeePercentage, 10);
+      if (!Number.isFinite(minAttendeePercentage) || minAttendeePercentage < 1 || minAttendeePercentage > 100) {
+        console.error(
+          `Error: --min-attendee-percentage must be a number from 1 to 100 (got "${options.minAttendeePercentage}")`
+        );
+        process.exit(1);
+      }
+      if (options.timezone) {
+        try {
+          assertValidTimeZone(options.timezone);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Invalid --timezone';
+          if (options.json) {
+            console.log(JSON.stringify({ error: toJsonError(message) }, null, 2));
+          } else {
+            console.error(`Error: ${message}`);
+          }
+          process.exit(1);
+        }
+      }
 
       const locationConstraint = buildFindMeetingTimesLocationConstraint({
         suggestLocations: options.suggestLocations,
@@ -451,7 +490,10 @@ export const findtimeCommand = new Command('findtime')
           mailbox: options.mailbox,
           json: options.json,
           locationConstraint,
-          findMeetingMerge
+          findMeetingMerge,
+          optionalEmails: options.optional,
+          minAttendeePercentage,
+          timezone: options.timezone
         });
         if (g.ok) {
           return;
@@ -466,7 +508,8 @@ export const findtimeCommand = new Command('findtime')
           workEndHour: workEnd,
           label,
           mailbox: options.mailbox,
-          json: options.json
+          json: options.json,
+          timezone: options.timezone
         });
         if (gs.ok) {
           return;
@@ -504,7 +547,10 @@ export const findtimeCommand = new Command('findtime')
             mailbox: options.mailbox,
             json: options.json,
             locationConstraint,
-            findMeetingMerge
+            findMeetingMerge,
+            optionalEmails: options.optional,
+            minAttendeePercentage,
+            timezone: options.timezone
           });
           if (g.ok) {
             return;
@@ -522,7 +568,8 @@ export const findtimeCommand = new Command('findtime')
             workEndHour: workEnd,
             label,
             mailbox: options.mailbox,
-            json: options.json
+            json: options.json,
+            timezone: options.timezone
           });
           if (gs.ok) {
             return;

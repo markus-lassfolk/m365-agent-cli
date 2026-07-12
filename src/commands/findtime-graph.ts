@@ -10,6 +10,7 @@ import {
   findMeetingTimes,
   getSchedule
 } from '../lib/graph-schedule.js';
+import { formatDateInTimeZone, hourInTimeZone } from '../lib/timezone-wallclock.js';
 
 /** Each char in availabilityView: 0=free, 1–5=busy/tentative/OOF/etc. */
 function padAvailabilityView(view: string, len: number): string {
@@ -50,14 +51,23 @@ export async function runFindTimeGraph(opts: {
   json?: boolean;
   locationConstraint?: FindMeetingTimesRequest['locationConstraint'];
   findMeetingMerge?: Partial<FindMeetingTimesRequest>;
+  optionalEmails?: string[];
+  minAttendeePercentage?: number;
+  timezone?: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
+  const optionalSet = new Set((opts.optionalEmails ?? []).map((e) => e.toLowerCase()));
   const attendeePayload: AttendeeBase[] = opts.emails.map((address) => ({
-    type: 'required' as const,
+    type: optionalSet.has(address.toLowerCase()) ? ('optional' as const) : ('required' as const),
     emailAddress: { address }
   }));
 
-  const startDateTime = opts.start.toISOString().replace('Z', '');
-  const endDateTime = opts.end.toISOString().replace('Z', '');
+  const tz = opts.timezone || 'UTC';
+  const startDateTime = opts.timezone
+    ? formatDateInTimeZone(opts.start, opts.timezone)
+    : opts.start.toISOString().replace('Z', '');
+  const endDateTime = opts.timezone
+    ? formatDateInTimeZone(opts.end, opts.timezone)
+    : opts.end.toISOString().replace('Z', '');
 
   const baseRequest: FindMeetingTimesRequest = {
     attendees: attendeePayload,
@@ -66,12 +76,12 @@ export async function runFindTimeGraph(opts: {
       activityDomain: 'work',
       timeSlots: [
         {
-          start: { dateTime: startDateTime, timeZone: 'UTC' },
-          end: { dateTime: endDateTime, timeZone: 'UTC' }
+          start: { dateTime: startDateTime, timeZone: tz },
+          end: { dateTime: endDateTime, timeZone: tz }
         }
       ]
     },
-    minimumAttendeePercentage: 100,
+    minimumAttendeePercentage: opts.minAttendeePercentage ?? 100,
     isOrganizerOptional: false,
     returnSuggestionReasons: true,
     ...(opts.locationConstraint ? { locationConstraint: opts.locationConstraint } : {})
@@ -80,7 +90,7 @@ export async function runFindTimeGraph(opts: {
     ? ({ ...baseRequest, ...opts.findMeetingMerge } as FindMeetingTimesRequest)
     : baseRequest;
 
-  const result = await findMeetingTimes(opts.token, merged, opts.mailbox?.trim() || undefined);
+  const result = await findMeetingTimes(opts.token, merged, opts.mailbox?.trim() || undefined, tz);
 
   if (!result.ok || !result.data) {
     return { ok: false, error: result.error?.message || 'Failed to find meeting times' };
@@ -95,7 +105,11 @@ export async function runFindTimeGraph(opts: {
         end: s.meetingTimeSlot?.end?.dateTime,
         confidence: s.confidence,
         reason: s.suggestionReason,
-        locations: s.locations
+        locations: s.locations,
+        attendeeAvailability: s.attendeeAvailability?.map((a) => ({
+          email: a.attendee?.emailAddress?.address,
+          availability: a.availability
+        }))
       })) ?? [];
     console.log(
       JSON.stringify(
@@ -130,7 +144,8 @@ export async function runFindTimeGraph(opts: {
     const start = s.meetingTimeSlot?.start;
     if (!start?.dateTime) return false;
     const ms = graphEventStartMs(start);
-    const hour = Number.isFinite(ms) ? new Date(ms).getHours() : new Date(start.dateTime).getHours();
+    const d = Number.isFinite(ms) ? new Date(ms) : new Date(start.dateTime);
+    const hour = opts.timezone ? hourInTimeZone(d, opts.timezone) : d.getHours();
     return hour >= opts.workStartHour && hour < opts.workEndHour;
   });
 
@@ -157,6 +172,12 @@ export async function runFindTimeGraph(opts: {
       const conf = s.confidence !== undefined ? ` (${s.confidence}% confidence)` : '';
       console.log(`    🟢 ${startLabel} – ${endLabel}${conf}`);
       if (s.suggestionReason) console.log(`       ${s.suggestionReason}`);
+      if (s.attendeeAvailability && s.attendeeAvailability.length > 0) {
+        for (const a of s.attendeeAvailability) {
+          const email = a.attendee?.emailAddress?.address || 'Unknown';
+          console.log(`       ${email}: ${a.availability || 'unknown'}`);
+        }
+      }
       if (s.locations && s.locations.length > 0) {
         const locBits = s.locations
           .map((l) => [l.displayName, l.locationEmailAddress].filter(Boolean).join(' · '))
@@ -184,20 +205,27 @@ export async function runFindTimeGraphSchedule(opts: {
   label: string;
   mailbox?: string;
   json?: boolean;
+  timezone?: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const intervalMinutes = Math.min(30, Math.max(5, opts.durationMinutes));
-  const startIso = opts.start.toISOString().replace(/\.\d{3}Z$/, '');
-  const endIso = opts.end.toISOString().replace(/\.\d{3}Z$/, '');
+  const tz = opts.timezone || 'UTC';
+  const startIso = opts.timezone
+    ? formatDateInTimeZone(opts.start, opts.timezone)
+    : opts.start.toISOString().replace(/\.\d{3}Z$/, '');
+  const endIso = opts.timezone
+    ? formatDateInTimeZone(opts.end, opts.timezone)
+    : opts.end.toISOString().replace(/\.\d{3}Z$/, '');
 
   const sched = await getSchedule(
     opts.token,
     {
       schedules: opts.emails,
-      startTime: { dateTime: startIso, timeZone: 'UTC' },
-      endTime: { dateTime: endIso, timeZone: 'UTC' },
+      startTime: { dateTime: startIso, timeZone: tz },
+      endTime: { dateTime: endIso, timeZone: tz },
       availabilityViewInterval: intervalMinutes
     },
-    opts.mailbox?.trim() || undefined
+    opts.mailbox?.trim() || undefined,
+    tz
   );
 
   if (!sched.ok || !sched.data?.value) {
@@ -231,7 +259,7 @@ export async function runFindTimeGraphSchedule(opts: {
     const t0 = new Date(opts.start.getTime() + i * intervalMinutes * 60 * 1000);
     const t1 = new Date(t0.getTime() + opts.durationMinutes * 60 * 1000);
     if (t1 > opts.end) continue;
-    const hour = t0.getHours();
+    const hour = opts.timezone ? hourInTimeZone(t0, opts.timezone) : t0.getHours();
     if (hour >= opts.workStartHour && hour < opts.workEndHour) {
       freeSlots.push({ start: t0.toISOString(), end: t1.toISOString() });
       i += needSlots - 1;
@@ -248,7 +276,14 @@ export async function runFindTimeGraphSchedule(opts: {
           duration: opts.durationMinutes,
           availabilityViewIntervalMinutes: intervalMinutes,
           dateRange: { start: opts.start.toISOString(), end: opts.end.toISOString() },
-          availableSlots: freeSlots.map((s) => ({ start: s.start, end: s.end }))
+          availableSlots: freeSlots.map((s) => ({ start: s.start, end: s.end })),
+          // Per-mailbox detail (not just the merged free/busy result): each char in `availabilityView`
+          // is one `availabilityViewIntervalMinutes` slot starting at `dateRange.start`
+          // (0=free, 1=tentative, 2=busy, 3=out of office, 4=working elsewhere).
+          attendeeAvailability: sched.data.value.map((s, i) => ({
+            email: opts.emails[i] ?? s.scheduleId,
+            availabilityView: s.availabilityView ?? ''
+          }))
         },
         null,
         2

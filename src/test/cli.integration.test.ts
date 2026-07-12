@@ -303,6 +303,13 @@ function resetSharedCommandOptionLeaks() {
   ]) {
     mailCommand.setOptionValue(opt, undefined);
   }
+  // findtime reuses a shared instance; restore these to their declared defaults (not undefined —
+  // parseInt(undefined) etc. would then fail validation) so a leaked value from one test's
+  // explicit flag doesn't leak into a later test that omits it.
+  findtimeCommand.setOptionValue('json', false);
+  findtimeCommand.setOptionValue('optional', []);
+  findtimeCommand.setOptionValue('minAttendeePercentage', '100');
+  findtimeCommand.setOptionValue('timezone', undefined);
 }
 
 async function runM365AgentCli(args: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
@@ -548,6 +555,29 @@ describe('findtime', () => {
     const result = await runM365AgentCli('findtime nextweek not-an-email --token test-token-12345');
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr).toContain('Invalid attendee email');
+  });
+
+  test('--optional, --min-attendee-percentage, and --timezone are accepted (EWS path ignores them)', async () => {
+    const result = await runM365AgentCli(
+      'findtime nextweek user@example.com --optional user@example.com --min-attendee-percentage 50 --timezone America/New_York --token test-token-12345'
+    );
+    expect(result.exitCode).toBe(0);
+  });
+
+  test('--min-attendee-percentage out of range shows error', async () => {
+    const result = await runM365AgentCli(
+      'findtime nextweek user@example.com --min-attendee-percentage 0 --token test-token-12345'
+    );
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain('--min-attendee-percentage');
+  });
+
+  test('invalid --timezone shows error', async () => {
+    const result = await runM365AgentCli(
+      'findtime nextweek user@example.com --timezone Not/AZone --token test-token-12345'
+    );
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toMatch(/[Ii]nvalid.*time zone|--timezone/);
   });
 });
 
