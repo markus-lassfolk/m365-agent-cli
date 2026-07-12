@@ -482,4 +482,34 @@ describe('graph-excel-client tables charts pivot session', () => {
       globalThis.fetch = originalFetch;
     }
   });
+  it('listExcelTableRows pages through @odata.nextLink when no top is given', async () => {
+    process.env.GRAPH_BASE_URL = 'https://graph.microsoft.com/v1.0';
+    const originalFetch = globalThis.fetch;
+    try {
+      let n = 0;
+      globalThis.fetch = (async () => {
+        n++;
+        if (n === 1) {
+          return new Response(
+            JSON.stringify({
+              value: [{ index: 0 }],
+              '@odata.nextLink': 'https://graph.microsoft.com/v1.0/next?$skiptoken=2'
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          );
+        }
+        return new Response(JSON.stringify({ value: [{ index: 1 }] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as unknown as typeof fetch;
+      const { listExcelTableRows } = await import('./graph-excel-client.js');
+      const r = await listExcelTableRows(token, 'item1', 'tbl1');
+      expect(r.ok).toBe(true);
+      expect(r.data?.map((x) => x.index)).toEqual([0, 1]);
+      expect(n).toBe(2);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

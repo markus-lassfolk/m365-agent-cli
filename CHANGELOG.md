@@ -52,6 +52,7 @@ Pagination consistency pass (list/collection endpoints no longer silently trunca
 - Added a shared `listGraphCollection` helper so every list endpoint follows the same rule: an explicit `--top`/`top` is a deliberate single bounded page; otherwise the call pages through `@odata.nextLink` to completion (and fails loudly on an unresolvable link, with the cycle/page cap).
 - Converted previously first-page-only functions to full pagination: groups (`groups`, `conversations`, `threads`, `posts`), insights (`trending`/`used`/`shared`, drive-item activities, followed sites), Teams (`team members`, `my chats`, app catalog), Excel (`table rows`), SharePoint (`lists`), and directory `search-people`.
 - **`rooms`/room-availability (`isRoomFree`)** now pages the whole calendar window, fixing a false "free" result when a busy event fell on a later `calendarView` page.
+- Completed the sweep by moving the remaining Teams (`joined teams`, channels, channel/chat members, installed apps, message/chat replies) and Excel (worksheets, tables, workbook/worksheet names, table columns, charts, pivot tables) list functions onto the same `listGraphCollection` pattern. Conversation-history listings (chat/channel messages) intentionally remain bounded recent-N pages.
 
 ---
 
