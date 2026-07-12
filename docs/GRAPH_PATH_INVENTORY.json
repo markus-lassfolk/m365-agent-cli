@@ -1,12 +1,12 @@
 {
   "version": 1,
   "description": "Graph path patterns from static analysis of callGraph*, graphInvoke*, fetchAllPages, fetchGraphRaw, graphPostBatch. Regenerate: npm run graph:inventory",
-  "generatedAt": "2026-07-12T16:02:57.102Z",
-  "entryCount": 709,
+  "generatedAt": "2026-07-12T16:11:46.387Z",
+  "entryCount": 713,
   "entries": [
     {
       "file": "src/commands/files.ts",
-      "line": 1485,
+      "line": 1534,
       "callee": "callGraphAt",
       "pattern": "{dynamic}/recent{dynamic}",
       "kind": "template"
@@ -1413,140 +1413,140 @@
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1265,
+      "line": 1281,
       "callee": "callGraphAt",
       "pattern": "{dynamic}/createLink",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1292,
+      "line": 1308,
       "callee": "callGraphAt",
       "pattern": "{dynamic}/checkout",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1316,
+      "line": 1332,
       "callee": "callGraphAt",
       "pattern": "{dynamic}/checkin",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1359,
+      "line": 1375,
       "callee": "callGraphAt",
       "pattern": "{dynamic}/listItem",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1374,
+      "line": 1390,
       "callee": "callGraphAt",
       "pattern": "{dynamic}/follow",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1394,
+      "line": 1410,
       "callee": "callGraphAt",
       "pattern": "{dynamic}/unfollow",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1416,
+      "line": 1432,
       "callee": "callGraphAt",
       "pattern": "{dynamic}/assignSensitivityLabel",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1440,
+      "line": 1456,
       "callee": "callGraphAt",
       "pattern": "{dynamic}/extractSensitivityLabels",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1464,
+      "line": 1480,
       "callee": "callGraphAt",
       "pattern": "{dynamic}/permanentDelete",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1489,
+      "line": 1505,
       "callee": "callGraphAt",
       "pattern": "{dynamic}/restore",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1508,
+      "line": 1524,
       "callee": "callGraphAt",
       "pattern": "{dynamic}/retentionLabel",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1530,
+      "line": 1546,
       "callee": "callGraphAt",
       "pattern": "{dynamic}/retentionLabel",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1604,
+      "line": 1620,
       "callee": "fetchAllPages",
       "pattern": "{dynamic}/versions",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1620,
+      "line": 1636,
       "callee": "callGraphAt",
       "pattern": "{dynamic}/versions/{dynamic}/restoreVersion",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1660,
+      "line": 1676,
       "callee": "callGraphAt",
       "pattern": "{dynamic}/analytics/allTime",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1661,
+      "line": 1677,
       "callee": "callGraphAt",
       "pattern": "{dynamic}/analytics/lastSevenDays",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1715,
+      "line": 1731,
       "callee": "fetchGraphRaw",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1802,
+      "line": 1818,
       "callee": "callGraphAt",
       "pattern": "{dynamic}/invite",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1820,
+      "line": 1836,
       "callee": "fetchAllPages",
       "pattern": "{dynamic}/permissions",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1836,
+      "line": 1852,
       "callee": "callGraphAt",
       "pattern": "{dynamic}/permissions/{dynamic}",
       "kind": "template"
@@ -1555,47 +1555,54 @@
       "file": "src/lib/graph-client.ts",
       "line": 1874,
       "callee": "callGraphAt",
+      "pattern": "{dynamic}/permissions/{dynamic}",
+      "kind": "template"
+    },
+    {
+      "file": "src/lib/graph-client.ts",
+      "line": 1912,
+      "callee": "callGraphAt",
       "pattern": "{dynamic}/thumbnails",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1910,
+      "line": 1948,
       "callee": "callGraphAbsolute",
       "pattern": "{dynamic}",
       "kind": "absolute-url"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1912,
+      "line": 1950,
       "callee": "callGraphAt",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1939,
+      "line": 1977,
       "callee": "callGraphAt",
       "pattern": "/me/drive/sharedWithMe",
       "kind": "literal"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1962,
+      "line": 2000,
       "callee": "fetchGraphRaw",
       "pattern": "{dynamic}/copy",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 2053,
+      "line": 2091,
       "callee": "callGraphAt",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 2074,
+      "line": 2112,
       "callee": "callGraphAt",
       "pattern": "{dynamic}/permissions/{dynamic}",
       "kind": "template"
@@ -4557,6 +4564,27 @@
     {
       "file": "src/lib/sharepoint-client.ts",
       "line": 373,
+      "callee": "callGraphAt",
+      "pattern": "/sites/{dynamic}/permissions/{dynamic}",
+      "kind": "template"
+    },
+    {
+      "file": "src/lib/sharepoint-client.ts",
+      "line": 399,
+      "callee": "callGraphAt",
+      "pattern": "/sites/{dynamic}/permissions/{dynamic}",
+      "kind": "template"
+    },
+    {
+      "file": "src/lib/sharepoint-client.ts",
+      "line": 425,
+      "callee": "callGraphAt",
+      "pattern": "/sites/{dynamic}/permissions",
+      "kind": "template"
+    },
+    {
+      "file": "src/lib/sharepoint-client.ts",
+      "line": 446,
       "callee": "callGraphAt",
       "pattern": "/sites/{dynamic}/permissions/{dynamic}",
       "kind": "template"

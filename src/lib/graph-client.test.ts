@@ -437,6 +437,87 @@ describe('inviteDriveItem and listDriveItemPermissions', () => {
   });
 });
 
+describe('getDriveItemPermission', () => {
+  it('GETs /permissions/{id}', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    const urls: string[] = [];
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+        urls.push(typeof input === 'string' ? input : input.toString());
+        expect(init?.method).toBe('GET');
+        return new Response(JSON.stringify({ id: 'perm-1', roles: ['read'] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as unknown as typeof fetch;
+
+      const { getDriveItemPermission } = await import('./graph-client.js');
+      const r = await getDriveItemPermission(token, 'item-7', 'perm-1');
+      expect(r.ok).toBe(true);
+      expect(r.data?.id).toBe('perm-1');
+      expect(urls[0]).toContain('/me/drive/items/item-7/permissions/perm-1');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+describe('shareFile advanced options', () => {
+  it('sends expirationDateTime, password, and retainInheritedPermissions in the createLink body', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    let body = '';
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+        body = String(init?.body ?? '');
+        return new Response(JSON.stringify({ link: { webUrl: 'https://x', id: 'link-1' } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as unknown as typeof fetch;
+
+      const { shareFile } = await import('./graph-client.js');
+      const r = await shareFile(token, 'item-7', 'view', 'organization', undefined, undefined, {
+        expirationDateTime: '2026-01-01T00:00:00Z',
+        password: 'hunter2',
+        retainInheritedPermissions: false
+      });
+      expect(r.ok).toBe(true);
+      expect(JSON.parse(body)).toEqual({
+        type: 'view',
+        scope: 'organization',
+        expirationDateTime: '2026-01-01T00:00:00Z',
+        password: 'hunter2',
+        retainInheritedPermissions: false
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('omits the advanced fields entirely when unset (unchanged prior behavior)', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    let body = '';
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+        body = String(init?.body ?? '');
+        return new Response(JSON.stringify({ link: {} }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as unknown as typeof fetch;
+
+      const { shareFile } = await import('./graph-client.js');
+      await shareFile(token, 'item-7', 'view', 'organization');
+      expect(JSON.parse(body)).toEqual({ type: 'view', scope: 'organization' });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
 describe('Graph v1.0 404 beta hint', () => {
   it('appends beta hint on 404 for graph.microsoft.com v1.0', async () => {
     process.env.GRAPH_BASE_URL = baseUrl;

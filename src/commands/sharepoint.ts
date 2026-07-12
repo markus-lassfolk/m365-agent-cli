@@ -12,7 +12,9 @@ import {
 import { followSites, listFollowedSites, unfollowSites } from '../lib/graph-insights-client.js';
 import {
   createListItem,
+  createSitePermission,
   deleteListItem,
+  deleteSitePermission,
   getAllListItemsPages,
   getListColumns,
   getListItem,
@@ -25,6 +27,7 @@ import {
   getSiteById,
   getSiteDefaultDriveId,
   getSiteDrives,
+  getSitePermission,
   getSitePermissions,
   type SharePointListItem,
   updateListItem,
@@ -551,6 +554,139 @@ sharepointCommand
         return;
       }
       console.log('✓ Site permission updated');
+    }
+  );
+
+sharepointCommand
+  .command('site-permission-get')
+  .description('GET a single site permission by ID (`GET /sites/{id}/permissions/{permissionId}`).')
+  .requiredOption('--site-id <id>', 'SharePoint Site ID')
+  .requiredOption('--permission-id <id>', 'Permission id from site-permissions')
+  .option('--json', 'Output as JSON')
+  .option('--beta', 'Use Microsoft Graph beta API host for this call', false)
+  .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .action(
+    async (opts: {
+      siteId: string;
+      permissionId: string;
+      json?: boolean;
+      beta?: boolean;
+      token?: string;
+      identity?: string;
+    }) => {
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!auth.success || !auth.token) {
+        console.error(`Auth error: ${auth.error || 'Unknown error'}`);
+        process.exit(1);
+      }
+      const res = await getSitePermission(auth.token, opts.siteId, opts.permissionId, spApi(opts));
+      if (!res.ok || !res.data) {
+        console.error(`Error: ${res.error?.message || 'Unknown error'}`);
+        process.exit(1);
+      }
+      if (opts.json) {
+        console.log(JSON.stringify(res.data, null, 2));
+        return;
+      }
+      const roles = Array.isArray(res.data.roles) ? (res.data.roles as string[]).join(',') : '';
+      console.log(`${res.data.id}\t${roles}`);
+    }
+  );
+
+sharepointCommand
+  .command('site-permission-create')
+  .description(
+    'POST a new site permission (`POST /sites/{id}/permissions`). Per Graph, this creates an *application* permission only — it cannot grant a new user site permission. Body is a Graph `permission` resource, e.g. { "roles": ["write"], "grantedToIdentities": [{ "application": { "id": "...", "displayName": "..." } }] }.'
+  )
+  .requiredOption('--site-id <id>', 'SharePoint Site ID')
+  .requiredOption('--json-file <path>', 'JSON body for POST (a Graph `permission` resource)')
+  .option('--json', 'Output as JSON')
+  .option('--beta', 'Use Microsoft Graph beta API host for this call', false)
+  .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .action(
+    async (
+      opts: {
+        siteId: string;
+        jsonFile: string;
+        json?: boolean;
+        beta?: boolean;
+        token?: string;
+        identity?: string;
+      },
+      cmd: any
+    ) => {
+      checkReadOnly(cmd);
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!auth.success || !auth.token) {
+        console.error(`Auth error: ${auth.error || 'Unknown error'}`);
+        process.exit(1);
+      }
+      let raw: string;
+      try {
+        raw = await readFile(opts.jsonFile.trim(), 'utf-8');
+      } catch (e) {
+        console.error(`Error: could not read --json-file: ${e instanceof Error ? e.message : String(e)}`);
+        process.exit(1);
+      }
+      let body: Record<string, unknown>;
+      try {
+        body = JSON.parse(raw) as Record<string, unknown>;
+      } catch {
+        console.error('Error: --json-file must contain valid JSON');
+        process.exit(1);
+      }
+      const res = await createSitePermission(auth.token, opts.siteId, body, spApi(opts));
+      if (!res.ok || !res.data) {
+        console.error(`Error: ${res.error?.message || 'Unknown error'}`);
+        process.exit(1);
+      }
+      if (opts.json) {
+        console.log(JSON.stringify(res.data, null, 2));
+        return;
+      }
+      console.log(`✓ Site permission created${typeof res.data.id === 'string' ? `: ${res.data.id}` : ''}`);
+    }
+  );
+
+sharepointCommand
+  .command('site-permission-delete')
+  .description('DELETE a site permission (`DELETE /sites/{id}/permissions/{permissionId}`) — revoke access.')
+  .requiredOption('--site-id <id>', 'SharePoint Site ID')
+  .requiredOption('--permission-id <id>', 'Permission id from site-permissions')
+  .option('--json', 'Output as JSON')
+  .option('--beta', 'Use Microsoft Graph beta API host for this call', false)
+  .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .action(
+    async (
+      opts: {
+        siteId: string;
+        permissionId: string;
+        json?: boolean;
+        beta?: boolean;
+        token?: string;
+        identity?: string;
+      },
+      cmd: any
+    ) => {
+      checkReadOnly(cmd);
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!auth.success || !auth.token) {
+        console.error(`Auth error: ${auth.error || 'Unknown error'}`);
+        process.exit(1);
+      }
+      const res = await deleteSitePermission(auth.token, opts.siteId, opts.permissionId, spApi(opts));
+      if (!res.ok) {
+        console.error(`Error: ${res.error?.message || 'Unknown error'}`);
+        process.exit(1);
+      }
+      if (opts.json) {
+        console.log(JSON.stringify({ success: true, siteId: opts.siteId, permissionId: opts.permissionId }, null, 2));
+        return;
+      }
+      console.log(`✓ Removed permission ${opts.permissionId} from site ${opts.siteId}`);
     }
   );
 

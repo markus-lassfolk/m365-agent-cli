@@ -1252,23 +1252,39 @@ export async function deleteFile(
   }
 }
 
+export interface ShareFileOptions {
+  /** ISO 8601 datetime the link expires at (e.g. `2026-01-01T00:00:00Z`). */
+  expirationDateTime?: string;
+  /** Sharing-link password (OneDrive Personal only, per Graph). */
+  password?: string;
+  /** Default `true` (Graph default): keep existing inherited permissions when creating the first share on this item. */
+  retainInheritedPermissions?: boolean;
+}
+
 export async function shareFile(
   token: string,
   itemId: string,
   type: 'view' | 'edit' = 'view',
   scope: 'anonymous' | 'organization' = 'organization',
   location: DriveLocation = DEFAULT_DRIVE_LOCATION,
-  graphBaseUrl: string = getGraphBaseUrl()
+  graphBaseUrl: string = getGraphBaseUrl(),
+  options: ShareFileOptions = {}
 ): Promise<GraphResponse<SharingLinkResult>> {
   let result: GraphResponse<{ link?: SharingLinkResult }>;
   try {
+    const body: Record<string, unknown> = { type, scope };
+    if (options.expirationDateTime) body.expirationDateTime = options.expirationDateTime;
+    if (options.password) body.password = options.password;
+    if (options.retainInheritedPermissions !== undefined) {
+      body.retainInheritedPermissions = options.retainInheritedPermissions;
+    }
     result = await callGraphAt<{ link?: SharingLinkResult }>(
       graphBaseUrl,
       token,
       `${driveItemPath(location, itemId)}/createLink`,
       {
         method: 'POST',
-        body: JSON.stringify({ type, scope })
+        body: JSON.stringify(body)
       }
     );
   } catch (err) {
@@ -1823,6 +1839,28 @@ export async function listDriveItemPermissions(
     'Failed to list permissions',
     graphBaseUrl
   );
+}
+
+export async function getDriveItemPermission(
+  token: string,
+  itemId: string,
+  permissionId: string,
+  location: DriveLocation = DEFAULT_DRIVE_LOCATION,
+  graphBaseUrl: string = getGraphBaseUrl()
+): Promise<GraphResponse<DriveItemPermission>> {
+  try {
+    return await callGraphAt<DriveItemPermission>(
+      graphBaseUrl,
+      token,
+      `${driveItemPath(location, itemId)}/permissions/${encodeURIComponent(permissionId)}`,
+      { method: 'GET' }
+    );
+  } catch (err) {
+    if (err instanceof GraphApiError) {
+      return graphErrorFromApiError(err);
+    }
+    return graphError(err instanceof Error ? err.message : 'Failed to get permission');
+  }
 }
 
 export async function deleteDriveItemPermission(

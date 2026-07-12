@@ -75,7 +75,7 @@ The table below matches **`checkReadOnly` in the source** (search the repo for `
 | `folders` | `--create`, `--rename` (with `--to`), `--delete` (listing folders allowed) |
 | `files` | `upload`, `upload-large`, `delete`, `share` (including `--collab`), `invite`, `permission-remove`, `permission-update`, `copy`, `move`, `restore`, `checkout`, `checkin` (read/query: **`thumbnails`**, **`delta`**, **`shared-with-me`**, …) |
 | `planner` | `create-task`, `update-task`, `delete-task`, `create-plan` (`--group` or beta `--roster`), `update-plan`, `delete-plan`, `delete-plan-details`, `delete-task-details`, `plan-archive`, `plan-unarchive` (beta), `create-bucket`, `update-bucket`, `delete-bucket`, `list-user-tasks`, `list-user-plans`, `update-task-details`, `update-plan-details`, `add-checklist-item`, `update-checklist-item`, `remove-checklist-item`, `add-reference`, `remove-reference`, `update-task-board`, `add-favorite`, `remove-favorite`, `roster` (beta: `create`, `get`, `list-members`, `add-member`, `remove-member`) |
-| `sharepoint` / `sp` | `create-item`, `update-item`, `delete-item`, `follow`, `unfollow` |
+| `sharepoint` / `sp` | `create-item`, `update-item`, `delete-item`, `follow`, `unfollow`, `site-permission-update`, `site-permission-create`, `site-permission-delete` |
 | `pages` | `update`, `publish` |
 | `rules` | `create`, `update`, `delete` |
 | `todo` | `create`, `update`, `complete`, `delete`, `add-checklist`, `update-checklist`, `delete-checklist`, `get-checklist-item`, `create-list`, `update-list`, `delete-list`, `add-attachment`, `get-attachment`, `download-attachment`, `delete-attachment`, `add-reference-attachment`, `add-linked-resource`, `remove-linked-resource`, `upload-attachment-large`, `attachment-session` (patch/delete/content-put/content-delete), `root` (patch/delete), `linked-resource` (`create`, `update`, `delete`), `extension` (`set`, `update`, `delete`), `list-extension` (`set`, `update`, `delete`) |
@@ -694,6 +694,9 @@ m365-agent-cli files delete <fileId>
 # Create a share link
 m365-agent-cli files share <fileId> --type view --scope org
 m365-agent-cli files share <fileId> --type edit --scope anonymous
+
+# Share link with an expiration, a password, and without retaining prior inherited permissions
+m365-agent-cli files share <fileId> --type view --scope anonymous --expiration 2026-01-01T00:00:00Z --password "hunter2" --no-retain-inherited-permissions
 ```
 
 ### Drive root, named invites, permissions, Excel workbook comments
@@ -712,8 +715,9 @@ m365-agent-cli files download <itemId> --site-id contoso.sharepoint.com,abc-123-
 # Invite people (POST body per Microsoft Graph driveItem invite)
 m365-agent-cli files invite <fileId> --body ./invite.json
 
-# List or remove sharing entries on an item
+# List, get one, or remove sharing entries on an item
 m365-agent-cli files permissions <fileId>
+m365-agent-cli files permission-get <fileId> <permissionId>
 m365-agent-cli files permission-remove <fileId> <permissionId>
 
 # Excel threaded comments on the workbook (Microsoft Graph beta)
@@ -979,6 +983,13 @@ m365-agent-cli sp items --site-id <siteId> --list-id <listId> --top 100 --filter
 # Create and update items
 m365-agent-cli sp create-item --site-id <siteId> --list-id <listId> --fields '{"Title": "New Item"}'
 m365-agent-cli sp update-item --site-id <siteId> --list-id <listId> --item-id <itemId> --fields '{"Title": "Updated Item"}'
+
+# Site sharing permissions (owner/admin scenarios; create/delete are app-permission-only per Graph)
+m365-agent-cli sp site-permissions --site-id <siteId>
+m365-agent-cli sp site-permission-get --site-id <siteId> --permission-id <permissionId>
+m365-agent-cli sp site-permission-update --site-id <siteId> --permission-id <permissionId> --json-file ./roles.json
+m365-agent-cli sp site-permission-create --site-id <siteId> --json-file ./new-permission.json
+m365-agent-cli sp site-permission-delete --site-id <siteId> --permission-id <permissionId>
 ```
 
 ### SharePoint Site Pages (`m365-agent-cli pages`)

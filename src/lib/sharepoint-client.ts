@@ -387,3 +387,73 @@ export async function updateSitePermission(
     return graphError(err instanceof Error ? err.message : 'Failed to update site permission');
   }
 }
+
+/** GET a single site permission by ID. */
+export async function getSitePermission(
+  token: string,
+  siteId: string,
+  permissionId: string,
+  apiBase: string = getGraphBaseUrl()
+): Promise<GraphResponse<SitePermission>> {
+  try {
+    return await callGraphAt<SitePermission>(
+      apiBase,
+      token,
+      `/sites/${encodeURIComponent(siteId)}/permissions/${encodeURIComponent(permissionId)}`,
+      { method: 'GET' }
+    );
+  } catch (err) {
+    if (err instanceof GraphApiError) {
+      return graphError(err.message, err.code, err.status);
+    }
+    return graphError(err instanceof Error ? err.message : 'Failed to get site permission');
+  }
+}
+
+/**
+ * POST /sites/{id}/permissions — creates a new **application** permission on a site (per Graph
+ * docs this cannot be used to grant a new *user* site permission). `body` is a Graph `permission`
+ * resource, e.g. `{ roles: ["write"], grantedToIdentities: [{ application: { id, displayName } }] }`.
+ */
+export async function createSitePermission(
+  token: string,
+  siteId: string,
+  body: Record<string, unknown>,
+  apiBase: string = getGraphBaseUrl()
+): Promise<GraphResponse<SitePermission>> {
+  try {
+    return await callGraphAt<SitePermission>(apiBase, token, `/sites/${encodeURIComponent(siteId)}/permissions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+  } catch (err) {
+    if (err instanceof GraphApiError) {
+      return graphError(err.message, err.code, err.status);
+    }
+    return graphError(err instanceof Error ? err.message : 'Failed to create site permission');
+  }
+}
+
+/** DELETE /sites/{id}/permissions/{id} — revoke a site permission. */
+export async function deleteSitePermission(
+  token: string,
+  siteId: string,
+  permissionId: string,
+  apiBase: string = getGraphBaseUrl()
+): Promise<GraphResponse<void>> {
+  try {
+    return await callGraphAt<void>(
+      apiBase,
+      token,
+      `/sites/${encodeURIComponent(siteId)}/permissions/${encodeURIComponent(permissionId)}`,
+      { method: 'DELETE' },
+      false
+    );
+  } catch (err) {
+    if (err instanceof GraphApiError) {
+      return graphError(err.message, err.code, err.status);
+    }
+    return graphError(err instanceof Error ? err.message : 'Failed to delete site permission');
+  }
+}

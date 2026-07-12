@@ -1052,6 +1052,19 @@ describe('files', () => {
     });
   });
 
+  describe('files permission-get', () => {
+    test('gets a single permission', async () => {
+      const result = await runM365AgentCli('files permission-get drive-item-1 perm-1 --token test-token-12345');
+      expect(result.exitCode).toBe(0);
+    });
+
+    test('--json outputs valid JSON', async () => {
+      const result = await runM365AgentCli('files permission-get drive-item-1 perm-1 --json --token test-token-12345');
+      expect(result.exitCode).toBe(0);
+      expect(isValidJson(result.stdout.trim())).toBe(true);
+    });
+  });
+
   describe('files checkout', () => {
     test('checks out a file', async () => {
       const result = await runM365AgentCli('files checkout drive-item-1 --token test-token-12345');

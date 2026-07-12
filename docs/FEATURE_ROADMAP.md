@@ -29,7 +29,7 @@ verification / a product decision)
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
-| 9 | OneDrive/SharePoint sharing & permissions (create/list/revoke links, manage item permissions) | ⬜ | |
+| 9 | OneDrive/SharePoint sharing & permissions (create/list/revoke links, manage item permissions) | ✅ (gap-filled, not built from scratch) | Investigation found `files`/`word`/`powerpoint` already had create-link (`share`), invite, list/update/remove permission commands; SharePoint sites already had list/update. Filled the actual gaps: (1) `getDriveItemPermission` + `files`/`word`/`powerpoint` **`permission-get`** (`GET .../permissions/{id}`, single-permission fetch was missing everywhere); (2) `shareFile` gained `--expiration`/`--password`/`--no-retain-inherited-permissions`, matching Graph's `createLink` body fields that had no CLI flags before; (3) `sharepoint-client.ts` gained `getSitePermission`/`createSitePermission`/`deleteSitePermission` + `sharepoint` **`site-permission-get`/`site-permission-create`/`site-permission-delete`** (only list/update existed at the site level). All Graph endpoints verified against Microsoft Learn docs before implementing. |
 | 10 | Bulk mutation commands (ID-list / `--filter` driven) for mail/todo/planner | ⬜ | Avoid one-call-per-item loops. |
 | 11 | `findtime` multi-attendee scheduling depth (working hours, timezone, free/busy in one call) | ⬜ | |
 | 12 | Reusable mail/draft templates with variable substitution | ⬜ | |
