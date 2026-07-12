@@ -1,7 +1,8 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { Command } from 'commander';
-import { requireGraphAuth } from '../lib/graph-auth.js';
+import { requireGraphAuth, resolveGraphAuth } from '../lib/graph-auth.js';
+import { toJsonError } from '../lib/json-error.js';
 import {
   copyOneNotePageToSection,
   copyOneNoteSectionToNotebook,
@@ -40,6 +41,30 @@ import {
   updateOneNoteSectionGroup
 } from '../lib/onenote-graph-client.js';
 import { checkReadOnly, resolveOutputFilePath } from '../lib/utils.js';
+
+/**
+ * Prints the `--json` structured error envelope (or the matching plain-text "Auth error: .../
+ * Error: ...") for the two failure shapes most onenote subcommands hit — an auth failure from
+ * `resolveGraphAuth` (a plain string) or a Graph API failure (`GraphResponse.error`, a
+ * GraphError-shaped object) — then exits 1. Without this, a `--json` onenote call that failed
+ * printed plain text on stderr instead of `{ error: {...} } ` on stdout like every other
+ * --json-supporting command, leaving an agent piping the output nothing valid to parse.
+ */
+function failOnenote(
+  json: boolean | undefined,
+  prefix: 'Auth error' | 'Error',
+  error: unknown,
+  fallbackMessage?: string
+): never {
+  if (json) {
+    console.log(JSON.stringify({ error: toJsonError(error, fallbackMessage) }, null, 2));
+  } else {
+    const message =
+      (typeof error === 'string' ? error : (error as { message?: string } | undefined)?.message) ?? fallbackMessage;
+    console.error(`${prefix}: ${message}`);
+  }
+  process.exit(1);
+}
 
 /** Read a text file, exiting with a clear message (not a bare stack trace) on failure. */
 async function readTextFileOrExit(path: string, label: string): Promise<string> {
@@ -133,12 +158,15 @@ addOneNoteRootOptions(
     .option('--user <email>', 'Target user (Graph delegation)')
 ).action(
   async (opts: { json?: boolean; token?: string; identity?: string; user?: string; group?: string; site?: string }) => {
-    const token = await requireGraphAuth(opts);
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success || !auth.token) {
+      failOnenote(opts.json, 'Auth error', auth.error);
+    }
+    const token = auth.token;
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await listOneNoteNotebooks(token, user, scope);
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failOnenote(opts.json, 'Error', r.error);
     }
     if (opts.json) console.log(JSON.stringify(r.data, null, 2));
     else {
@@ -164,12 +192,15 @@ addOneNoteRootOptions(
     notebookId: string,
     opts: { json?: boolean; token?: string; identity?: string; user?: string; group?: string; site?: string }
   ) => {
-    const token = await requireGraphAuth(opts);
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success || !auth.token) {
+      failOnenote(opts.json, 'Auth error', auth.error);
+    }
+    const token = auth.token;
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await listNotebookSections(token, notebookId, user, scope);
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failOnenote(opts.json, 'Error', r.error);
     }
     if (opts.json) console.log(JSON.stringify(r.data, null, 2));
     else {
@@ -194,12 +225,15 @@ addOneNoteRootOptions(
     sectionId: string,
     opts: { json?: boolean; token?: string; identity?: string; user?: string; group?: string; site?: string }
   ) => {
-    const token = await requireGraphAuth(opts);
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success || !auth.token) {
+      failOnenote(opts.json, 'Auth error', auth.error);
+    }
+    const token = auth.token;
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await listSectionPages(token, sectionId, user, scope);
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failOnenote(opts.json, 'Error', r.error);
     }
     if (opts.json) console.log(JSON.stringify(r.data, null, 2));
     else {
@@ -230,12 +264,15 @@ addOneNoteRootOptions(
     group?: string;
     site?: string;
   }) => {
-    const token = await requireGraphAuth(opts);
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success || !auth.token) {
+      failOnenote(opts.json, 'Auth error', auth.error);
+    }
+    const token = auth.token;
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await listAllOneNotePages(token, user, opts.query, scope);
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failOnenote(opts.json, 'Error', r.error);
     }
     if (opts.json) console.log(JSON.stringify(r.data, null, 2));
     else {
@@ -261,12 +298,15 @@ addOneNoteRootOptions(
     pageId: string,
     opts: { json?: boolean; token?: string; identity?: string; user?: string; group?: string; site?: string }
   ) => {
-    const token = await requireGraphAuth(opts);
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success || !auth.token) {
+      failOnenote(opts.json, 'Auth error', auth.error);
+    }
+    const token = auth.token;
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await getOneNotePagePreview(token, pageId, user, scope);
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failOnenote(opts.json, 'Error', r.error);
     }
     if (opts.json) console.log(JSON.stringify(r.data, null, 2));
     else console.log(r.data.previewText ?? '');
@@ -416,12 +456,15 @@ addOneNoteRootOptions(
     resourceId: string,
     opts: { json?: boolean; token?: string; identity?: string; user?: string; group?: string; site?: string }
   ) => {
-    const token = await requireGraphAuth(opts);
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success || !auth.token) {
+      failOnenote(opts.json, 'Auth error', auth.error);
+    }
+    const token = auth.token;
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await getOneNoteResource(token, resourceId, user, scope);
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message || 'Failed to get resource'}`);
-      process.exit(1);
+      failOnenote(opts.json, 'Error', r.error, 'Failed to get resource');
     }
     console.log(opts.json ? JSON.stringify(r.data) : JSON.stringify(r.data, null, 2));
   }
@@ -461,15 +504,18 @@ addOneNoteRootOptions(
     cmd: any
   ) => {
     checkReadOnly(cmd);
-    const token = await requireGraphAuth(opts);
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success || !auth.token) {
+      failOnenote(opts.json, 'Auth error', auth.error);
+    }
+    const token = auth.token;
     const { user, scope } = parseOneNoteRoot(opts);
     const wd = process.cwd();
     const html = await readTextFileOrExit(resolve(wd, opts.file), '--file');
     const parts = parseOneNoteAttachSpecs(opts.attach ?? []);
     const r = await createOneNotePageMultipart(token, opts.section, html, parts, user, scope);
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message || 'Failed to create page'}`);
-      process.exit(1);
+      failOnenote(opts.json, 'Error', r.error, 'Failed to create page');
     }
     if (opts.json) console.log(JSON.stringify(r.data, null, 2));
     else {
@@ -505,13 +551,16 @@ addOneNoteRootOptions(
     cmd: any
   ) => {
     checkReadOnly(cmd);
-    const token = await requireGraphAuth(opts);
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success || !auth.token) {
+      failOnenote(opts.json, 'Auth error', auth.error);
+    }
+    const token = auth.token;
     const { user, scope } = parseOneNoteRoot(opts);
     const html = await readTextFileOrExit(opts.file, '--file');
     const r = await createOneNotePageFromHtml(token, opts.section, html, user, scope);
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failOnenote(opts.json, 'Error', r.error);
     }
     if (opts.json) console.log(JSON.stringify(r.data, null, 2));
     else {
@@ -545,12 +594,15 @@ addOneNoteRootOptions(
     group?: string;
     site?: string;
   }) => {
-    const token = await requireGraphAuth(opts);
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success || !auth.token) {
+      failOnenote(opts.json, 'Auth error', auth.error);
+    }
+    const token = auth.token;
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await getOneNoteNotebookFromWebUrl(token, opts.url, user, scope);
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failOnenote(opts.json, 'Error', r.error);
     }
     if (opts.json) console.log(JSON.stringify(r.data, null, 2));
     else {
@@ -570,12 +622,15 @@ addOneNoteRootOptions(
     .option('--user <email>', 'Target user')
 ).action(
   async (opts: { json?: boolean; token?: string; identity?: string; user?: string; group?: string; site?: string }) => {
-    const token = await requireGraphAuth(opts);
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success || !auth.token) {
+      failOnenote(opts.json, 'Auth error', auth.error);
+    }
+    const token = auth.token;
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await listOneNoteNotebooks(token, user, scope);
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failOnenote(opts.json, 'Error', r.error);
     }
     if (opts.json) console.log(JSON.stringify(r.data, null, 2));
     else {
@@ -601,12 +656,15 @@ addOneNoteRootOptions(
     notebookId: string,
     opts: { json?: boolean; token?: string; identity?: string; user?: string; group?: string; site?: string }
   ) => {
-    const token = await requireGraphAuth(opts);
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success || !auth.token) {
+      failOnenote(opts.json, 'Auth error', auth.error);
+    }
+    const token = auth.token;
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await getOneNoteNotebook(token, notebookId, user, scope);
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failOnenote(opts.json, 'Error', r.error);
     }
     if (opts.json) console.log(JSON.stringify(r.data, null, 2));
     else {
@@ -639,12 +697,15 @@ addOneNoteRootOptions(
     cmd: any
   ) => {
     checkReadOnly(cmd);
-    const token = await requireGraphAuth(opts);
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success || !auth.token) {
+      failOnenote(opts.json, 'Auth error', auth.error);
+    }
+    const token = auth.token;
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await createOneNoteNotebook(token, opts.name, user, scope);
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failOnenote(opts.json, 'Error', r.error);
     }
     if (opts.json) console.log(JSON.stringify(r.data, null, 2));
     else console.log(`Created notebook: ${r.data.displayName ?? r.data.id} (${r.data.id})`);
@@ -676,13 +737,16 @@ addOneNoteRootOptions(
     cmd: any
   ) => {
     checkReadOnly(cmd);
-    const token = await requireGraphAuth(opts);
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success || !auth.token) {
+      failOnenote(opts.json, 'Auth error', auth.error);
+    }
+    const token = auth.token;
     const { user, scope } = parseOneNoteRoot(opts);
     const patch = await readJsonFileOrExit<Record<string, unknown>>(opts.jsonFile, '--json-file');
     const r = await updateOneNoteNotebook(token, notebookId, patch, user, scope);
     if (!r.ok) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failOnenote(opts.json, 'Error', r.error);
     }
     if (opts.json) console.log(JSON.stringify(r.data ?? null, null, 2));
     else if (r.data) console.log(`Updated notebook: ${r.data.id}`);
@@ -753,12 +817,15 @@ addOneNoteRootOptions(
     group?: string;
     site?: string;
   }) => {
-    const token = await requireGraphAuth(opts);
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success || !auth.token) {
+      failOnenote(opts.json, 'Auth error', auth.error);
+    }
+    const token = auth.token;
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await listNotebookSectionGroups(token, opts.notebook, user, scope);
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failOnenote(opts.json, 'Error', r.error);
     }
     if (opts.json) console.log(JSON.stringify(r.data, null, 2));
     else {
@@ -783,12 +850,15 @@ addOneNoteRootOptions(
     sectionGroupId: string,
     opts: { json?: boolean; token?: string; identity?: string; user?: string; group?: string; site?: string }
   ) => {
-    const token = await requireGraphAuth(opts);
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success || !auth.token) {
+      failOnenote(opts.json, 'Auth error', auth.error);
+    }
+    const token = auth.token;
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await getOneNoteSectionGroup(token, sectionGroupId, user, scope);
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failOnenote(opts.json, 'Error', r.error);
     }
     if (opts.json) console.log(JSON.stringify(r.data, null, 2));
     else console.log(`${r.data.displayName ?? '(group)'}\t${r.data.id}`);
@@ -820,12 +890,15 @@ addOneNoteRootOptions(
     cmd: any
   ) => {
     checkReadOnly(cmd);
-    const token = await requireGraphAuth(opts);
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success || !auth.token) {
+      failOnenote(opts.json, 'Auth error', auth.error);
+    }
+    const token = auth.token;
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await createSectionGroupInNotebook(token, opts.notebook, opts.name, user, scope);
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failOnenote(opts.json, 'Error', r.error);
     }
     if (opts.json) console.log(JSON.stringify(r.data, null, 2));
     else console.log(`Created section group: ${r.data.displayName ?? r.data.id} (${r.data.id})`);
@@ -857,13 +930,16 @@ addOneNoteRootOptions(
     cmd: any
   ) => {
     checkReadOnly(cmd);
-    const token = await requireGraphAuth(opts);
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success || !auth.token) {
+      failOnenote(opts.json, 'Auth error', auth.error);
+    }
+    const token = auth.token;
     const { user, scope } = parseOneNoteRoot(opts);
     const patch = await readJsonFileOrExit<Record<string, unknown>>(opts.jsonFile, '--json-file');
     const r = await updateOneNoteSectionGroup(token, sectionGroupId, patch, user, scope);
     if (!r.ok) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failOnenote(opts.json, 'Error', r.error);
     }
     if (opts.json) console.log(JSON.stringify(r.data ?? null, null, 2));
     else if (r.data) console.log(`Updated section group: ${r.data.id}`);
@@ -929,7 +1005,11 @@ addOneNoteRootOptions(
     group?: string;
     site?: string;
   }) => {
-    const token = await requireGraphAuth(opts);
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success || !auth.token) {
+      failOnenote(opts.json, 'Auth error', auth.error);
+    }
+    const token = auth.token;
     const { user, scope } = parseOneNoteRoot(opts);
     const nb = opts.notebook?.trim();
     const sg = opts.sectionGroup?.trim();
@@ -941,8 +1021,7 @@ addOneNoteRootOptions(
       ? await listNotebookSections(token, nb, user, scope)
       : await listSectionsInSectionGroup(token, sg!, user, scope);
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failOnenote(opts.json, 'Error', r.error);
     }
     if (opts.json) console.log(JSON.stringify(r.data, null, 2));
     else {
@@ -967,12 +1046,15 @@ addOneNoteRootOptions(
     sectionId: string,
     opts: { json?: boolean; token?: string; identity?: string; user?: string; group?: string; site?: string }
   ) => {
-    const token = await requireGraphAuth(opts);
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success || !auth.token) {
+      failOnenote(opts.json, 'Auth error', auth.error);
+    }
+    const token = auth.token;
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await getOneNoteSection(token, sectionId, user, scope);
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failOnenote(opts.json, 'Error', r.error);
     }
     if (opts.json) console.log(JSON.stringify(r.data, null, 2));
     else console.log(`${r.data.displayName ?? '(section)'}\t${r.data.id}`);
@@ -1012,14 +1094,17 @@ addOneNoteRootOptions(
       console.error('Error: specify exactly one of --notebook or --section-group');
       process.exit(1);
     }
-    const token = await requireGraphAuth(opts);
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success || !auth.token) {
+      failOnenote(opts.json, 'Auth error', auth.error);
+    }
+    const token = auth.token;
     const { user, scope } = parseOneNoteRoot(opts);
     const r = nb
       ? await createSectionInNotebook(token, nb, opts.name, user, scope)
       : await createSectionInSectionGroup(token, sg!, opts.name, user, scope);
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failOnenote(opts.json, 'Error', r.error);
     }
     if (opts.json) console.log(JSON.stringify(r.data, null, 2));
     else console.log(`Created section: ${r.data.displayName ?? r.data.id} (${r.data.id})`);
@@ -1051,13 +1136,16 @@ addOneNoteRootOptions(
     cmd: any
   ) => {
     checkReadOnly(cmd);
-    const token = await requireGraphAuth(opts);
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success || !auth.token) {
+      failOnenote(opts.json, 'Auth error', auth.error);
+    }
+    const token = auth.token;
     const { user, scope } = parseOneNoteRoot(opts);
     const patch = await readJsonFileOrExit<Record<string, unknown>>(opts.jsonFile, '--json-file');
     const r = await updateOneNoteSection(token, sectionId, patch, user, scope);
     if (!r.ok) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failOnenote(opts.json, 'Error', r.error);
     }
     if (opts.json) console.log(JSON.stringify(r.data ?? null, null, 2));
     else if (r.data) console.log(`Updated section: ${r.data.id}`);
@@ -1125,15 +1213,18 @@ addOneNoteRootOptions(
     cmd: any
   ) => {
     checkReadOnly(cmd);
-    const token = await requireGraphAuth(opts);
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success || !auth.token) {
+      failOnenote(opts.json, 'Auth error', auth.error);
+    }
+    const token = auth.token;
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await copyOneNoteSectionToNotebook(token, sectionId, opts.notebook, user, scope, {
       copyToNotebookGroupId: opts.groupId,
       renameAs: opts.renameAs
     });
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failOnenote(opts.json, 'Error', r.error);
     }
     if (opts.json) {
       console.log(JSON.stringify(r.data, null, 2));
@@ -1176,15 +1267,18 @@ addOneNoteRootOptions(
     cmd: any
   ) => {
     checkReadOnly(cmd);
-    const token = await requireGraphAuth(opts);
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success || !auth.token) {
+      failOnenote(opts.json, 'Auth error', auth.error);
+    }
+    const token = auth.token;
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await copyOneNoteSectionToSectionGroup(token, sectionId, opts.sectionGroup, user, scope, {
       copyToGroupId: opts.groupId,
       renameAs: opts.renameAs
     });
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failOnenote(opts.json, 'Error', r.error);
     }
     if (opts.json) {
       console.log(JSON.stringify(r.data, null, 2));
@@ -1341,12 +1435,15 @@ addOneNoteRootOptions(
     cmd: any
   ) => {
     checkReadOnly(cmd);
-    const token = await requireGraphAuth(opts);
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success || !auth.token) {
+      failOnenote(opts.json, 'Auth error', auth.error);
+    }
+    const token = auth.token;
     const { user, scope } = parseOneNoteRoot(opts);
     const r = await copyOneNotePageToSection(token, pageId, opts.section, user, scope, opts.groupId);
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failOnenote(opts.json, 'Error', r.error);
     }
     if (opts.json) {
       console.log(JSON.stringify(r.data, null, 2));
@@ -1368,11 +1465,14 @@ onenoteCommand
   .option('--token <token>', 'Use a specific token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
   .action(async (operationLocationUrl: string, opts: { json?: boolean; token?: string; identity?: string }) => {
-    const token = await requireGraphAuth(opts);
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success || !auth.token) {
+      failOnenote(opts.json, 'Auth error', auth.error);
+    }
+    const token = auth.token;
     const r = await getOneNoteOperation(token, operationLocationUrl);
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failOnenote(opts.json, 'Error', r.error);
     }
     if (opts.json) console.log(JSON.stringify(r.data, null, 2));
     else {

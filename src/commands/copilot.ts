@@ -119,6 +119,7 @@ import {
   copilotSettingsPeoplePatch
 } from '../lib/copilot-graph-client.js';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
+import { toJsonError } from '../lib/json-error.js';
 import { readJsonFileOrExit } from '../lib/read-json-file.js';
 import { checkReadOnly } from '../lib/utils.js';
 
@@ -141,8 +142,12 @@ function printJson(data: unknown): void {
   console.log(JSON.stringify(data, null, 2));
 }
 
-function exitGraphError(prefix: string, message: string | undefined): never {
-  console.error(`${prefix}${message || 'Unknown error'}`);
+/** Every copilot subcommand's success output is unconditionally JSON (printJson) — there is no
+ *  --json opt-out here, JSON is the only output mode. Failures must match: print the structured
+ *  error envelope on stdout, not plain text on stderr, so a caller that always parses this
+ *  command's stdout as JSON doesn't get nothing valid to parse specifically on failure. */
+export function exitGraphError(message: string | undefined): never {
+  console.log(JSON.stringify({ error: toJsonError(message, 'Unknown error') }, null, 2));
   process.exit(1);
 }
 
@@ -201,7 +206,7 @@ copilotCommand
         }
       }
       const r = await copilotRetrieval(token, body, Boolean(opts.beta));
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       printJson(r.data);
     }
   );
@@ -250,7 +255,7 @@ copilotCommand
         }
       }
       const r = await copilotSearch(token, body, !opts.v1);
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       printJson(r.data);
     }
   );
@@ -265,7 +270,7 @@ copilotCommand
   .action(async (opts: { nextLink: string; token?: string; identity?: string }) => {
     const token = await resolveTokenOrExit(opts);
     const r = await copilotSearchNextPage(token, opts.nextLink);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     printJson(r.data);
   });
 
@@ -281,7 +286,7 @@ copilotCommand
   .action(async (opts: { odata?: string; beta?: boolean; v1?: boolean; token?: string; identity?: string }) => {
     const token = await resolveTokenOrExit(opts);
     const r = await copilotConversationsList(token, opts.odata, !opts.v1);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     printJson(r.data);
   });
 
@@ -301,7 +306,7 @@ copilotCommand
     ) => {
       const token = await resolveTokenOrExit(opts);
       const r = await copilotConversationGet(token, conversationId, opts.odata, !opts.v1);
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       printJson(r.data);
     }
   );
@@ -326,7 +331,7 @@ copilotCommand
       const token = await resolveTokenOrExit(opts);
       const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const r = await copilotConversationPatch(token, conversationId, body, !opts.v1, ifMatchHeader(opts.ifMatch));
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       if (r.data !== undefined) printJson(r.data);
       else console.log('OK (204 No Content)');
     }
@@ -350,7 +355,7 @@ copilotCommand
       checkReadOnly(cmd);
       const token = await resolveTokenOrExit(opts);
       const r = await copilotConversationDelete(token, conversationId, !opts.v1, ifMatchHeader(opts.ifMatch));
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       if (r.data !== undefined) printJson(r.data);
       else console.log('OK (204 No Content)');
     }
@@ -369,7 +374,7 @@ copilotCommand
     const token = await resolveTokenOrExit(opts);
     const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
     const r = await copilotConversationDeleteByThreadId(token, body, !opts.v1);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     if (r.data !== undefined) printJson(r.data);
     else console.log('OK (204 No Content)');
   });
@@ -390,7 +395,7 @@ copilotCommand
     ) => {
       const token = await resolveTokenOrExit(opts);
       const r = await copilotConversationMessagesList(token, conversationId, opts.odata, !opts.v1);
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       printJson(r.data);
     }
   );
@@ -413,7 +418,7 @@ copilotCommand
     ) => {
       const token = await resolveTokenOrExit(opts);
       const r = await copilotConversationMessageGet(token, conversationId, messageId, opts.odata, !opts.v1);
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       printJson(r.data);
     }
   );
@@ -437,7 +442,7 @@ copilotCommand
       const token = await resolveTokenOrExit(opts);
       const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const r = await copilotConversationMessageCreate(token, conversationId, body, !opts.v1);
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       printJson(r.data);
     }
   );
@@ -471,7 +476,7 @@ copilotCommand
         !opts.v1,
         ifMatchHeader(opts.ifMatch)
       );
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       if (r.data !== undefined) printJson(r.data);
       else console.log('OK (204 No Content)');
     }
@@ -503,7 +508,7 @@ copilotCommand
         !opts.v1,
         ifMatchHeader(opts.ifMatch)
       );
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       if (r.data !== undefined) printJson(r.data);
       else console.log('OK (204 No Content)');
     }
@@ -520,7 +525,7 @@ copilotCommand
   .action(async (opts: { odata?: string; beta?: boolean; v1?: boolean; token?: string; identity?: string }) => {
     const token = await resolveTokenOrExit(opts);
     const r = await copilotAgentsList(token, opts.odata, !opts.v1);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     printJson(r.data);
   });
 
@@ -540,7 +545,7 @@ copilotCommand
     ) => {
       const token = await resolveTokenOrExit(opts);
       const r = await copilotAgentGet(token, agentId, opts.odata, !opts.v1);
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       printJson(r.data);
     }
   );
@@ -556,7 +561,7 @@ copilotCommand
   .action(async (opts: { odata?: string; beta?: boolean; v1?: boolean; token?: string; identity?: string }) => {
     const token = await resolveTokenOrExit(opts);
     const r = await copilotSettingsGet(token, opts.odata, !opts.v1);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     printJson(r.data);
   });
 
@@ -573,7 +578,7 @@ copilotCommand
     const token = await resolveTokenOrExit(opts);
     const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
     const r = await copilotSettingsPatch(token, body, !opts.v1);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     if (r.data !== undefined) printJson(r.data);
     else console.log('OK (204 No Content)');
   });
@@ -589,7 +594,7 @@ copilotCommand
   .action(async (opts: { odata?: string; beta?: boolean; v1?: boolean; token?: string; identity?: string }) => {
     const token = await resolveTokenOrExit(opts);
     const r = await copilotSettingsPeopleGet(token, opts.odata, !opts.v1);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     printJson(r.data);
   });
 
@@ -606,7 +611,7 @@ copilotCommand
     const token = await resolveTokenOrExit(opts);
     const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
     const r = await copilotSettingsPeoplePatch(token, body, !opts.v1);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     if (r.data !== undefined) printJson(r.data);
     else console.log('OK (204 No Content)');
   });
@@ -622,7 +627,7 @@ copilotCommand
   .action(async (opts: { odata?: string; beta?: boolean; v1?: boolean; token?: string; identity?: string }) => {
     const token = await resolveTokenOrExit(opts);
     const r = await copilotSettingsEnhancedPersonalizationGet(token, opts.odata, !opts.v1);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     printJson(r.data);
   });
 
@@ -639,7 +644,7 @@ copilotCommand
     const token = await resolveTokenOrExit(opts);
     const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
     const r = await copilotSettingsEnhancedPersonalizationPatch(token, body, !opts.v1);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     if (r.data !== undefined) printJson(r.data);
     else console.log('OK (204 No Content)');
   });
@@ -656,7 +661,7 @@ copilotCommand
     checkReadOnly(cmd);
     const token = await resolveTokenOrExit(opts);
     const r = await copilotSettingsDelete(token, !opts.v1, ifMatchHeader(opts.ifMatch));
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     if (r.data !== undefined) printJson(r.data);
     else console.log('OK (204 No Content)');
   });
@@ -673,7 +678,7 @@ copilotCommand
     checkReadOnly(cmd);
     const token = await resolveTokenOrExit(opts);
     const r = await copilotSettingsPeopleDelete(token, !opts.v1, ifMatchHeader(opts.ifMatch));
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     if (r.data !== undefined) printJson(r.data);
     else console.log('OK (204 No Content)');
   });
@@ -690,7 +695,7 @@ copilotCommand
     checkReadOnly(cmd);
     const token = await resolveTokenOrExit(opts);
     const r = await copilotSettingsEnhancedPersonalizationDelete(token, !opts.v1, ifMatchHeader(opts.ifMatch));
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     if (r.data !== undefined) printJson(r.data);
     else console.log('OK (204 No Content)');
   });
@@ -704,7 +709,7 @@ copilotCommand
   .action(async (opts: { odata?: string; token?: string; identity?: string }) => {
     const token = await resolveTokenOrExit(opts);
     const r = await copilotAdminSettingsGet(token, opts.odata);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     printJson(r.data);
   });
 
@@ -719,7 +724,7 @@ copilotCommand
     const token = await resolveTokenOrExit(opts);
     const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
     const r = await copilotAdminSettingsPatch(token, body);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     if (r.data !== undefined) printJson(r.data);
     else console.log('OK (204 No Content)');
   });
@@ -733,7 +738,7 @@ copilotCommand
   .action(async (opts: { odata?: string; token?: string; identity?: string }) => {
     const token = await resolveTokenOrExit(opts);
     const r = await copilotAdminLimitedModeGet(token, opts.odata);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     printJson(r.data);
   });
 
@@ -748,7 +753,7 @@ copilotCommand
     const token = await resolveTokenOrExit(opts);
     const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
     const r = await copilotAdminLimitedModePatch(token, body);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     if (r.data !== undefined) printJson(r.data);
     else console.log('OK (204 No Content)');
   });
@@ -763,7 +768,7 @@ copilotCommand
     checkReadOnly(cmd);
     const token = await resolveTokenOrExit(opts);
     const r = await copilotAdminSettingsDelete(token, ifMatchHeader(opts.ifMatch));
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     if (r.data !== undefined) printJson(r.data);
     else console.log('OK (204 No Content)');
   });
@@ -778,7 +783,7 @@ copilotCommand
     checkReadOnly(cmd);
     const token = await resolveTokenOrExit(opts);
     const r = await copilotAdminLimitedModeDelete(token, ifMatchHeader(opts.ifMatch));
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     if (r.data !== undefined) printJson(r.data);
     else console.log('OK (204 No Content)');
   });
@@ -794,7 +799,7 @@ copilotCommand
   .action(async (opts: { odata?: string; beta?: boolean; v1?: boolean; token?: string; identity?: string }) => {
     const token = await resolveTokenOrExit(opts);
     const r = await copilotRootGet(token, opts.odata, !opts.v1);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     printJson(r.data);
   });
 
@@ -811,7 +816,7 @@ copilotCommand
     const token = await resolveTokenOrExit(opts);
     const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
     const r = await copilotRootPatch(token, body, !opts.v1);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     if (r.data !== undefined) printJson(r.data);
     else console.log('OK (204 No Content)');
   });
@@ -825,7 +830,7 @@ copilotCommand
   .action(async (opts: { odata?: string; token?: string; identity?: string }) => {
     const token = await resolveTokenOrExit(opts);
     const r = await copilotAdminNavGet(token, opts.odata);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     printJson(r.data);
   });
 
@@ -840,7 +845,7 @@ copilotCommand
     const token = await resolveTokenOrExit(opts);
     const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
     const r = await copilotAdminNavPatch(token, body);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     if (r.data !== undefined) printJson(r.data);
     else console.log('OK (204 No Content)');
   });
@@ -855,7 +860,7 @@ copilotCommand
     checkReadOnly(cmd);
     const token = await resolveTokenOrExit(opts);
     const r = await copilotAdminNavDelete(token, ifMatchHeader(opts.ifMatch));
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     if (r.data !== undefined) printJson(r.data);
     else console.log('OK (204 No Content)');
   });
@@ -869,7 +874,7 @@ copilotCommand
   .action(async (opts: { odata?: string; token?: string; identity?: string }) => {
     const token = await resolveTokenOrExit(opts);
     const r = await copilotAdminCatalogGet(token, opts.odata);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     printJson(r.data);
   });
 
@@ -884,7 +889,7 @@ copilotCommand
     const token = await resolveTokenOrExit(opts);
     const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
     const r = await copilotAdminCatalogPatch(token, body);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     if (r.data !== undefined) printJson(r.data);
     else console.log('OK (204 No Content)');
   });
@@ -899,7 +904,7 @@ copilotCommand
     checkReadOnly(cmd);
     const token = await resolveTokenOrExit(opts);
     const r = await copilotAdminCatalogDelete(token, ifMatchHeader(opts.ifMatch));
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     if (r.data !== undefined) printJson(r.data);
     else console.log('OK (204 No Content)');
   });
@@ -915,7 +920,7 @@ copilotCommand
   .action(async (opts: { odata?: string; beta?: boolean; v1?: boolean; token?: string; identity?: string }) => {
     const token = await resolveTokenOrExit(opts);
     const r = await copilotCommunicationsGet(token, opts.odata, !opts.v1);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     printJson(r.data);
   });
 
@@ -932,7 +937,7 @@ copilotCommand
     const token = await resolveTokenOrExit(opts);
     const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
     const r = await copilotCommunicationsPatch(token, body, !opts.v1);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     if (r.data !== undefined) printJson(r.data);
     else console.log('OK (204 No Content)');
   });
@@ -949,7 +954,7 @@ copilotCommand
     checkReadOnly(cmd);
     const token = await resolveTokenOrExit(opts);
     const r = await copilotCommunicationsDelete(token, !opts.v1, ifMatchHeader(opts.ifMatch));
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     if (r.data !== undefined) printJson(r.data);
     else console.log('OK (204 No Content)');
   });
@@ -964,7 +969,7 @@ copilotCommand
   .action(async (opts: { odata?: string; beta?: boolean; token?: string; identity?: string }) => {
     const token = await resolveTokenOrExit(opts);
     const r = await copilotInteractionHistoryNavGet(token, opts.odata, Boolean(opts.beta));
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     printJson(r.data);
   });
 
@@ -980,7 +985,7 @@ copilotCommand
     const token = await resolveTokenOrExit(opts);
     const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
     const r = await copilotInteractionHistoryNavPatch(token, body, Boolean(opts.beta));
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     if (r.data !== undefined) printJson(r.data);
     else console.log('OK (204 No Content)');
   });
@@ -996,7 +1001,7 @@ copilotCommand
     checkReadOnly(cmd);
     const token = await resolveTokenOrExit(opts);
     const r = await copilotInteractionHistoryNavDelete(token, Boolean(opts.beta), ifMatchHeader(opts.ifMatch));
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     if (r.data !== undefined) printJson(r.data);
     else console.log('OK (204 No Content)');
   });
@@ -1012,7 +1017,7 @@ copilotCommand
   .action(async (opts: { odata?: string; beta?: boolean; v1?: boolean; token?: string; identity?: string }) => {
     const token = await resolveTokenOrExit(opts);
     const r = await copilotConversationsCount(token, opts.odata, !opts.v1);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     printJson(r.data);
   });
 
@@ -1032,7 +1037,7 @@ copilotCommand
     ) => {
       const token = await resolveTokenOrExit(opts);
       const r = await copilotConversationMessagesCount(token, conversationId, opts.odata, !opts.v1);
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       printJson(r.data);
     }
   );
@@ -1048,7 +1053,7 @@ copilotCommand
   .action(async (opts: { odata?: string; beta?: boolean; v1?: boolean; token?: string; identity?: string }) => {
     const token = await resolveTokenOrExit(opts);
     const r = await copilotAgentsCount(token, opts.odata, !opts.v1);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     printJson(r.data);
   });
 
@@ -1061,7 +1066,7 @@ copilotCommand
   .action(async (opts: { odata?: string; token?: string; identity?: string }) => {
     const token = await resolveTokenOrExit(opts);
     const r = await copilotPackagesCount(token, opts.odata);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     printJson(r.data);
   });
 
@@ -1076,7 +1081,7 @@ copilotCommand
     checkReadOnly(cmd);
     const token = await resolveTokenOrExit(opts);
     const r = await copilotPackageZipDelete(token, packageId, ifMatchHeader(opts.ifMatch));
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     if (r.data !== undefined) printJson(r.data);
     else console.log('OK (204 No Content)');
   });
@@ -1093,7 +1098,7 @@ copilotCommand
   .action(async (opts: { odata?: string; beta?: boolean; token?: string; identity?: string }) => {
     const token = await resolveTokenOrExit(opts);
     const r = await copilotInteractionsTenantExportList(token, opts.odata, Boolean(opts.beta));
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     printJson(r.data);
   });
 
@@ -1108,7 +1113,7 @@ copilotCommand
     checkReadOnly(cmd);
     const token = await resolveTokenOrExit(opts);
     const r = await copilotConversationCreate(token, !opts.v1);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     printJson(r.data);
   });
 
@@ -1159,7 +1164,7 @@ copilotCommand
         };
       }
       const r = await copilotConversationChat(token, conversationId, body, !opts.v1);
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       printJson(r.data);
     }
   );
@@ -1208,7 +1213,7 @@ copilotCommand
         };
       }
       const r = await copilotConversationChatOverStream(token, conversationId, body, !opts.v1);
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       console.log(r.data ?? '');
     }
   );
@@ -1227,7 +1232,7 @@ copilotCommand
   .action(async (opts: { user: string; odata?: string; beta?: boolean; token?: string; identity?: string }) => {
     const token = await resolveTokenOrExit(opts);
     const r = await copilotInteractionsExportList(token, opts.user, opts.odata, Boolean(opts.beta));
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     printJson(r.data);
   });
 
@@ -1252,7 +1257,7 @@ copilotCommand
     }) => {
       const token = await resolveTokenOrExit(opts);
       const r = await copilotMeetingInsightsList(token, opts.user, opts.meeting, opts.odata, Boolean(opts.beta));
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       printJson(r.data);
     }
   );
@@ -1287,7 +1292,7 @@ copilotCommand
         opts.odata,
         Boolean(opts.beta)
       );
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       printJson(r.data);
     }
   );
@@ -1312,7 +1317,7 @@ copilotCommand
     }) => {
       const token = await resolveTokenOrExit(opts);
       const r = await copilotMeetingAiInsightsCount(token, opts.user, opts.meeting, opts.odata, Boolean(opts.beta));
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       printJson(r.data);
     }
   );
@@ -1335,7 +1340,7 @@ copilotCommand
       const token = await resolveTokenOrExit(opts);
       const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const r = await copilotMeetingAiInsightsCreate(token, opts.user, opts.meeting, body, Boolean(opts.beta));
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       printJson(r.data);
     }
   );
@@ -1377,7 +1382,7 @@ copilotCommand
         Boolean(opts.beta),
         ifMatchHeader(opts.ifMatch)
       );
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       if (r.data !== undefined) printJson(r.data);
       else console.log('OK (204 No Content)');
     }
@@ -1416,7 +1421,7 @@ copilotCommand
         Boolean(opts.beta),
         ifMatchHeader(opts.ifMatch)
       );
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       if (r.data !== undefined) printJson(r.data);
       else console.log('OK (204 No Content)');
     }
@@ -1445,7 +1450,7 @@ reportsCmd.addCommand(
       }
       const beta = Boolean(opts.beta) && !opts.v1;
       const r = await copilotReportGet(token, 'getMicrosoft365CopilotUserCountSummary', period, beta);
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       printJson(r.data);
     })
 );
@@ -1469,7 +1474,7 @@ reportsCmd.addCommand(
       }
       const beta = Boolean(opts.beta) && !opts.v1;
       const r = await copilotReportGet(token, 'getMicrosoft365CopilotUserCountTrend', period, beta);
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       printJson(r.data);
     })
 );
@@ -1493,7 +1498,7 @@ reportsCmd.addCommand(
       }
       const beta = Boolean(opts.beta) && !opts.v1;
       const r = await copilotReportGet(token, 'getMicrosoft365CopilotUsageUserDetail', period, beta);
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       printJson(r.data);
     })
 );
@@ -1510,7 +1515,7 @@ reportsCmd.addCommand(
       const token = await resolveTokenOrExit(opts);
       const beta = Boolean(opts.beta) && !opts.v1;
       const r = await copilotReportsNavGet(token, opts.odata, beta);
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       printJson(r.data);
     })
 );
@@ -1530,7 +1535,7 @@ reportsCmd.addCommand(
         const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
         const beta = Boolean(opts.beta) && !opts.v1;
         const r = await copilotReportsNavPatch(token, body, beta);
-        if (!r.ok) exitGraphError('Error: ', r.error?.message);
+        if (!r.ok) exitGraphError(r.error?.message);
         if (r.data !== undefined) printJson(r.data);
         else console.log('OK (204 No Content)');
       }
@@ -1551,7 +1556,7 @@ reportsCmd.addCommand(
         const token = await resolveTokenOrExit(opts);
         const beta = Boolean(opts.beta) && !opts.v1;
         const r = await copilotReportsNavDelete(token, beta, ifMatchHeader(opts.ifMatch));
-        if (!r.ok) exitGraphError('Error: ', r.error?.message);
+        if (!r.ok) exitGraphError(r.error?.message);
         if (r.data !== undefined) printJson(r.data);
         else console.log('OK (204 No Content)');
       }
@@ -1573,7 +1578,7 @@ packagesCmd
   .action(async (opts: { odata?: string; token?: string; identity?: string }) => {
     const token = await resolveTokenOrExit(opts);
     const r = await copilotPackagesList(token, opts.odata);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     printJson(r.data);
   });
 
@@ -1588,7 +1593,7 @@ packagesCmd
     const token = await resolveTokenOrExit(opts);
     const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
     const r = await copilotPackagesCreate(token, body);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     printJson(r.data);
   });
 
@@ -1601,7 +1606,7 @@ packagesCmd
   .action(async (packageId: string, opts: AuthOpts) => {
     const token = await resolveTokenOrExit(opts);
     const r = await copilotPackagesGet(token, packageId);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     printJson(r.data);
   });
 
@@ -1617,7 +1622,7 @@ packagesCmd
     const token = await resolveTokenOrExit(opts);
     const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
     const r = await copilotPackagesUpdate(token, packageId, body);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     if (r.data !== undefined) printJson(r.data);
     else console.log('OK (204 No Content)');
   });
@@ -1632,7 +1637,7 @@ packagesCmd
     checkReadOnly(cmd);
     const token = await resolveTokenOrExit(opts);
     const r = await copilotPackagesBlock(token, packageId);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     if (r.data !== undefined) printJson(r.data);
     else console.log('OK (204 No Content)');
   });
@@ -1647,7 +1652,7 @@ packagesCmd
     checkReadOnly(cmd);
     const token = await resolveTokenOrExit(opts);
     const r = await copilotPackagesUnblock(token, packageId);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     if (r.data !== undefined) printJson(r.data);
     else console.log('OK (204 No Content)');
   });
@@ -1663,7 +1668,7 @@ packagesCmd
     checkReadOnly(cmd);
     const token = await resolveTokenOrExit(opts);
     const r = await copilotPackagesReassign(token, packageId, opts.newOwnerUserId);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     if (r.data !== undefined) printJson(r.data);
     else console.log('OK (204 No Content)');
   });
@@ -1679,7 +1684,7 @@ packagesCmd
     checkReadOnly(cmd);
     const token = await resolveTokenOrExit(opts);
     const r = await copilotPackagesDelete(token, packageId, ifMatchHeader(opts.ifMatch));
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     if (r.data !== undefined) printJson(r.data);
     else console.log('OK (204 No Content)');
   });
@@ -1706,8 +1711,8 @@ packagesCmd
       }
     }
     const r = await copilotPackageZipDownload(token, packageId);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
-    if (!r.data) exitGraphError('Error: ', 'Empty response');
+    if (!r.ok) exitGraphError(r.error?.message);
+    if (!r.data) exitGraphError('Empty response');
     await writeFile(outPath, r.data);
     console.log(`Wrote ${r.data.byteLength} bytes to ${opts.output}`);
   });
@@ -1725,7 +1730,7 @@ packagesCmd
     const token = await resolveTokenOrExit(opts);
     const bytes = new Uint8Array(await readFile(resolve(process.cwd(), opts.file.trim())));
     const r = await copilotPackageZipUpload(token, packageId, bytes, opts.contentType ?? 'application/zip');
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     if (r.data !== undefined) printJson(r.data);
     else console.log('OK (204 No Content)');
   });
@@ -1747,7 +1752,7 @@ activityFeedCmd
   .action(async (opts: { odata?: string; beta?: boolean; v1?: boolean; token?: string; identity?: string }) => {
     const token = await resolveTokenOrExit(opts);
     const r = await copilotRealtimeActivityFeedGet(token, opts.odata, !opts.v1);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     printJson(r.data);
   });
 
@@ -1776,7 +1781,7 @@ activityFeedCmd
       const token = await resolveTokenOrExit(opts);
       const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const r = await copilotRealtimeActivityFeedPatch(token, body, !opts.v1, ifMatchHeader(opts.ifMatch));
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       if (r.data !== undefined) printJson(r.data);
       else console.log('OK (204 No Content)');
     }
@@ -1794,7 +1799,7 @@ activityFeedCmd
     checkReadOnly(cmd);
     const token = await resolveTokenOrExit(opts);
     const r = await copilotRealtimeActivityFeedDelete(token, !opts.v1, ifMatchHeader(opts.ifMatch));
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     if (r.data !== undefined) printJson(r.data);
     else console.log('OK (204 No Content)');
   });
@@ -1810,7 +1815,7 @@ activityFeedCmd
   .action(async (opts: { odata?: string; beta?: boolean; v1?: boolean; token?: string; identity?: string }) => {
     const token = await resolveTokenOrExit(opts);
     const r = await copilotRealtimeMeetingsList(token, opts.odata, !opts.v1);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     printJson(r.data);
   });
 
@@ -1825,7 +1830,7 @@ activityFeedCmd
   .action(async (opts: { odata?: string; beta?: boolean; v1?: boolean; token?: string; identity?: string }) => {
     const token = await resolveTokenOrExit(opts);
     const r = await copilotRealtimeMeetingsCount(token, opts.odata, !opts.v1);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     printJson(r.data);
   });
 
@@ -1842,7 +1847,7 @@ activityFeedCmd
     const token = await resolveTokenOrExit(opts);
     const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
     const r = await copilotRealtimeMeetingCreate(token, body, !opts.v1);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     printJson(r.data);
   });
 
@@ -1862,7 +1867,7 @@ activityFeedCmd
     ) => {
       const token = await resolveTokenOrExit(opts);
       const r = await copilotRealtimeMeetingGet(token, meetingId, opts.odata, !opts.v1);
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       printJson(r.data);
     }
   );
@@ -1894,7 +1899,7 @@ activityFeedCmd
       const token = await resolveTokenOrExit(opts);
       const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const r = await copilotRealtimeMeetingPatch(token, meetingId, body, !opts.v1, ifMatchHeader(opts.ifMatch));
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       if (r.data !== undefined) printJson(r.data);
       else console.log('OK (204 No Content)');
     }
@@ -1918,7 +1923,7 @@ activityFeedCmd
       checkReadOnly(cmd);
       const token = await resolveTokenOrExit(opts);
       const r = await copilotRealtimeMeetingDelete(token, meetingId, !opts.v1, ifMatchHeader(opts.ifMatch));
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       if (r.data !== undefined) printJson(r.data);
       else console.log('OK (204 No Content)');
     }
@@ -1935,7 +1940,7 @@ activityFeedCmd
   .action(async (opts: { odata?: string; beta?: boolean; v1?: boolean; token?: string; identity?: string }) => {
     const token = await resolveTokenOrExit(opts);
     const r = await copilotRealtimeSubscriptionsList(token, opts.odata, !opts.v1);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     printJson(r.data);
   });
 
@@ -1950,7 +1955,7 @@ activityFeedCmd
   .action(async (opts: { odata?: string; beta?: boolean; v1?: boolean; token?: string; identity?: string }) => {
     const token = await resolveTokenOrExit(opts);
     const r = await copilotRealtimeSubscriptionsCount(token, opts.odata, !opts.v1);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     printJson(r.data);
   });
 
@@ -1967,7 +1972,7 @@ activityFeedCmd
     const token = await resolveTokenOrExit(opts);
     const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
     const r = await copilotRealtimeSubscriptionCreate(token, body, !opts.v1);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     printJson(r.data);
   });
 
@@ -1987,7 +1992,7 @@ activityFeedCmd
     ) => {
       const token = await resolveTokenOrExit(opts);
       const r = await copilotRealtimeSubscriptionGet(token, subscriptionId, opts.odata, !opts.v1);
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       printJson(r.data);
     }
   );
@@ -2025,7 +2030,7 @@ activityFeedCmd
         !opts.v1,
         ifMatchHeader(opts.ifMatch)
       );
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       if (r.data !== undefined) printJson(r.data);
       else console.log('OK (204 No Content)');
     }
@@ -2049,7 +2054,7 @@ activityFeedCmd
       checkReadOnly(cmd);
       const token = await resolveTokenOrExit(opts);
       const r = await copilotRealtimeSubscriptionDelete(token, subscriptionId, !opts.v1, ifMatchHeader(opts.ifMatch));
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       if (r.data !== undefined) printJson(r.data);
       else console.log('OK (204 No Content)');
     }
@@ -2075,7 +2080,7 @@ activityFeedCmd
         body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       }
       const r = await copilotRealtimeSubscriptionGetArtifacts(token, subscriptionId, body, !opts.v1);
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       printJson(r.data);
     }
   );
@@ -2096,7 +2101,7 @@ activityFeedCmd
     ) => {
       const token = await resolveTokenOrExit(opts);
       const r = await copilotRealtimeTranscriptsList(token, meetingId, opts.odata, !opts.v1);
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       printJson(r.data);
     }
   );
@@ -2117,7 +2122,7 @@ activityFeedCmd
     ) => {
       const token = await resolveTokenOrExit(opts);
       const r = await copilotRealtimeTranscriptsCount(token, meetingId, opts.odata, !opts.v1);
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       printJson(r.data);
     }
   );
@@ -2141,7 +2146,7 @@ activityFeedCmd
       const token = await resolveTokenOrExit(opts);
       const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const r = await copilotRealtimeTranscriptCreate(token, meetingId, body, !opts.v1);
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       printJson(r.data);
     }
   );
@@ -2164,7 +2169,7 @@ activityFeedCmd
     ) => {
       const token = await resolveTokenOrExit(opts);
       const r = await copilotRealtimeTranscriptGet(token, meetingId, transcriptId, opts.odata, !opts.v1);
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       printJson(r.data);
     }
   );
@@ -2205,7 +2210,7 @@ activityFeedCmd
         !opts.v1,
         ifMatchHeader(opts.ifMatch)
       );
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       if (r.data !== undefined) printJson(r.data);
       else console.log('OK (204 No Content)');
     }
@@ -2237,7 +2242,7 @@ activityFeedCmd
         !opts.v1,
         ifMatchHeader(opts.ifMatch)
       );
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       if (r.data !== undefined) printJson(r.data);
       else console.log('OK (204 No Content)');
     }
@@ -2258,7 +2263,7 @@ aiUserCmd
   .action(async (opts: { odata?: string; beta?: boolean; v1?: boolean; token?: string; identity?: string }) => {
     const token = await resolveTokenOrExit(opts);
     const r = await copilotAiUsersList(token, opts.odata, !opts.v1);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     printJson(r.data);
   });
 
@@ -2273,7 +2278,7 @@ aiUserCmd
   .action(async (opts: { odata?: string; beta?: boolean; v1?: boolean; token?: string; identity?: string }) => {
     const token = await resolveTokenOrExit(opts);
     const r = await copilotAiUsersCount(token, opts.odata, !opts.v1);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     printJson(r.data);
   });
 
@@ -2290,7 +2295,7 @@ aiUserCmd
     const token = await resolveTokenOrExit(opts);
     const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
     const r = await copilotAiUserCreate(token, body, !opts.v1);
-    if (!r.ok) exitGraphError('Error: ', r.error?.message);
+    if (!r.ok) exitGraphError(r.error?.message);
     printJson(r.data);
   });
 
@@ -2310,7 +2315,7 @@ aiUserCmd
     ) => {
       const token = await resolveTokenOrExit(opts);
       const r = await copilotAiUserGet(token, aiUserId, opts.odata, !opts.v1);
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       printJson(r.data);
     }
   );
@@ -2342,7 +2347,7 @@ aiUserCmd
       const token = await resolveTokenOrExit(opts);
       const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const r = await copilotAiUserPatch(token, aiUserId, body, !opts.v1, ifMatchHeader(opts.ifMatch));
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       if (r.data !== undefined) printJson(r.data);
       else console.log('OK (204 No Content)');
     }
@@ -2366,7 +2371,7 @@ aiUserCmd
       checkReadOnly(cmd);
       const token = await resolveTokenOrExit(opts);
       const r = await copilotAiUserDelete(token, aiUserId, !opts.v1, ifMatchHeader(opts.ifMatch));
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       if (r.data !== undefined) printJson(r.data);
       else console.log('OK (204 No Content)');
     }
@@ -2385,7 +2390,7 @@ aiUserCmd
     async (opts: { user: string; odata?: string; beta?: boolean; v1?: boolean; token?: string; identity?: string }) => {
       const token = await resolveTokenOrExit(opts);
       const r = await copilotAiUserInteractionHistoryGet(token, opts.user, opts.odata, !opts.v1);
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       printJson(r.data);
     }
   );
@@ -2408,7 +2413,7 @@ aiUserCmd
       const token = await resolveTokenOrExit(opts);
       const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const r = await copilotAiUserInteractionHistoryPatch(token, opts.user, body, !opts.v1);
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       if (r.data !== undefined) printJson(r.data);
       else console.log('OK (204 No Content)');
     }
@@ -2431,7 +2436,7 @@ aiUserCmd
       checkReadOnly(cmd);
       const token = await resolveTokenOrExit(opts);
       const r = await copilotAiUserInteractionHistoryDelete(token, opts.user, !opts.v1, ifMatchHeader(opts.ifMatch));
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       if (r.data !== undefined) printJson(r.data);
       else console.log('OK (204 No Content)');
     }
@@ -2450,7 +2455,7 @@ aiUserCmd
     async (opts: { user: string; odata?: string; beta?: boolean; v1?: boolean; token?: string; identity?: string }) => {
       const token = await resolveTokenOrExit(opts);
       const r = await copilotAiUserOnlineMeetingsList(token, opts.user, opts.odata, !opts.v1);
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       printJson(r.data);
     }
   );
@@ -2468,7 +2473,7 @@ aiUserCmd
     async (opts: { user: string; odata?: string; beta?: boolean; v1?: boolean; token?: string; identity?: string }) => {
       const token = await resolveTokenOrExit(opts);
       const r = await copilotAiUserOnlineMeetingsCount(token, opts.user, opts.odata, !opts.v1);
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       printJson(r.data);
     }
   );
@@ -2491,7 +2496,7 @@ aiUserCmd
       const token = await resolveTokenOrExit(opts);
       const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const r = await copilotAiUserOnlineMeetingCreate(token, opts.user, body, !opts.v1);
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       printJson(r.data);
     }
   );
@@ -2513,7 +2518,7 @@ aiUserCmd
     ) => {
       const token = await resolveTokenOrExit(opts);
       const r = await copilotAiUserOnlineMeetingGet(token, opts.user, onlineMeetingId, opts.odata, !opts.v1);
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       printJson(r.data);
     }
   );
@@ -2554,7 +2559,7 @@ aiUserCmd
         !opts.v1,
         ifMatchHeader(opts.ifMatch)
       );
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       if (r.data !== undefined) printJson(r.data);
       else console.log('OK (204 No Content)');
     }
@@ -2585,7 +2590,7 @@ aiUserCmd
         !opts.v1,
         ifMatchHeader(opts.ifMatch)
       );
-      if (!r.ok) exitGraphError('Error: ', r.error?.message);
+      if (!r.ok) exitGraphError(r.error?.message);
       if (r.data !== undefined) printJson(r.data);
       else console.log('OK (204 No Content)');
     }

@@ -54,11 +54,36 @@ import {
   patchOnlineMeetingConversationMessageReply,
   patchOnlineMeetingConversationMessageReplyReaction
 } from '../lib/graph-viva-meeting-engage-deep.js';
+import { toJsonError } from '../lib/json-error.js';
 import { checkReadOnly } from '../lib/utils.js';
 
 async function readJsonBody(path: string): Promise<unknown> {
   const raw = await readFile(path.trim(), 'utf8');
   return JSON.parse(raw) as unknown;
+}
+
+/**
+ * Prints the `--json` structured error envelope (or the matching plain-text "Auth error: ..." /
+ * "Error: ...") for the two failure shapes the ~7 `--json`-supporting list subcommands in this
+ * file hit — an auth failure from `resolveGraphAuth` (a plain string) or a Graph API failure
+ * (`GraphResponse.error`, a GraphError-shaped object) — then exits 1. Without this, a `--json`
+ * list call that fails printed plain text on stderr instead of `{ error: {...} } ` on stdout like
+ * every other --json-supporting command, leaving an agent piping the output nothing valid to parse.
+ */
+function failVivaExtra(
+  json: boolean | undefined,
+  prefix: 'Auth error' | 'Error',
+  error: unknown,
+  fallbackMessage?: string
+): never {
+  if (json) {
+    console.log(JSON.stringify({ error: toJsonError(error, fallbackMessage) }, null, 2));
+  } else {
+    const message =
+      (typeof error === 'string' ? error : (error as { message?: string } | undefined)?.message) ?? fallbackMessage;
+    console.error(`${prefix}: ${message}`);
+  }
+  process.exit(1);
 }
 
 type ODataOpts = {
@@ -291,13 +316,11 @@ export function registerVivaExtraSubcommands(viva: Command): void {
   ).action(async (opts: ODataOpts & { json?: boolean; token?: string; identity?: string; user?: string }) => {
     const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success || !auth.token) {
-      console.error(`Auth error: ${auth.error}`);
-      process.exit(1);
+      failVivaExtra(opts.json, 'Auth error', auth.error);
     }
     const r = await listWorkHoursOccurrences(auth.token, opts.user, odataQ(opts));
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message || 'List failed'}`);
-      process.exit(1);
+      failVivaExtra(opts.json, 'Error', r.error, 'List failed');
     }
     if (opts.json) console.log(JSON.stringify(r.data, null, 2));
     else for (const row of r.data) console.log(JSON.stringify(row));
@@ -450,13 +473,11 @@ export function registerVivaExtraSubcommands(viva: Command): void {
   ).action(async (opts: ODataOpts & { json?: boolean; token?: string; identity?: string; user?: string }) => {
     const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success || !auth.token) {
-      console.error(`Auth error: ${auth.error}`);
-      process.exit(1);
+      failVivaExtra(opts.json, 'Auth error', auth.error);
     }
     const r = await listWorkHoursRecurrences(auth.token, opts.user, odataQ(opts));
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message || 'List failed'}`);
-      process.exit(1);
+      failVivaExtra(opts.json, 'Error', r.error, 'List failed');
     }
     if (opts.json) console.log(JSON.stringify(r.data, null, 2));
     else for (const row of r.data) console.log(JSON.stringify(row));
@@ -555,13 +576,11 @@ export function registerVivaExtraSubcommands(viva: Command): void {
   ).action(async (opts: ODataOpts & { json?: boolean; token?: string; identity?: string }) => {
     const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success || !auth.token) {
-      console.error(`Auth error: ${auth.error}`);
-      process.exit(1);
+      failVivaExtra(opts.json, 'Auth error', auth.error);
     }
     const r = await listOnlineMeetingEngagementConversations(auth.token, odataQ(opts));
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message || 'List failed'}`);
-      process.exit(1);
+      failVivaExtra(opts.json, 'Error', r.error, 'List failed');
     }
     if (opts.json) console.log(JSON.stringify(r.data, null, 2));
     else for (const row of r.data) console.log(JSON.stringify(row));
@@ -680,13 +699,11 @@ export function registerVivaExtraSubcommands(viva: Command): void {
   ).action(async (opts: ODataOpts & { conversationId: string; json?: boolean; token?: string; identity?: string }) => {
     const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success || !auth.token) {
-      console.error(`Auth error: ${auth.error}`);
-      process.exit(1);
+      failVivaExtra(opts.json, 'Auth error', auth.error);
     }
     const r = await listOnlineMeetingEngagementConversationMessages(auth.token, opts.conversationId, odataQ(opts));
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message || 'List failed'}`);
-      process.exit(1);
+      failVivaExtra(opts.json, 'Error', r.error, 'List failed');
     }
     if (opts.json) console.log(JSON.stringify(r.data, null, 2));
     else for (const row of r.data) console.log(JSON.stringify(row));
@@ -882,8 +899,7 @@ export function registerVivaExtraSubcommands(viva: Command): void {
     ) => {
       const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
       if (!auth.success || !auth.token) {
-        console.error(`Auth error: ${auth.error}`);
-        process.exit(1);
+        failVivaExtra(opts.json, 'Auth error', auth.error);
       }
       const r = await listOnlineMeetingConversationMessageReactions(
         auth.token,
@@ -892,8 +908,7 @@ export function registerVivaExtraSubcommands(viva: Command): void {
         odataQ(opts)
       );
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message || 'List failed'}`);
-        process.exit(1);
+        failVivaExtra(opts.json, 'Error', r.error, 'List failed');
       }
       if (opts.json) console.log(JSON.stringify(r.data, null, 2));
       else for (const row of r.data) console.log(JSON.stringify(row));
@@ -1083,8 +1098,7 @@ export function registerVivaExtraSubcommands(viva: Command): void {
     ) => {
       const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
       if (!auth.success || !auth.token) {
-        console.error(`Auth error: ${auth.error}`);
-        process.exit(1);
+        failVivaExtra(opts.json, 'Auth error', auth.error);
       }
       const r = await listOnlineMeetingConversationMessageReplies(
         auth.token,
@@ -1093,8 +1107,7 @@ export function registerVivaExtraSubcommands(viva: Command): void {
         odataQ(opts)
       );
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message || 'List failed'}`);
-        process.exit(1);
+        failVivaExtra(opts.json, 'Error', r.error, 'List failed');
       }
       if (opts.json) console.log(JSON.stringify(r.data, null, 2));
       else for (const row of r.data) console.log(JSON.stringify(row));
@@ -1362,8 +1375,7 @@ export function registerVivaExtraSubcommands(viva: Command): void {
     ) => {
       const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
       if (!auth.success || !auth.token) {
-        console.error(`Auth error: ${auth.error}`);
-        process.exit(1);
+        failVivaExtra(opts.json, 'Auth error', auth.error);
       }
       const r = await listOnlineMeetingConversationMessageReplyReactions(
         auth.token,
@@ -1373,8 +1385,7 @@ export function registerVivaExtraSubcommands(viva: Command): void {
         odataQ(opts)
       );
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message || 'List failed'}`);
-        process.exit(1);
+        failVivaExtra(opts.json, 'Error', r.error, 'List failed');
       }
       if (opts.json) console.log(JSON.stringify(r.data, null, 2));
       else for (const row of r.data) console.log(JSON.stringify(row));

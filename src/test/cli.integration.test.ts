@@ -131,6 +131,7 @@ import { approvalsCommand } from '../commands/approvals.js';
 import { autoReplyCommand } from '../commands/auto-reply.js';
 import { bookingsCommand } from '../commands/bookings.js';
 import { calendarCommand } from '../commands/calendar.js';
+import { contactsCommand } from '../commands/contacts.js';
 import { counterCommand } from '../commands/counter.js';
 import { createEventCommand } from '../commands/create-event.js';
 import { delegatesCommand } from '../commands/delegates.js';
@@ -144,6 +145,7 @@ import { forwardEventCommand } from '../commands/forward-event.js';
 import { groupsCommand } from '../commands/groups.js';
 import { loginCommand } from '../commands/login.js';
 import { mailCommand } from '../commands/mail.js';
+import { onenoteCommand } from '../commands/onenote.js';
 import { oofCommand } from '../commands/oof.js';
 import { peopleCommand } from '../commands/people.js';
 import { respondCommand } from '../commands/respond.js';
@@ -159,6 +161,7 @@ import { suggestCommand } from '../commands/suggest.js';
 import { todoCommand } from '../commands/todo.js';
 import { updateCommand } from '../commands/update.js';
 import { updateEventCommand } from '../commands/update-event.js';
+import { vivaCommand } from '../commands/viva.js';
 import { whoamiCommand } from '../commands/whoami.js';
 
 // Helper to call a command action with options
@@ -223,6 +226,9 @@ function makeProgram(): Command {
   p.addCommand(bookingsCommand);
   p.addCommand(approvalsCommand);
   p.addCommand(groupsCommand);
+  p.addCommand(onenoteCommand);
+  p.addCommand(contactsCommand);
+  p.addCommand(vivaCommand);
   installM365HelpOnCommandTree(p);
   return p;
 }
@@ -370,6 +376,38 @@ function resetSharedCommandOptionLeaks() {
   // would misroute the --json error-envelope branch.
   for (const sub of groupsCommand.commands) {
     sub.setOptionValue('json', false);
+  }
+  // onenote has flat subcommands (notebooks, sections, pages, ...) plus three nested command
+  // groups (notebook, section-group, section) each with their own subcommands; --json/--confirm
+  // leaking between tests would misroute the --json error-envelope branch or the delete
+  // confirmation guard. setOptionValue on a command that doesn't declare that option is a no-op
+  // (it just stores an unused key), so it's safe to sweep both levels unconditionally.
+  for (const sub of onenoteCommand.commands) {
+    sub.setOptionValue('json', false);
+    sub.setOptionValue('confirm', false);
+    for (const nested of sub.commands) {
+      nested.setOptionValue('json', false);
+      nested.setOptionValue('confirm', false);
+    }
+  }
+  // viva has many subcommands (including ones registered by viva-extra/tenant-subcommands.ts),
+  // each its own shared Command instance; --json leaking between tests would misroute the --json
+  // error-envelope branch.
+  for (const sub of vivaCommand.commands) {
+    sub.setOptionValue('json', false);
+  }
+  // contacts has flat subcommands (folders, list, show, create, update, delete, search, delta)
+  // plus nested command groups (folder, extension, photo, attachments, merge-suggestions) each
+  // with their own subcommands; --json/--confirm leaking between tests would misroute the --json
+  // error-envelope branch or the delete confirmation guard. setOptionValue on a command that
+  // doesn't declare that option is a no-op, so it's safe to sweep both levels unconditionally.
+  for (const sub of contactsCommand.commands) {
+    sub.setOptionValue('json', false);
+    sub.setOptionValue('confirm', false);
+    for (const nested of sub.commands) {
+      nested.setOptionValue('json', false);
+      nested.setOptionValue('confirm', false);
+    }
   }
 }
 
@@ -2108,6 +2146,206 @@ describe('groups --json error envelope (bug regression)', () => {
       return null;
     });
     const result = await runM365AgentCli('groups list --token test-graph-token');
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toContain('Access denied');
+  });
+});
+
+describe('onenote --json error envelope (bug regression)', () => {
+  test('a failed Graph call returns the structured error envelope on stdout, not plain text on stderr', async () => {
+    setMockFetch((url) => {
+      if (!url.includes('graph.microsoft.com/v1.0')) return null;
+      if (url.includes('/me/onenote/notebooks')) {
+        return {
+          status: 403,
+          body: JSON.stringify({ error: { code: 'ErrorAccessDenied', message: 'Access denied' } }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    const result = await runM365AgentCli('onenote notebooks --json --token test-graph-token');
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toBe('');
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.error.status).toBe(403);
+    expect(data.error.code).toBe('ErrorAccessDenied');
+  });
+
+  test('without --json, still prints plain text to stderr (unchanged)', async () => {
+    setMockFetch((url) => {
+      if (!url.includes('graph.microsoft.com/v1.0')) return null;
+      if (url.includes('/me/onenote/notebooks')) {
+        return {
+          status: 403,
+          body: JSON.stringify({ error: { code: 'ErrorAccessDenied', message: 'Access denied' } }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    const result = await runM365AgentCli('onenote notebooks --token test-graph-token');
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toContain('Access denied');
+  });
+});
+
+describe('contacts --json error envelope (bug regression)', () => {
+  test('a failed Graph call returns the structured error envelope on stdout, not plain text on stderr', async () => {
+    setMockFetch((url) => {
+      if (!url.includes('graph.microsoft.com/v1.0')) return null;
+      if (url.includes('/me/contacts')) {
+        return {
+          status: 403,
+          body: JSON.stringify({ error: { code: 'ErrorAccessDenied', message: 'Access denied' } }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    const result = await runM365AgentCli('contacts list --json --token test-graph-token');
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toBe('');
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.error.status).toBe(403);
+    expect(data.error.code).toBe('ErrorAccessDenied');
+  });
+
+  test('without --json, still prints plain text to stderr (unchanged)', async () => {
+    setMockFetch((url) => {
+      if (!url.includes('graph.microsoft.com/v1.0')) return null;
+      if (url.includes('/me/contacts')) {
+        return {
+          status: 403,
+          body: JSON.stringify({ error: { code: 'ErrorAccessDenied', message: 'Access denied' } }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    const result = await runM365AgentCli('contacts list --token test-graph-token');
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toContain('Access denied');
+  });
+});
+
+describe('viva --json error envelope (bug regression)', () => {
+  test('a failed Graph call returns the structured error envelope on stdout, not plain text on stderr', async () => {
+    setMockFetch((url) => {
+      if (!url.includes('graph.microsoft.com/beta')) return null;
+      if (url.includes('/me/employeeExperience/assignedRoles')) {
+        return {
+          status: 403,
+          body: JSON.stringify({ error: { code: 'ErrorAccessDenied', message: 'Access denied' } }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    const result = await runM365AgentCli('viva engage-assigned-roles-list --json --token test-graph-token');
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toBe('');
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.error.status).toBe(403);
+    expect(data.error.code).toBe('ErrorAccessDenied');
+  });
+
+  test('without --json, still prints plain text to stderr (unchanged)', async () => {
+    setMockFetch((url) => {
+      if (!url.includes('graph.microsoft.com/beta')) return null;
+      if (url.includes('/me/employeeExperience/assignedRoles')) {
+        return {
+          status: 403,
+          body: JSON.stringify({ error: { code: 'ErrorAccessDenied', message: 'Access denied' } }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    const result = await runM365AgentCli('viva engage-assigned-roles-list --token test-graph-token');
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toContain('Access denied');
+  });
+});
+
+describe('viva-extra-subcommands --json error envelope (bug regression)', () => {
+  test('a failed Graph call returns the structured error envelope on stdout, not plain text on stderr', async () => {
+    setMockFetch((url) => {
+      if (!url.includes('graph.microsoft.com/beta')) return null;
+      if (url.includes('/communications/onlineMeetingConversations')) {
+        return {
+          status: 403,
+          body: JSON.stringify({ error: { code: 'ErrorAccessDenied', message: 'Access denied' } }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    const result = await runM365AgentCli('viva meeting-engage-conversations-list --json --token test-graph-token');
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toBe('');
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.error.status).toBe(403);
+    expect(data.error.code).toBe('ErrorAccessDenied');
+  });
+
+  test('without --json, still prints plain text to stderr (unchanged)', async () => {
+    setMockFetch((url) => {
+      if (!url.includes('graph.microsoft.com/beta')) return null;
+      if (url.includes('/communications/onlineMeetingConversations')) {
+        return {
+          status: 403,
+          body: JSON.stringify({ error: { code: 'ErrorAccessDenied', message: 'Access denied' } }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    const result = await runM365AgentCli('viva meeting-engage-conversations-list --token test-graph-token');
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toContain('Access denied');
+  });
+});
+
+describe('viva-tenant-subcommands --json error envelope (bug regression)', () => {
+  test('a failed Graph call returns the structured error envelope on stdout, not plain text on stderr', async () => {
+    setMockFetch((url) => {
+      if (!url.includes('graph.microsoft.com/beta')) return null;
+      if (url.includes('/employeeExperience/communities')) {
+        return {
+          status: 403,
+          body: JSON.stringify({ error: { code: 'ErrorAccessDenied', message: 'Access denied' } }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    const result = await runM365AgentCli('viva tenant-communities-list --json --token test-graph-token');
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toBe('');
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.error.status).toBe(403);
+    expect(data.error.code).toBe('ErrorAccessDenied');
+  });
+
+  test('without --json, still prints plain text to stderr (unchanged)', async () => {
+    setMockFetch((url) => {
+      if (!url.includes('graph.microsoft.com/beta')) return null;
+      if (url.includes('/employeeExperience/communities')) {
+        return {
+          status: 403,
+          body: JSON.stringify({ error: { code: 'ErrorAccessDenied', message: 'Access denied' } }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    const result = await runM365AgentCli('viva tenant-communities-list --token test-graph-token');
     expect(result.exitCode).toBe(1);
     expect(result.stdout).toBe('');
     expect(result.stderr).toContain('Access denied');
