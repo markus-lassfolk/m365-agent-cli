@@ -40,6 +40,12 @@ Second review pass:
 - **EWS free/busy times were parsed in the host's local time zone.** `GetUserAvailability` returns zone-less times (in the request's UTC zone); they are now normalized to UTC so room-free / schedule-overlap checks are correct on non-UTC hosts.
 - **EWS recurrence validation:** weekly and relative monthly/yearly patterns now require at least one day-of-week (an empty `DaysOfWeek` was rejected by EWS with an opaque error); yearly patterns no longer require an `Interval` (their schema has none); relative monthly/yearly emit a single day-of-week (the element is single-valued) instead of a space-joined list.
 - **Attachment id from the upload-session `Location` header** is parsed correctly even when the URL uses percent-encoded OData key quotes.
+- **Graph responses with an empty or non-JSON 2xx body** no longer throw a raw `SyntaxError`: an empty body is treated as no content, and a non-JSON body becomes a `GraphApiError` (`InvalidJsonResponse`) carrying the status.
+- **Attachment download temp files** now `basename()` the server-supplied name, so a name with path separators can't relocate the temp file.
+- **`find` / directory `expandGroup`** no longer misclassifies mail-enabled groups / distribution lists as users (it now keys off the `@odata.type` discriminator instead of the presence of a `mail` property).
+- **Directory `search-users` / `search-groups`** now page through all matches instead of silently returning only the first page.
+- **`bookings staff-availability`** reads the `staffAvailabilityItem` collection from the correct `value` property (human output was always empty), and every Bookings `--json-file` read reports a clear error instead of an unhandled stack trace.
+- **Teams `@`-mention composition** inserts display names literally, so a name containing `$&`/`$$` is no longer mangled by `String.replace` substitution patterns.
 
 ---
 

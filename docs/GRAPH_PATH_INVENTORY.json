@@ -1,7 +1,7 @@
 {
   "version": 1,
   "description": "Graph path patterns from static analysis of callGraph*, graphInvoke*, fetchAllPages, fetchGraphRaw, graphPostBatch. Regenerate: npm run graph:inventory",
-  "generatedAt": "2026-07-12T09:45:09.764Z",
+  "generatedAt": "2026-07-12T09:58:51.952Z",
   "entryCount": 723,
   "entries": [
     {
@@ -1350,238 +1350,238 @@
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 633,
+      "line": 647,
       "callee": "callGraphAt",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 742,
+      "line": 756,
       "callee": "fetchAllPages",
       "pattern": "{dynamic}/children",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 751,
+      "line": 765,
       "callee": "fetchAllPages",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 766,
+      "line": 780,
       "callee": "callGraphAt",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 809,
+      "line": 823,
       "callee": "callGraphAt",
       "pattern": "{dynamic}{dynamic}:/content",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 871,
+      "line": 885,
       "callee": "callGraphAt",
       "pattern": "{dynamic}{dynamic}:/createUploadSession",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1148,
+      "line": 1164,
       "callee": "callGraphAt",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1167,
+      "line": 1183,
       "callee": "callGraphAt",
       "pattern": "{dynamic}/createLink",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1194,
+      "line": 1210,
       "callee": "callGraphAt",
       "pattern": "{dynamic}/checkout",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1218,
+      "line": 1234,
       "callee": "callGraphAt",
       "pattern": "{dynamic}/checkin",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1261,
+      "line": 1277,
       "callee": "callGraphAt",
       "pattern": "{dynamic}/listItem",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1276,
+      "line": 1292,
       "callee": "callGraphAt",
       "pattern": "{dynamic}/follow",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1296,
+      "line": 1312,
       "callee": "callGraphAt",
       "pattern": "{dynamic}/unfollow",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1318,
+      "line": 1334,
       "callee": "callGraphAt",
       "pattern": "{dynamic}/assignSensitivityLabel",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1342,
+      "line": 1358,
       "callee": "callGraphAt",
       "pattern": "{dynamic}/extractSensitivityLabels",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1366,
+      "line": 1382,
       "callee": "callGraphAt",
       "pattern": "{dynamic}/permanentDelete",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1391,
+      "line": 1407,
       "callee": "callGraphAt",
       "pattern": "{dynamic}/restore",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1410,
+      "line": 1426,
       "callee": "callGraphAt",
       "pattern": "{dynamic}/retentionLabel",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1432,
+      "line": 1448,
       "callee": "callGraphAt",
       "pattern": "{dynamic}/retentionLabel",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1506,
+      "line": 1522,
       "callee": "fetchAllPages",
       "pattern": "{dynamic}/versions",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1522,
+      "line": 1538,
       "callee": "callGraphAt",
       "pattern": "{dynamic}/versions/{dynamic}/restoreVersion",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1562,
+      "line": 1578,
       "callee": "callGraphAt",
       "pattern": "{dynamic}/analytics/allTime",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1563,
+      "line": 1579,
       "callee": "callGraphAt",
       "pattern": "{dynamic}/analytics/lastSevenDays",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1617,
+      "line": 1633,
       "callee": "fetchGraphRaw",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1704,
+      "line": 1720,
       "callee": "callGraphAt",
       "pattern": "{dynamic}/invite",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1722,
+      "line": 1738,
       "callee": "fetchAllPages",
       "pattern": "{dynamic}/permissions",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1738,
+      "line": 1754,
       "callee": "callGraphAt",
       "pattern": "{dynamic}/permissions/{dynamic}",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1776,
+      "line": 1792,
       "callee": "callGraphAt",
       "pattern": "{dynamic}/thumbnails",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1812,
+      "line": 1828,
       "callee": "callGraphAbsolute",
       "pattern": "{dynamic}",
       "kind": "absolute-url"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1814,
+      "line": 1830,
       "callee": "callGraphAt",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1841,
+      "line": 1857,
       "callee": "callGraphAt",
       "pattern": "/me/drive/sharedWithMe",
       "kind": "literal"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1864,
+      "line": 1880,
       "callee": "fetchGraphRaw",
       "pattern": "{dynamic}/copy",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1955,
+      "line": 1971,
       "callee": "callGraphAt",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-client.ts",
-      "line": 1976,
+      "line": 1992,
       "callee": "callGraphAt",
       "pattern": "{dynamic}/permissions/{dynamic}",
       "kind": "template"
@@ -1638,20 +1638,20 @@
     {
       "file": "src/lib/graph-directory.ts",
       "line": 121,
-      "callee": "callGraph",
+      "callee": "fetchAllPages",
       "pattern": "/users?$filter={dynamic}&$count=true",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-directory.ts",
-      "line": 143,
-      "callee": "callGraph",
+      "line": 129,
+      "callee": "fetchAllPages",
       "pattern": "/groups?$filter={dynamic}&$count=true",
       "kind": "template"
     },
     {
       "file": "src/lib/graph-directory.ts",
-      "line": 161,
+      "line": 135,
       "callee": "fetchAllPages",
       "pattern": "/groups/{dynamic}/members?$top=100",
       "kind": "template"
