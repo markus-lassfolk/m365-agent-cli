@@ -1249,6 +1249,13 @@ export async function createEvent(options: CreateEventOptions): Promise<OwaRespo
 
     const files = fileAttachments ?? [];
     const refs = referenceAttachments ?? [];
+    // KNOWN LIMITATION (EWS only): when the event has both attendees and attachments, the invitation
+    // is already sent by CreateItem above (SendMeetingInvitations) BEFORE these attachments are added,
+    // because EWS cannot inline attachments in CreateItem. Invitees therefore receive an
+    // attachment-less invite. The correct flow (create with SendToNone → add attachments → UpdateItem
+    // with SendMeetingInvitationsOrCancellations=SendToAllAndSaveCopy to deliver the complete item)
+    // depends on runtime resend behavior that can't be validated without a live Exchange, so it is
+    // deferred to a change that can be verified end-to-end. The Graph backend is not affected.
     if (files.length > 0 || refs.length > 0) {
       let itemState: { id: string; changeKey?: string } = { id: id.trim(), changeKey: changeKey || undefined };
       for (const att of files) {
