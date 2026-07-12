@@ -493,12 +493,11 @@ describe('calendar', () => {
     expect(JSON.parse(a.stdout.trim())).toEqual(JSON.parse(b.stdout.trim()));
   });
 
-  test('invalid date shows an error (not a crash)', async () => {
+  test('invalid date shows an error (not silently coerced to today)', async () => {
     const result = await runM365AgentCli('calendar not-a-valid-date --token test-token-12345');
-    // Either exit 0 with no events or exit 1 with error - not a raw JS crash
-    if (result.exitCode !== 0) {
-      expect(isUsefulError(result.stderr + result.stdout)).toBe(true);
-    }
+    // A garbage date argument must be rejected, not silently treated as "today".
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr + result.stdout).toMatch(/invalid day value|invalid/i);
   });
 });
 
@@ -1142,11 +1141,11 @@ describe('error handling', () => {
   });
 
   test('--json flag produces valid JSON on error', async () => {
-    // With a bad day, calendar should return either success or error JSON
+    // A bad day is now rejected; the error must still be valid JSON on stdout under --json.
     const result = await runM365AgentCli('calendar invalid-date-xyz --json --token test-token-12345');
-    if (result.exitCode !== 0) {
-      expect(isValidJson(result.stdout.trim())).toBe(true);
-    }
+    expect(result.exitCode).toBe(1);
+    expect(isValidJson(result.stdout.trim())).toBe(true);
+    expect(JSON.parse(result.stdout.trim()).error).toBeTruthy();
   });
 
   test('error messages do not leak internals', async () => {
@@ -1508,7 +1507,9 @@ describe('Graph backend (M365_EXCHANGE_BACKEND=graph)', () => {
   });
 
   test('whoami does not fall back to EWS when GET /me returns 401 (graph-only mode)', async () => {
+    const requestedUrls: string[] = [];
     setMockFetch((url) => {
+      requestedUrls.push(url);
       if (url.includes('graph.microsoft.com/v1.0/me')) {
         return {
           status: 401,
@@ -1518,7 +1519,10 @@ describe('Graph backend (M365_EXCHANGE_BACKEND=graph)', () => {
       }
       return null;
     });
+    // The Graph 401 surfaces as a failure; the key contract is that NO EWS/SOAP request is attempted.
     await expect(runM365AgentCli('whoami --token test-graph-token')).rejects.toThrow();
+    expect(requestedUrls.some((u) => /EWS\/Exchange\.asmx|outlook\.office365\.com/i.test(u))).toBe(false);
+    expect(requestedUrls.some((u) => u.includes('graph.microsoft.com'))).toBe(true);
   });
 
   test('auto-reply exits on graph backend with JSON hint to use oof', async () => {

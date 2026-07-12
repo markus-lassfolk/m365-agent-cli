@@ -170,13 +170,14 @@ function getDateRange(startDay: string, endDay?: string): { start: string; end: 
     }
   }
 
-  // Single day or start of range
-  const startDate = parseDay(startDay, { weekdayDirection: 'previous' });
+  // Single day or start of range. throwOnInvalid so a garbage date argument surfaces a clean
+  // error instead of being silently coerced to "today".
+  const startDate = parseDay(startDay, { weekdayDirection: 'previous', throwOnInvalid: true });
   startDate.setHours(0, 0, 0, 0);
 
   if (endDay) {
     // Date range - use nearestForward for end date
-    const endDate = parseDay(endDay, { baseDate: startDate, weekdayDirection: 'nearestForward' });
+    const endDate = parseDay(endDay, { baseDate: startDate, weekdayDirection: 'nearestForward', throwOnInvalid: true });
     endDate.setHours(0, 0, 0, 0);
     // Exclusive end: next day's midnight
     const endExclusive = new Date(endDate);
@@ -230,7 +231,7 @@ function parseBusinessDaysOption(options: {
 }
 
 function parseAnchorDateForDynamicRange(startDay: string): Date {
-  const startDate = parseDay(startDay, { weekdayDirection: 'previous' });
+  const startDate = parseDay(startDay, { weekdayDirection: 'previous', throwOnInvalid: true });
   startDate.setHours(0, 0, 0, 0);
   return startDate;
 }

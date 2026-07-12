@@ -567,10 +567,17 @@ plannerCommand
         }
         updates.percentComplete = percentValue;
       }
+      // `assignments` is an open-type dictionary merged per-key on PATCH: an entry is only removed
+      // when its key is sent with value null. Sending {} (clear) or just the new assignees (replace)
+      // leaves previously-assigned users in place, so null out the current assignees explicitly.
+      const currentAssignments = (taskRes.data.assignments as Record<string, unknown> | undefined) ?? {};
       if (opts.clearAssign) {
-        updates.assignments = {};
+        updates.assignments = Object.fromEntries(Object.keys(currentAssignments).map((id) => [id, null]));
       } else if (assignReplace) {
-        updates.assignments = buildPlannerAssignments(opts.assign!);
+        const replaced: Record<string, unknown> = {};
+        for (const id of Object.keys(currentAssignments)) replaced[id] = null;
+        Object.assign(replaced, buildPlannerAssignments(opts.assign!));
+        updates.assignments = replaced;
       } else if (assignMerge) {
         updates.assignments = mergePlannerAssignments(
           taskRes.data.assignments as Record<string, unknown> | undefined,
