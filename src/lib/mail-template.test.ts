@@ -82,4 +82,10 @@ describe('renderMailTemplate', () => {
   it('does not flag a valid placeholder as malformed once resolved', () => {
     expect(renderMailTemplate('Hello {{name}}!', { name: 'Alice' })).toBe('Hello Alice!');
   });
+
+  it('does not flag a {{...}}-shaped substring inside a substituted --var value as malformed (bug regression)', () => {
+    expect(renderMailTemplate('Welcome, {{name}}!', { name: 'Team {{Placeholder}}' })).toBe(
+      'Welcome, Team {{Placeholder}}!'
+    );
+  });
 });

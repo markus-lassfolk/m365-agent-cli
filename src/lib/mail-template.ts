@@ -36,6 +36,20 @@ export function parseTemplateVars(pairs: string[]): Record<string, string> {
  * than silently mailing a recipient a literal `{{name}}`.
  */
 export function renderMailTemplate(source: string, vars: Record<string, string>): string {
+  // Malformed-placeholder tokens must be found in the *template* (source), not the rendered
+  // output — a substituted --var value or default is arbitrary user text and may legitimately
+  // contain a {{...}}-shaped substring (an example, a signature, quoted syntax, ...) that isn't a
+  // template placeholder at all. Stripping every valid PLACEHOLDER_RE match first means what's
+  // left is exactly the template's own unmatched double-brace text.
+  const malformed = [
+    ...new Set([...source.replace(PLACEHOLDER_RE, '').matchAll(MALFORMED_PLACEHOLDER_RE)].map((m) => m[0]))
+  ];
+  if (malformed.length > 0) {
+    throw new MailTemplateError(
+      `Template has malformed placeholder(s) — expected {{name}} or {{name|default}}: ${malformed.join(', ')}`
+    );
+  }
+
   const unresolved = new Set<string>();
   const rendered = source.replace(PLACEHOLDER_RE, (_match, name: string, fallback: string | undefined) => {
     if (Object.hasOwn(vars, name)) return vars[name];
@@ -46,12 +60,6 @@ export function renderMailTemplate(source: string, vars: Record<string, string>)
   if (unresolved.size > 0) {
     throw new MailTemplateError(
       `Template has unresolved placeholder(s) with no --var and no default: ${[...unresolved].join(', ')}`
-    );
-  }
-  const malformed = [...new Set([...rendered.matchAll(MALFORMED_PLACEHOLDER_RE)].map((m) => m[0]))];
-  if (malformed.length > 0) {
-    throw new MailTemplateError(
-      `Template has malformed placeholder(s) — expected {{name}} or {{name|default}}: ${malformed.join(', ')}`
     );
   }
   return rendered;

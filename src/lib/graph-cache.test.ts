@@ -127,6 +127,22 @@ describe('readGraphCache / writeGraphCache', () => {
     expect(entry?.body).toEqual({ ok: true });
   });
 
+  it('does not collide when a header value itself contains "&" or "=" (bug regression)', async () => {
+    const url = 'https://graph.microsoft.com/v1.0/me/events';
+    await writeGraphCache('tok', 'GET', url, 200, { which: 'combined-header' }, 60_000, {
+      'X-Test': 'a&y=1'
+    });
+    await writeGraphCache('tok', 'GET', url, 200, { which: 'split-headers' }, 60_000, {
+      'X-Test': 'a',
+      y: '1'
+    });
+
+    const combined = await readGraphCache('tok', 'GET', url, { 'X-Test': 'a&y=1' });
+    const split = await readGraphCache('tok', 'GET', url, { 'X-Test': 'a', y: '1' });
+    expect(combined?.body).toEqual({ which: 'combined-header' });
+    expect(split?.body).toEqual({ which: 'split-headers' });
+  });
+
   it('prunes expired entries opportunistically on every write, keeping only live entries', async () => {
     const dir = join(testHome, 'graph-cache');
 

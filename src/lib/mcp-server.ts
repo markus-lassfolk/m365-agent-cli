@@ -143,8 +143,16 @@ function asArray(v: unknown): unknown[] {
 /** Reconstructs CLI argv (`[...commandPath.split(' '), ...flags, '--', ...positionals]`) from an
  *  MCP tool call's arguments object. Options come before a `--` separator and positionals after it
  *  so a positional value that happens to start with `-` (e.g. free-text search query) is never
- *  misparsed by Commander as an unknown option. */
-export function toolArgsToArgv(tool: McpToolDef, args: Record<string, unknown>): string[] {
+ *  misparsed by Commander as an unknown option. When `opts.forceJson` is true and `--json` wasn't
+ *  already requested via `args`, it's appended to the options segment (before the separator) here
+ *  — inserting it structurally during construction, rather than searching the finished array for
+ *  the separator afterward, avoids colliding with a positional/option value that happens to equal
+ *  the literal string `"--"`. */
+export function toolArgsToArgv(
+  tool: McpToolDef,
+  args: Record<string, unknown>,
+  opts: { forceJson?: boolean } = {}
+): string[] {
   const commandPath = tool.commandPath.split(/\s+/).filter(Boolean);
   const positionalArgv: string[] = [];
   const optionArgv: string[] = [];
@@ -177,6 +185,10 @@ export function toolArgsToArgv(tool: McpToolDef, args: Record<string, unknown>):
     }
   }
 
+  if (opts.forceJson && !optionArgv.includes('--json')) {
+    optionArgv.push('--json');
+  }
+
   return positionalArgv.length > 0
     ? [...commandPath, ...optionArgv, '--', ...positionalArgv]
     : [...commandPath, ...optionArgv];
@@ -202,7 +214,9 @@ const MCP_TOOL_KILL_GRACE_MS = 5000;
  *  below. Windows: `taskkill /t` walks the tree by pid. */
 export function killChildTree(child: ReturnType<typeof spawn>, signal: NodeJS.Signals): void {
   if (process.platform === 'win32') {
-    if (child.pid) spawn('taskkill', ['/pid', String(child.pid), '/t', '/f']);
+    // An unlistened 'error' event on a failed spawn() throws and crashes the process — a missing
+    // or blocked taskkill binary must only fail this one kill attempt, not take down the server.
+    if (child.pid) spawn('taskkill', ['/pid', String(child.pid), '/t', '/f']).on('error', () => {});
     return;
   }
   try {
@@ -328,18 +342,8 @@ export async function handleMcpMessage(msg: unknown, ctx: McpContext): Promise<R
     if (!tool) {
       return jsonRpcError(m.id, -32602, `Unknown tool: ${params.name ?? '(missing name)'}`);
     }
-    const argv = toolArgsToArgv(tool, params.arguments ?? {});
     const supportsJson = tool.argSpecs.some((s) => s.kind === 'option' && s.flag === '--json');
-    if (supportsJson && !argv.includes('--json')) {
-      // Insert before the `--` positional separator (if any) — appending after it would make
-      // Commander treat "--json" as a literal positional value instead of the flag.
-      const sepIndex = argv.indexOf('--');
-      if (sepIndex === -1) {
-        argv.push('--json');
-      } else {
-        argv.splice(sepIndex, 0, '--json');
-      }
-    }
+    const argv = toolArgsToArgv(tool, params.arguments ?? {}, { forceJson: supportsJson });
 
     const result = await ctx.runCli(argv);
     const text = result.stdout.trim() || result.stderr.trim() || '(no output)';

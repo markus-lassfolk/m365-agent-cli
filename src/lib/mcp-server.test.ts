@@ -212,6 +212,28 @@ describe('handleMcpMessage', () => {
     expect(capturedArgv).toEqual(['mail', '--json', '--', '--weird']);
   });
 
+  test('injects --json correctly even when an option value is the literal string "--" (bug regression)', async () => {
+    let capturedArgv: string[] = [];
+    const ctx = buildMcpContext(manifest, {
+      runCli: async (argv) => {
+        capturedArgv = argv;
+        return okResult('{}');
+      }
+    });
+    await handleMcpMessage(
+      {
+        jsonrpc: '2.0',
+        id: 10,
+        method: 'tools/call',
+        params: { name: 'mail', arguments: { reply: '--', folder: 'inbox' } }
+      },
+      ctx
+    );
+    // An index-based search for '--' would have found the option's own value here instead of the
+    // real positional separator, corrupting --reply and misplacing --json.
+    expect(capturedArgv).toEqual(['mail', '--reply', '--', '--json', '--', 'inbox']);
+  });
+
   test('tools/call surfaces a non-zero exit code as isError with stderr text', async () => {
     const ctx = buildMcpContext(manifest, {
       runCli: async () => ({ stdout: '', stderr: 'Error: boom', exitCode: 1, timedOut: false })
@@ -321,4 +343,19 @@ describe('killChildTree', () => {
     },
     5_000
   );
+
+  test('does not crash the process when the win32 taskkill spawn itself fails (bug regression)', async () => {
+    const originalPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    try {
+      // "taskkill" genuinely doesn't exist on this (non-Windows) test host, so spawn() fails
+      // asynchronously with a real ENOENT 'error' event — exercising the exact failure this fix
+      // guards against. Before the fix, an unlistened 'error' event here throws and crashes the
+      // whole process; this test merely completing (instead of the test runner dying) is the proof.
+      killChildTree({ pid: 999999, kill: () => true } as unknown as ReturnType<typeof spawn>, 'SIGTERM');
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
+    }
+  }, 5_000);
 });

@@ -63,13 +63,16 @@ export interface CachedGraphEntry {
  *  eventual`, `Accept-Language`. Sorted/lowercased so header order/case never affects the key. */
 function normalizeHeaders(headers?: HeadersInit): string {
   if (!headers) return '';
-  const pairs: string[] = [];
+  const pairs: Array<[string, string]> = [];
   new Headers(headers).forEach((value, key) => {
     if (key.toLowerCase() === 'authorization') return;
-    pairs.push(`${key.toLowerCase()}=${value}`);
+    pairs.push([key.toLowerCase(), value]);
   });
-  pairs.sort();
-  return pairs.join('&');
+  // JSON-encode the sorted [key, value] tuples rather than joining with "key=value&..." — a raw
+  // delimiter join lets an unrelated header set collide onto the same string (and thus the same
+  // cache key) whenever a header's own value contains "&" or "=".
+  pairs.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  return JSON.stringify(pairs);
 }
 
 function cacheKey(token: string, method: string, url: string, headers?: HeadersInit): string {
