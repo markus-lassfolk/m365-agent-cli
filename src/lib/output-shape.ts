@@ -16,9 +16,19 @@ export function parseFieldsOption(raw: string | undefined): string[] | undefined
   return fields.length > 0 ? fields : undefined;
 }
 
+/** Walks `segments` against `obj`. If an array is encountered mid-path (e.g. Graph's
+ *  `toRecipients`/`attendees`), the remaining segments are resolved against each element instead
+ *  of failing outright — a bare `in` check on an array only sees numeric indices, never a nested
+ *  object key, so without this an array-of-objects field silently could never be reached. */
 function getByPath(obj: unknown, segments: string[]): { found: boolean; value?: unknown } {
   let cur: unknown = obj;
-  for (const seg of segments) {
+  for (let i = 0; i < segments.length; i++) {
+    if (Array.isArray(cur)) {
+      const remaining = segments.slice(i);
+      const resolved = cur.map((el) => getByPath(el, remaining)).filter((r) => r.found);
+      return { found: true, value: resolved.map((r) => r.value) };
+    }
+    const seg = segments[i];
     if (cur === null || typeof cur !== 'object' || !(seg in (cur as Record<string, unknown>))) {
       return { found: false };
     }
@@ -70,4 +80,12 @@ export function shapeRows(rows: unknown[], fields?: string[]): unknown[] {
 /** One compact JSON object per line (no pretty-printing — NDJSON is meant to be streamed/parsed line-by-line). */
 export function formatNdjson(rows: unknown[]): string {
   return rows.map((row) => JSON.stringify(row)).join('\n');
+}
+
+/** Prints {@link formatNdjson}'s output, but no-ops (prints nothing, not even a blank line) for a
+ *  zero-row result — `console.log(formatNdjson([]))` would otherwise write a single blank line,
+ *  which a strict line-oriented NDJSON consumer (`JSON.parse` per line) can't parse. */
+export function printNdjson(rows: unknown[]): void {
+  if (rows.length === 0) return;
+  console.log(formatNdjson(rows));
 }

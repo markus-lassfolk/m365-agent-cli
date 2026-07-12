@@ -29,7 +29,7 @@ import {
   patchMailMessage,
   sendMailMessage
 } from '../lib/outlook-graph-client.js';
-import { formatNdjson, parseFieldsOption, shapeRows } from '../lib/output-shape.js';
+import { parseFieldsOption, printNdjson, shapeRows } from '../lib/output-shape.js';
 import { safeAttachmentFileName, writeInternetShortcutUtf8File } from '../lib/safe-filename.js';
 
 export interface MailGraphCommandOptions {
@@ -897,7 +897,7 @@ export async function tryMailGraphPortion(
   if (options.json) {
     const rows = shapeRows(emails, parseFieldsOption(options.fields));
     if (options.ndjson) {
-      console.log(formatNdjson(rows));
+      printNdjson(rows);
     } else {
       console.log(JSON.stringify({ value: rows }, null, 2));
     }

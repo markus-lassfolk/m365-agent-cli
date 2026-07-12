@@ -1623,6 +1623,26 @@ describe('Graph backend (M365_EXCHANGE_BACKEND=graph)', () => {
     expect(data.events[0].id).toBe('graph-cal-event-1');
   });
 
+  test('calendar --json preserves code/status from a failed calendarView call (bug regression)', async () => {
+    setMockFetch((url) => {
+      if (!url.includes('graph.microsoft.com/v1.0')) return null;
+      const path = new URL(url).pathname;
+      if (path.includes('/calendar/calendarView')) {
+        return {
+          status: 403,
+          body: JSON.stringify({ error: { code: 'ErrorAccessDenied', message: 'Access denied' } }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    const result = await runM365AgentCli('calendar today --json --token test-graph-token');
+    expect(result.exitCode).toBe(1);
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.error.status).toBe(403);
+    expect(data.error.code).toBe('ErrorAccessDenied');
+  });
+
   test('delete-event --scope future truncates recurring series via Graph (PATCH master)', async () => {
     setMockFetch((url, request) => {
       const method = (request.method || 'GET').toUpperCase();

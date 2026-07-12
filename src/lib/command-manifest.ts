@@ -14,6 +14,10 @@ export interface ManifestOption {
   valueOptional: boolean;
   variadic: boolean;
   defaultValue?: unknown;
+  /** True for a `--no-*` flag. Commander implicitly defaults the underlying value to `true` for
+   *  these (unless a positive counterpart option, e.g. `--foo` for `--no-foo`, is also
+   *  registered) — see `defaultValue` for the resolved effective default. */
+  negate: boolean;
 }
 
 export interface ManifestArgument {
@@ -21,6 +25,8 @@ export interface ManifestArgument {
   description: string;
   required: boolean;
   variadic: boolean;
+  defaultValue?: unknown;
+  defaultValueDescription?: string;
 }
 
 export interface CommandManifest {
@@ -44,7 +50,19 @@ export interface ProgramManifest {
 /** Excludes the auto-added `-h, --help` / `-V, --version` options Commander injects on every command. */
 const NOISE_FLAGS = new Set(['-h, --help', '-V, --version']);
 
-function toManifestOption(opt: Option): ManifestOption {
+/** Mirrors Commander's own `addOption` default-seeding for `--no-*` flags (command.js): a negated
+ *  option with no explicit `defaultValue` implicitly defaults to `true`, unless a positive
+ *  counterpart (`--foo` for `--no-foo`) is also registered on the same command. */
+function effectiveDefaultValue(opt: Option, allOptions: readonly Option[]): unknown {
+  if (opt.defaultValue !== undefined) return opt.defaultValue;
+  if (!opt.negate || !opt.long) return opt.defaultValue;
+  const positiveLongFlag = opt.long.replace(/^--no-/, '--');
+  const hasPositiveCounterpart = allOptions.some((o) => o.long === positiveLongFlag);
+  return hasPositiveCounterpart ? undefined : true;
+}
+
+function toManifestOption(opt: Option, allOptions: readonly Option[]): ManifestOption {
+  const defaultValue = effectiveDefaultValue(opt, allOptions);
   return {
     flags: opt.flags,
     long: opt.long ?? null,
@@ -54,12 +72,13 @@ function toManifestOption(opt: Option): ManifestOption {
     valueRequired: opt.required ?? false,
     valueOptional: opt.optional ?? false,
     variadic: opt.variadic ?? false,
-    ...(opt.defaultValue !== undefined ? { defaultValue: opt.defaultValue } : {})
+    negate: opt.negate ?? false,
+    ...(defaultValue !== undefined ? { defaultValue } : {})
   };
 }
 
 function toManifestOptions(cmd: Command): ManifestOption[] {
-  return cmd.options.filter((o) => !NOISE_FLAGS.has(o.flags)).map(toManifestOption);
+  return cmd.options.filter((o) => !NOISE_FLAGS.has(o.flags)).map((o) => toManifestOption(o, cmd.options));
 }
 
 function toManifestArguments(cmd: Command): ManifestArgument[] {
@@ -67,7 +86,9 @@ function toManifestArguments(cmd: Command): ManifestArgument[] {
     name: a.name(),
     description: a.description ?? '',
     required: a.required,
-    variadic: a.variadic ?? false
+    variadic: a.variadic ?? false,
+    ...(a.defaultValue !== undefined ? { defaultValue: a.defaultValue } : {}),
+    ...(a.defaultValueDescription !== undefined ? { defaultValueDescription: a.defaultValueDescription } : {})
   }));
 }
 

@@ -50,11 +50,11 @@ export function toJsonError(input: unknown, fallbackMessage = 'Request failed'):
     return { message: input.trim() || fallbackMessage };
   }
 
-  if (input instanceof Error) {
-    return { message: input.message || fallbackMessage };
-  }
-
   if (typeof input === 'object') {
+    // An Error instance (including GraphApiError, which carries code/status/requestId as own
+    // properties) satisfies `typeof x === 'object'` too — falling through here (rather than
+    // special-casing `instanceof Error` to just `{ message }`) lets the same extraction below
+    // pick those fields up instead of silently discarding them.
     const obj = input as Record<string, unknown>;
     const message =
       typeof obj.message === 'string' && obj.message.trim()

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { formatNdjson, parseFieldsOption, projectFields, shapeRows } from './output-shape.js';
+import { formatNdjson, parseFieldsOption, printNdjson, projectFields, shapeRows } from './output-shape.js';
 
 describe('parseFieldsOption', () => {
   it('splits and trims comma-separated fields', () => {
@@ -51,6 +51,30 @@ describe('projectFields', () => {
   it('treats an empty fields list as "keep nothing"', () => {
     expect(projectFields({ id: '1', subject: 'hi' }, [])).toEqual({});
   });
+
+  it('maps a dot-path through an array-of-objects field instead of silently dropping it (bug regression)', () => {
+    const row = {
+      subject: 'hi',
+      toRecipients: [{ emailAddress: { address: 'x@y.com' } }, { emailAddress: { address: 'z@y.com' } }]
+    };
+    expect(projectFields(row, ['subject', 'toRecipients.emailAddress.address'])).toEqual({
+      subject: 'hi',
+      toRecipients: { emailAddress: { address: ['x@y.com', 'z@y.com'] } }
+    });
+  });
+
+  it('drops array elements where the remaining path does not resolve, keeping the ones that do', () => {
+    const row = {
+      toRecipients: [
+        { emailAddress: { address: 'x@y.com' } },
+        { emailAddress: {} },
+        { emailAddress: { address: 'z@y.com' } }
+      ]
+    };
+    expect(projectFields(row, ['toRecipients.emailAddress.address'])).toEqual({
+      toRecipients: { emailAddress: { address: ['x@y.com', 'z@y.com'] } }
+    });
+  });
 });
 
 describe('shapeRows', () => {
@@ -81,5 +105,35 @@ describe('formatNdjson', () => {
 
   it('returns an empty string for an empty list', () => {
     expect(formatNdjson([])).toBe('');
+  });
+});
+
+describe('printNdjson', () => {
+  it('prints nothing at all for a zero-row result (bug regression)', () => {
+    const originalLog = console.log;
+    const calls: unknown[][] = [];
+    console.log = (...args: unknown[]) => {
+      calls.push(args);
+    };
+    try {
+      printNdjson([]);
+      expect(calls).toHaveLength(0);
+    } finally {
+      console.log = originalLog;
+    }
+  });
+
+  it('prints the ndjson output for a non-empty result', () => {
+    const originalLog = console.log;
+    const calls: unknown[][] = [];
+    console.log = (...args: unknown[]) => {
+      calls.push(args);
+    };
+    try {
+      printNdjson([{ id: '1' }, { id: '2' }]);
+      expect(calls).toEqual([['{"id":"1"}\n{"id":"2"}']]);
+    } finally {
+      console.log = originalLog;
+    }
   });
 });

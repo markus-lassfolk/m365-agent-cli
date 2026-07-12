@@ -74,6 +74,40 @@ describe('describeCommandTree', () => {
     expect(flags).not.toContain('-h, --help');
     expect(flags).not.toContain('-V, --version');
   });
+
+  test('reports an argument default value (bug regression)', () => {
+    const cmd = new Command('mail-cmd').argument('[folder]', 'folder name', 'inbox');
+    const manifest = describeCommandTree(cmd);
+    expect(manifest.arguments[0]).toEqual({
+      name: 'folder',
+      description: 'folder name',
+      required: false,
+      variadic: false,
+      defaultValue: 'inbox'
+    });
+  });
+
+  test('a --no-* option with no positive counterpart implicitly defaults to true (bug regression)', () => {
+    const cmd = new Command('approvals-list').option('--no-expand', 'Skip $expand');
+    const manifest = describeCommandTree(cmd);
+    const opt = manifest.options.find((o) => o.long === '--no-expand');
+    expect(opt?.negate).toBe(true);
+    expect(opt?.defaultValue).toBe(true);
+  });
+
+  test('a --no-* option with a registered positive counterpart does not get a forced true default', () => {
+    const cmd = new Command('thing').option('--expand', 'expand it').option('--no-expand', 'do not expand');
+    const manifest = describeCommandTree(cmd);
+    const noExpand = manifest.options.find((o) => o.long === '--no-expand');
+    expect(noExpand?.negate).toBe(true);
+    expect(noExpand?.defaultValue).toBeUndefined();
+  });
+
+  test('a non-negated option has negate: false', () => {
+    const cmd = new Command('thing').option('--force', 'force it');
+    const manifest = describeCommandTree(cmd);
+    expect(manifest.options.find((o) => o.long === '--force')?.negate).toBe(false);
+  });
 });
 
 describe('describeProgram', () => {

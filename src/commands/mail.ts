@@ -29,7 +29,7 @@ import { resolveGraphAuth } from '../lib/graph-auth.js';
 import { toJsonError } from '../lib/json-error.js';
 import { markdownToHtml } from '../lib/markdown.js';
 import { lookupMimeType } from '../lib/mime-type.js';
-import { formatNdjson, parseFieldsOption, shapeRows } from '../lib/output-shape.js';
+import { parseFieldsOption, printNdjson, shapeRows } from '../lib/output-shape.js';
 import { safeAttachmentFileName, writeInternetShortcutUtf8File } from '../lib/safe-filename.js';
 import { checkReadOnly } from '../lib/utils.js';
 import {
@@ -198,7 +198,7 @@ export const mailCommand = new Command('mail')
   .option('--json', 'Output as JSON')
   .option(
     '--fields <list>',
-    'With --json on the list view: comma-separated dot-paths to project each email down to (e.g. "id,subject,from.emailAddress.address")'
+    'With --json on the list view: comma-separated dot-paths to project each email down to (e.g. "id,subject,from")'
   )
   .option('--ndjson', 'With --json on the list view: print one JSON object per email per line, instead of one array')
   .option('--token <token>', 'Use a specific token')
@@ -1098,7 +1098,7 @@ Shared mailbox: add --mailbox shared@contoso.com. Full flags: docs/CLI_REFERENCE
           parseFieldsOption(options.fields)
         );
         if (options.ndjson) {
-          console.log(formatNdjson(rows));
+          printNdjson(rows);
         } else {
           console.log(JSON.stringify({ folder: apiFolder, page, limit, emails: rows }, null, 2));
         }

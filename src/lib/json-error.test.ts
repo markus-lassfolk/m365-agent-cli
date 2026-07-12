@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { GraphApiError } from './graph-client.js';
 import { toJsonError } from './json-error.js';
 
 describe('toJsonError', () => {
@@ -22,6 +23,16 @@ describe('toJsonError', () => {
 
   test('falls back for an Error with an empty message', () => {
     expect(toJsonError(new Error(''), 'fallback')).toEqual({ message: 'fallback' });
+  });
+
+  test('preserves code/status/requestId from a real GraphApiError instance (bug regression)', () => {
+    const err = new GraphApiError('Not found', 'ItemNotFound', 404, 'req-123');
+    expect(toJsonError(err)).toEqual({
+      message: 'Not found',
+      code: 'ItemNotFound',
+      status: 404,
+      requestId: 'req-123'
+    });
   });
 
   test('preserves code/status/requestId from a GraphError-shaped object', () => {

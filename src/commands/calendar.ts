@@ -1001,11 +1001,7 @@ function buildCalendarListCommand(): Command {
             if (backend === 'graph') {
               if (options.json) {
                 console.log(
-                  JSON.stringify(
-                    { error: toJsonError(graphResult.error?.message || 'Failed to fetch calendar (Graph)') },
-                    null,
-                    2
-                  )
+                  JSON.stringify({ error: toJsonError(graphResult.error, 'Failed to fetch calendar (Graph)') }, null, 2)
                 );
               } else {
                 console.error(`Error: ${graphResult.error?.message || 'Failed to fetch calendar (Graph)'}`);
@@ -1013,9 +1009,12 @@ function buildCalendarListCommand(): Command {
               process.exit(1);
             }
             if (graphCalendarId) {
-              const msg = `${graphResult.error?.message || 'Failed to fetch calendar (Graph)'}. Option --calendar requires Microsoft Graph; cannot fall back to EWS.`;
+              const suffix = 'Option --calendar requires Microsoft Graph; cannot fall back to EWS.';
+              const msg = `${graphResult.error?.message || 'Failed to fetch calendar (Graph)'}. ${suffix}`;
               if (options.json) {
-                console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
+                // Keep code/status/requestId from the underlying Graph error, only the message gains the suffix.
+                const errorInput = graphResult.error ? { ...graphResult.error, message: msg } : msg;
+                console.log(JSON.stringify({ error: toJsonError(errorInput) }, null, 2));
               } else {
                 console.error(`Error: ${msg}`);
               }
