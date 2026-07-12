@@ -4,6 +4,7 @@ import { sep } from 'node:path';
 import { Command } from 'commander';
 import semver from 'semver';
 import { getPackageVersion } from '../lib/package-info.js';
+import { checkReadOnly } from '../lib/utils.js';
 
 const NPM_PKG = 'm365-agent-cli';
 const NPM_LATEST_URL = `https://registry.npmjs.org/${NPM_PKG}/latest`;
@@ -70,7 +71,7 @@ function runGlobalInstall(): Promise<{ code: number; packageManager: 'npm' | 'bu
 export const updateCommand = new Command('update')
   .description('Check for and install the latest npm release of this CLI')
   .option('-c, --check', 'Only check if a newer version exists on npm (exit 1 if newer is available)')
-  .action(async (opts: { check?: boolean }) => {
+  .action(async (opts: { check?: boolean }, cmd) => {
     const current = await getPackageVersion();
     let latest: string;
     try {
@@ -94,6 +95,8 @@ export const updateCommand = new Command('update')
       console.log(`Update available: ${current} → ${latest}`);
       process.exit(1);
     }
+
+    checkReadOnly(cmd);
 
     console.log(`Updating ${current} → ${latest}…`);
     const { code, packageManager } = await runGlobalInstall();

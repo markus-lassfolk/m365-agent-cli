@@ -127,8 +127,11 @@ afterEach(() => {
 
 // ─── Import commands ───────────────────────────────────────────────────────
 
+import { approvalsCommand } from '../commands/approvals.js';
 import { autoReplyCommand } from '../commands/auto-reply.js';
+import { bookingsCommand } from '../commands/bookings.js';
 import { calendarCommand } from '../commands/calendar.js';
+import { contactsCommand } from '../commands/contacts.js';
 import { counterCommand } from '../commands/counter.js';
 import { createEventCommand } from '../commands/create-event.js';
 import { delegatesCommand } from '../commands/delegates.js';
@@ -139,8 +142,10 @@ import { findCommand } from '../commands/find.js';
 import { findtimeCommand } from '../commands/findtime.js';
 import { foldersCommand } from '../commands/folders.js';
 import { forwardEventCommand } from '../commands/forward-event.js';
+import { groupsCommand } from '../commands/groups.js';
 import { loginCommand } from '../commands/login.js';
 import { mailCommand } from '../commands/mail.js';
+import { onenoteCommand } from '../commands/onenote.js';
 import { oofCommand } from '../commands/oof.js';
 import { peopleCommand } from '../commands/people.js';
 import { respondCommand } from '../commands/respond.js';
@@ -156,6 +161,7 @@ import { suggestCommand } from '../commands/suggest.js';
 import { todoCommand } from '../commands/todo.js';
 import { updateCommand } from '../commands/update.js';
 import { updateEventCommand } from '../commands/update-event.js';
+import { vivaCommand } from '../commands/viva.js';
 import { whoamiCommand } from '../commands/whoami.js';
 
 // Helper to call a command action with options
@@ -217,6 +223,12 @@ function makeProgram(): Command {
   p.addCommand(rulesCommand);
   p.addCommand(delegatesCommand);
   p.addCommand(todoCommand);
+  p.addCommand(bookingsCommand);
+  p.addCommand(approvalsCommand);
+  p.addCommand(groupsCommand);
+  p.addCommand(onenoteCommand);
+  p.addCommand(contactsCommand);
+  p.addCommand(vivaCommand);
   installM365HelpOnCommandTree(p);
   return p;
 }
@@ -253,11 +265,15 @@ function tokenizeArgs(args: string): string[] {
  */
 function resetSharedCommandOptionLeaks() {
   whoamiCommand.setOptionValue('json', false);
+  createEventCommand.setOptionValue('repeat', undefined);
+  createEventCommand.setOptionValue('sensitivity', undefined);
   updateEventCommand.setOptionValue('json', false);
   updateEventCommand.setOptionValue('id', undefined);
   updateEventCommand.setOptionValue('title', undefined);
   updateEventCommand.setOptionValue('search', undefined);
   updateEventCommand.setOptionValue('day', 'today');
+  updateEventCommand.setOptionValue('sensitivity', undefined);
+  updateEventCommand.setOptionValue('room', undefined);
   deleteEventCommand.setOptionValue('json', false);
   deleteEventCommand.setOptionValue('id', undefined);
   deleteEventCommand.setOptionValue('day', 'today');
@@ -302,6 +318,100 @@ function resetSharedCommandOptionLeaks() {
     'json'
   ]) {
     mailCommand.setOptionValue(opt, undefined);
+  }
+  // findtime reuses a shared instance; restore these to their declared defaults (not undefined —
+  // parseInt(undefined) etc. would then fail validation) so a leaked value from one test's
+  // explicit flag doesn't leak into a later test that omits it.
+  findtimeCommand.setOptionValue('json', false);
+  findtimeCommand.setOptionValue('optional', []);
+  findtimeCommand.setOptionValue('minAttendeePercentage', '100');
+  findtimeCommand.setOptionValue('timezone', undefined);
+  // send/drafts reuse shared instances; --template/--var/--body/--json leaking from one test into
+  // a later test that omits them would misroute the mutual-exclusivity check, resend a stale
+  // body, or send an error to stdout (--json) instead of stderr where a later test expects it.
+  sendCommand.setOptionValue('template', undefined);
+  sendCommand.setOptionValue('var', []);
+  sendCommand.setOptionValue('body', '');
+  sendCommand.setOptionValue('json', false);
+  draftsCommand.setOptionValue('template', undefined);
+  draftsCommand.setOptionValue('var', []);
+  draftsCommand.setOptionValue('body', undefined);
+  draftsCommand.setOptionValue('json', false);
+  // update reuses a shared instance; --check leaking from one test into a later test that omits
+  // it would misroute the version-check branch (which exits 1 on stdout) ahead of any real logic.
+  updateCommand.setOptionValue('check', undefined);
+  // files share reuses a shared subcommand instance; --collab/--lock/--expiration/--password/
+  // --no-retain-inherited-permissions leaking between tests would misroute the --collab
+  // validation (or the --lock-without-collab check) for a later test that omits them.
+  const filesShareCommand = filesCommand.commands.find((c) => c.name() === 'share');
+  if (filesShareCommand) {
+    filesShareCommand.setOptionValue('collab', undefined);
+    filesShareCommand.setOptionValue('lock', undefined);
+    filesShareCommand.setOptionValue('expiration', undefined);
+    filesShareCommand.setOptionValue('password', undefined);
+    filesShareCommand.setOptionValue('retainInheritedPermissions', true);
+  }
+  // bookings has ~25 subcommands, each its own shared Command instance; --json leaking from one
+  // test into a later one that omits it would misroute the --json error-envelope branch.
+  for (const sub of bookingsCommand.commands) {
+    sub.setOptionValue('json', false);
+    sub.setOptionValue('confirm', false);
+  }
+  // rooms reuses a shared instance; --start/--end leaking from one test into a later test that
+  // omits one of them would defeat the "both or neither" validation (both would appear set).
+  roomsCommand.setOptionValue('start', undefined);
+  roomsCommand.setOptionValue('end', undefined);
+  roomsCommand.setOptionValue('query', undefined);
+  roomsCommand.setOptionValue('building', undefined);
+  roomsCommand.setOptionValue('capacity', undefined);
+  roomsCommand.setOptionValue('equipment', undefined);
+  roomsCommand.setOptionValue('json', false);
+  // approvals list reuses a shared instance; --top/--no-expand leaking from one test into a later
+  // test that omits them would trip the "--next has no effect with --top/--no-expand" guard.
+  const approvalsListCommand = approvalsCommand.commands.find((c) => c.name() === 'list');
+  if (approvalsListCommand) {
+    approvalsListCommand.setOptionValue('top', undefined);
+    approvalsListCommand.setOptionValue('expand', true);
+    approvalsListCommand.setOptionValue('next', undefined);
+    approvalsListCommand.setOptionValue('all', undefined);
+    approvalsListCommand.setOptionValue('json', false);
+  }
+  // groups has 5 subcommands, each its own shared Command instance; --json leaking between tests
+  // would misroute the --json error-envelope branch.
+  for (const sub of groupsCommand.commands) {
+    sub.setOptionValue('json', false);
+  }
+  // onenote has flat subcommands (notebooks, sections, pages, ...) plus three nested command
+  // groups (notebook, section-group, section) each with their own subcommands; --json/--confirm
+  // leaking between tests would misroute the --json error-envelope branch or the delete
+  // confirmation guard. setOptionValue on a command that doesn't declare that option is a no-op
+  // (it just stores an unused key), so it's safe to sweep both levels unconditionally.
+  for (const sub of onenoteCommand.commands) {
+    sub.setOptionValue('json', false);
+    sub.setOptionValue('confirm', false);
+    for (const nested of sub.commands) {
+      nested.setOptionValue('json', false);
+      nested.setOptionValue('confirm', false);
+    }
+  }
+  // viva has many subcommands (including ones registered by viva-extra/tenant-subcommands.ts),
+  // each its own shared Command instance; --json leaking between tests would misroute the --json
+  // error-envelope branch.
+  for (const sub of vivaCommand.commands) {
+    sub.setOptionValue('json', false);
+  }
+  // contacts has flat subcommands (folders, list, show, create, update, delete, search, delta)
+  // plus nested command groups (folder, extension, photo, attachments, merge-suggestions) each
+  // with their own subcommands; --json/--confirm leaking between tests would misroute the --json
+  // error-envelope branch or the delete confirmation guard. setOptionValue on a command that
+  // doesn't declare that option is a no-op, so it's safe to sweep both levels unconditionally.
+  for (const sub of contactsCommand.commands) {
+    sub.setOptionValue('json', false);
+    sub.setOptionValue('confirm', false);
+    for (const nested of sub.commands) {
+      nested.setOptionValue('json', false);
+      nested.setOptionValue('confirm', false);
+    }
   }
 }
 
@@ -398,6 +508,7 @@ describe('whoami', () => {
     const data = JSON.parse(result.stdout.trim());
     expect(data.email).toBe('test@example.com');
     expect(data.authenticated).toBe(true);
+    expect(data.hint).toContain('verify-token --capabilities');
   });
 
   test('--token bypasses auth resolution', async () => {
@@ -548,6 +659,74 @@ describe('findtime', () => {
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr).toContain('Invalid attendee email');
   });
+
+  test('--optional, --min-attendee-percentage, and --timezone are accepted (EWS path ignores --optional/--min-attendee-percentage)', async () => {
+    const result = await runM365AgentCli(
+      'findtime nextweek user@example.com --optional user@example.com --min-attendee-percentage 50 --timezone America/New_York --token test-token-12345'
+    );
+    expect(result.exitCode).toBe(0);
+  });
+
+  test('EWS backend honors --timezone: sends TimeZoneDefinition and filters/displays without double-shifting (bug regression)', async () => {
+    let capturedBody = '';
+    setMockFetch((url, _request, body) => {
+      if (!url.includes('outlook.office365.com/EWS/Exchange.asmx')) return null;
+      if (!body.includes('GetUserAvailabilityRequest')) return null;
+      capturedBody = body;
+      return {
+        status: 200,
+        contentType: 'text/xml',
+        body: `<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages" xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types">
+  <soap:Body>
+    <m:GetUserAvailabilityResponse>
+      <m:SuggestionsResponse>
+        <m:ResponseMessage ResponseClass="Success"><m:ResponseCode>NoError</m:ResponseCode></m:ResponseMessage>
+        <m:SuggestionDayResultArray>
+          <t:SuggestionDayResult>
+            <t:Date>2026-07-13T00:00:00</t:Date>
+            <t:SuggestionArray>
+              <t:Suggestion>
+                <t:MeetingTime>2026-07-13T14:00:00</t:MeetingTime>
+                <t:IsWorkTime>true</t:IsWorkTime>
+              </t:Suggestion>
+            </t:SuggestionArray>
+          </t:SuggestionDayResult>
+        </m:SuggestionDayResultArray>
+      </m:SuggestionsResponse>
+    </m:GetUserAvailabilityResponse>
+  </soap:Body>
+</soap:Envelope>`
+      };
+    });
+
+    // 2026-07-13T14:00:00 in the mocked SuggestionsResponse means 2pm America/New_York (per the
+    // TimeZoneDefinition sent in the request) — inside the default 9-17 work hours window, and
+    // must display as 14:00, not shifted by the host machine's local offset.
+    const result = await runM365AgentCli(
+      'findtime nextweek user@example.com --solo --timezone America/New_York --token test-token-12345'
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(capturedBody).toContain('TimeZoneDefinition Id="America/New_York"');
+    expect(result.stdout).toContain('14:00');
+  });
+
+  test('--min-attendee-percentage out of range shows error', async () => {
+    const result = await runM365AgentCli(
+      'findtime nextweek user@example.com --min-attendee-percentage 0 --token test-token-12345'
+    );
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain('--min-attendee-percentage');
+  });
+
+  test('invalid --timezone shows error', async () => {
+    const result = await runM365AgentCli(
+      'findtime nextweek user@example.com --timezone Not/AZone --token test-token-12345'
+    );
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toMatch(/[Ii]nvalid.*time zone|--timezone/);
+  });
 });
 
 // ─── 4. respond ────────────────────────────────────────────────────────────
@@ -643,6 +822,51 @@ describe('create-event', () => {
     //     // (skip) expect(result.stdout).toContain('--teams');
     //     // (skip) expect(result.stdout).toContain('--day');
   });
+
+  test('--all-day without --timezone does not shift to the previous day on a positive-UTC-offset host (bug regression)', async () => {
+    const originalTz = process.env.TZ;
+    let capturedStart = '';
+    try {
+      process.env.TZ = 'Europe/Berlin';
+      setMockFetch((url, _request, body) => {
+        if (!url.includes('outlook.office365.com/EWS/Exchange.asmx')) return null;
+        if (body.includes('<m:CreateItem')) {
+          const m = body.match(/<t:Start>([^<]+)<\/t:Start>/);
+          capturedStart = m?.[1] ?? '';
+          return null; // fall through to the default mock response
+        }
+        return null;
+      });
+      const result = await runM365AgentCli(
+        'create-event "All Day" --day 2026-04-15 --all-day --token test-token-12345'
+      );
+      expect(result.exitCode).toBe(0);
+      expect(capturedStart).toBe('2026-04-15T00:00:00.000Z');
+    } finally {
+      if (originalTz === undefined) delete process.env.TZ;
+      else process.env.TZ = originalTz;
+    }
+  });
+
+  test('invalid --repeat --json returns the structured error envelope (bug regression)', async () => {
+    const result = await runM365AgentCli(
+      'create-event "Test" 10:00 11:00 --day today --repeat bogus --json --token test-token-12345'
+    );
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stdout.trim()).not.toBe('');
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.error.message).toContain('Invalid repeat type');
+  });
+
+  test('invalid --sensitivity --json returns the structured error envelope (bug regression)', async () => {
+    const result = await runM365AgentCli(
+      'create-event "Test" 10:00 11:00 --day today --sensitivity bogus --json --token test-token-12345'
+    );
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stdout.trim()).not.toBe('');
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.error.message).toContain('Invalid sensitivity');
+  });
 });
 
 // ─── 6. delete-event ───────────────────────────────────────────────────────
@@ -673,6 +897,19 @@ describe('delete-event', () => {
     expect(result.exitCode).toBe(0);
     //     // (skip) expect(result.stdout).toContain('--search');
     //     // (skip) expect(result.stdout).toContain('--id');
+  });
+
+  test('--scope future on EWS errors instead of only deleting the single occurrence while claiming to truncate (bug regression)', async () => {
+    const result = await runM365AgentCli('delete-event --id event-1 --scope future --token test-token-12345');
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain('--scope future is not supported on the EWS backend');
+  });
+
+  test('--scope future --json on EWS returns the structured error envelope', async () => {
+    const result = await runM365AgentCli('delete-event --id event-1 --scope future --json --token test-token-12345');
+    expect(result.exitCode).not.toBe(0);
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.error.message).toContain('--scope future is not supported on the EWS backend');
   });
 });
 
@@ -742,6 +979,26 @@ describe('update-event', () => {
     //     // (skip) expect(result.stdout).toContain('--title');
     //     // (skip) expect(result.stdout).toContain('--day');
   });
+
+  test('invalid --sensitivity on EWS --json returns the structured error envelope (bug regression)', async () => {
+    const result = await runM365AgentCli(
+      'update-event --id event-1 --sensitivity bogus --json --token test-token-12345'
+    );
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stdout.trim()).not.toBe('');
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.error.message).toContain('Invalid sensitivity');
+  });
+
+  test('--room not found on EWS --json returns the structured error envelope (bug regression)', async () => {
+    const result = await runM365AgentCli(
+      'update-event --id event-1 --room "Nonexistent Room" --json --token test-token-12345'
+    );
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stdout.trim()).not.toBe('');
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.error.message).toContain('Room not found');
+  });
 });
 
 // ─── 9. mail ───────────────────────────────────────────────────────────────
@@ -785,6 +1042,27 @@ describe('mail', () => {
     const data = JSON.parse(result.stdout.trim());
     expect(data.emails).toBeDefined();
     expect(Array.isArray(data.emails)).toBe(true);
+  });
+
+  test('--json --fields projects each email down to the requested dot-paths', async () => {
+    const result = await runM365AgentCli('mail inbox --json --fields "id,subject" --token test-token-12345');
+    expect(result.exitCode).toBe(0);
+    const data = JSON.parse(result.stdout.trim());
+    expect(Array.isArray(data.emails)).toBe(true);
+    for (const email of data.emails) {
+      expect(Object.keys(email).sort()).toEqual(['id', 'subject'].sort());
+    }
+  });
+
+  test('--json --ndjson prints one JSON object per line instead of one array', async () => {
+    const result = await runM365AgentCli('mail inbox --json --ndjson --fields "id" --token test-token-12345');
+    expect(result.exitCode).toBe(0);
+    const lines = result.stdout.trim().split('\n');
+    expect(lines.length).toBeGreaterThan(0);
+    for (const line of lines) {
+      const row = JSON.parse(line);
+      expect(Object.keys(row)).toEqual(['id']);
+    }
   });
 
   test('--help shows help text', async () => {
@@ -896,6 +1174,49 @@ describe('send', () => {
     //     // (skip) expect(result.stdout).toContain('--body');
     //     expect(result.stdout).toContain('--markdown');
   });
+
+  test('--template renders variables into the body', async () => {
+    const { mkdtemp, writeFile, rm } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const dir = await mkdtemp(join(tmpdir(), 'm365-send-template-'));
+    const templatePath = join(dir, 'welcome.txt');
+    await writeFile(templatePath, 'Hi {{name}}, welcome to {{company|our team}}!');
+    try {
+      const result = await runM365AgentCli(
+        `send --to recipient@example.com --subject "Welcome" --template "${templatePath}" --var name=Alice --token test-token-12345`
+      );
+      expect(result.exitCode).toBe(0);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('--template with an unresolved placeholder (no --var, no default) errors', async () => {
+    const { mkdtemp, writeFile, rm } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const dir = await mkdtemp(join(tmpdir(), 'm365-send-template-'));
+    const templatePath = join(dir, 'welcome.txt');
+    await writeFile(templatePath, 'Hi {{name}}!');
+    try {
+      const result = await runM365AgentCli(
+        `send --to recipient@example.com --subject "Welcome" --template "${templatePath}" --token test-token-12345`
+      );
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toContain('unresolved placeholder');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('--template and --body together error', async () => {
+    const result = await runM365AgentCli(
+      'send --to recipient@example.com --subject "Test" --body "hi" --template "/nonexistent.txt" --token test-token-12345'
+    );
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain('mutually exclusive');
+  });
 });
 
 // ─── 12. drafts ────────────────────────────────────────────────────────────
@@ -921,6 +1242,41 @@ describe('drafts', () => {
     );
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toMatch(/Draft|draft/i);
+  });
+
+  test('--create --template renders variables into the body', async () => {
+    const { mkdtemp, writeFile, rm } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const dir = await mkdtemp(join(tmpdir(), 'm365-drafts-template-'));
+    const templatePath = join(dir, 'welcome.txt');
+    await writeFile(templatePath, 'Hi {{name}}, from {{company|our team}}.');
+    try {
+      const result = await runM365AgentCli(
+        `drafts --create --to recipient@example.com --subject "Draft Test" --template "${templatePath}" --var name=Bob --token test-token-12345`
+      );
+      expect(result.exitCode).toBe(0);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('--create --template with an unresolved placeholder errors', async () => {
+    const { mkdtemp, writeFile, rm } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const dir = await mkdtemp(join(tmpdir(), 'm365-drafts-template-'));
+    const templatePath = join(dir, 'welcome.txt');
+    await writeFile(templatePath, 'Hi {{name}}!');
+    try {
+      const result = await runM365AgentCli(
+        `drafts --create --to recipient@example.com --subject "Draft Test" --template "${templatePath}" --token test-token-12345`
+      );
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toContain('unresolved placeholder');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   test('--send with invalid id shows error', async () => {
@@ -1017,14 +1373,47 @@ describe('files', () => {
       expect(result.exitCode).toBe(0);
     });
 
+    test('--collab with --expiration/--password/--no-retain-inherited-permissions errors instead of silently dropping them', async () => {
+      const expiration = await runM365AgentCli(
+        'files share drive-item-1 --collab --expiration 2026-01-01T00:00:00Z --token test-token-12345'
+      );
+      expect(expiration.exitCode).not.toBe(0);
+      expect(expiration.stderr).toContain('--collab');
+
+      const password = await runM365AgentCli(
+        'files share drive-item-1 --collab --password hunter2 --token test-token-12345'
+      );
+      expect(password.exitCode).not.toBe(0);
+      expect(password.stderr).toContain('--collab');
+
+      const noRetain = await runM365AgentCli(
+        'files share drive-item-1 --collab --no-retain-inherited-permissions --token test-token-12345'
+      );
+      expect(noRetain.exitCode).not.toBe(0);
+      expect(noRetain.stderr).toContain('--collab');
+    });
+
     test('--lock without --collab shows error', async () => {
       const result = await runM365AgentCli('files share drive-item-1 --lock --token test-token-12345');
-      expect(result.exitCode).toBe(0); // exitCode check;
-      // stderr checked
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toContain('--lock is only supported together with --collab');
     });
 
     test('--json outputs valid JSON', async () => {
       const result = await runM365AgentCli('files share drive-item-1 --json --token test-token-12345');
+      expect(result.exitCode).toBe(0);
+      expect(isValidJson(result.stdout.trim())).toBe(true);
+    });
+  });
+
+  describe('files permission-get', () => {
+    test('gets a single permission', async () => {
+      const result = await runM365AgentCli('files permission-get drive-item-1 perm-1 --token test-token-12345');
+      expect(result.exitCode).toBe(0);
+    });
+
+    test('--json outputs valid JSON', async () => {
+      const result = await runM365AgentCli('files permission-get drive-item-1 perm-1 --json --token test-token-12345');
       expect(result.exitCode).toBe(0);
       expect(isValidJson(result.stdout.trim())).toBe(true);
     });
@@ -1209,6 +1598,28 @@ describe('update command', () => {
       clearMockFetch();
     }
   });
+
+  test('--read-only blocks the actual update (does not spawn a global install)', async () => {
+    const { clearMockFetch, setMockFetch } = await import('./mocks/index.js');
+    setMockFetch((url) => {
+      if (url.includes('registry.npmjs.org/m365-agent-cli/latest')) {
+        return {
+          status: 200,
+          body: JSON.stringify({ version: '3000.0.0' }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    try {
+      const result = await runM365AgentCli('--read-only update');
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain('read-only mode');
+      expect(result.stdout).not.toContain('Updating');
+    } finally {
+      clearMockFetch();
+    }
+  });
 });
 
 // ─── Read-Only Mode ────────────────────────────────────────────────────
@@ -1342,6 +1753,13 @@ describe('Graph backend (M365_EXCHANGE_BACKEND=graph)', () => {
     expect(data.email).toBe('graph.user@example.com');
   });
 
+  test('whoami --json points to verify-token --capabilities for scope/capability coverage', async () => {
+    const result = await runM365AgentCli('whoami --json --token test-graph-token');
+    expect(result.exitCode).toBe(0);
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.hint).toContain('verify-token --capabilities');
+  });
+
   test('update-event --json lists organizer events from calendarView', async () => {
     const result = await runM365AgentCli('update-event --json --day today --token test-graph-token');
     expect(result.exitCode).toBe(0);
@@ -1359,6 +1777,26 @@ describe('Graph backend (M365_EXCHANGE_BACKEND=graph)', () => {
     expect(data.backend).toBe('graph');
     expect(data.events).toHaveLength(1);
     expect(data.events[0].id).toBe('graph-cal-event-1');
+  });
+
+  test('calendar --json preserves code/status from a failed calendarView call (bug regression)', async () => {
+    setMockFetch((url) => {
+      if (!url.includes('graph.microsoft.com/v1.0')) return null;
+      const path = new URL(url).pathname;
+      if (path.includes('/calendar/calendarView')) {
+        return {
+          status: 403,
+          body: JSON.stringify({ error: { code: 'ErrorAccessDenied', message: 'Access denied' } }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    const result = await runM365AgentCli('calendar today --json --token test-graph-token');
+    expect(result.exitCode).toBe(1);
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.error.status).toBe(403);
+    expect(data.error.code).toBe('ErrorAccessDenied');
   });
 
   test('delete-event --scope future truncates recurring series via Graph (PATCH master)', async () => {
@@ -1454,6 +1892,41 @@ describe('Graph backend (M365_EXCHANGE_BACKEND=graph)', () => {
     expect(data.action).toBe('truncated');
   });
 
+  test('does not corrupt the untouched end time when only --start is patched on a non-UTC host (bug regression)', async () => {
+    const originalTz = process.env.TZ;
+    try {
+      // Berlin is UTC+2 in April — parsing the mock event's unzoned "09:30:00.0000000" end time as
+      // local time (instead of normalizing it as UTC first) would shift it by 2 hours.
+      process.env.TZ = 'Europe/Berlin';
+      let patchBody = '';
+      setMockFetch((url, request, body) => {
+        if (!url.includes('graph.microsoft.com/v1.0')) return null;
+        const method = (request?.method || 'GET').toUpperCase();
+        const path = new URL(url).pathname;
+        if (method === 'PATCH' && /^\/v1\.0\/me\/events\/[^/]+$/.test(path)) {
+          patchBody = body;
+          return {
+            status: 200,
+            body: JSON.stringify({ id: 'graph-cal-event-1', subject: 'Standup', changeKey: 'ck2' }),
+            contentType: 'application/json'
+          };
+        }
+        return null;
+      });
+      const result = await runM365AgentCli(
+        'update-event --id graph-cal-event-1 --start 10:00 --token test-graph-token'
+      );
+      expect(result.exitCode).toBe(0);
+      expect(patchBody).not.toBe('');
+      const patch = JSON.parse(patchBody);
+      // Untouched end time must stay 09:30 UTC, not shift to 07:30 from a local-time misparse.
+      expect(patch.end.dateTime).toBe('2026-04-01T09:30:00');
+    } finally {
+      if (originalTz === undefined) delete process.env.TZ;
+      else process.env.TZ = originalTz;
+    }
+  });
+
   test('update-event --id --title patches event via Graph', async () => {
     const result = await runM365AgentCli(
       'update-event --id graph-cal-event-1 --title "Updated title" --token test-graph-token'
@@ -1506,6 +1979,40 @@ describe('Graph backend (M365_EXCHANGE_BACKEND=graph)', () => {
     expect(Array.isArray(data.pendingEvents)).toBe(true);
   });
 
+  test('normalizes the pending invitation end time like the start time instead of leaving it unzoned (bug regression)', async () => {
+    setMockFetch((url) => {
+      if (!url.includes('graph.microsoft.com/v1.0')) return null;
+      const path = new URL(url).pathname;
+      if (path.includes('/calendar/calendarView')) {
+        return {
+          status: 200,
+          body: JSON.stringify({
+            value: [
+              {
+                id: 'pending-invite-1',
+                subject: 'Unzoned End Time',
+                isOrganizer: false,
+                isCancelled: false,
+                start: { dateTime: '2026-04-05T09:00:00.0000000', timeZone: 'UTC' },
+                end: { dateTime: '2026-04-05T10:00:00.0000000', timeZone: 'UTC' },
+                organizer: { emailAddress: { address: 'someone-else@example.com', name: 'Someone Else' } }
+              }
+            ]
+          }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    const result = await runM365AgentCli('respond list --json --token test-graph-token');
+    expect(result.exitCode).toBe(0);
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.pendingEvents).toHaveLength(1);
+    // Graph's timeZone:"UTC" with an unzoned dateTime must be normalized to a "Z"-suffixed string,
+    // the same way the start time already was — not passed through raw.
+    expect(data.pendingEvents[0].end).toBe('2026-04-05T10:00:00.0000000Z');
+  });
+
   test('whoami does not fall back to EWS when GET /me returns 401 (graph-only mode)', async () => {
     const requestedUrls: string[] = [];
     setMockFetch((url) => {
@@ -1539,9 +2046,9 @@ describe('Graph backend (M365_EXCHANGE_BACKEND=graph)', () => {
   test('auto-reply exits on graph backend with JSON hint to use oof', async () => {
     const result = await runM365AgentCli('auto-reply --json');
     expect(result.exitCode).toBe(1);
-    const data = JSON.parse(result.stdout.trim()) as { error: string };
-    expect(data.error).toMatch(/oof/i);
-    expect(data.error).toMatch(/M365_EXCHANGE_BACKEND/i);
+    const data = JSON.parse(result.stdout.trim()) as { error: { message: string } };
+    expect(data.error.message).toMatch(/oof/i);
+    expect(data.error.message).toMatch(/M365_EXCHANGE_BACKEND/i);
   });
 });
 
@@ -1635,5 +2142,363 @@ describe('Auto backend (M365_EXCHANGE_BACKEND=auto)', () => {
     expect(data.backend).toBe('graph');
     expect(Array.isArray(data.events)).toBe(true);
     expect(data.events.length).toBeGreaterThan(0);
+  });
+});
+
+describe('bookings --json error envelope (bug regression)', () => {
+  test('a failed Graph call returns the structured error envelope on stdout, not plain text on stderr', async () => {
+    setMockFetch((url) => {
+      if (!url.includes('graph.microsoft.com/v1.0')) return null;
+      const path = new URL(url).pathname;
+      if (path.includes('/solutions/bookingBusinesses')) {
+        return {
+          status: 403,
+          body: JSON.stringify({ error: { code: 'ErrorAccessDenied', message: 'Access denied' } }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    const result = await runM365AgentCli('bookings businesses --json --token test-graph-token');
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toBe('');
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.error.status).toBe(403);
+    expect(data.error.code).toBe('ErrorAccessDenied');
+  });
+
+  test('without --json, still prints plain text to stderr (unchanged)', async () => {
+    setMockFetch((url) => {
+      if (!url.includes('graph.microsoft.com/v1.0')) return null;
+      const path = new URL(url).pathname;
+      if (path.includes('/solutions/bookingBusinesses')) {
+        return {
+          status: 403,
+          body: JSON.stringify({ error: { code: 'ErrorAccessDenied', message: 'Access denied' } }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    const result = await runM365AgentCli('bookings businesses --token test-graph-token');
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toContain('Access denied');
+  });
+});
+
+describe('rooms find (bug regressions)', () => {
+  test('--start without --end errors instead of silently ignoring --start', async () => {
+    const result = await runM365AgentCli(
+      'rooms find --query conf --start 2026-01-01T09:00:00Z --token test-graph-token'
+    );
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain('--start and --end must be used together');
+  });
+
+  test('--end without --start errors the same way', async () => {
+    const result = await runM365AgentCli('rooms find --query conf --end 2026-01-01T10:00:00Z --token test-graph-token');
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain('--start and --end must be used together');
+  });
+
+  test('marks a room whose availability check failed as availabilityUnknown instead of confirmed-free', async () => {
+    setMockFetch((url) => {
+      if (!url.includes('graph.microsoft.com/v1.0')) return null;
+      const path = new URL(url).pathname;
+      if (path === '/v1.0/places/microsoft.graph.room') {
+        return {
+          status: 200,
+          body: JSON.stringify({
+            value: [{ id: 'room-1', displayName: 'Conf Room', emailAddress: 'conf@contoso.com' }]
+          }),
+          contentType: 'application/json'
+        };
+      }
+      if (path === '/v1.0/users/conf%40contoso.com/calendar/calendarView') {
+        return {
+          status: 403,
+          body: JSON.stringify({ error: { code: 'ErrorAccessDenied', message: 'Access denied' } }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    const result = await runM365AgentCli(
+      'rooms find --query conf --start 2026-01-01T09:00:00Z --end 2026-01-01T10:00:00Z --json --token test-graph-token'
+    );
+    expect(result.exitCode).toBe(0);
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.rooms).toHaveLength(1);
+    expect(data.rooms[0].availabilityUnknown).toBe(true);
+  });
+});
+
+describe('approvals list --next (bug regression)', () => {
+  test('--next combined with --top errors instead of silently ignoring --top', async () => {
+    const result = await runM365AgentCli(
+      'approvals list --next "https://graph.microsoft.com/beta/me/approvals?$skiptoken=x" --top 5 --token test-graph-token'
+    );
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain('--next');
+  });
+
+  test('--next combined with --no-expand errors the same way', async () => {
+    const result = await runM365AgentCli(
+      'approvals list --next "https://graph.microsoft.com/beta/me/approvals?$skiptoken=x" --no-expand --token test-graph-token'
+    );
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain('--next');
+  });
+
+  test('--next alone (no --top/--no-expand) is unaffected', async () => {
+    setMockFetch((url) => {
+      if (!url.includes('graph.microsoft.com/beta/me/approvals')) return null;
+      return { status: 200, body: JSON.stringify({ value: [] }), contentType: 'application/json' };
+    });
+    const result = await runM365AgentCli(
+      'approvals list --next "https://graph.microsoft.com/beta/me/approvals?$skiptoken=x" --token test-graph-token'
+    );
+    expect(result.exitCode).toBe(0);
+  });
+});
+
+describe('groups --json error envelope (bug regression)', () => {
+  test('a failed Graph call returns the structured error envelope on stdout, not plain text on stderr', async () => {
+    setMockFetch((url) => {
+      if (!url.includes('graph.microsoft.com/v1.0')) return null;
+      if (url.includes('/me/memberOf/microsoft.graph.group')) {
+        return {
+          status: 403,
+          body: JSON.stringify({ error: { code: 'ErrorAccessDenied', message: 'Access denied' } }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    const result = await runM365AgentCli('groups list --json --token test-graph-token');
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toBe('');
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.error.status).toBe(403);
+    expect(data.error.code).toBe('ErrorAccessDenied');
+  });
+
+  test('without --json, still prints plain text to stderr (unchanged)', async () => {
+    setMockFetch((url) => {
+      if (!url.includes('graph.microsoft.com/v1.0')) return null;
+      if (url.includes('/me/memberOf/microsoft.graph.group')) {
+        return {
+          status: 403,
+          body: JSON.stringify({ error: { code: 'ErrorAccessDenied', message: 'Access denied' } }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    const result = await runM365AgentCli('groups list --token test-graph-token');
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toContain('Access denied');
+  });
+});
+
+describe('onenote --json error envelope (bug regression)', () => {
+  test('a failed Graph call returns the structured error envelope on stdout, not plain text on stderr', async () => {
+    setMockFetch((url) => {
+      if (!url.includes('graph.microsoft.com/v1.0')) return null;
+      if (url.includes('/me/onenote/notebooks')) {
+        return {
+          status: 403,
+          body: JSON.stringify({ error: { code: 'ErrorAccessDenied', message: 'Access denied' } }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    const result = await runM365AgentCli('onenote notebooks --json --token test-graph-token');
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toBe('');
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.error.status).toBe(403);
+    expect(data.error.code).toBe('ErrorAccessDenied');
+  });
+
+  test('without --json, still prints plain text to stderr (unchanged)', async () => {
+    setMockFetch((url) => {
+      if (!url.includes('graph.microsoft.com/v1.0')) return null;
+      if (url.includes('/me/onenote/notebooks')) {
+        return {
+          status: 403,
+          body: JSON.stringify({ error: { code: 'ErrorAccessDenied', message: 'Access denied' } }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    const result = await runM365AgentCli('onenote notebooks --token test-graph-token');
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toContain('Access denied');
+  });
+});
+
+describe('contacts --json error envelope (bug regression)', () => {
+  test('a failed Graph call returns the structured error envelope on stdout, not plain text on stderr', async () => {
+    setMockFetch((url) => {
+      if (!url.includes('graph.microsoft.com/v1.0')) return null;
+      if (url.includes('/me/contacts')) {
+        return {
+          status: 403,
+          body: JSON.stringify({ error: { code: 'ErrorAccessDenied', message: 'Access denied' } }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    const result = await runM365AgentCli('contacts list --json --token test-graph-token');
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toBe('');
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.error.status).toBe(403);
+    expect(data.error.code).toBe('ErrorAccessDenied');
+  });
+
+  test('without --json, still prints plain text to stderr (unchanged)', async () => {
+    setMockFetch((url) => {
+      if (!url.includes('graph.microsoft.com/v1.0')) return null;
+      if (url.includes('/me/contacts')) {
+        return {
+          status: 403,
+          body: JSON.stringify({ error: { code: 'ErrorAccessDenied', message: 'Access denied' } }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    const result = await runM365AgentCli('contacts list --token test-graph-token');
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toContain('Access denied');
+  });
+});
+
+describe('viva --json error envelope (bug regression)', () => {
+  test('a failed Graph call returns the structured error envelope on stdout, not plain text on stderr', async () => {
+    setMockFetch((url) => {
+      if (!url.includes('graph.microsoft.com/beta')) return null;
+      if (url.includes('/me/employeeExperience/assignedRoles')) {
+        return {
+          status: 403,
+          body: JSON.stringify({ error: { code: 'ErrorAccessDenied', message: 'Access denied' } }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    const result = await runM365AgentCli('viva engage-assigned-roles-list --json --token test-graph-token');
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toBe('');
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.error.status).toBe(403);
+    expect(data.error.code).toBe('ErrorAccessDenied');
+  });
+
+  test('without --json, still prints plain text to stderr (unchanged)', async () => {
+    setMockFetch((url) => {
+      if (!url.includes('graph.microsoft.com/beta')) return null;
+      if (url.includes('/me/employeeExperience/assignedRoles')) {
+        return {
+          status: 403,
+          body: JSON.stringify({ error: { code: 'ErrorAccessDenied', message: 'Access denied' } }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    const result = await runM365AgentCli('viva engage-assigned-roles-list --token test-graph-token');
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toContain('Access denied');
+  });
+});
+
+describe('viva-extra-subcommands --json error envelope (bug regression)', () => {
+  test('a failed Graph call returns the structured error envelope on stdout, not plain text on stderr', async () => {
+    setMockFetch((url) => {
+      if (!url.includes('graph.microsoft.com/beta')) return null;
+      if (url.includes('/communications/onlineMeetingConversations')) {
+        return {
+          status: 403,
+          body: JSON.stringify({ error: { code: 'ErrorAccessDenied', message: 'Access denied' } }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    const result = await runM365AgentCli('viva meeting-engage-conversations-list --json --token test-graph-token');
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toBe('');
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.error.status).toBe(403);
+    expect(data.error.code).toBe('ErrorAccessDenied');
+  });
+
+  test('without --json, still prints plain text to stderr (unchanged)', async () => {
+    setMockFetch((url) => {
+      if (!url.includes('graph.microsoft.com/beta')) return null;
+      if (url.includes('/communications/onlineMeetingConversations')) {
+        return {
+          status: 403,
+          body: JSON.stringify({ error: { code: 'ErrorAccessDenied', message: 'Access denied' } }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    const result = await runM365AgentCli('viva meeting-engage-conversations-list --token test-graph-token');
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toContain('Access denied');
+  });
+});
+
+describe('viva-tenant-subcommands --json error envelope (bug regression)', () => {
+  test('a failed Graph call returns the structured error envelope on stdout, not plain text on stderr', async () => {
+    setMockFetch((url) => {
+      if (!url.includes('graph.microsoft.com/beta')) return null;
+      if (url.includes('/employeeExperience/communities')) {
+        return {
+          status: 403,
+          body: JSON.stringify({ error: { code: 'ErrorAccessDenied', message: 'Access denied' } }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    const result = await runM365AgentCli('viva tenant-communities-list --json --token test-graph-token');
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toBe('');
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.error.status).toBe(403);
+    expect(data.error.code).toBe('ErrorAccessDenied');
+  });
+
+  test('without --json, still prints plain text to stderr (unchanged)', async () => {
+    setMockFetch((url) => {
+      if (!url.includes('graph.microsoft.com/beta')) return null;
+      if (url.includes('/employeeExperience/communities')) {
+        return {
+          status: 403,
+          body: JSON.stringify({ error: { code: 'ErrorAccessDenied', message: 'Access denied' } }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    const result = await runM365AgentCli('viva tenant-communities-list --token test-graph-token');
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toContain('Access denied');
   });
 });

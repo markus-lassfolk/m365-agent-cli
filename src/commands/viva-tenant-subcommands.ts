@@ -70,11 +70,30 @@ import {
   patchTenantProviderLearningCourseActivity,
   patchTenantRootLearningCourseActivity
 } from '../lib/graph-viva-tenant-client.js';
+import { toJsonError } from '../lib/json-error.js';
 import { checkReadOnly } from '../lib/utils.js';
 
 async function readJsonBody(path: string): Promise<unknown> {
   const raw = await readFile(path.trim(), 'utf8');
   return JSON.parse(raw) as unknown;
+}
+
+/** Prints the --json structured error envelope (or the matching plain-text "Auth error: .../
+ *  Error: ...") for the two failure shapes the tenant `-list` subcommands hit, then exits 1. */
+function failVivaTenant(
+  json: boolean | undefined,
+  prefix: 'Auth error' | 'Error',
+  error: unknown,
+  fallbackMessage?: string
+): never {
+  if (json) {
+    console.log(JSON.stringify({ error: toJsonError(error, fallbackMessage) }, null, 2));
+  } else {
+    const message =
+      (typeof error === 'string' ? error : (error as { message?: string } | undefined)?.message) ?? fallbackMessage;
+    console.error(`${prefix}: ${message}`);
+  }
+  process.exit(1);
 }
 
 type ODataOpts = {
@@ -183,13 +202,11 @@ export function registerVivaTenantSubcommands(viva: Command): void {
   ).action(async (opts: ODataOpts & { json?: boolean; token?: string; identity?: string }) => {
     const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success || !auth.token) {
-      console.error(`Auth error: ${auth.error}`);
-      process.exit(1);
+      failVivaTenant(opts.json, 'Auth error', auth.error);
     }
     const r = await listTenantCommunities(auth.token, odataQ(opts));
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message || 'List failed'}`);
-      process.exit(1);
+      failVivaTenant(opts.json, 'Error', r.error, 'List failed');
     }
     if (opts.json) console.log(JSON.stringify(r.data, null, 2));
     else for (const row of r.data) console.log(JSON.stringify(row));
@@ -328,13 +345,11 @@ export function registerVivaTenantSubcommands(viva: Command): void {
   ).action(async (opts: ODataOpts & { communityId: string; json?: boolean; token?: string; identity?: string }) => {
     const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success || !auth.token) {
-      console.error(`Auth error: ${auth.error}`);
-      process.exit(1);
+      failVivaTenant(opts.json, 'Auth error', auth.error);
     }
     const r = await listTenantCommunityOwners(auth.token, opts.communityId, odataQ(opts));
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message || 'List failed'}`);
-      process.exit(1);
+      failVivaTenant(opts.json, 'Error', r.error, 'List failed');
     }
     if (opts.json) console.log(JSON.stringify(r.data, null, 2));
     else for (const row of r.data) console.log(JSON.stringify(row));
@@ -453,8 +468,7 @@ export function registerVivaTenantSubcommands(viva: Command): void {
     ) => {
       const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
       if (!auth.success || !auth.token) {
-        console.error(`Auth error: ${auth.error}`);
-        process.exit(1);
+        failVivaTenant(opts.json, 'Auth error', auth.error);
       }
       const r = await listTenantCommunityOwnerServiceProvisioningErrors(
         auth.token,
@@ -463,8 +477,7 @@ export function registerVivaTenantSubcommands(viva: Command): void {
         odataQ(opts)
       );
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message || 'List failed'}`);
-        process.exit(1);
+        failVivaTenant(opts.json, 'Error', r.error, 'List failed');
       }
       if (opts.json) console.log(JSON.stringify(r.data, null, 2));
       else for (const row of r.data) console.log(JSON.stringify(row));
@@ -481,13 +494,11 @@ export function registerVivaTenantSubcommands(viva: Command): void {
   ).action(async (opts: ODataOpts & { json?: boolean; token?: string; identity?: string }) => {
     const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success || !auth.token) {
-      console.error(`Auth error: ${auth.error}`);
-      process.exit(1);
+      failVivaTenant(opts.json, 'Auth error', auth.error);
     }
     const r = await listTenantEngagementAsyncOperations(auth.token, odataQ(opts));
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message || 'List failed'}`);
-      process.exit(1);
+      failVivaTenant(opts.json, 'Error', r.error, 'List failed');
     }
     if (opts.json) console.log(JSON.stringify(r.data, null, 2));
     else for (const row of r.data) console.log(JSON.stringify(row));
@@ -672,13 +683,11 @@ export function registerVivaTenantSubcommands(viva: Command): void {
   ).action(async (opts: ODataOpts & { json?: boolean; token?: string; identity?: string }) => {
     const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success || !auth.token) {
-      console.error(`Auth error: ${auth.error}`);
-      process.exit(1);
+      failVivaTenant(opts.json, 'Auth error', auth.error);
     }
     const r = await listTenantGoalsExportJobs(auth.token, odataQ(opts));
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message || 'List failed'}`);
-      process.exit(1);
+      failVivaTenant(opts.json, 'Error', r.error, 'List failed');
     }
     if (opts.json) console.log(JSON.stringify(r.data, null, 2));
     else for (const row of r.data) console.log(JSON.stringify(row));
@@ -812,13 +821,11 @@ export function registerVivaTenantSubcommands(viva: Command): void {
   ).action(async (opts: ODataOpts & { json?: boolean; token?: string; identity?: string }) => {
     const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success || !auth.token) {
-      console.error(`Auth error: ${auth.error}`);
-      process.exit(1);
+      failVivaTenant(opts.json, 'Auth error', auth.error);
     }
     const r = await listTenantRootLearningCourseActivities(auth.token, odataQ(opts));
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message || 'List failed'}`);
-      process.exit(1);
+      failVivaTenant(opts.json, 'Error', r.error, 'List failed');
     }
     if (opts.json) console.log(JSON.stringify(r.data, null, 2));
     else for (const row of r.data) console.log(JSON.stringify(row));
@@ -952,13 +959,11 @@ export function registerVivaTenantSubcommands(viva: Command): void {
   ).action(async (opts: ODataOpts & { json?: boolean; token?: string; identity?: string }) => {
     const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success || !auth.token) {
-      console.error(`Auth error: ${auth.error}`);
-      process.exit(1);
+      failVivaTenant(opts.json, 'Auth error', auth.error);
     }
     const r = await listTenantLearningProviders(auth.token, odataQ(opts));
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message || 'List failed'}`);
-      process.exit(1);
+      failVivaTenant(opts.json, 'Error', r.error, 'List failed');
     }
     if (opts.json) console.log(JSON.stringify(r.data, null, 2));
     else for (const row of r.data) console.log(JSON.stringify(row));
@@ -1073,13 +1078,11 @@ export function registerVivaTenantSubcommands(viva: Command): void {
   ).action(async (opts: ODataOpts & { providerId: string; json?: boolean; token?: string; identity?: string }) => {
     const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success || !auth.token) {
-      console.error(`Auth error: ${auth.error}`);
-      process.exit(1);
+      failVivaTenant(opts.json, 'Auth error', auth.error);
     }
     const r = await listTenantLearningContents(auth.token, opts.providerId, odataQ(opts));
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message || 'List failed'}`);
-      process.exit(1);
+      failVivaTenant(opts.json, 'Error', r.error, 'List failed');
     }
     if (opts.json) console.log(JSON.stringify(r.data, null, 2));
     else for (const row of r.data) console.log(JSON.stringify(row));
@@ -1229,13 +1232,11 @@ export function registerVivaTenantSubcommands(viva: Command): void {
   ).action(async (opts: ODataOpts & { providerId: string; json?: boolean; token?: string; identity?: string }) => {
     const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success || !auth.token) {
-      console.error(`Auth error: ${auth.error}`);
-      process.exit(1);
+      failVivaTenant(opts.json, 'Auth error', auth.error);
     }
     const r = await listTenantProviderLearningCourseActivities(auth.token, opts.providerId, odataQ(opts));
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message || 'List failed'}`);
-      process.exit(1);
+      failVivaTenant(opts.json, 'Error', r.error, 'List failed');
     }
     if (opts.json) console.log(JSON.stringify(r.data, null, 2));
     else for (const row of r.data) console.log(JSON.stringify(row));
@@ -1393,13 +1394,11 @@ export function registerVivaTenantSubcommands(viva: Command): void {
   ).action(async (opts: ODataOpts & { json?: boolean; token?: string; identity?: string }) => {
     const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success || !auth.token) {
-      console.error(`Auth error: ${auth.error}`);
-      process.exit(1);
+      failVivaTenant(opts.json, 'Auth error', auth.error);
     }
     const r = await listTenantEngagementRoles(auth.token, odataQ(opts));
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message || 'List failed'}`);
-      process.exit(1);
+      failVivaTenant(opts.json, 'Error', r.error, 'List failed');
     }
     if (opts.json) console.log(JSON.stringify(r.data, null, 2));
     else for (const row of r.data) console.log(JSON.stringify(row));
@@ -1514,13 +1513,11 @@ export function registerVivaTenantSubcommands(viva: Command): void {
   ).action(async (opts: ODataOpts & { roleId: string; json?: boolean; token?: string; identity?: string }) => {
     const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success || !auth.token) {
-      console.error(`Auth error: ${auth.error}`);
-      process.exit(1);
+      failVivaTenant(opts.json, 'Auth error', auth.error);
     }
     const r = await listTenantEngagementRoleMembers(auth.token, opts.roleId, odataQ(opts));
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message || 'List failed'}`);
-      process.exit(1);
+      failVivaTenant(opts.json, 'Error', r.error, 'List failed');
     }
     if (opts.json) console.log(JSON.stringify(r.data, null, 2));
     else for (const row of r.data) console.log(JSON.stringify(row));
@@ -1735,8 +1732,7 @@ export function registerVivaTenantSubcommands(viva: Command): void {
     ) => {
       const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
       if (!auth.success || !auth.token) {
-        console.error(`Auth error: ${auth.error}`);
-        process.exit(1);
+        failVivaTenant(opts.json, 'Auth error', auth.error);
       }
       const r = await listTenantEngagementRoleMemberUserServiceProvisioningErrors(
         auth.token,
@@ -1745,8 +1741,7 @@ export function registerVivaTenantSubcommands(viva: Command): void {
         odataQ(opts)
       );
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message || 'List failed'}`);
-        process.exit(1);
+        failVivaTenant(opts.json, 'Error', r.error, 'List failed');
       }
       if (opts.json) console.log(JSON.stringify(r.data, null, 2));
       else for (const row of r.data) console.log(JSON.stringify(row));

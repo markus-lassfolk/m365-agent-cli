@@ -26,8 +26,10 @@ import {
 import { getExchangeBackend } from '../lib/exchange-backend.js';
 import { warnAutoGraphToEwsFallback } from '../lib/exchange-fallback-hint.js';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
+import { toJsonError } from '../lib/json-error.js';
 import { markdownToHtml } from '../lib/markdown.js';
 import { lookupMimeType } from '../lib/mime-type.js';
+import { parseFieldsOption, printNdjson, shapeRows } from '../lib/output-shape.js';
 import { safeAttachmentFileName, writeInternetShortcutUtf8File } from '../lib/safe-filename.js';
 import { checkReadOnly } from '../lib/utils.js';
 import {
@@ -194,6 +196,11 @@ export const mailCommand = new Command('mail')
   )
   .option('--markdown', 'Parse message as markdown (bold, links, lists)')
   .option('--json', 'Output as JSON')
+  .option(
+    '--fields <list>',
+    'With --json on the list view: comma-separated dot-paths to project each email down to (e.g. "id,subject,from")'
+  )
+  .option('--ndjson', 'With --json on the list view: print one JSON object per email per line, instead of one array')
   .option('--token <token>', 'Use a specific token')
   .option(
     '--mailbox <email>',
@@ -254,6 +261,8 @@ Shared mailbox: add --mailbox shared@contoso.com. Full flags: docs/CLI_REFERENCE
         message?: string;
         markdown?: boolean;
         json?: boolean;
+        fields?: string;
+        ndjson?: boolean;
         token?: string;
         draft?: boolean;
         mailbox?: string;
@@ -289,7 +298,9 @@ Shared mailbox: add --mailbox shared@contoso.com. Full flags: docs/CLI_REFERENCE
         if (options.json) {
           console.log(
             JSON.stringify({
-              error: 'There is no `mail folders` subcommand. Use the top-level `folders` command to list mail folders.',
+              error: toJsonError(
+                'There is no `mail folders` subcommand. Use the top-level `folders` command to list mail folders.'
+              ),
               hint: 'm365-agent-cli folders [--mailbox <email>]'
             })
           );
@@ -317,7 +328,7 @@ Shared mailbox: add --mailbox shared@contoso.com. Full flags: docs/CLI_REFERENCE
           if (!ga.success || !ga.token) {
             const msg = ga.error || 'Graph authentication failed';
             if (options.json) {
-              console.log(JSON.stringify({ error: msg }, null, 2));
+              console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
             } else {
               console.error(`Error: ${msg}`);
             }
@@ -325,7 +336,7 @@ Shared mailbox: add --mailbox shared@contoso.com. Full flags: docs/CLI_REFERENCE
           }
           const detail = describeMailGraphUnhandledCombination(mailGraphOpts);
           if (options.json) {
-            console.log(JSON.stringify({ error: detail }, null, 2));
+            console.log(JSON.stringify({ error: toJsonError(detail) }, null, 2));
           } else {
             console.error(detail);
           }
@@ -350,7 +361,7 @@ Shared mailbox: add --mailbox shared@contoso.com. Full flags: docs/CLI_REFERENCE
 
       if (!authResult.success) {
         if (options.json) {
-          console.log(JSON.stringify({ error: authResult.error }, null, 2));
+          console.log(JSON.stringify({ error: toJsonError(authResult.error) }, null, 2));
         } else {
           console.error(`Error: ${authResult.error}`);
           console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
@@ -409,7 +420,9 @@ Shared mailbox: add --mailbox shared@contoso.com. Full flags: docs/CLI_REFERENCE
 
       if (!result.ok || !result.data) {
         if (options.json) {
-          console.log(JSON.stringify({ error: result.error?.message || 'Failed to fetch emails' }, null, 2));
+          console.log(
+            JSON.stringify({ error: toJsonError(result.error?.message || 'Failed to fetch emails') }, null, 2)
+          );
         } else {
           console.error(`Error: ${result.error?.message || 'Failed to fetch emails'}`);
         }
@@ -1067,31 +1080,28 @@ Shared mailbox: add --mailbox shared@contoso.com. Full flags: docs/CLI_REFERENCE
 
       // List emails
       if (options.json) {
-        console.log(
-          JSON.stringify(
-            {
-              folder: apiFolder,
-              page,
-              limit,
-              emails: emails.map((e, i) => ({
-                index: skip + i + 1,
-                id: e.Id,
-                from: e.From?.EmailAddress?.Address,
-                fromName: e.From?.EmailAddress?.Name,
-                subject: e.Subject,
-                preview: e.BodyPreview,
-                receivedAt: e.ReceivedDateTime,
-                isRead: e.IsRead,
-                hasAttachments: e.HasAttachments,
-                importance: e.Importance,
-                flagged: e.Flag?.FlagStatus === 'Flagged',
-                categories: e.Categories
-              }))
-            },
-            null,
-            2
-          )
+        const rows = shapeRows(
+          emails.map((e, i) => ({
+            index: skip + i + 1,
+            id: e.Id,
+            from: e.From?.EmailAddress?.Address,
+            fromName: e.From?.EmailAddress?.Name,
+            subject: e.Subject,
+            preview: e.BodyPreview,
+            receivedAt: e.ReceivedDateTime,
+            isRead: e.IsRead,
+            hasAttachments: e.HasAttachments,
+            importance: e.Importance,
+            flagged: e.Flag?.FlagStatus === 'Flagged',
+            categories: e.Categories
+          })),
+          parseFieldsOption(options.fields)
         );
+        if (options.ndjson) {
+          printNdjson(rows);
+        } else {
+          console.log(JSON.stringify({ folder: apiFolder, page, limit, emails: rows }, null, 2));
+        }
         return;
       }
 

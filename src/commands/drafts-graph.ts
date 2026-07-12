@@ -203,7 +203,7 @@ export async function tryGraphDraftMutations(
 
     const patch: Record<string, unknown> = {};
     if (options.subject !== undefined) patch.subject = options.subject;
-    if (options.body !== undefined || options.markdown || options.html) {
+    if (options.body !== undefined) {
       const { body, bodyType } = normalizeDraftBody(options);
       patch.body = { contentType: bodyType, content: body };
     }

@@ -18,6 +18,7 @@ import {
   listCalendarPermissions,
   updateCalendarPermission
 } from '../lib/graph-calendar-client.js';
+import { toJsonError } from '../lib/json-error.js';
 import { checkReadOnly } from '../lib/utils.js';
 
 const VALID_PERMISSIONS = [
@@ -439,7 +440,7 @@ calendarShareAdd
       );
       if (!result.ok || !result.data) {
         if (opts.json) {
-          console.log(JSON.stringify({ error: result.error?.message || 'Failed' }, null, 2));
+          console.log(JSON.stringify({ error: toJsonError(result.error?.message || 'Failed') }, null, 2));
         } else {
           console.error(`Error: ${result.error?.message || 'Failed to create calendar permission'}`);
         }
@@ -488,14 +489,14 @@ calendarShareUpdate
         permId = await findCalendarPermissionIdByEmail(ga.token, opts.email.trim(), opts.mailbox?.trim());
         if (!permId) {
           const msg = `No calendar permission found for ${opts.email.trim()}`;
-          if (opts.json) console.log(JSON.stringify({ error: msg }, null, 2));
+          if (opts.json) console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
           else console.error(`Error: ${msg}`);
           process.exit(1);
         }
       }
       if (!permId) {
         const msg = 'Provide --permission-id or --email';
-        if (opts.json) console.log(JSON.stringify({ error: msg }, null, 2));
+        if (opts.json) console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
         else console.error(`Error: ${msg}`);
         process.exit(1);
       }
@@ -507,7 +508,7 @@ calendarShareUpdate
       );
       if (!result.ok || !result.data) {
         if (opts.json) {
-          console.log(JSON.stringify({ error: result.error?.message || 'Failed' }, null, 2));
+          console.log(JSON.stringify({ error: toJsonError(result.error?.message || 'Failed') }, null, 2));
         } else {
           console.error(`Error: ${result.error?.message || 'Failed to update calendar permission'}`);
         }
@@ -554,21 +555,21 @@ calendarShareRemove
         permId = await findCalendarPermissionIdByEmail(ga.token, opts.email.trim(), opts.mailbox?.trim());
         if (!permId) {
           const msg = `No calendar permission found for ${opts.email.trim()}`;
-          if (opts.json) console.log(JSON.stringify({ error: msg }, null, 2));
+          if (opts.json) console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
           else console.error(`Error: ${msg}`);
           process.exit(1);
         }
       }
       if (!permId) {
         const msg = 'Provide --permission-id or --email';
-        if (opts.json) console.log(JSON.stringify({ error: msg }, null, 2));
+        if (opts.json) console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
         else console.error(`Error: ${msg}`);
         process.exit(1);
       }
       const result = await deleteCalendarPermission(ga.token, permId, opts.mailbox?.trim() || undefined);
       if (!result.ok) {
         if (opts.json) {
-          console.log(JSON.stringify({ error: result.error?.message || 'Failed' }, null, 2));
+          console.log(JSON.stringify({ error: toJsonError(result.error?.message || 'Failed') }, null, 2));
         } else {
           console.error(`Error: ${result.error?.message || 'Failed to delete calendar permission'}`);
         }

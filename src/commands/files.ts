@@ -20,6 +20,7 @@ import {
   followDriveItem,
   getDriveItemDeltaPage,
   getDriveItemListItem,
+  getDriveItemPermission,
   getDriveItemRetentionLabel,
   getFileAnalytics,
   getFileMetadata,
@@ -543,6 +544,12 @@ withDriveOptions(filesCommand.command('share <fileId>'))
   .option('--scope <scope>', 'Link scope: org or anonymous', 'org')
   .option('--collab', 'Create an Office Online collaboration handoff (edit/org + webUrl)')
   .option('--lock', 'Checkout the file before creating a collaboration link (use with --collab)')
+  .option('--expiration <iso>', 'Link expiration, ISO 8601 (e.g. 2026-01-01T00:00:00Z)')
+  .option('--password <password>', 'Sharing-link password (OneDrive Personal only, per Graph)')
+  .option(
+    '--no-retain-inherited-permissions',
+    'On first share of this item, remove existing inherited permissions instead of keeping them (Graph default: retain)'
+  )
   .option('--json', 'Output as JSON')
   .option('--token <token>', 'Use a specific Graph token')
   .option('--identity <name>', 'Graph token cache identity (default: default)')
@@ -554,6 +561,9 @@ withDriveOptions(filesCommand.command('share <fileId>'))
         scope?: 'org' | 'anonymous';
         collab?: boolean;
         lock?: boolean;
+        expiration?: string;
+        password?: string;
+        retainInheritedPermissions?: boolean;
         json?: boolean;
         token?: string;
         identity?: string;
@@ -569,6 +579,13 @@ withDriveOptions(filesCommand.command('share <fileId>'))
 
       if (options.lock && !options.collab) {
         console.error('Error: --lock is only supported together with --collab.');
+        process.exit(1);
+      }
+
+      if (options.collab && (options.expiration || options.password || options.retainInheritedPermissions === false)) {
+        console.error(
+          'Error: --expiration/--password/--no-retain-inherited-permissions are not supported together with --collab (collaboration links are always edit/organization).'
+        );
         process.exit(1);
       }
 
@@ -605,7 +622,11 @@ withDriveOptions(filesCommand.command('share <fileId>'))
 
       const type = options.type === 'edit' ? 'edit' : 'view';
       const scope = options.scope === 'anonymous' ? 'anonymous' : 'organization';
-      const result = await shareFile(auth.token!, fileId, type, scope, loc, graphRoot(options));
+      const result = await shareFile(auth.token!, fileId, type, scope, loc, graphRoot(options), {
+        expirationDateTime: options.expiration,
+        password: options.password,
+        retainInheritedPermissions: options.retainInheritedPermissions
+      });
       if (!result.ok || !result.data) {
         console.error(`Error: ${result.error?.message || 'Share failed'}`);
         process.exit(1);
@@ -713,6 +734,41 @@ withDriveOptions(filesCommand.command('permissions <fileId>'))
         const roles = Array.isArray(p.roles) ? (p.roles as string[]).join(',') : '';
         console.log(`${id}\t${roles}`);
       }
+    }
+  );
+
+withDriveOptions(filesCommand.command('permission-get <fileId> <permissionId>'))
+  .summary('Get one permission')
+  .description('GET a single permission on a drive item by ID (sharing link or invitation grant)')
+  .option('--json', 'Output as JSON')
+  .option('--token <token>', 'Use a specific Graph token')
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .action(
+    async (
+      fileId: string,
+      permissionId: string,
+      options: FilesDriveCliFlags & { json?: boolean; token?: string; identity?: string }
+    ) => {
+      const auth = await resolveGraphAuth({ token: options.token, identity: options.identity });
+      if (!auth.success) {
+        console.error(`Error: ${auth.error}`);
+        process.exit(1);
+      }
+
+      const loc = parseDriveLocation(options);
+      const result = await getDriveItemPermission(auth.token!, fileId, permissionId, loc, graphRoot(options));
+      if (!result.ok || !result.data) {
+        console.error(`Error: ${result.error?.message || 'Failed to get permission'}`);
+        process.exit(1);
+      }
+
+      if (options.json) {
+        console.log(JSON.stringify(result.data, null, 2));
+        return;
+      }
+
+      const roles = Array.isArray(result.data.roles) ? (result.data.roles as string[]).join(',') : '';
+      console.log(`${result.data.id}\t${roles}`);
     }
   );
 

@@ -56,7 +56,8 @@ export interface GetScheduleResponse {
 export async function getSchedule(
   token: string,
   request: GetScheduleRequest,
-  user?: string
+  user?: string,
+  preferTimeZone: string = 'UTC'
 ): Promise<GraphResponse<GetScheduleResponse>> {
   let result: GraphResponse<GetScheduleResponse>;
   try {
@@ -64,7 +65,7 @@ export async function getSchedule(
       method: 'POST',
       body: JSON.stringify(request),
       headers: {
-        Prefer: 'outlook.timezone="UTC"'
+        Prefer: `outlook.timezone="${preferTimeZone}"`
       }
     });
   } catch (err) {
@@ -144,7 +145,8 @@ export interface FindMeetingTimesResponse {
 export async function findMeetingTimes(
   token: string,
   request: FindMeetingTimesRequest,
-  user?: string
+  user?: string,
+  preferTimeZone: string = 'UTC'
 ): Promise<GraphResponse<FindMeetingTimesResponse>> {
   let result: GraphResponse<FindMeetingTimesResponse>;
   try {
@@ -152,7 +154,7 @@ export async function findMeetingTimes(
       method: 'POST',
       body: JSON.stringify(request),
       headers: {
-        Prefer: 'outlook.timezone="UTC"'
+        Prefer: `outlook.timezone="${preferTimeZone}"`
       }
     });
   } catch (err) {

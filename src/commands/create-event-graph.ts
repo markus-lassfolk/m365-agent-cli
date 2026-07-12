@@ -36,8 +36,13 @@ function graphStartEnd(opts: { start: Date; end: Date; allDay: boolean; timezone
         end: { dateTime: toLocalUnzonedISOString(e), timeZone: tz }
       };
     }
-    const sUtc = new Date(opts.start);
-    sUtc.setUTCHours(0, 0, 0, 0);
+    // opts.start already carries the intended calendar day at host-local midnight (see
+    // create-event.ts's `start.setHours(0, 0, 0, 0)`). Building the UTC boundary via
+    // `setUTCHours(0,0,0,0)` on that local-midnight instant re-snaps it to whatever UTC calendar
+    // day the instant happens to fall on — on a host with a positive UTC offset (most of Europe,
+    // Asia, Australia), local midnight is still the previous UTC day, silently shifting the
+    // all-day event back one day. Read the local y/m/d directly instead.
+    const sUtc = new Date(Date.UTC(opts.start.getFullYear(), opts.start.getMonth(), opts.start.getDate()));
     const eUtc = new Date(sUtc);
     eUtc.setUTCDate(eUtc.getUTCDate() + 1);
     return {

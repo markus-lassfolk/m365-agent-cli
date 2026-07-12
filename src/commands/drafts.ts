@@ -15,6 +15,8 @@ import {
 } from '../lib/ews-client.js';
 import { getExchangeBackend } from '../lib/exchange-backend.js';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
+import { toJsonError } from '../lib/json-error.js';
+import { MailTemplateError, parseTemplateVars, renderMailTemplate } from '../lib/mail-template.js';
 import { markdownToHtml } from '../lib/markdown.js';
 import { lookupMimeType } from '../lib/mime-type.js';
 import { getMessage, listMessagesInFolder } from '../lib/outlook-graph-client.js';
@@ -40,6 +42,41 @@ function truncate(str: string, maxLen: number): string {
   return `${str.substring(0, maxLen - 1)}\u2026`;
 }
 
+/**
+ * Resolves the draft body from `--body`, or renders `--template` (with `--var name=value`
+ * substitutions) when given instead \u2014 the two are mutually exclusive. Exits the process with a
+ * clean error (JSON or text, matching `opts.json`) on a bad template file or unresolved
+ * placeholder, rather than throwing.
+ */
+async function resolveDraftBodyOrExit(opts: {
+  body?: string;
+  template?: string;
+  var?: string[];
+  json?: boolean;
+}): Promise<string | undefined> {
+  if (opts.template && opts.body) {
+    console.error('Error: --template and --body are mutually exclusive.');
+    process.exit(1);
+  }
+  if (!opts.template) return opts.body;
+  try {
+    const source = await readFile(opts.template.trim(), 'utf-8');
+    const vars = parseTemplateVars(opts.var ?? []);
+    return renderMailTemplate(source, vars);
+  } catch (err) {
+    const message =
+      err instanceof MailTemplateError
+        ? err.message
+        : `Could not read/render --template: ${err instanceof Error ? err.message : String(err)}`;
+    if (opts.json) {
+      console.log(JSON.stringify({ error: toJsonError(message) }, null, 2));
+    } else {
+      console.error(`Error: ${message}`);
+    }
+    process.exit(1);
+  }
+}
+
 export const draftsCommand = new Command('drafts')
   .description('Manage email drafts')
   .option('-n, --limit <number>', 'Number of drafts to show', '10')
@@ -50,8 +87,19 @@ export const draftsCommand = new Command('drafts')
   .option('--delete <id>', 'Delete draft by ID')
   .option('--to <emails>', 'Recipient(s) for create/edit, comma-separated')
   .option('--cc <emails>', 'CC recipient(s), comma-separated')
+  .option('--bcc <emails>', 'BCC recipient(s), comma-separated')
   .option('--subject <text>', 'Subject for create/edit')
   .option('--body <text>', 'Body for create/edit')
+  .option(
+    '--template <path>',
+    'Read the body from a template file with {{variable}} / {{variable|default}} placeholders (mutually exclusive with --body)'
+  )
+  .option(
+    '--var <nameValue>',
+    'Template variable "name=value" (repeatable; use with --template)',
+    (v: string, prev: string[]) => [...prev, v],
+    [] as string[]
+  )
   .option('--attach <files>', 'Attach file(s), comma-separated paths')
   .option(
     '--attach-link <spec>',
@@ -83,8 +131,11 @@ export const draftsCommand = new Command('drafts')
         delete?: string;
         to?: string;
         cc?: string;
+        bcc?: string;
         subject?: string;
         body?: string;
+        template?: string;
+        var?: string[];
         attach?: string;
         attachLink?: string[];
         markdown?: boolean;
@@ -100,6 +151,13 @@ export const draftsCommand = new Command('drafts')
     ) => {
       if (options.send || options.delete || options.create || options.edit) {
         checkReadOnly(cmd);
+      }
+
+      // Resolve --template/--var into options.body once, up front, so every downstream mutation
+      // path (EWS below, and the Graph path in drafts-graph.ts) sees an already-rendered body and
+      // neither needs to know templates exist.
+      if (options.create || options.edit) {
+        options.body = await resolveDraftBodyOrExit(options);
       }
 
       const backend = getExchangeBackend();
@@ -119,7 +177,9 @@ export const draftsCommand = new Command('drafts')
             if (!full.ok || !full.data) {
               if (backend === 'graph') {
                 if (options.json) {
-                  console.log(JSON.stringify({ error: full.error?.message || 'Failed to fetch draft' }, null, 2));
+                  console.log(
+                    JSON.stringify({ error: toJsonError(full.error?.message || 'Failed to fetch draft') }, null, 2)
+                  );
                 } else {
                   console.error(`Error: ${full.error?.message || 'Failed to fetch draft'}`);
                 }
@@ -171,7 +231,9 @@ export const draftsCommand = new Command('drafts')
           if (!r.ok || !r.data) {
             if (backend === 'graph') {
               if (options.json) {
-                console.log(JSON.stringify({ error: r.error?.message || 'Failed to fetch drafts' }, null, 2));
+                console.log(
+                  JSON.stringify({ error: toJsonError(r.error?.message || 'Failed to fetch drafts') }, null, 2)
+                );
               } else {
                 console.error(`Error: ${r.error?.message || 'Failed to fetch drafts'}`);
               }
@@ -233,7 +295,7 @@ export const draftsCommand = new Command('drafts')
         if (backend === 'graph') {
           const msg = ga.error || 'Graph authentication failed';
           if (options.json) {
-            console.log(JSON.stringify({ error: msg }, null, 2));
+            console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
           } else {
             console.error(`Error: ${msg}`);
             console.error('\nSet EWS_CLIENT_ID and M365_REFRESH_TOKEN for Graph, or run `m365-agent-cli login`.');
@@ -253,7 +315,7 @@ export const draftsCommand = new Command('drafts')
           if (!ga.success || !ga.token) {
             const msg = ga.error || 'Graph authentication failed';
             if (options.json) {
-              console.log(JSON.stringify({ error: msg }, null, 2));
+              console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
             } else {
               console.error(`Error: ${msg}`);
               console.error('\nSet EWS_CLIENT_ID and M365_REFRESH_TOKEN for Graph, or run `m365-agent-cli login`.');
@@ -274,7 +336,7 @@ export const draftsCommand = new Command('drafts')
 
       if (!authResult.success) {
         if (options.json) {
-          console.log(JSON.stringify({ error: authResult.error }, null, 2));
+          console.log(JSON.stringify({ error: toJsonError(authResult.error) }, null, 2));
         } else {
           console.error(`Error: ${authResult.error}`);
           console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
@@ -294,7 +356,9 @@ export const draftsCommand = new Command('drafts')
 
       if (!draftsResult.ok || !draftsResult.data) {
         if (options.json) {
-          console.log(JSON.stringify({ error: draftsResult.error?.message || 'Failed to fetch drafts' }, null, 2));
+          console.log(
+            JSON.stringify({ error: toJsonError(draftsResult.error?.message || 'Failed to fetch drafts') }, null, 2)
+          );
         } else {
           console.error(`Error: ${draftsResult.error?.message || 'Failed to fetch drafts'}`);
         }
@@ -313,6 +377,12 @@ export const draftsCommand = new Command('drafts')
           : undefined;
         const ccList = options.cc
           ? options.cc
+              .split(',')
+              .map((e) => e.trim())
+              .filter(Boolean)
+          : undefined;
+        const bccList = options.bcc
+          ? options.bcc
               .split(',')
               .map((e) => e.trim())
               .filter(Boolean)
@@ -338,6 +408,7 @@ export const draftsCommand = new Command('drafts')
         const result = await createDraft(authResult.token!, {
           to: toList,
           cc: ccList,
+          bcc: bccList,
           subject: options.subject,
           body,
           bodyType,
@@ -485,6 +556,12 @@ export const draftsCommand = new Command('drafts')
               .map((e) => e.trim())
               .filter(Boolean)
           : undefined;
+        const bccList = options.bcc
+          ? options.bcc
+              .split(',')
+              .map((e) => e.trim())
+              .filter(Boolean)
+          : undefined;
 
         let body = options.body;
         if (body) body = body.replace(/\\n/g, '\n');
@@ -506,6 +583,7 @@ export const draftsCommand = new Command('drafts')
         const result = await updateDraft(authResult.token!, id, {
           to: toList,
           cc: ccList,
+          bcc: bccList,
           subject: options.subject,
           body,
           bodyType,

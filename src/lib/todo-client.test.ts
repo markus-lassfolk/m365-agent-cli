@@ -107,8 +107,57 @@ describe('getTask $select', () => {
       const r = await getTask(token, 'list-1', 'task-1', undefined, { select: 'id,title' });
 
       expect(r.ok).toBe(true);
-      expect(urls[0]).toContain('$select=');
+      expect(decodeURIComponent(urls[0])).toContain('$select=');
       expect(decodeURIComponent(urls[0])).toContain('id,title');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('appends $expand when provided (bug regression: was silently dropped)', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    const urls: string[] = [];
+    const originalFetch = globalThis.fetch;
+
+    try {
+      globalThis.fetch = (async (input: string | URL | Request) => {
+        urls.push(typeof input === 'string' ? input : input.toString());
+        return new Response(JSON.stringify({ id: 't1', title: 'x' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as unknown as typeof fetch;
+
+      const { getTask } = await import('./todo-client.js');
+      const r = await getTask(token, 'list-1', 'task-1', undefined, { expand: 'attachments' });
+
+      expect(r.ok).toBe(true);
+      expect(decodeURIComponent(urls[0])).toContain('$expand=attachments');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('appends both $select and $expand together', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    const urls: string[] = [];
+    const originalFetch = globalThis.fetch;
+
+    try {
+      globalThis.fetch = (async (input: string | URL | Request) => {
+        urls.push(typeof input === 'string' ? input : input.toString());
+        return new Response(JSON.stringify({ id: 't1', title: 'x' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as unknown as typeof fetch;
+
+      const { getTask } = await import('./todo-client.js');
+      await getTask(token, 'list-1', 'task-1', undefined, { select: 'id,title', expand: 'attachments' });
+
+      const decoded = decodeURIComponent(urls[0]);
+      expect(decoded).toContain('$select=id,title');
+      expect(decoded).toContain('$expand=attachments');
     } finally {
       globalThis.fetch = originalFetch;
     }

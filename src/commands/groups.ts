@@ -7,6 +7,7 @@ import {
   listThreadPosts,
   replyToPost
 } from '../lib/graph-groups-client.js';
+import { toJsonError } from '../lib/json-error.js';
 import { checkReadOnly } from '../lib/utils.js';
 
 export const groupsCommand = new Command('groups').description(
@@ -17,6 +18,24 @@ interface BaseOpts {
   json?: boolean;
   token?: string;
   identity?: string;
+}
+
+/** Prints the --json structured error envelope (or the matching plain-text "Auth error: .../
+ *  Error: ...") for the two failure shapes every groups subcommand hits, then exits 1. */
+function failGroups(
+  json: boolean | undefined,
+  prefix: 'Auth error' | 'Error',
+  error: unknown,
+  fallbackMessage?: string
+): never {
+  if (json) {
+    console.log(JSON.stringify({ error: toJsonError(error, fallbackMessage) }, null, 2));
+  } else {
+    const message =
+      (typeof error === 'string' ? error : (error as { message?: string } | undefined)?.message) ?? fallbackMessage;
+    console.error(`${prefix}: ${message}`);
+  }
+  process.exit(1);
 }
 
 /** Strip HTML tags for terminal preview (repeat until stable so nested/obfuscated tags are removed). */
@@ -44,8 +63,7 @@ baseFlags(groupsCommand.command('list'))
   .action(async (opts: BaseOpts & { top?: string }) => {
     const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success || !auth.token) {
-      console.error(`Auth error: ${auth.error}`);
-      process.exit(1);
+      failGroups(opts.json, 'Auth error', auth.error);
     }
     const top = opts.top ? Number.parseInt(opts.top, 10) : undefined;
     if (opts.top && (!Number.isFinite(top) || (top as number) <= 0)) {
@@ -54,8 +72,7 @@ baseFlags(groupsCommand.command('list'))
     }
     const r = await listMyOutlookGroups(auth.token, { top });
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message ?? 'memberOf failed'}`);
-      process.exit(1);
+      failGroups(opts.json, 'Error', r.error, 'memberOf failed');
     }
     const items = r.data.value ?? [];
     if (opts.json) {
@@ -79,8 +96,7 @@ baseFlags(groupsCommand.command('conversations <groupId>'))
   .action(async (groupId: string, opts: BaseOpts & { top?: string }) => {
     const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success || !auth.token) {
-      console.error(`Auth error: ${auth.error}`);
-      process.exit(1);
+      failGroups(opts.json, 'Auth error', auth.error);
     }
     const top = opts.top ? Number.parseInt(opts.top, 10) : undefined;
     if (opts.top && (!Number.isFinite(top) || (top as number) <= 0)) {
@@ -89,8 +105,7 @@ baseFlags(groupsCommand.command('conversations <groupId>'))
     }
     const r = await listGroupConversations(auth.token, groupId, { top });
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message ?? 'conversations failed'}`);
-      process.exit(1);
+      failGroups(opts.json, 'Error', r.error, 'conversations failed');
     }
     const items = r.data.value ?? [];
     if (opts.json) {
@@ -114,8 +129,7 @@ baseFlags(groupsCommand.command('thread <groupId> <conversationId>'))
   .action(async (groupId: string, conversationId: string, opts: BaseOpts & { top?: string }) => {
     const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success || !auth.token) {
-      console.error(`Auth error: ${auth.error}`);
-      process.exit(1);
+      failGroups(opts.json, 'Auth error', auth.error);
     }
     const top = opts.top ? Number.parseInt(opts.top, 10) : undefined;
     if (opts.top && (!Number.isFinite(top) || (top as number) <= 0)) {
@@ -124,8 +138,7 @@ baseFlags(groupsCommand.command('thread <groupId> <conversationId>'))
     }
     const r = await listConversationThreads(auth.token, groupId, conversationId, { top });
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message ?? 'threads failed'}`);
-      process.exit(1);
+      failGroups(opts.json, 'Error', r.error, 'threads failed');
     }
     const items = r.data.value ?? [];
     if (opts.json) {
@@ -149,8 +162,7 @@ baseFlags(groupsCommand.command('posts <groupId> <conversationId> <threadId>'))
   .action(async (groupId: string, conversationId: string, threadId: string, opts: BaseOpts & { top?: string }) => {
     const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
     if (!auth.success || !auth.token) {
-      console.error(`Auth error: ${auth.error}`);
-      process.exit(1);
+      failGroups(opts.json, 'Auth error', auth.error);
     }
     const top = opts.top ? Number.parseInt(opts.top, 10) : undefined;
     if (opts.top && (!Number.isFinite(top) || (top as number) <= 0)) {
@@ -159,8 +171,7 @@ baseFlags(groupsCommand.command('posts <groupId> <conversationId> <threadId>'))
     }
     const r = await listThreadPosts(auth.token, groupId, conversationId, threadId, { top });
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message ?? 'posts failed'}`);
-      process.exit(1);
+      failGroups(opts.json, 'Error', r.error, 'posts failed');
     }
     const items = r.data.value ?? [];
     if (opts.json) {
@@ -204,8 +215,7 @@ baseFlags(groupsCommand.command('post-reply <groupId> <conversationId> <threadId
       }
       const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
       if (!auth.success || !auth.token) {
-        console.error(`Auth error: ${auth.error}`);
-        process.exit(1);
+        failGroups(opts.json, 'Auth error', auth.error);
       }
       const r = await replyToPost(
         auth.token,
@@ -215,8 +225,7 @@ baseFlags(groupsCommand.command('post-reply <groupId> <conversationId> <threadId
           : { contentType: 'text', content: opts.text ?? '' }
       );
       if (!r.ok) {
-        console.error(`Error: ${r.error?.message ?? 'reply failed'}`);
-        process.exit(1);
+        failGroups(opts.json, 'Error', r.error, 'reply failed');
       }
       if (opts.json) {
         console.log(JSON.stringify({ ok: true, postId }, null, 2));

@@ -16,6 +16,8 @@ Complete command-line reference for **m365-agent-cli**: global flags, read-only 
 
 ```bash
 --read-only         # Run in read-only mode, blocking mutating operations
+--dry-run           # Preview the resolved request for a mutating command without sending it
+--cache <duration>  # Cache idempotent Graph GET responses on disk (e.g. 30s, 5m, 1h). Off by default.
 --version, -V       # CLI version (semver from package)
 ```
 
@@ -29,6 +31,28 @@ Many **subcommands** accept their own flags. Common patterns (not every command 
 ```
 
 **EWS shared mailbox:** use `--mailbox <email>` on calendar, mail, send, folders, drafts, respond, findtime, delegates, auto-reply, and related flows.
+
+### Structured `--json` errors
+
+When a command fails under `--json`, the error is a structured object (mirroring Microsoft
+Graph's own `{ "error": { "code", "message" } }` shape) instead of a bare string:
+
+```json
+{
+  "error": {
+    "message": "The specified object was not found in the store.",
+    "code": "ErrorItemNotFound",
+    "status": 404,
+    "retriable": false,
+    "requestId": "a1b2c3d4-..."
+  }
+}
+```
+
+Only `message` is guaranteed present — `code`/`status`/`retriable`/`requestId` are included when
+the underlying Graph/EWS error carried them. `retriable: true` marks throttling/service-unavailable
+errors (HTTP 429/502/503/504, or a `tooManyRequests`/`serviceNotAvailable` error code) — a signal
+scripts/agents can use to decide whether to back off and retry.
 
 ### Read-Only Mode
 
@@ -50,11 +74,11 @@ The table below matches **`checkReadOnly` in the source** (search the repo for `
 | `drafts` | `--create`, `--edit`, `--send`, `--delete` (plain list/read allowed) |
 | `folders` | `--create`, `--rename` (with `--to`), `--delete` (listing folders allowed) |
 | `files` | `upload`, `upload-large`, `delete`, `share` (including `--collab`), `invite`, `permission-remove`, `permission-update`, `copy`, `move`, `restore`, `checkout`, `checkin` (read/query: **`thumbnails`**, **`delta`**, **`shared-with-me`**, …) |
-| `planner` | `create-task`, `update-task`, `delete-task`, `create-plan` (`--group` or beta `--roster`), `update-plan`, `delete-plan`, `delete-plan-details`, `delete-task-details`, `plan-archive`, `plan-unarchive` (beta), `create-bucket`, `update-bucket`, `delete-bucket`, `list-user-tasks`, `list-user-plans`, `update-task-details`, `update-plan-details`, `add-checklist-item`, `update-checklist-item`, `remove-checklist-item`, `add-reference`, `remove-reference`, `update-task-board`, `add-favorite`, `remove-favorite`, `roster` (beta: `create`, `get`, `list-members`, `add-member`, `remove-member`) |
-| `sharepoint` / `sp` | `create-item`, `update-item`, `delete-item`, `follow`, `unfollow` |
+| `planner` | `create-task`, `update-task`, `delete-task`, **`bulk-complete-task`**, `create-plan` (`--group` or beta `--roster`), `update-plan`, `delete-plan`, `delete-plan-details`, `delete-task-details`, `plan-archive`, `plan-unarchive` (beta), `create-bucket`, `update-bucket`, `delete-bucket`, `list-user-tasks`, `list-user-plans`, `update-task-details`, `update-plan-details`, `add-checklist-item`, `update-checklist-item`, `remove-checklist-item`, `add-reference`, `remove-reference`, `update-task-board`, `add-favorite`, `remove-favorite`, `roster` (beta: `create`, `get`, `list-members`, `add-member`, `remove-member`) |
+| `sharepoint` / `sp` | `create-item`, `update-item`, `delete-item`, `follow`, `unfollow`, `site-permission-update`, `site-permission-create`, `site-permission-delete` |
 | `pages` | `update`, `publish` |
 | `rules` | `create`, `update`, `delete` |
-| `todo` | `create`, `update`, `complete`, `delete`, `add-checklist`, `update-checklist`, `delete-checklist`, `get-checklist-item`, `create-list`, `update-list`, `delete-list`, `add-attachment`, `get-attachment`, `download-attachment`, `delete-attachment`, `add-reference-attachment`, `add-linked-resource`, `remove-linked-resource`, `upload-attachment-large`, `attachment-session` (patch/delete/content-put/content-delete), `root` (patch/delete), `linked-resource` (`create`, `update`, `delete`), `extension` (`set`, `update`, `delete`), `list-extension` (`set`, `update`, `delete`) |
+| `todo` | `create`, `update`, `complete`, `delete`, **`bulk-complete`**, **`bulk-delete`**, `add-checklist`, `update-checklist`, `delete-checklist`, `get-checklist-item`, `create-list`, `update-list`, `delete-list`, `add-attachment`, `get-attachment`, `download-attachment`, `delete-attachment`, `add-reference-attachment`, `add-linked-resource`, `remove-linked-resource`, `upload-attachment-large`, `attachment-session` (patch/delete/content-put/content-delete), `root` (patch/delete), `linked-resource` (`create`, `update`, `delete`), `extension` (`set`, `update`, `delete`), `list-extension` (`set`, `update`, `delete`) |
 | `subscribe` | Creating a subscription; `subscribe cancel <id>` |
 | `delegates` | `add`, `update`, `remove` |
 | `oof` | Write path only (when `--status`, `--internal-message`, `--external-message`, `--start`, or `--end` is used to change settings) |
@@ -93,6 +117,81 @@ You can enable Read-Only mode in two ways:
    m365-agent-cli planner update-task <taskId> --title "New"
    # Error: Command blocked. The CLI is running in read-only mode.
    ```
+
+### Dry-Run Mode
+
+`--dry-run` (root flag — works before or after the subcommand; or `M365_DRY_RUN=1` in the
+environment) previews the exact request a mutating command would send, without sending it.
+Unlike `--read-only` (which blocks before any client call), `--dry-run` lets read-only lookups
+the command needs (e.g. resolving a message's current `ChangeKey`) go through as normal, and only
+intercepts the actual mutating write, right at the transport layer:
+
+- **Graph**: prints `{ dryRun: true, backend: "graph", method, url, headers, body }` — the exact
+  resolved HTTP method, URL, and JSON body — instead of calling `fetch`.
+- **EWS**: prints `{ dryRun: true, backend: "ews", operation, endpoint, mailbox, envelope }` — the
+  resolved SOAP operation name and full envelope XML — instead of POSTing it.
+
+```bash
+m365-agent-cli mail --reply msg-123 --message "Thanks!" --cc alice@contoso.com --dry-run
+# { "dryRun": true, "backend": "graph", "method": "POST", "url": "https://graph.microsoft.com/v1.0/me/messages/msg-123/createReply", "body": { "comment": "Thanks!" } }
+```
+
+For a multi-step command (e.g. create a draft, add an attachment, then send), only the **first**
+mutating request is shown — the CLI exits immediately after printing it, exactly like a real run
+would if that first call failed, so nothing downstream can execute against state that was never
+actually written. Re-run without `--dry-run` to send it, or run again after fixing the previewed
+request. GET-only commands are unaffected by `--dry-run` (there's nothing to preview).
+
+### Read Cache
+
+`--cache <duration>` (root flag — works before or after the subcommand; or `M365_CACHE_TTL=<duration>`
+in the environment) opt-in caches successful Microsoft Graph **GET** responses on disk for
+`<duration>`, so repeated agent calls to the same read (folder lists, room lists, user lookups,
+etc.) within that window skip the network round trip. Off by default — without `--cache`, every
+run hits Graph fresh, same as today.
+
+`<duration>` accepts a bare number (seconds), or a number with a unit suffix: `30s`, `5m`, `2h`, `1d`.
+
+```bash
+m365-agent-cli folders --cache 5m
+# first call hits Graph and populates the cache; a second identical call within 5 minutes
+# returns the cached response without a network request
+```
+
+Only `GET` requests are cached — mutating requests (POST/PATCH/PUT/DELETE) always go straight to
+Graph. The cache lives at `~/.config/m365-agent-cli/graph-cache/` (or under `XDG_CONFIG_HOME`),
+keyed by a hash of the bearer token, HTTP method, and full URL, so two different signed-in
+identities on the same machine never share cache entries, and different query parameters (e.g.
+`$top`, `$filter`) get separate entries. Entries past their TTL are treated as a miss and pruned
+opportunistically. EWS requests are not cached (EWS operations are POST/SOAP, not idempotent GETs
+in the way Graph's REST API is).
+
+### Output Shaping (`--fields` / `--ndjson`)
+
+On commands that list many rows, `--json` combined with `--fields <dot-paths>` and/or `--ndjson`
+lets an agent shape and stream output instead of buffering a large pretty-printed array:
+
+- **`--fields "id,subject,from.emailAddress.address"`** — projects each row down to only the
+  listed dot-paths (nested paths keep their nesting; e.g. `from.emailAddress.address` produces
+  `{ "from": { "emailAddress": { "address": "..." } } }`). A path missing on a given row is
+  silently omitted from that row rather than erroring — Graph and EWS payloads aren't uniform.
+- **`--ndjson`** — prints one compact JSON object per row, one per line, instead of a single
+  pretty-printed `{ ... : [ ... ] }` array, so a large list can be parsed line-by-line as it's
+  produced rather than requiring the whole response to be buffered and parsed at once.
+
+```bash
+m365-agent-cli mail inbox --json --fields "id,subject,from.emailAddress.address" --ndjson --limit 200
+# {"id":"...","subject":"...","from":{"emailAddress":{"address":"..."}}}
+# {"id":"...","subject":"...","from":{"emailAddress":{"address":"..."}}}
+# ...
+```
+
+This is a **per-command opt-in**, not a global flag — unlike `--dry-run`/`--cache` (which hook
+into the single Graph/EWS transport layer and so apply uniformly to every command), output
+shaping happens after each command's own data-fetching and formatting logic, so each command
+wires it in explicitly. Today `mail` (list view, both the EWS and Graph backends) supports
+`--fields`/`--ndjson`; other high-volume list commands are natural candidates for the same
+`src/lib/output-shape.ts` helper as a follow-up.
 
 ---
 
@@ -310,7 +409,18 @@ m365-agent-cli findtime nextweek alice@company.com --duration 60 --start 10 --en
 
 # Only check specified people (exclude yourself from availability check)
 m365-agent-cli findtime nextweek alice@company.com --solo
+
+# Graph: mark some attendees optional, require only a percentage of attendees free,
+# and search/filter working hours in a specific time zone instead of UTC
+m365-agent-cli findtime nextweek alice@company.com bob@company.com --optional bob@company.com --min-attendee-percentage 50 --timezone America/New_York
 ```
+
+`--optional`, `--min-attendee-percentage`, and `--timezone` apply to the Graph `findMeetingTimes` /
+`getSchedule` paths (backend `graph` or `auto` with a working Graph token); the EWS fallback path
+ignores them. `--json` output for both Graph strategies now includes attendee-level detail: with
+`findMeetingTimes`, each suggestion's `attendeeAvailability` (`free`/`busy`/`tentative`/… per
+attendee); with the `getSchedule` fallback, a top-level `attendeeAvailability` array with each
+attendee's raw `availabilityView` string, not just the merged free/busy result.
 
 ---
 
@@ -416,7 +526,22 @@ m365-agent-cli send \
   --subject "From shared mailbox" \
   --body "..." \
   --mailbox shared@company.com
+
+# Render the body from a reusable template file instead of --body
+# (welcome.txt: "Hi {{name}}, welcome to {{company|our team}}!")
+m365-agent-cli send \
+  --to "recipient@example.com" \
+  --subject "Welcome" \
+  --template ./templates/welcome.txt \
+  --var name=Alice \
+  --var company=Acme
 ```
+
+`--template <path>` reads the body from a file with `{{variable}}` (or `{{variable|default}}`)
+placeholders, filled in from repeatable `--var name=value` flags; `--template` and `--body` are
+mutually exclusive. A placeholder with neither a supplied `--var` nor a default is an error
+(listing every unresolved name) rather than silently mailing a literal `{{name}}`. Also available
+on `drafts --create` / `drafts --edit` for the same reusable-draft-body use case.
 
 ### Reply & Forward
 
@@ -503,6 +628,10 @@ m365-agent-cli drafts --create \
 m365-agent-cli drafts --create --to "a@b.com" --subject "Hi" --body "..." --category Work
 m365-agent-cli drafts --edit <draftId> --category Review --category "Follow up"
 m365-agent-cli drafts --edit <draftId> --clear-categories
+
+# CC/BCC on drafts (create or edit; comma-separated)
+m365-agent-cli drafts --create --to "a@b.com" --cc "cc@b.com" --bcc "hidden@b.com" --subject "Hi" --body "..."
+m365-agent-cli drafts --edit <draftId> --bcc "hidden@b.com"
 
 # Create with attachment
 m365-agent-cli drafts --create \
@@ -591,6 +720,9 @@ m365-agent-cli files delete <fileId>
 # Create a share link
 m365-agent-cli files share <fileId> --type view --scope org
 m365-agent-cli files share <fileId> --type edit --scope anonymous
+
+# Share link with an expiration, a password, and without retaining prior inherited permissions
+m365-agent-cli files share <fileId> --type view --scope anonymous --expiration 2026-01-01T00:00:00Z --password "hunter2" --no-retain-inherited-permissions
 ```
 
 ### Drive root, named invites, permissions, Excel workbook comments
@@ -609,8 +741,9 @@ m365-agent-cli files download <itemId> --site-id contoso.sharepoint.com,abc-123-
 # Invite people (POST body per Microsoft Graph driveItem invite)
 m365-agent-cli files invite <fileId> --body ./invite.json
 
-# List or remove sharing entries on an item
+# List, get one, or remove sharing entries on an item
 m365-agent-cli files permissions <fileId>
+m365-agent-cli files permission-get <fileId> <permissionId>
 m365-agent-cli files permission-remove <fileId> <permissionId>
 
 # Excel threaded comments on the workbook (Microsoft Graph beta)
@@ -735,6 +868,10 @@ m365-agent-cli files checkin <fileId> --comment "Updated Q1 numbers"
 
 Legacy Office formats such as `.doc`, `.xls`, and `.ppt` must be converted first.
 
+`--collab` is always an edit/organization link — it does not accept `--expiration`, `--password`,
+or `--no-retain-inherited-permissions` (those apply to the plain `share` link created without
+`--collab`); combining them is an error rather than a silently-ignored flag.
+
 **Important clarification:**
 
 - m365-agent-cli does **not** participate in the real-time editing session
@@ -776,6 +913,9 @@ m365-agent-cli planner update-task -i <taskId> --title "Updated Task" --percent 
 m365-agent-cli planner update-task -i <taskId> --label 2 --unlabel 1
 m365-agent-cli planner update-task -i <taskId> --clear-labels
 
+# Mark many tasks complete in one call (batched: GETs to fetch each @odata.etag, then PATCHes)
+m365-agent-cli planner bulk-complete-task --ids <taskId1>,<taskId2>,<taskId3>
+
 # Beta: archive / unarchive a plan (Graph requires a justification string)
 m365-agent-cli planner plan-archive -p <planId> -j "Project closed"
 m365-agent-cli planner plan-unarchive -p <planId> -j "Reopened for Q2"
@@ -801,6 +941,10 @@ m365-agent-cli todo download-attachment -l Tasks -t <taskId> -a <attachmentId> -
 
 # Incremental sync: tasks in a list (`todo delta`) vs task **lists** themselves (`todo lists-delta` + `--state-file`)
 m365-agent-cli todo lists-delta --state-file ./todo-lists-sync.json
+
+# Bulk complete / delete many tasks in one call (Graph JSON $batch, instead of one call per task)
+m365-agent-cli todo bulk-complete -l Tasks --ids <taskId1>,<taskId2>,<taskId3>
+m365-agent-cli todo bulk-delete -l Tasks --ids <taskId1>,<taskId2> --confirm
 ```
 
 ## Outlook Graph REST (`outlook-graph`)
@@ -876,6 +1020,13 @@ m365-agent-cli sp items --site-id <siteId> --list-id <listId> --top 100 --filter
 # Create and update items
 m365-agent-cli sp create-item --site-id <siteId> --list-id <listId> --fields '{"Title": "New Item"}'
 m365-agent-cli sp update-item --site-id <siteId> --list-id <listId> --item-id <itemId> --fields '{"Title": "Updated Item"}'
+
+# Site sharing permissions (owner/admin scenarios; create/delete are app-permission-only per Graph)
+m365-agent-cli sp site-permissions --site-id <siteId>
+m365-agent-cli sp site-permission-get --site-id <siteId> --permission-id <permissionId>
+m365-agent-cli sp site-permission-update --site-id <siteId> --permission-id <permissionId> --json-file ./roles.json
+m365-agent-cli sp site-permission-create --site-id <siteId> --json-file ./new-permission.json
+m365-agent-cli sp site-permission-delete --site-id <siteId> --permission-id <permissionId>
 ```
 
 ### SharePoint Site Pages (`m365-agent-cli pages`)
@@ -930,6 +1081,8 @@ These commands are not expanded step-by-step above; use **`m365-agent-cli <comma
 
 | Command | What it does |
 | --- | --- |
+| **`describe`** | Machine-readable **JSON manifest** of every command/subcommand, option, and argument — for agents/tools discovering the CLI surface programmatically instead of parsing `--help` text. **`--list`** for a fast top-level overview, **`--command "rules create"`** to scope to one (sub)command. |
+| **`mcp`** | Starts a native **MCP (Model Context Protocol) stdio server**: reflects the `describe` manifest into one MCP tool per leaf command (e.g. `rules create` → tool `rules_create`), with a JSON schema built from that command's own arguments/options. A tool call runs this same CLI as a subprocess with the equivalent argv (`--json` auto-appended when the command supports it), so behavior — read-only mode, `--dry-run`, structured `--json` errors — is identical to running the command directly. `mcp`, `serve`, `login`, and `update` are not exposed as tools (self-referential / interactive / long-running / system-mutating). Point an MCP client at `{ "command": "m365-agent-cli", "args": ["mcp"] }`. |
 | **`contacts`** | **Graph-only** Outlook contacts: folders (CRUD), list/search/delta, photo, attachments (file + **link** via `attachments add-link`), **`--user`** for delegated mailboxes ([GRAPH_SCOPES.md](./GRAPH_SCOPES.md)). |
 | **`onenote`** | **Graph-only** OneNote: notebooks (incl. **resolve by web URL** — `notebook from-web-url`), section groups, sections (**copy-to-notebook**, **copy-to-section-group**), pages, HTML export/create, **patch-page-content**, **copy-page**, async **operation** poll; **`--group`** / **`--site`** roots. |
 | **`meeting`** | **Graph** standalone Teams meetings (`/me/onlineMeetings`): create (simple or **`--json-file`**), get, update, delete. Calendar invitations with Teams: use **`create-event … --teams`**. |
@@ -943,7 +1096,7 @@ These commands are not expanded step-by-step above; use **`m365-agent-cli <comma
 | **`bookings`** | **Graph-only** Microsoft Bookings: **businesses**, **business-get** / **business-create** / **business-update** / **business-delete** / **business-publish** / **business-unpublish**, **currencies** + **currency-get**, appointments (**list**, **appointment**, **appointment-create** / **update** / **delete** / **cancel**), customers (**list**, **customer**, CRUD), **custom-questions** + **custom-question** (get) + CRUD, services + **service-get** + CRUD, staff + **staff-get** + CRUD, **calendar-view**, **staff-availability** (app-only **`--token`**). |
 | **`excel`** | **Graph-only** Excel on a drive item: **worksheets** + **worksheet-get** / **add** / **update** / **delete**; **range** / **range-patch** / **range-clear**; **used-range**; **tables** / **table-get** / **table-add** / **table-patch** / **table-delete** / **table-rows** / **table-rows-add** / **table-row-patch** / **table-row-delete** / **table-columns** / **table-column-get** / **table-column-patch**; **pivot-tables** / **pivot-table-get** / **pivot-table-create** / **pivot-table-patch** / **pivot-table-delete** / **pivot-table-refresh** / **pivot-tables-refresh-all**; **names** / **name-get** / **worksheet-names** / **worksheet-name-get**; **charts** + **chart-create** / **chart-patch** / **chart-delete**; **workbook-get**; **application-calculate**; **session-create** / **session-refresh** / **session-close**; **comments-*** (beta). Same drive location flags as **`files`**. |
 | **`word`** / **`powerpoint`** | Full **per-item** parity with **`files`** (incl. **list-item**, **follow**/**unfollow**, **sensitivity-assign**/**extract**, **retention-label**/**remove**, **permanent-delete**) plus **preview**/**meta**/**download**/**thumbnails**; same drive flags as **`files`**. |
-| **`graph`** | **Graph-only** escape hatch: **`graph invoke`** (any JSON path/method; repeatable **`-H` / `--header "Name: value"`** for OData headers such as **`ConsistencyLevel: eventual`**) and **`graph batch`** (JSON **`$batch`** file, **max 20** requests per batch); respects **`--read-only`** for non-GET. |
+| **`graph`** | **Graph-only** escape hatch: **`graph invoke`** (any JSON path/method; repeatable **`-H` / `--header "Name: value"`** for OData headers such as **`ConsistencyLevel: eventual`**) and **`graph batch`** (JSON **`$batch`** file — any number of requests; auto-chunked into **≤20**-request POSTs, sent sequentially, with `responses` merged back into one array in request order; a `dependsOn` chain must stay within one 20-request chunk); respects **`--read-only`** for non-GET. |
 | **`presence`** | **Graph-only** presence: **`me`**, **`user`**, **`bulk`**, **`set-me`** / **`set-user`** (session; output includes `sessionId`), **`clear-me`** / **`clear-user`**, **`status-message-set`**, **`preferred-set`** / **`preferred-clear`**, **`clear-location`** ([GRAPH_SCOPES.md](./GRAPH_SCOPES.md)). |
 | **`counter`** (`propose-new-time`) | Propose a new time for an existing event (Graph). |
 | **`schedule`** | Merged free/busy for one or more people over a time window (`getSchedule`). |

@@ -7,7 +7,9 @@ import { getExchangeBackend } from '../lib/exchange-backend.js';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
 import { callGraph } from '../lib/graph-client.js';
 import type { FindMeetingTimesRequest } from '../lib/graph-schedule.js';
+import { toJsonError } from '../lib/json-error.js';
 import { buildFindMeetingTimesLocationConstraint } from '../lib/meeting-location-constraint.js';
+import { assertValidTimeZone } from '../lib/timezone-wallclock.js';
 import { runFindTimeGraph, runFindTimeGraphSchedule } from './findtime-graph.js';
 
 function formatTime(dateStr: string): string {
@@ -97,6 +99,21 @@ export const findtimeCommand = new Command('findtime')
   )
   .option('--resolve-location-availability', 'Graph: resolveAvailability on location constraint entries')
   .option('--find-meeting-json <path>', 'Graph: merge JSON into findMeetingTimes request body')
+  .option(
+    '--optional <email>',
+    'Graph: mark an attendee optional rather than required for findMeetingTimes (repeatable)',
+    (v: string, prev: string[]) => [...prev, v],
+    [] as string[]
+  )
+  .option(
+    '--min-attendee-percentage <n>',
+    'Graph findMeetingTimes: minimum percentage of attendees who must be free (1-100)',
+    '100'
+  )
+  .option(
+    '--timezone <iana>',
+    'IANA time zone (e.g. America/New_York) for the search window, working hours, and results. Default: UTC.'
+  )
   .action(
     async (
       startDay: string,
@@ -115,6 +132,9 @@ export const findtimeCommand = new Command('findtime')
         meetingLocation?: string[];
         resolveLocationAvailability?: boolean;
         findMeetingJson?: string;
+        optional?: string[];
+        minAttendeePercentage: string;
+        timezone?: string;
       },
       _cmd: any
     ) => {
@@ -171,7 +191,7 @@ export const findtimeCommand = new Command('findtime')
           });
           if (!authResult.success) {
             if (options.json) {
-              console.log(JSON.stringify({ error: authResult.error }, null, 2));
+              console.log(JSON.stringify({ error: toJsonError(authResult.error) }, null, 2));
             } else {
               console.error(`Error: ${authResult.error}`);
               console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
@@ -182,7 +202,7 @@ export const findtimeCommand = new Command('findtime')
           const userInfo = await getOwaUserInfo(ewsToken!);
           if (!userInfo.ok || !userInfo.data?.email) {
             if (options.json) {
-              console.log(JSON.stringify({ error: 'Failed to determine user email' }, null, 2));
+              console.log(JSON.stringify({ error: toJsonError('Failed to determine user email') }, null, 2));
             } else {
               console.error('Error: Failed to determine user email');
             }
@@ -198,7 +218,7 @@ export const findtimeCommand = new Command('findtime')
           });
           if (!ga.success || !ga.token) {
             if (options.json) {
-              console.log(JSON.stringify({ error: ga.error || 'Graph authentication failed' }, null, 2));
+              console.log(JSON.stringify({ error: toJsonError(ga.error || 'Graph authentication failed') }, null, 2));
             } else {
               console.error(`Error: ${ga.error || 'Graph authentication failed'}`);
             }
@@ -212,7 +232,7 @@ export const findtimeCommand = new Command('findtime')
           const myEmail = me.data?.mail || me.data?.userPrincipalName;
           if (!myEmail) {
             if (options.json) {
-              console.log(JSON.stringify({ error: 'Failed to determine user email' }, null, 2));
+              console.log(JSON.stringify({ error: toJsonError('Failed to determine user email') }, null, 2));
             } else {
               console.error('Error: Failed to determine user email');
             }
@@ -245,7 +265,7 @@ export const findtimeCommand = new Command('findtime')
             });
             if (!authResult.success) {
               if (options.json) {
-                console.log(JSON.stringify({ error: authResult.error }, null, 2));
+                console.log(JSON.stringify({ error: toJsonError(authResult.error) }, null, 2));
               } else {
                 console.error(`Error: ${authResult.error}`);
                 console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
@@ -256,7 +276,7 @@ export const findtimeCommand = new Command('findtime')
             const userInfo = await getOwaUserInfo(ewsToken!);
             if (!userInfo.ok || !userInfo.data?.email) {
               if (options.json) {
-                console.log(JSON.stringify({ error: 'Failed to determine user email' }, null, 2));
+                console.log(JSON.stringify({ error: toJsonError('Failed to determine user email') }, null, 2));
               } else {
                 console.error('Error: Failed to determine user email');
               }
@@ -284,7 +304,7 @@ export const findtimeCommand = new Command('findtime')
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Invalid date value';
         if (options.json) {
-          console.log(JSON.stringify({ error: message }, null, 2));
+          console.log(JSON.stringify({ error: toJsonError(message) }, null, 2));
         } else {
           console.error(`Error: ${message}`);
         }
@@ -305,6 +325,26 @@ export const findtimeCommand = new Command('findtime')
         console.error(`Error: --end must be an hour from 1 to 24 and greater than --start (got "${options.end}")`);
         process.exit(1);
       }
+      const minAttendeePercentage = parseInt(options.minAttendeePercentage, 10);
+      if (!Number.isFinite(minAttendeePercentage) || minAttendeePercentage < 1 || minAttendeePercentage > 100) {
+        console.error(
+          `Error: --min-attendee-percentage must be a number from 1 to 100 (got "${options.minAttendeePercentage}")`
+        );
+        process.exit(1);
+      }
+      if (options.timezone) {
+        try {
+          assertValidTimeZone(options.timezone);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Invalid --timezone';
+          if (options.json) {
+            console.log(JSON.stringify({ error: toJsonError(message) }, null, 2));
+          } else {
+            console.error(`Error: ${message}`);
+          }
+          process.exit(1);
+        }
+      }
 
       const locationConstraint = buildFindMeetingTimesLocationConstraint({
         suggestLocations: options.suggestLocations,
@@ -320,7 +360,7 @@ export const findtimeCommand = new Command('findtime')
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Invalid --find-meeting-json file';
           if (options.json) {
-            console.log(JSON.stringify({ error: message }, null, 2));
+            console.log(JSON.stringify({ error: toJsonError(message) }, null, 2));
           } else {
             console.error(`Error: ${message}`);
           }
@@ -336,7 +376,7 @@ export const findtimeCommand = new Command('findtime')
           });
           if (!ar.success) {
             if (options.json) {
-              console.log(JSON.stringify({ error: ar.error }, null, 2));
+              console.log(JSON.stringify({ error: toJsonError(ar.error) }, null, 2));
             } else {
               console.error(`Error: ${ar.error}`);
               console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
@@ -352,13 +392,15 @@ export const findtimeCommand = new Command('findtime')
           start.toISOString(),
           end.toISOString(),
           duration,
-          undefined,
+          options.timezone,
           options.mailbox
         );
 
         if (!result.ok || !result.data) {
           if (options.json) {
-            console.log(JSON.stringify({ error: result.error?.message || 'Failed to find meeting times' }, null, 2));
+            console.log(
+              JSON.stringify({ error: toJsonError(result.error?.message || 'Failed to find meeting times') }, null, 2)
+            );
           } else {
             console.error(`Error: ${result.error?.message || 'Failed to find meeting times'}`);
           }
@@ -367,7 +409,13 @@ export const findtimeCommand = new Command('findtime')
 
         const freeSlots = (result.data[0]?.scheduleItems || []).filter((item) => {
           if (item.status !== 'Free') return false;
-          const hour = new Date(item.start.dateTime).getHours();
+          // item.start.dateTime already carries wall-clock digits for the effective request
+          // zone (options.timezone, or UTC by default) tagged as a "Z" instant by
+          // ewsAvailabilityTimeToUtcMs — read the hour with the UTC accessor to get that zone's
+          // hour directly. Using local getHours() applies the host machine's offset (wrong unless
+          // the host happens to be in that zone); re-projecting through hourInTimeZone would
+          // double-shift since the digits are already zoned.
+          const hour = new Date(item.start.dateTime).getUTCHours();
           return hour >= workStart && hour < workEnd;
         });
 
@@ -409,11 +457,22 @@ export const findtimeCommand = new Command('findtime')
             byDay.get(day)?.push(slot);
           }
 
+          // slot.start/end.dateTime carry wall-clock digits for the effective request zone
+          // (options.timezone, or UTC by default) tagged as a "Z" instant — read them directly
+          // (UTC accessors / string slicing) rather than through formatDate/formatTime, which
+          // apply the host machine's local offset and would shift the displayed day/time.
           for (const [day, slots] of byDay) {
-            const dayLabel = formatDate(new Date(day).toISOString());
+            const dayLabel = new Date(`${day}T12:00:00Z`).toLocaleDateString('en-US', {
+              weekday: 'short',
+              month: 'short',
+              day: 'numeric',
+              timeZone: 'UTC'
+            });
             console.log(`  ${dayLabel}:`);
             for (const slot of slots) {
-              console.log(`    🟢 ${formatTime(slot.start.dateTime)} - ${formatTime(slot.end.dateTime)}`);
+              const st = slot.start.dateTime.slice(11, 16);
+              const en = slot.end.dateTime.slice(11, 16);
+              console.log(`    🟢 ${st} - ${en}`);
             }
           }
         }
@@ -428,7 +487,7 @@ export const findtimeCommand = new Command('findtime')
           });
           if (!ga.success || !ga.token) {
             if (options.json) {
-              console.log(JSON.stringify({ error: ga.error || 'Graph authentication failed' }, null, 2));
+              console.log(JSON.stringify({ error: toJsonError(ga.error || 'Graph authentication failed') }, null, 2));
             } else {
               console.error(`Error: ${ga.error || 'Graph authentication failed'}`);
             }
@@ -448,7 +507,10 @@ export const findtimeCommand = new Command('findtime')
           mailbox: options.mailbox,
           json: options.json,
           locationConstraint,
-          findMeetingMerge
+          findMeetingMerge,
+          optionalEmails: options.optional,
+          minAttendeePercentage,
+          timezone: options.timezone
         });
         if (g.ok) {
           return;
@@ -463,13 +525,16 @@ export const findtimeCommand = new Command('findtime')
           workEndHour: workEnd,
           label,
           mailbox: options.mailbox,
-          json: options.json
+          json: options.json,
+          timezone: options.timezone
         });
         if (gs.ok) {
           return;
         }
         if (options.json) {
-          console.log(JSON.stringify({ error: `findMeetingTimes: ${g.error}; getSchedule: ${gs.error}` }, null, 2));
+          console.log(
+            JSON.stringify({ error: toJsonError(`findMeetingTimes: ${g.error}; getSchedule: ${gs.error}`) }, null, 2)
+          );
         } else {
           console.error(`Error: findMeetingTimes failed (${g.error}). getSchedule failed (${gs.error}).`);
         }
@@ -499,7 +564,10 @@ export const findtimeCommand = new Command('findtime')
             mailbox: options.mailbox,
             json: options.json,
             locationConstraint,
-            findMeetingMerge
+            findMeetingMerge,
+            optionalEmails: options.optional,
+            minAttendeePercentage,
+            timezone: options.timezone
           });
           if (g.ok) {
             return;
@@ -517,7 +585,8 @@ export const findtimeCommand = new Command('findtime')
             workEndHour: workEnd,
             label,
             mailbox: options.mailbox,
-            json: options.json
+            json: options.json,
+            timezone: options.timezone
           });
           if (gs.ok) {
             return;

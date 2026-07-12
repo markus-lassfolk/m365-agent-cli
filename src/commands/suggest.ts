@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { Command } from 'commander';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
 import { type AttendeeBase, type FindMeetingTimesRequest, findMeetingTimes } from '../lib/graph-schedule.js';
+import { toJsonError } from '../lib/json-error.js';
 import { buildFindMeetingTimesLocationConstraint } from '../lib/meeting-location-constraint.js';
 
 export const suggestCommand = new Command('suggest')
@@ -47,7 +48,7 @@ export const suggestCommand = new Command('suggest')
       const authResult = await resolveGraphAuth({ token: options.token, identity: options.identity });
       if (!authResult.success || !authResult.token) {
         if (options.json) {
-          console.log(JSON.stringify({ error: authResult.error }, null, 2));
+          console.log(JSON.stringify({ error: toJsonError(authResult.error) }, null, 2));
         } else {
           console.error(`Error: ${authResult.error}`);
         }
@@ -66,7 +67,7 @@ export const suggestCommand = new Command('suggest')
       if (!Object.hasOwn(durationMapping, durationKey)) {
         const message = `Invalid duration "${options.duration}". Supported values are: ${Object.keys(durationMapping).join(', ')}.`;
         if (options.json) {
-          console.log(JSON.stringify({ error: message }, null, 2));
+          console.log(JSON.stringify({ error: toJsonError(message) }, null, 2));
         } else {
           console.error(`Error: ${message}`);
         }
@@ -130,7 +131,7 @@ export const suggestCommand = new Command('suggest')
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Invalid --find-meeting-json file';
           if (options.json) {
-            console.log(JSON.stringify({ error: message }, null, 2));
+            console.log(JSON.stringify({ error: toJsonError(message) }, null, 2));
           } else {
             console.error(`Error: ${message}`);
           }
@@ -142,7 +143,7 @@ export const suggestCommand = new Command('suggest')
 
       if (!result.ok || !result.data) {
         if (options.json) {
-          console.log(JSON.stringify({ error: result.error }, null, 2));
+          console.log(JSON.stringify({ error: toJsonError(result.error) }, null, 2));
         } else {
           console.error('Error finding meeting times:', result.error?.message || 'Unknown error');
         }

@@ -2235,6 +2235,10 @@ teamsCommand
   .argument('<chatId>', 'Chat id')
   .argument('<messageId>', 'Message id')
   .requiredOption('-r, --reaction <unicode>', 'Reaction unicode string')
+  .option(
+    '--reply <replyId>',
+    'Not supported: Graph v1.0 has no reply-reaction endpoint for chat messages (channel messages only). Passing this always errors.'
+  )
   .option('--unset', 'Call unsetReaction', false)
   .option('--token <token>', 'Graph access token')
   .option('--identity <name>', 'Graph token cache identity')
@@ -2242,7 +2246,7 @@ teamsCommand
     async (
       chatId: string,
       messageId: string,
-      opts: { reaction: string; unset?: boolean; token?: string; identity?: string },
+      opts: { reaction: string; reply?: string; unset?: boolean; token?: string; identity?: string },
       cmd: Command
     ) => {
       checkReadOnly(cmd);
@@ -2252,8 +2256,8 @@ teamsCommand
         process.exit(1);
       }
       const r = opts.unset
-        ? await unsetChatMessageReaction(auth.token, chatId, messageId, opts.reaction)
-        : await setChatMessageReaction(auth.token, chatId, messageId, opts.reaction);
+        ? await unsetChatMessageReaction(auth.token, chatId, messageId, opts.reaction, opts.reply)
+        : await setChatMessageReaction(auth.token, chatId, messageId, opts.reaction, opts.reply);
       if (!r.ok) {
         console.error(`Error: ${r.error?.message}`);
         process.exit(1);

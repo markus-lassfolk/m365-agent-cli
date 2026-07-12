@@ -9,6 +9,7 @@ import { counterCommand } from '../commands/counter.js';
 import { createEventCommand } from '../commands/create-event.js';
 import { delegatesCommand } from '../commands/delegates.js';
 import { deleteEventCommand } from '../commands/delete-event.js';
+import { describeCommand } from '../commands/describe.js';
 import { draftsCommand } from '../commands/drafts.js';
 import { excelCommand } from '../commands/excel.js';
 import { filesCommand } from '../commands/files.js';
@@ -24,6 +25,7 @@ import { insightsCommand } from '../commands/insights.js';
 import { loginCommand } from '../commands/login.js';
 import { mailCommand } from '../commands/mail.js';
 import { mailboxSettingsCommand } from '../commands/mailbox-settings.js';
+import { mcpCommand } from '../commands/mcp.js';
 import { meetingCommand } from '../commands/meeting.js';
 import { onenoteCommand } from '../commands/onenote.js';
 import { oofCommand } from '../commands/oof.js';
@@ -64,10 +66,33 @@ function registerM365Commands(program: Command): void {
     .version(getPackageVersionSync());
 
   program.option('--read-only', 'Run in read-only mode, blocking any mutating operations');
+  program.option(
+    '--dry-run',
+    'Preview the exact request a mutating command would send (Graph URL/body or EWS SOAP envelope) without sending it, then exit 0. For a multi-step command, only the first mutating request is shown.'
+  );
+  program.option(
+    '--cache <duration>',
+    'Cache idempotent Microsoft Graph GET responses on disk for this long (e.g. 30s, 5m, 1h; bare number = seconds), keyed by identity token + URL. Off by default.'
+  );
+
+  // Sync --dry-run / --cache into process-wide env vars before the action runs: the transport
+  // layer (graph-client.ts / ews-client.ts) has no access to the parsed Command instance, so this
+  // is the only way to carry the flags down to where requests are actually built and sent.
+  program.hook('preAction', (_thisCommand, actionCommand) => {
+    const opts = actionCommand.optsWithGlobals();
+    if (opts.dryRun) {
+      process.env.M365_DRY_RUN = '1';
+    }
+    if (opts.cache) {
+      process.env.M365_CACHE_TTL = String(opts.cache);
+    }
+  });
 
   program.addHelpText('after', 'Tip: run m365-agent-cli <command> --help for flags and examples on each command.');
 
   program.addCommand(whoamiCommand);
+  program.addCommand(describeCommand);
+  program.addCommand(mcpCommand);
   program.addCommand(updateCommand);
   program.addCommand(loginCommand);
   program.addCommand(sitePagesCommand);

@@ -12,6 +12,8 @@ import {
   driveItemPath,
   driveRootSearchPath
 } from './drive-location.js';
+import { haltForDryRun, isDryRunActive, previewableBody } from './dry-run.js';
+import { activeCacheTtlMs, readGraphCache, writeGraphCache } from './graph-cache.js';
 import { getGraphBaseUrl } from './graph-constants.js';
 
 /** Shown after HTTP 404 on a v1.0-style Graph URL (preview APIs are often beta-only). */
@@ -291,9 +293,26 @@ function throttleBackoffMs(attemptIndex: number): number {
   return Math.min(GRAPH_RETRY_MAX_WAIT_MS, base + jitter);
 }
 
-function isIdempotentMethod(method: string): boolean {
+export function isIdempotentMethod(method: string): boolean {
   const m = (method || 'GET').toUpperCase();
   return m === 'GET' || m === 'HEAD';
+}
+
+/** True when `fullUrl` is a Graph `/$batch` POST whose body is a well-formed batch request whose
+ *  every sub-request uses GET/HEAD — i.e. nothing would actually mutate data, so `--dry-run`
+ *  shouldn't halt it. Any parse failure or non-batch URL returns false (treat as mutating, the
+ *  safe default). */
+function isReadOnlyBatchRequest(fullUrl: string, fetchInit: RequestInit): boolean {
+  try {
+    if (!new URL(fullUrl).pathname.endsWith('/$batch')) return false;
+    const bodyStr = typeof fetchInit.body === 'string' ? fetchInit.body : undefined;
+    if (!bodyStr) return false;
+    const parsed = JSON.parse(bodyStr) as { requests?: Array<{ method?: string }> };
+    if (!Array.isArray(parsed.requests) || parsed.requests.length === 0) return false;
+    return parsed.requests.every((r) => isIdempotentMethod(String(r?.method || 'GET')));
+  } catch {
+    return false;
+  }
 }
 
 function isTransientNetworkError(err: unknown): boolean {
@@ -532,6 +551,26 @@ async function callGraphUrlWithRetries<T>(
   onUnauthorized?: () => Promise<string | null>
 ): Promise<GraphResponse<T>> {
   const method = (fetchInit.method || 'GET').toUpperCase();
+
+  if (!isIdempotentMethod(method) && !isReadOnlyBatchRequest(fullUrl, fetchInit) && isDryRunActive()) {
+    const { headers: previewHeaders } = fetchInit;
+    haltForDryRun({
+      backend: 'graph',
+      method,
+      url: fullUrl,
+      ...(previewHeaders ? { headers: Object.fromEntries(new Headers(previewHeaders).entries()) } : {}),
+      body: previewableBody(fetchInit.body)
+    });
+  }
+
+  const cacheTtlMs = method === 'GET' ? activeCacheTtlMs() : null;
+  if (cacheTtlMs) {
+    const cached = await readGraphCache(token, method, fullUrl, fetchInit.headers);
+    if (cached) {
+      return graphResult(cached.body as T);
+    }
+  }
+
   let accessToken = token;
   let throttleAttempt = 0;
   let did401Refresh = false;
@@ -636,6 +675,9 @@ async function callGraphUrlWithRetries<T>(
 
     if (responseMode === 'text') {
       const text = await response.text();
+      if (cacheTtlMs) {
+        await writeGraphCache(token, method, fullUrl, response.status, text, cacheTtlMs, fetchInit.headers);
+      }
       return graphResult(text as unknown as T);
     }
 
@@ -651,7 +693,11 @@ async function callGraphUrlWithRetries<T>(
       return graphResult(undefined as T);
     }
     try {
-      return graphResult(JSON.parse(raw) as T);
+      const parsed = JSON.parse(raw) as T;
+      if (cacheTtlMs) {
+        await writeGraphCache(token, method, fullUrl, response.status, parsed, cacheTtlMs, fetchInit.headers);
+      }
+      return graphResult(parsed);
     } catch {
       throw new GraphApiError(
         `Microsoft Graph returned a non-JSON ${response.status} response`,
@@ -1223,23 +1269,39 @@ export async function deleteFile(
   }
 }
 
+export interface ShareFileOptions {
+  /** ISO 8601 datetime the link expires at (e.g. `2026-01-01T00:00:00Z`). */
+  expirationDateTime?: string;
+  /** Sharing-link password (OneDrive Personal only, per Graph). */
+  password?: string;
+  /** Default `true` (Graph default): keep existing inherited permissions when creating the first share on this item. */
+  retainInheritedPermissions?: boolean;
+}
+
 export async function shareFile(
   token: string,
   itemId: string,
   type: 'view' | 'edit' = 'view',
   scope: 'anonymous' | 'organization' = 'organization',
   location: DriveLocation = DEFAULT_DRIVE_LOCATION,
-  graphBaseUrl: string = getGraphBaseUrl()
+  graphBaseUrl: string = getGraphBaseUrl(),
+  options: ShareFileOptions = {}
 ): Promise<GraphResponse<SharingLinkResult>> {
   let result: GraphResponse<{ link?: SharingLinkResult }>;
   try {
+    const body: Record<string, unknown> = { type, scope };
+    if (options.expirationDateTime) body.expirationDateTime = options.expirationDateTime;
+    if (options.password) body.password = options.password;
+    if (options.retainInheritedPermissions !== undefined) {
+      body.retainInheritedPermissions = options.retainInheritedPermissions;
+    }
     result = await callGraphAt<{ link?: SharingLinkResult }>(
       graphBaseUrl,
       token,
       `${driveItemPath(location, itemId)}/createLink`,
       {
         method: 'POST',
-        body: JSON.stringify({ type, scope })
+        body: JSON.stringify(body)
       }
     );
   } catch (err) {
@@ -1794,6 +1856,28 @@ export async function listDriveItemPermissions(
     'Failed to list permissions',
     graphBaseUrl
   );
+}
+
+export async function getDriveItemPermission(
+  token: string,
+  itemId: string,
+  permissionId: string,
+  location: DriveLocation = DEFAULT_DRIVE_LOCATION,
+  graphBaseUrl: string = getGraphBaseUrl()
+): Promise<GraphResponse<DriveItemPermission>> {
+  try {
+    return await callGraphAt<DriveItemPermission>(
+      graphBaseUrl,
+      token,
+      `${driveItemPath(location, itemId)}/permissions/${encodeURIComponent(permissionId)}`,
+      { method: 'GET' }
+    );
+  } catch (err) {
+    if (err instanceof GraphApiError) {
+      return graphErrorFromApiError(err);
+    }
+    return graphError(err instanceof Error ? err.message : 'Failed to get permission');
+  }
 }
 
 export async function deleteDriveItemPermission(

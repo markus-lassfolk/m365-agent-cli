@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
 import { getSchedule } from '../lib/graph-schedule.js';
+import { toJsonError } from '../lib/json-error.js';
 
 export const scheduleCommand = new Command('schedule')
   .description('Get merged free/busy schedule for multiple users')
@@ -19,7 +20,7 @@ export const scheduleCommand = new Command('schedule')
       const authResult = await resolveGraphAuth({ token: options.token, identity: options.identity });
       if (!authResult.success || !authResult.token) {
         if (options.json) {
-          console.log(JSON.stringify({ error: authResult.error }, null, 2));
+          console.log(JSON.stringify({ error: toJsonError(authResult.error) }, null, 2));
         } else {
           console.error(`Error: ${authResult.error}`);
         }
@@ -33,7 +34,7 @@ export const scheduleCommand = new Command('schedule')
         const errorMessage =
           'Invalid start or end date. Please provide ISO 8601 date/time values (e.g. 2026-04-01T00:00:00Z or 2026-04-01).';
         if (options.json) {
-          console.log(JSON.stringify({ error: errorMessage }, null, 2));
+          console.log(JSON.stringify({ error: toJsonError(errorMessage) }, null, 2));
         } else {
           console.error(`Error: ${errorMessage}`);
         }
@@ -63,7 +64,7 @@ export const scheduleCommand = new Command('schedule')
 
       if (!result.ok || !result.data) {
         if (options.json) {
-          console.log(JSON.stringify({ error: result.error }, null, 2));
+          console.log(JSON.stringify({ error: toJsonError(result.error) }, null, 2));
         } else {
           console.error('Error fetching schedule:', result.error?.message || 'Unknown error');
         }

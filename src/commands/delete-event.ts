@@ -18,6 +18,7 @@ import {
   listCalendarView
 } from '../lib/graph-calendar-client.js';
 import { truncateRecurringSeriesBeforeCut } from '../lib/graph-calendar-recurrence.js';
+import { toJsonError } from '../lib/json-error.js';
 import { checkReadOnly } from '../lib/utils.js';
 
 function formatTime(dateStr: string): string {
@@ -106,7 +107,7 @@ export const deleteEventCommand = new Command('delete-event')
               graphToken = ga.token;
             } else if (backend === 'graph') {
               if (options.json) {
-                console.log(JSON.stringify({ error: 'Failed to determine user email' }, null, 2));
+                console.log(JSON.stringify({ error: toJsonError('Failed to determine user email') }, null, 2));
               } else {
                 console.error('Error: Failed to determine user email');
               }
@@ -114,7 +115,9 @@ export const deleteEventCommand = new Command('delete-event')
             }
           } else if (backend === 'graph') {
             if (options.json) {
-              console.log(JSON.stringify({ error: lv.error?.message || 'Failed to list calendar' }, null, 2));
+              console.log(
+                JSON.stringify({ error: toJsonError(lv.error?.message || 'Failed to list calendar') }, null, 2)
+              );
             } else {
               console.error(`Error: ${lv.error?.message || 'Failed to list calendar'}`);
             }
@@ -124,7 +127,7 @@ export const deleteEventCommand = new Command('delete-event')
           }
         } else if (backend === 'graph') {
           if (options.json) {
-            console.log(JSON.stringify({ error: ga.error || 'Graph authentication failed' }, null, 2));
+            console.log(JSON.stringify({ error: toJsonError(ga.error || 'Graph authentication failed') }, null, 2));
           } else {
             console.error(`Error: ${ga.error || 'Graph authentication failed'}`);
           }
@@ -141,7 +144,7 @@ export const deleteEventCommand = new Command('delete-event')
 
         if (!authResult.success) {
           if (options.json) {
-            console.log(JSON.stringify({ error: authResult.error }, null, 2));
+            console.log(JSON.stringify({ error: toJsonError(authResult.error) }, null, 2));
           } else {
             console.error(`Error: ${authResult.error}`);
             console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
@@ -160,7 +163,9 @@ export const deleteEventCommand = new Command('delete-event')
 
         if (!result.ok || !result.data) {
           if (options.json) {
-            console.log(JSON.stringify({ error: result.error?.message || 'Failed to fetch events' }, null, 2));
+            console.log(
+              JSON.stringify({ error: toJsonError(result.error?.message || 'Failed to fetch events') }, null, 2)
+            );
           } else {
             console.error(`Error: ${result.error?.message || 'Failed to fetch events'}`);
           }
@@ -281,6 +286,22 @@ export const deleteEventCommand = new Command('delete-event')
         scope = 'this';
       }
 
+      // EWS has no operation that actually truncates a recurring series' RecurrenceRange — the
+      // DeleteItem call below only ever removes the single targeted occurrence regardless of
+      // scope, so silently proceeding here (as if this and all future occurrences were removed)
+      // would misrepresent what happened. Graph's --scope future path (below) does truncate
+      // properly via truncateRecurringSeriesBeforeCut.
+      if (!useGraph && scope === 'future') {
+        const msg =
+          '--scope future is not supported on the EWS backend (EWS has no operation to truncate a recurring series’ range — DeleteItem would only remove the single targeted occurrence, not this-and-future). Use --scope this, or M365_EXCHANGE_BACKEND=graph.';
+        if (options.json) {
+          console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
+        } else {
+          console.error(`Error: ${msg}`);
+        }
+        process.exit(1);
+      }
+
       if (useGraph) {
         targetGraph = events.find((e) => (e as GraphCalendarEvent).id === options.id) as GraphCalendarEvent | undefined;
         if (!targetGraph && options.id) {
@@ -296,7 +317,7 @@ export const deleteEventCommand = new Command('delete-event')
             } catch (err) {
               const message = err instanceof Error ? err.message : 'Invalid instance date';
               if (options.json) {
-                console.log(JSON.stringify({ error: message }, null, 2));
+                console.log(JSON.stringify({ error: toJsonError(message) }, null, 2));
               } else {
                 console.error(`Error: ${message}`);
               }
@@ -384,7 +405,7 @@ export const deleteEventCommand = new Command('delete-event')
             } catch (err) {
               const message = err instanceof Error ? err.message : 'Invalid instance date';
               if (options.json) {
-                console.log(JSON.stringify({ error: message }, null, 2));
+                console.log(JSON.stringify({ error: toJsonError(message) }, null, 2));
               } else {
                 console.error(`Error: ${message}`);
               }
@@ -425,11 +446,9 @@ export const deleteEventCommand = new Command('delete-event')
             targetEws = occEvent;
           }
           if (!options.json) {
-            if (scope === 'future') {
-              console.log(`\nTruncating series from occurrence: ${targetEws!.Subject}`);
-            } else {
-              console.log(`\nDeleting single occurrence: ${targetEws!.Subject}`);
-            }
+            // scope === 'future' already exited above (EWS can't truncate a series), so only
+            // 'this' reaches here.
+            console.log(`\nDeleting single occurrence: ${targetEws!.Subject}`);
             console.log(
               `  ${formatDate(targetEws!.Start.DateTime)} ${formatTime(targetEws!.Start.DateTime)} - ${formatTime(targetEws!.End.DateTime)}`
             );
@@ -461,7 +480,7 @@ export const deleteEventCommand = new Command('delete-event')
           const msg =
             'Cannot truncate from series master directly. Use --occurrence or --instance to specify which occurrence to start the truncation from.';
           if (options.json) {
-            console.log(JSON.stringify({ error: msg }, null, 2));
+            console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
           } else {
             console.error(`Error: ${msg}`);
           }
@@ -473,7 +492,9 @@ export const deleteEventCommand = new Command('delete-event')
         });
         if (!tr.ok) {
           if (options.json) {
-            console.log(JSON.stringify({ error: tr.error?.message || 'Failed to truncate series' }, null, 2));
+            console.log(
+              JSON.stringify({ error: toJsonError(tr.error?.message || 'Failed to truncate series') }, null, 2)
+            );
           } else {
             console.error(`\nError: ${tr.error?.message || 'Failed to truncate series'}`);
           }
@@ -544,7 +565,9 @@ export const deleteEventCommand = new Command('delete-event')
 
         if (!graphRes.ok) {
           if (options.json) {
-            console.log(JSON.stringify({ error: graphRes.error?.message || `Failed to ${action} event` }, null, 2));
+            console.log(
+              JSON.stringify({ error: toJsonError(graphRes.error?.message || `Failed to ${action} event`) }, null, 2)
+            );
           } else {
             console.error(`\nError: ${graphRes.error?.message || `Failed to ${action} event`}`);
           }
@@ -608,7 +631,9 @@ export const deleteEventCommand = new Command('delete-event')
 
       if (!deleteResult.ok) {
         if (options.json) {
-          console.log(JSON.stringify({ error: deleteResult.error?.message || `Failed to ${action} event` }, null, 2));
+          console.log(
+            JSON.stringify({ error: toJsonError(deleteResult.error?.message || `Failed to ${action} event`) }, null, 2)
+          );
         } else {
           console.error(`\nError: ${deleteResult.error?.message || `Failed to ${action} event`}`);
         }

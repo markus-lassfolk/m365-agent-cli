@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { parseDay, parseTimeToDate } from '../lib/dates.js';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
 import { proposeNewTime } from '../lib/graph-event.js';
+import { toJsonError } from '../lib/json-error.js';
 import { checkReadOnly } from '../lib/utils.js';
 
 export const counterCommand = new Command('counter')
@@ -83,7 +84,11 @@ export const counterCommand = new Command('counter')
       if (!response.ok) {
         if (options.json) {
           console.log(
-            JSON.stringify({ success: false, error: response.error?.message || 'Failed to propose new time' }, null, 2)
+            JSON.stringify(
+              { success: false, error: toJsonError(response.error?.message || 'Failed to propose new time') },
+              null,
+              2
+            )
           );
         } else {
           console.error(`\nError: ${response.error?.message || 'Failed to propose new time'}`);

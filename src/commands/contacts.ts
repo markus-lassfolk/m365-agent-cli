@@ -1,6 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { Command } from 'commander';
-import { requireGraphAuth } from '../lib/graph-auth.js';
+import { resolveGraphAuth } from '../lib/graph-auth.js';
 import {
   deleteContactMergeSuggestions,
   getContactMergeSuggestions,
@@ -13,6 +13,7 @@ import {
   resolveDeltaContinuationUrl,
   writeDeltaStateFile
 } from '../lib/graph-delta-state-file.js';
+import { toJsonError } from '../lib/json-error.js';
 import {
   addFileAttachmentToContact,
   addReferenceAttachmentToContact,
@@ -51,6 +52,22 @@ import { checkReadOnly } from '../lib/utils.js';
 const contactsDesc =
   'Outlook contacts via Microsoft Graph (Contacts.ReadWrite; shared mailboxes: Contacts.Read.Shared / Contacts.ReadWrite.Shared — see docs/GRAPH_SCOPES.md)';
 
+function failContacts(
+  json: boolean | undefined,
+  prefix: 'Auth error' | 'Error',
+  error: unknown,
+  fallbackMessage?: string
+): never {
+  if (json) {
+    console.log(JSON.stringify({ error: toJsonError(error, fallbackMessage) }, null, 2));
+  } else {
+    const message =
+      (typeof error === 'string' ? error : (error as { message?: string } | undefined)?.message) ?? fallbackMessage;
+    console.error(`${prefix}: ${message}`);
+  }
+  process.exit(1);
+}
+
 function resolveContactExtensionLocation(opts: {
   folder?: string;
   childFolder?: string;
@@ -67,11 +84,14 @@ export const contactsCommand = new Command('contacts').description(contactsDesc)
 // ─── folders (list — backward compatible) ───────────────────────────────────
 
 async function listContactFoldersAction(opts: { json?: boolean; token?: string; identity?: string; user?: string }) {
-  const token = await requireGraphAuth(opts);
+  const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+  if (!auth.success || !auth.token) {
+    failContacts(opts.json, 'Auth error', auth.error);
+  }
+  const token = auth.token;
   const r = await listContactFolders(token, opts.user);
   if (!r.ok || !r.data) {
-    console.error(`Error: ${r.error?.message}`);
-    process.exit(1);
+    failContacts(opts.json, 'Error', r.error);
   }
   if (opts.json) console.log(JSON.stringify(r.data, null, 2));
   else {
@@ -112,11 +132,14 @@ folderCmd
   .option('--identity <name>', 'Graph token cache identity (default: default)')
   .option('--user <email>', 'Target user')
   .action(async (folderId: string, opts: { json?: boolean; token?: string; identity?: string; user?: string }) => {
-    const token = await requireGraphAuth(opts);
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success || !auth.token) {
+      failContacts(opts.json, 'Auth error', auth.error);
+    }
+    const token = auth.token;
     const r = await getContactFolder(token, folderId, opts.user);
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failContacts(opts.json, 'Error', r.error);
     }
     if (opts.json) console.log(JSON.stringify(r.data, null, 2));
     else console.log(`${r.data.displayName ?? '(folder)'}\t${r.data.id}`);
@@ -144,11 +167,14 @@ folderCmd
       cmd: any
     ) => {
       checkReadOnly(cmd);
-      const token = await requireGraphAuth(opts);
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!auth.success || !auth.token) {
+        failContacts(opts.json, 'Auth error', auth.error);
+      }
+      const token = auth.token;
       const r = await createContactFolder(token, opts.name, opts.user, opts.parent);
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
+        failContacts(opts.json, 'Error', r.error);
       }
       if (opts.json) console.log(JSON.stringify(r.data, null, 2));
       else console.log(`Created folder: ${r.data.displayName ?? r.data.id} (${r.data.id})`);
@@ -171,13 +197,16 @@ folderCmd
       cmd: any
     ) => {
       checkReadOnly(cmd);
-      const token = await requireGraphAuth(opts);
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!auth.success || !auth.token) {
+        failContacts(opts.json, 'Auth error', auth.error);
+      }
+      const token = auth.token;
       const raw = await readFile(opts.jsonFile, 'utf-8');
       const patch = JSON.parse(raw) as Record<string, unknown>;
       const r = await updateContactFolder(token, folderId, patch, opts.user);
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
+        failContacts(opts.json, 'Error', r.error);
       }
       if (opts.json) console.log(JSON.stringify(r.data, null, 2));
       else console.log(`Updated folder: ${r.data.id}`);
@@ -203,11 +232,14 @@ folderCmd
         console.error('Refusing to delete without --confirm');
         process.exit(1);
       }
-      const token = await requireGraphAuth(opts);
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!auth.success || !auth.token) {
+        failContacts(undefined, 'Auth error', auth.error);
+      }
+      const token = auth.token;
       const r = await deleteContactFolder(token, folderId, opts.user);
       if (!r.ok) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
+        failContacts(undefined, 'Error', r.error);
       }
       console.log('Deleted folder.');
     }
@@ -223,11 +255,14 @@ folderCmd
   .option('--user <email>', 'Target user')
   .action(
     async (parentFolderId: string, opts: { json?: boolean; token?: string; identity?: string; user?: string }) => {
-      const token = await requireGraphAuth(opts);
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!auth.success || !auth.token) {
+        failContacts(opts.json, 'Auth error', auth.error);
+      }
+      const token = auth.token;
       const r = await listChildContactFolders(token, parentFolderId, opts.user);
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
+        failContacts(opts.json, 'Error', r.error);
       }
       if (opts.json) console.log(JSON.stringify(r.data, null, 2));
       else {
@@ -270,7 +305,11 @@ contactsCommand
       identity?: string;
       user?: string;
     }) => {
-      const token = await requireGraphAuth(opts);
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!auth.success || !auth.token) {
+        failContacts(opts.json, 'Auth error', auth.error);
+      }
+      const token = auth.token;
       const useStructured = !!(
         opts.filter?.trim() ||
         opts.orderby?.trim() ||
@@ -300,8 +339,7 @@ contactsCommand
           query: query ?? {}
         });
         if (!r.ok || !r.data) {
-          console.error(`Error: ${r.error?.message}`);
-          process.exit(1);
+          failContacts(opts.json, 'Error', r.error);
         }
         if (opts.json) {
           console.log(JSON.stringify(r.data, null, 2));
@@ -321,8 +359,7 @@ contactsCommand
         ? await listContactsInFolder(token, opts.folder, opts.user, query)
         : await listContacts(token, opts.user, query);
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
+        failContacts(opts.json, 'Error', r.error);
       }
       if (opts.json) console.log(JSON.stringify(r.data, null, 2));
       else {
@@ -348,11 +385,14 @@ contactsCommand
       contactId: string,
       opts: { select?: string; json?: boolean; token?: string; identity?: string; user?: string }
     ) => {
-      const token = await requireGraphAuth(opts);
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!auth.success || !auth.token) {
+        failContacts(opts.json, 'Auth error', auth.error);
+      }
+      const token = auth.token;
       const r = await getContact(token, contactId, opts.user, opts.select);
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
+        failContacts(opts.json, 'Error', r.error);
       }
       if (opts.json) console.log(JSON.stringify(r.data, null, 2));
       else {
@@ -384,13 +424,16 @@ contactsCommand
       cmd: any
     ) => {
       checkReadOnly(cmd);
-      const token = await requireGraphAuth(opts);
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!auth.success || !auth.token) {
+        failContacts(opts.json, 'Auth error', auth.error);
+      }
+      const token = auth.token;
       const raw = await readFile(opts.jsonFile, 'utf-8');
       const body = JSON.parse(raw) as Record<string, unknown>;
       const r = await createContact(token, body, opts.user, opts.folder);
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
+        failContacts(opts.json, 'Error', r.error);
       }
       if (opts.json) console.log(JSON.stringify(r.data, null, 2));
       else console.log(`Created contact: ${r.data.displayName ?? r.data.id} (${r.data.id})`);
@@ -413,13 +456,16 @@ contactsCommand
       cmd: any
     ) => {
       checkReadOnly(cmd);
-      const token = await requireGraphAuth(opts);
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!auth.success || !auth.token) {
+        failContacts(opts.json, 'Auth error', auth.error);
+      }
+      const token = auth.token;
       const raw = await readFile(opts.jsonFile, 'utf-8');
       const patch = JSON.parse(raw) as Record<string, unknown>;
       const r = await updateContact(token, contactId, patch, opts.user);
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
+        failContacts(opts.json, 'Error', r.error);
       }
       if (opts.json) console.log(JSON.stringify(r.data, null, 2));
       else console.log(`Updated contact: ${r.data.id}`);
@@ -445,11 +491,14 @@ contactsCommand
         console.error('Refusing to delete without --confirm');
         process.exit(1);
       }
-      const token = await requireGraphAuth(opts);
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!auth.success || !auth.token) {
+        failContacts(undefined, 'Auth error', auth.error);
+      }
+      const token = auth.token;
       const r = await deleteContact(token, contactId, opts.user);
       if (!r.ok) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
+        failContacts(undefined, 'Error', r.error);
       }
       console.log('Deleted contact.');
     }
@@ -471,11 +520,14 @@ contactsCommand
       query: string,
       opts: { folder?: string; json?: boolean; token?: string; identity?: string; user?: string }
     ) => {
-      const token = await requireGraphAuth(opts);
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!auth.success || !auth.token) {
+        failContacts(opts.json, 'Auth error', auth.error);
+      }
+      const token = auth.token;
       const r = await searchContacts(token, query, opts.user, opts.folder);
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
+        failContacts(opts.json, 'Error', r.error);
       }
       if (opts.json) console.log(JSON.stringify(r.data, null, 2));
       else {
@@ -511,7 +563,11 @@ contactsCommand
       identity?: string;
       user?: string;
     }) => {
-      const token = await requireGraphAuth(opts);
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!auth.success || !auth.token) {
+        failContacts(opts.json, 'Auth error', auth.error);
+      }
+      const token = auth.token;
       const existingState = opts.stateFile ? await readDeltaStateFile(opts.stateFile) : null;
       if (existingState && existingState.kind !== 'contacts') {
         console.error('Error: state file is not for contacts delta (kind must be contacts).');
@@ -532,8 +588,7 @@ contactsCommand
         nextLink: continueUrl
       });
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
+        failContacts(opts.json, 'Error', r.error);
       }
       if (opts.stateFile && r.data) {
         const merged = applyDeltaPageToState(existingState, 'contacts', r.data, {
@@ -585,11 +640,14 @@ contactExtensionCmd
         console.error('Error: --child-folder requires -f/--folder');
         process.exit(1);
       }
-      const token = await requireGraphAuth(opts);
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!auth.success || !auth.token) {
+        failContacts(opts.json, 'Auth error', auth.error);
+      }
+      const token = auth.token;
       const r = await listContactOpenExtensions(token, contactId, opts.user, loc);
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
+        failContacts(opts.json, 'Error', r.error);
       }
       if (opts.json) console.log(JSON.stringify(r.data, null, 2));
       else {
@@ -630,13 +688,25 @@ contactExtensionCmd
         console.error('Error: --child-folder requires -f/--folder');
         process.exit(1);
       }
-      const token = await requireGraphAuth(opts);
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!auth.success || !auth.token) {
+        failContacts(opts.json, 'Auth error', auth.error);
+      }
+      const token = auth.token;
       const r = await getContactOpenExtension(token, contactId, opts.name, opts.user, loc);
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
+        failContacts(opts.json, 'Error', r.error);
       }
-      console.log(JSON.stringify(r.data, null, 2));
+      if (opts.json) {
+        console.log(JSON.stringify(r.data, null, 2));
+      } else {
+        const { extensionName, ...props } = r.data;
+        console.log(`- ${(extensionName as string) || opts.name}`);
+        for (const [key, value] of Object.entries(props)) {
+          if (key.startsWith('@') || key === 'id') continue;
+          console.log(`    ${key}: ${JSON.stringify(value)}`);
+        }
+      }
     }
   );
 
@@ -673,13 +743,16 @@ contactExtensionCmd
         console.error('Error: --child-folder requires -f/--folder');
         process.exit(1);
       }
-      const token = await requireGraphAuth(opts);
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!auth.success || !auth.token) {
+        failContacts(opts.json, 'Auth error', auth.error);
+      }
+      const token = auth.token;
       const raw = await readFile(opts.jsonFile, 'utf-8');
       const data = JSON.parse(raw) as Record<string, unknown>;
       const r = await setContactOpenExtension(token, contactId, opts.name, data, opts.user, loc);
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
+        failContacts(opts.json, 'Error', r.error);
       }
       if (opts.json) console.log(JSON.stringify(r.data, null, 2));
       else console.log(`\n\u2705 Extension set: ${opts.name}\n`);
@@ -717,13 +790,16 @@ contactExtensionCmd
         console.error('Error: --child-folder requires -f/--folder');
         process.exit(1);
       }
-      const token = await requireGraphAuth(opts);
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!auth.success || !auth.token) {
+        failContacts(undefined, 'Auth error', auth.error);
+      }
+      const token = auth.token;
       const raw = await readFile(opts.jsonFile, 'utf-8');
       const patch = JSON.parse(raw) as Record<string, unknown>;
       const r = await updateContactOpenExtension(token, contactId, opts.name, patch, opts.user, loc);
       if (!r.ok) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
+        failContacts(undefined, 'Error', r.error);
       }
       console.log('\n\u2705 Extension updated.\n');
     }
@@ -764,11 +840,14 @@ contactExtensionCmd
         console.error('Error: --child-folder requires -f/--folder');
         process.exit(1);
       }
-      const token = await requireGraphAuth(opts);
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!auth.success || !auth.token) {
+        failContacts(undefined, 'Auth error', auth.error);
+      }
+      const token = auth.token;
       const r = await deleteContactOpenExtension(token, contactId, opts.name, opts.user, loc);
       if (!r.ok) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
+        failContacts(undefined, 'Error', r.error);
       }
       console.log(`\n\u2705 Deleted extension: ${opts.name}\n`);
     }
@@ -789,11 +868,14 @@ photoCmd
   .option('--identity <name>', 'Graph token cache identity (default: default)')
   .option('--user <email>', 'Target user')
   .action(async (contactId: string, opts: { out: string; token?: string; identity?: string; user?: string }) => {
-    const token = await requireGraphAuth(opts);
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success || !auth.token) {
+      failContacts(undefined, 'Auth error', auth.error);
+    }
+    const token = auth.token;
     const r = await getContactPhotoBytes(token, contactId, opts.user);
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failContacts(undefined, 'Error', r.error);
     }
     await writeFile(opts.out, r.data);
     console.log(`Wrote ${r.data.byteLength} bytes to ${opts.out}`);
@@ -815,13 +897,16 @@ photoCmd
       cmd: any
     ) => {
       checkReadOnly(cmd);
-      const token = await requireGraphAuth(opts);
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!auth.success || !auth.token) {
+        failContacts(undefined, 'Auth error', auth.error);
+      }
+      const token = auth.token;
       const bytes = await readFile(opts.file);
       const ct = opts.contentType ?? 'image/jpeg';
       const r = await setContactPhoto(token, contactId, new Uint8Array(bytes), ct, opts.user);
       if (!r.ok) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
+        failContacts(undefined, 'Error', r.error);
       }
       console.log('Photo updated.');
     }
@@ -846,11 +931,14 @@ photoCmd
         console.error('Refusing to delete photo without --confirm');
         process.exit(1);
       }
-      const token = await requireGraphAuth(opts);
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!auth.success || !auth.token) {
+        failContacts(undefined, 'Auth error', auth.error);
+      }
+      const token = auth.token;
       const r = await deleteContactPhoto(token, contactId, opts.user);
       if (!r.ok) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
+        failContacts(undefined, 'Error', r.error);
       }
       console.log('Photo deleted.');
     }
@@ -871,11 +959,14 @@ attachCmd
   .option('--identity <name>', 'Graph token cache identity (default: default)')
   .option('--user <email>', 'Target user')
   .action(async (contactId: string, opts: { json?: boolean; token?: string; identity?: string; user?: string }) => {
-    const token = await requireGraphAuth(opts);
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success || !auth.token) {
+      failContacts(opts.json, 'Auth error', auth.error);
+    }
+    const token = auth.token;
     const r = await listContactAttachments(token, contactId, opts.user);
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failContacts(opts.json, 'Error', r.error);
     }
     if (opts.json) console.log(JSON.stringify(r.data, null, 2));
     else {
@@ -911,7 +1002,11 @@ attachCmd
       cmd: any
     ) => {
       checkReadOnly(cmd);
-      const token = await requireGraphAuth(opts);
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!auth.success || !auth.token) {
+        failContacts(opts.json, 'Auth error', auth.error);
+      }
+      const token = auth.token;
       const buf = await readFile(opts.file);
       const base64 = Buffer.from(buf).toString('base64');
       const pathParts = opts.file.replace(/\\/g, '/').split('/');
@@ -925,8 +1020,7 @@ attachCmd
         opts.user
       );
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
+        failContacts(opts.json, 'Error', r.error);
       }
       if (opts.json) console.log(JSON.stringify(r.data, null, 2));
       else console.log(`Added attachment: ${r.data.name ?? r.data.id} (${r.data.id})`);
@@ -957,7 +1051,11 @@ attachCmd
       cmd: any
     ) => {
       checkReadOnly(cmd);
-      const token = await requireGraphAuth(opts);
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!auth.success || !auth.token) {
+        failContacts(opts.json, 'Auth error', auth.error);
+      }
+      const token = auth.token;
       const r = await addReferenceAttachmentToContact(
         token,
         contactId,
@@ -968,8 +1066,7 @@ attachCmd
         opts.user
       );
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
+        failContacts(opts.json, 'Error', r.error);
       }
       if (opts.json) console.log(JSON.stringify(r.data, null, 2));
       else console.log(`Added link attachment: ${r.data.name ?? r.data.id} (${r.data.id})`);
@@ -991,11 +1088,14 @@ attachCmd
       attachmentId: string,
       opts: { json?: boolean; token?: string; identity?: string; user?: string }
     ) => {
-      const token = await requireGraphAuth(opts);
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!auth.success || !auth.token) {
+        failContacts(opts.json, 'Auth error', auth.error);
+      }
+      const token = auth.token;
       const r = await getContactAttachment(token, contactId, attachmentId, opts.user);
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
+        failContacts(opts.json, 'Error', r.error);
       }
       if (opts.json) console.log(JSON.stringify(r.data, null, 2));
       else console.log(`${r.data.name ?? r.data.id}\t${r.data.id}\t${r.data.contentType ?? ''}`);
@@ -1017,11 +1117,14 @@ attachCmd
       attachmentId: string,
       opts: { out: string; token?: string; identity?: string; user?: string }
     ) => {
-      const token = await requireGraphAuth(opts);
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!auth.success || !auth.token) {
+        failContacts(undefined, 'Auth error', auth.error);
+      }
+      const token = auth.token;
       const r = await downloadContactAttachmentBytes(token, contactId, attachmentId, opts.user);
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
+        failContacts(undefined, 'Error', r.error);
       }
       await writeFile(opts.out, r.data);
       console.log(`Wrote ${r.data.byteLength} bytes to ${opts.out}`);
@@ -1049,11 +1152,14 @@ attachCmd
         console.error('Refusing to delete without --confirm');
         process.exit(1);
       }
-      const token = await requireGraphAuth(opts);
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!auth.success || !auth.token) {
+        failContacts(undefined, 'Auth error', auth.error);
+      }
+      const token = auth.token;
       const r = await deleteContactAttachment(token, contactId, attachmentId, opts.user);
       if (!r.ok) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
+        failContacts(undefined, 'Error', r.error);
       }
       console.log('Attachment deleted.');
     }
@@ -1070,11 +1176,14 @@ mergeSuggestionsCmd
   .option('--identity <name>', 'Graph token cache identity (default: default)')
   .option('--user <email>', 'Target user (delegated)')
   .action(async (opts: { json?: boolean; token?: string; identity?: string; user?: string }) => {
-    const token = await requireGraphAuth(opts);
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success || !auth.token) {
+      failContacts(opts.json, 'Auth error', auth.error);
+    }
+    const token = auth.token;
     const r = await getContactMergeSuggestions(token, opts.user);
     if (!r.ok || !r.data) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failContacts(opts.json, 'Error', r.error);
     }
     console.log(JSON.stringify(r.data, null, 2));
   });
@@ -1093,13 +1202,16 @@ mergeSuggestionsCmd
       cmd: Command
     ) => {
       checkReadOnly(cmd);
-      const token = await requireGraphAuth(opts);
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!auth.success || !auth.token) {
+        failContacts(opts.json, 'Auth error', auth.error);
+      }
+      const token = auth.token;
       const raw = await readFile(opts.jsonFile.trim(), 'utf8');
       const body = JSON.parse(raw) as Record<string, unknown>;
       const r = await patchContactMergeSuggestions(token, body, opts.user);
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message}`);
-        process.exit(1);
+        failContacts(opts.json, 'Error', r.error);
       }
       if (opts.json) console.log(JSON.stringify(r.data, null, 2));
       else console.log('Updated contact merge suggestions settings.');
@@ -1115,13 +1227,16 @@ mergeSuggestionsCmd
   .option('--user <email>', 'Target user (delegated)')
   .action(async (opts: { ifMatch?: string; token?: string; identity?: string; user?: string }, cmd: Command) => {
     checkReadOnly(cmd);
-    const token = await requireGraphAuth(opts);
+    const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+    if (!auth.success || !auth.token) {
+      failContacts(undefined, 'Auth error', auth.error);
+    }
+    const token = auth.token;
     let ifMatch = opts.ifMatch?.trim();
     if (!ifMatch) {
       const gr = await getContactMergeSuggestions(token, opts.user);
       if (!gr.ok || !gr.data) {
-        console.error(`Error: ${gr.error?.message}`);
-        process.exit(1);
+        failContacts(undefined, 'Error', gr.error);
       }
       ifMatch = (gr.data as { '@odata.etag'?: string })['@odata.etag']?.trim();
       if (!ifMatch) {
@@ -1131,8 +1246,7 @@ mergeSuggestionsCmd
     }
     const r = await deleteContactMergeSuggestions(token, ifMatch, opts.user);
     if (!r.ok) {
-      console.error(`Error: ${r.error?.message}`);
-      process.exit(1);
+      failContacts(undefined, 'Error', r.error);
     }
     console.log('Deleted contact merge suggestions settings resource.');
   });

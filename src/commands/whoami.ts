@@ -5,6 +5,7 @@ import { getExchangeBackend } from '../lib/exchange-backend.js';
 import { warnAutoGraphToEwsFallback } from '../lib/exchange-fallback-hint.js';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
 import { callGraph, type GraphResponse } from '../lib/graph-client.js';
+import { toJsonError } from '../lib/json-error.js';
 
 interface GraphMe {
   displayName?: string;
@@ -24,6 +25,8 @@ export const whoamiCommand = new Command('whoami')
   .action(async (options: { json?: boolean; token?: string; identity?: string }) => {
     const backend = getExchangeBackend();
 
+    const capabilitiesHint = "Run `verify-token --capabilities` to see this token's read/write coverage per CLI area.";
+
     const outputGraph = (
       displayName: string,
       email: string,
@@ -36,11 +39,13 @@ export const whoamiCommand = new Command('whoami')
           authenticated: boolean;
           backend: string;
           identity?: string;
+          hint: string;
         } = {
           displayName,
           email,
           authenticated: true,
-          backend: 'graph'
+          backend: 'graph',
+          hint: capabilitiesHint
         };
         if (!opts.token) {
           result.identity = opts.identity || 'default';
@@ -54,6 +59,7 @@ export const whoamiCommand = new Command('whoami')
         console.log(`  Backend: graph (M365_EXCHANGE_BACKEND=${backend})`);
         console.log(`  Name: ${displayName}`);
         console.log(`  Email: ${email}`);
+        console.log(`\n  Tip: ${capabilitiesHint}`);
       }
     };
 
@@ -69,11 +75,13 @@ export const whoamiCommand = new Command('whoami')
           authenticated: boolean;
           backend: string;
           identity?: string;
+          hint: string;
         } = {
           displayName,
           email,
           authenticated: true,
-          backend: 'ews'
+          backend: 'ews',
+          hint: capabilitiesHint
         };
         if (!opts.token) {
           result.identity = opts.identity || 'default';
@@ -87,6 +95,7 @@ export const whoamiCommand = new Command('whoami')
         console.log(`  Backend: ews (M365_EXCHANGE_BACKEND=${backend})`);
         console.log(`  Name: ${displayName}`);
         console.log(`  Email: ${email}`);
+        console.log(`\n  Tip: ${capabilitiesHint}`);
       }
     };
 
@@ -98,7 +107,7 @@ export const whoamiCommand = new Command('whoami')
 
       if (!authResult.success) {
         if (options.json) {
-          console.log(JSON.stringify({ error: authResult.error, backend: 'ews' }, null, 2));
+          console.log(JSON.stringify({ error: toJsonError(authResult.error), backend: 'ews' }, null, 2));
         } else {
           console.error(`Error: ${authResult.error}`);
           console.error('\nCheck your .env for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
@@ -113,7 +122,7 @@ export const whoamiCommand = new Command('whoami')
           console.log(
             JSON.stringify(
               {
-                error: userInfo.error?.message || 'Failed to fetch user info',
+                error: toJsonError(userInfo.error?.message || 'Failed to fetch user info'),
                 authenticated: true,
                 backend: 'ews'
               },
@@ -144,7 +153,7 @@ export const whoamiCommand = new Command('whoami')
           console.log(
             JSON.stringify(
               {
-                error: authResult.error || 'Graph authentication failed',
+                error: toJsonError(authResult.error || 'Graph authentication failed'),
                 backend: 'graph'
               },
               null,
@@ -167,7 +176,7 @@ export const whoamiCommand = new Command('whoami')
           console.log(
             JSON.stringify(
               {
-                error: userInfo.error?.message || 'Failed to fetch user from Graph',
+                error: toJsonError(userInfo.error?.message || 'Failed to fetch user from Graph'),
                 authenticated: false,
                 backend: 'graph'
               },

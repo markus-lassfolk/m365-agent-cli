@@ -2,9 +2,10 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { Command } from 'commander';
 import {
+  GRAPH_BATCH_MAX_REQUESTS,
   type GraphBatchRequestBody,
+  graphBatchAll,
   graphInvoke,
-  graphPostBatch,
   parseGraphInvokeHeaders
 } from '../lib/graph-advanced-client.js';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
@@ -133,7 +134,7 @@ graphCommand
 graphCommand
   .command('batch')
   .description(
-    'POST JSON batch body to /$batch (max 20 requests per call; see https://learn.microsoft.com/en-us/graph/json-batching )'
+    `POST JSON batch body to /$batch. Any number of sub-requests is accepted: requests beyond the API's ${GRAPH_BATCH_MAX_REQUESTS}-per-call cap are transparently split into multiple /$batch POSTs (sent sequentially) and the "responses" arrays are merged back into one, in request order. Sub-requests with a "dependsOn" chain must land within the same ${GRAPH_BATCH_MAX_REQUESTS}-request chunk. See https://learn.microsoft.com/en-us/graph/json-batching`
   )
   .requiredOption('-f, --file <path>', 'JSON file: { "requests": [ { "id", "method", "url", ... }, ... ] }')
   .option('--beta', 'Use GRAPH_BETA_URL')
@@ -155,7 +156,7 @@ graphCommand
       process.exit(1);
     }
 
-    const r = await graphPostBatch(auth.token, body, opts.beta, {
+    const r = await graphBatchAll(auth.token, body.requests, opts.beta, {
       identity: opts.identity,
       pinAccessToken: !!opts.token
     });

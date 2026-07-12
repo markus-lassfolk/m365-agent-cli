@@ -19,6 +19,7 @@ import {
   extractDriveItemSensitivityLabels,
   followDriveItem,
   getDriveItemListItem,
+  getDriveItemPermission,
   getDriveItemRetentionLabel,
   getFileAnalytics,
   graphApiRoot,
@@ -196,6 +197,12 @@ export function registerOfficeDriveMirroredCommands(parent: Command): void {
       .option('--scope <scope>', 'Link scope: org or anonymous', 'org')
       .option('--collab', 'Office Online collaboration handoff (edit/org + webUrl)')
       .option('--lock', 'Checkout before collaboration link (with --collab)')
+      .option('--expiration <iso>', 'Link expiration, ISO 8601 (e.g. 2026-01-01T00:00:00Z)')
+      .option('--password <password>', 'Sharing-link password (OneDrive Personal only, per Graph)')
+      .option(
+        '--no-retain-inherited-permissions',
+        'On first share of this item, remove existing inherited permissions instead of keeping them (Graph default: retain)'
+      )
       .option('--json', 'Output as JSON')
       .option('--token <token>', 'Graph access token')
       .option('--identity <name>', 'Graph token cache identity')
@@ -207,6 +214,9 @@ export function registerOfficeDriveMirroredCommands(parent: Command): void {
         scope?: 'org' | 'anonymous';
         collab?: boolean;
         lock?: boolean;
+        expiration?: string;
+        password?: string;
+        retainInheritedPermissions?: boolean;
         json?: boolean;
         token?: string;
         identity?: string;
@@ -221,6 +231,12 @@ export function registerOfficeDriveMirroredCommands(parent: Command): void {
       }
       if (opts.lock && !opts.collab) {
         console.error('Error: --lock is only supported together with --collab.');
+        process.exit(1);
+      }
+      if (opts.collab && (opts.expiration || opts.password || opts.retainInheritedPermissions === false)) {
+        console.error(
+          'Error: --expiration/--password/--no-retain-inherited-permissions are not supported together with --collab (collaboration links are always edit/organization).'
+        );
         process.exit(1);
       }
       const loc = parseLoc(opts);
@@ -251,7 +267,11 @@ export function registerOfficeDriveMirroredCommands(parent: Command): void {
       }
       const type = opts.type === 'edit' ? 'edit' : 'view';
       const scope = opts.scope === 'anonymous' ? 'anonymous' : 'organization';
-      const result = await shareFile(auth.token, fileId, type, scope, loc, graphRoot(opts));
+      const result = await shareFile(auth.token, fileId, type, scope, loc, graphRoot(opts), {
+        expirationDateTime: opts.expiration,
+        password: opts.password,
+        retainInheritedPermissions: opts.retainInheritedPermissions
+      });
       if (!result.ok || !result.data) {
         console.error(`Error: ${result.error?.message || 'Share failed'}`);
         process.exit(1);
@@ -348,6 +368,39 @@ export function registerOfficeDriveMirroredCommands(parent: Command): void {
       console.log(`${id}\t${roles}`);
     }
   });
+
+  withDrive(
+    parent
+      .command('permission-get <fileId> <permissionId>')
+      .description('GET a single permission (same as `files permission-get`)')
+      .option('--json', 'Output as JSON')
+      .option('--token <token>', 'Graph access token')
+      .option('--identity <name>', 'Graph token cache identity')
+  ).action(
+    async (
+      fileId: string,
+      permissionId: string,
+      opts: DriveLocOpts & { json?: boolean; token?: string; identity?: string }
+    ) => {
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!auth.success || !auth.token) {
+        console.error(`Auth error: ${auth.error}`);
+        process.exit(1);
+      }
+      const loc = parseLoc(opts);
+      const result = await getDriveItemPermission(auth.token, fileId, permissionId, loc, graphRoot(opts));
+      if (!result.ok || !result.data) {
+        console.error(`Error: ${result.error?.message || 'Failed to get permission'}`);
+        process.exit(1);
+      }
+      if (opts.json) {
+        console.log(JSON.stringify(result.data, null, 2));
+        return;
+      }
+      const roles = Array.isArray(result.data.roles) ? (result.data.roles as string[]).join(',') : '';
+      console.log(`${result.data.id}\t${roles}`);
+    }
+  );
 
   withDrive(
     parent

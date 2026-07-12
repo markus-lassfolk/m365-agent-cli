@@ -3,12 +3,20 @@ import { basename } from 'node:path';
 import { Command } from 'commander';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
 import {
+  applyBulkGraphRequests,
+  type BulkSubRequestSpec,
+  parseBulkIdListOrExit,
+  printBulkOutcomeSummary
+} from '../lib/graph-bulk.js';
+import {
   applyDeltaPageToState,
   assertDeltaScopeMatchesState,
   readDeltaStateFile,
   resolveDeltaContinuationUrl,
   writeDeltaStateFile
 } from '../lib/graph-delta-state-file.js';
+import { graphUserPath } from '../lib/graph-user-path.js';
+import { toJsonError } from '../lib/json-error.js';
 import { getMessage } from '../lib/outlook-graph-client.js';
 import {
   addChecklistItem,
@@ -318,7 +326,7 @@ todoCommand
           listId,
           opts.task,
           opts.user,
-          opts.select ? { select: opts.select } : undefined
+          opts.select || opts.expand ? { select: opts.select, expand: opts.expand } : undefined
         );
         if (!r.ok || !r.data) {
           console.error(`Error: ${r.error?.message}`);
@@ -855,6 +863,137 @@ todoCommand
         process.exit(1);
       }
       console.log(`\n\u{1F5D1}  Deleted: "${taskR.data.title}"\n`);
+    }
+  );
+
+todoCommand
+  .command('bulk-complete')
+  .description(
+    'Mark many tasks as completed in one call (Graph JSON $batch, auto-chunked into <=20-request POSTs — see `graph batch`), instead of one PATCH per task.'
+  )
+  .requiredOption('-l, --list <name|id>', 'List name or ID (all tasks must be in this one list)')
+  .option('--ids <csv>', 'Comma-separated task ids')
+  .option('--json-file <path>', 'JSON array of task ids (overrides --ids)')
+  .option('--json', 'Output as JSON')
+  .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
+  .action(
+    async (
+      opts: {
+        list: string;
+        ids?: string;
+        jsonFile?: string;
+        json?: boolean;
+        token?: string;
+        identity?: string;
+        user?: string;
+      },
+      cmd: any
+    ) => {
+      checkReadOnly(cmd);
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!auth.success || !auth.token) {
+        if (opts.json) {
+          console.log(JSON.stringify({ error: toJsonError(auth.error) }, null, 2));
+        } else {
+          console.error(`Auth error: ${auth.error}`);
+        }
+        process.exit(1);
+      }
+      const taskIds = await parseBulkIdListOrExit(opts);
+      const { listId } = await resolveListId(auth.token, opts.list, opts.user);
+      const nowISO = new Date().toISOString();
+      const now = nowISO.replace('Z', '');
+      const base = `${graphUserPath(opts.user, 'todo')}/lists/${encodeURIComponent(listId)}/tasks`;
+      const requests: BulkSubRequestSpec[] = taskIds.map((taskId) => ({
+        id: taskId,
+        method: 'PATCH',
+        url: `${base}/${encodeURIComponent(taskId)}`,
+        headers: { 'Content-Type': 'application/json' },
+        body: { status: 'completed', completedDateTime: { dateTime: now, timeZone: 'UTC' } }
+      }));
+      const r = await applyBulkGraphRequests(auth.token, requests, undefined, {
+        identity: opts.identity,
+        pinAccessToken: !!opts.token
+      });
+      if (!r.ok || !r.data) {
+        if (opts.json) {
+          console.log(JSON.stringify({ error: toJsonError(r.error, 'Bulk complete failed') }, null, 2));
+        } else {
+          console.error(`Error: ${r.error?.message || 'Bulk complete failed'}`);
+        }
+        process.exit(1);
+      }
+      printBulkOutcomeSummary(r.data, opts.json);
+      if (r.data.some((o) => !o.ok)) process.exitCode = 1;
+    }
+  );
+
+todoCommand
+  .command('bulk-delete')
+  .description(
+    'Delete many tasks in one call (Graph JSON $batch, auto-chunked into <=20-request POSTs — see `graph batch`), instead of one DELETE per task.'
+  )
+  .requiredOption('-l, --list <name|id>', 'List name or ID (all tasks must be in this one list)')
+  .option('--ids <csv>', 'Comma-separated task ids')
+  .option('--json-file <path>', 'JSON array of task ids (overrides --ids)')
+  .option('--confirm', 'Skip confirmation prompt')
+  .option('--json', 'Output as JSON')
+  .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .option('--user <email>', 'Target user for Graph To Do (/users/{id}; depends on To Do access/provisioning)')
+  .action(
+    async (
+      opts: {
+        list: string;
+        ids?: string;
+        jsonFile?: string;
+        confirm?: boolean;
+        json?: boolean;
+        token?: string;
+        identity?: string;
+        user?: string;
+      },
+      cmd: any
+    ) => {
+      checkReadOnly(cmd);
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!auth.success || !auth.token) {
+        if (opts.json) {
+          console.log(JSON.stringify({ error: toJsonError(auth.error) }, null, 2));
+        } else {
+          console.error(`Auth error: ${auth.error}`);
+        }
+        process.exit(1);
+      }
+      const taskIds = await parseBulkIdListOrExit(opts);
+      if (!opts.confirm) {
+        console.log(`Delete ${taskIds.length} task(s) from list "${opts.list}"? (${taskIds.join(', ')})`);
+        console.log('Run with --confirm to confirm.');
+        process.exit(1);
+      }
+      const { listId } = await resolveListId(auth.token, opts.list, opts.user);
+      const base = `${graphUserPath(opts.user, 'todo')}/lists/${encodeURIComponent(listId)}/tasks`;
+      const requests: BulkSubRequestSpec[] = taskIds.map((taskId) => ({
+        id: taskId,
+        method: 'DELETE',
+        url: `${base}/${encodeURIComponent(taskId)}`
+      }));
+      const r = await applyBulkGraphRequests(auth.token, requests, undefined, {
+        identity: opts.identity,
+        pinAccessToken: !!opts.token
+      });
+      if (!r.ok || !r.data) {
+        if (opts.json) {
+          console.log(JSON.stringify({ error: toJsonError(r.error, 'Bulk delete failed') }, null, 2));
+        } else {
+          console.error(`Error: ${r.error?.message || 'Bulk delete failed'}`);
+        }
+        process.exit(1);
+      }
+      printBulkOutcomeSummary(r.data, opts.json);
+      if (r.data.some((o) => !o.ok)) process.exitCode = 1;
     }
   );
 

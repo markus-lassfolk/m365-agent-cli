@@ -7,6 +7,7 @@ import {
   graphTokenPermissionKind,
   permissionSetFromGraphPayload
 } from '../lib/graph-capability-matrix.js';
+import { toJsonError } from '../lib/json-error.js';
 import { getJwtPayloadAppId } from '../lib/jwt-utils.js';
 import { applyEnvFileOverrides, getGlobalEnvFilePath, resolveEnvFilePathArgument } from '../lib/utils.js';
 
@@ -57,7 +58,9 @@ export const verifyTokenCommand = new Command('verify-token')
       });
       if (!authResult.success || !authResult.token) {
         if (options.json) {
-          console.log(JSON.stringify({ error: authResult.error || 'Failed to resolve auth token' }, null, 2));
+          console.log(
+            JSON.stringify({ error: toJsonError(authResult.error || 'Failed to resolve auth token') }, null, 2)
+          );
         } else {
           console.error(`Error: ${authResult.error || 'Failed to resolve auth token'}`);
         }
@@ -209,7 +212,7 @@ export const verifyTokenCommand = new Command('verify-token')
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
         if (options.json) {
-          console.log(JSON.stringify({ error: `Failed to parse token: ${message}` }, null, 2));
+          console.log(JSON.stringify({ error: toJsonError(`Failed to parse token: ${message}`) }, null, 2));
         } else {
           console.error(`Failed to parse token: ${message}`);
         }

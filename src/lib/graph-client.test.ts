@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { writeFileSync } from 'node:fs';
-import { mkdtemp, unlink } from 'node:fs/promises';
+import { mkdtemp, rm, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { callGraphAt, GraphApiError, pollGraphAsyncJob, uploadLargeFile } from './graph-client.js';
@@ -437,6 +437,87 @@ describe('inviteDriveItem and listDriveItemPermissions', () => {
   });
 });
 
+describe('getDriveItemPermission', () => {
+  it('GETs /permissions/{id}', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    const urls: string[] = [];
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+        urls.push(typeof input === 'string' ? input : input.toString());
+        expect(init?.method).toBe('GET');
+        return new Response(JSON.stringify({ id: 'perm-1', roles: ['read'] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as unknown as typeof fetch;
+
+      const { getDriveItemPermission } = await import('./graph-client.js');
+      const r = await getDriveItemPermission(token, 'item-7', 'perm-1');
+      expect(r.ok).toBe(true);
+      expect(r.data?.id).toBe('perm-1');
+      expect(urls[0]).toContain('/me/drive/items/item-7/permissions/perm-1');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+describe('shareFile advanced options', () => {
+  it('sends expirationDateTime, password, and retainInheritedPermissions in the createLink body', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    let body = '';
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+        body = String(init?.body ?? '');
+        return new Response(JSON.stringify({ link: { webUrl: 'https://x', id: 'link-1' } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as unknown as typeof fetch;
+
+      const { shareFile } = await import('./graph-client.js');
+      const r = await shareFile(token, 'item-7', 'view', 'organization', undefined, undefined, {
+        expirationDateTime: '2026-01-01T00:00:00Z',
+        password: 'hunter2',
+        retainInheritedPermissions: false
+      });
+      expect(r.ok).toBe(true);
+      expect(JSON.parse(body)).toEqual({
+        type: 'view',
+        scope: 'organization',
+        expirationDateTime: '2026-01-01T00:00:00Z',
+        password: 'hunter2',
+        retainInheritedPermissions: false
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('omits the advanced fields entirely when unset (unchanged prior behavior)', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    let body = '';
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+        body = String(init?.body ?? '');
+        return new Response(JSON.stringify({ link: {} }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as unknown as typeof fetch;
+
+      const { shareFile } = await import('./graph-client.js');
+      await shareFile(token, 'item-7', 'view', 'organization');
+      expect(JSON.parse(body)).toEqual({ type: 'view', scope: 'organization' });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
 describe('Graph v1.0 404 beta hint', () => {
   it('appends beta hint on 404 for graph.microsoft.com v1.0', async () => {
     process.env.GRAPH_BASE_URL = baseUrl;
@@ -640,6 +721,273 @@ describe('listGraphCollection shared pagination helper', () => {
       expect(r.ok).toBe(true);
       expect(r.data?.map((x) => x.id)).toEqual(['a', 'b']);
       expect(n).toBe(2);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+describe('--dry-run (M365_DRY_RUN)', () => {
+  const originalExit = process.exit;
+  const originalLog = console.log;
+  const originalEnv = process.env.M365_DRY_RUN;
+
+  afterEach(() => {
+    process.exit = originalExit;
+    console.log = originalLog;
+    if (originalEnv === undefined) delete process.env.M365_DRY_RUN;
+    else process.env.M365_DRY_RUN = originalEnv;
+  });
+
+  it('halts a mutating request before fetch and prints the resolved method/url/body', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    process.env.M365_DRY_RUN = '1';
+    const originalFetch = globalThis.fetch;
+    let fetchCalled = false;
+    let exitCode: number | undefined;
+    const logged: string[] = [];
+    process.exit = ((code?: number) => {
+      exitCode = code;
+      throw new Error('exit');
+    }) as never;
+    console.log = ((s: string) => {
+      logged.push(s);
+    }) as typeof console.log;
+
+    try {
+      globalThis.fetch = (async () => {
+        fetchCalled = true;
+        return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } });
+      }) as unknown as typeof fetch;
+
+      await expect(
+        callGraphAt(baseUrl, token, '/me/sendMail', { method: 'POST', body: JSON.stringify({ subject: 'hi' }) })
+      ).rejects.toThrow('exit');
+
+      expect(fetchCalled).toBe(false);
+      expect(exitCode).toBe(0);
+      expect(logged).toHaveLength(1);
+      const preview = JSON.parse(logged[0]);
+      expect(preview).toMatchObject({
+        dryRun: true,
+        backend: 'graph',
+        method: 'POST',
+        url: `${baseUrl}/me/sendMail`,
+        body: { subject: 'hi' }
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('does not halt a GET request (reads are never blocked by dry-run)', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    process.env.M365_DRY_RUN = '1';
+    const originalFetch = globalThis.fetch;
+    let fetchCalled = false;
+
+    try {
+      globalThis.fetch = (async () => {
+        fetchCalled = true;
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as unknown as typeof fetch;
+
+      const r = await callGraphAt<{ ok: boolean }>(baseUrl, token, '/me', { method: 'GET' });
+      expect(fetchCalled).toBe(true);
+      expect(r.ok).toBe(true);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('does not halt a /$batch POST whose sub-requests are all GET (bug regression)', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    process.env.M365_DRY_RUN = '1';
+    const originalFetch = globalThis.fetch;
+    let fetchCalled = false;
+
+    try {
+      globalThis.fetch = (async () => {
+        fetchCalled = true;
+        return new Response(JSON.stringify({ responses: [] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as unknown as typeof fetch;
+
+      const r = await callGraphAt(baseUrl, token, '/$batch', {
+        method: 'POST',
+        body: JSON.stringify({ requests: [{ id: '1', method: 'GET', url: '/me' }] })
+      });
+      expect(fetchCalled).toBe(true);
+      expect(r.ok).toBe(true);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('still halts a /$batch POST that contains a mutating sub-request', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    process.env.M365_DRY_RUN = '1';
+    const originalFetch = globalThis.fetch;
+    let fetchCalled = false;
+    let exitCode: number | undefined;
+    process.exit = ((code?: number) => {
+      exitCode = code;
+      throw new Error('exit');
+    }) as never;
+    console.log = (() => {}) as typeof console.log;
+
+    try {
+      globalThis.fetch = (async () => {
+        fetchCalled = true;
+        return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } });
+      }) as unknown as typeof fetch;
+
+      await expect(
+        callGraphAt(baseUrl, token, '/$batch', {
+          method: 'POST',
+          body: JSON.stringify({
+            requests: [
+              { id: '1', method: 'GET', url: '/me' },
+              { id: '2', method: 'PATCH', url: '/me/messages/1', body: { subject: 'x' } }
+            ]
+          })
+        })
+      ).rejects.toThrow('exit');
+
+      expect(fetchCalled).toBe(false);
+      expect(exitCode).toBe(0);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('does nothing special when M365_DRY_RUN is unset (mutating request goes through)', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    delete process.env.M365_DRY_RUN;
+    const originalFetch = globalThis.fetch;
+    let fetchCalled = false;
+
+    try {
+      globalThis.fetch = (async () => {
+        fetchCalled = true;
+        return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } });
+      }) as unknown as typeof fetch;
+
+      const r = await callGraphAt(baseUrl, token, '/me/sendMail', { method: 'POST', body: '{}' });
+      expect(fetchCalled).toBe(true);
+      expect(r.ok).toBe(true);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+describe('read cache (M365_CACHE_TTL)', () => {
+  const originalTtl = process.env.M365_CACHE_TTL;
+  let testHome: string;
+  let originalConfigDir: string | undefined;
+
+  beforeEach(async () => {
+    testHome = await mkdtemp(join(tmpdir(), 'm365-graph-client-cache-'));
+    originalConfigDir = process.env.M365_AGENT_CLI_CONFIG_DIR;
+    process.env.M365_AGENT_CLI_CONFIG_DIR = testHome;
+  });
+
+  afterEach(async () => {
+    if (originalTtl === undefined) delete process.env.M365_CACHE_TTL;
+    else process.env.M365_CACHE_TTL = originalTtl;
+    if (originalConfigDir === undefined) delete process.env.M365_AGENT_CLI_CONFIG_DIR;
+    else process.env.M365_AGENT_CLI_CONFIG_DIR = originalConfigDir;
+    await rm(testHome, { recursive: true, force: true }).catch(() => {});
+  });
+
+  it('serves a repeated GET from cache without calling fetch again', async () => {
+    process.env.M365_CACHE_TTL = '1m';
+    const originalFetch = globalThis.fetch;
+    let fetchCalls = 0;
+    try {
+      globalThis.fetch = (async () => {
+        fetchCalls++;
+        return new Response(JSON.stringify({ id: 'u1' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as unknown as typeof fetch;
+
+      const r1 = await callGraphAt<{ id: string }>(baseUrl, token, '/me', { method: 'GET' });
+      const r2 = await callGraphAt<{ id: string }>(baseUrl, token, '/me', { method: 'GET' });
+      expect(fetchCalls).toBe(1);
+      expect(r1.ok).toBe(true);
+      expect(r2.ok).toBe(true);
+      expect(r2.data).toEqual({ id: 'u1' });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('never caches a mutating request', async () => {
+    process.env.M365_CACHE_TTL = '1m';
+    const originalFetch = globalThis.fetch;
+    let fetchCalls = 0;
+    try {
+      globalThis.fetch = (async () => {
+        fetchCalls++;
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as unknown as typeof fetch;
+
+      await callGraphAt(baseUrl, token, '/me/sendMail', { method: 'POST', body: '{}' });
+      await callGraphAt(baseUrl, token, '/me/sendMail', { method: 'POST', body: '{}' });
+      expect(fetchCalls).toBe(2);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('does not use the cache when M365_CACHE_TTL is unset (default off)', async () => {
+    delete process.env.M365_CACHE_TTL;
+    const originalFetch = globalThis.fetch;
+    let fetchCalls = 0;
+    try {
+      globalThis.fetch = (async () => {
+        fetchCalls++;
+        return new Response(JSON.stringify({ id: 'u1' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as unknown as typeof fetch;
+
+      await callGraphAt(baseUrl, token, '/me', { method: 'GET' });
+      await callGraphAt(baseUrl, token, '/me', { method: 'GET' });
+      expect(fetchCalls).toBe(2);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('does not share cache entries across different bearer tokens', async () => {
+    process.env.M365_CACHE_TTL = '1m';
+    const originalFetch = globalThis.fetch;
+    let fetchCalls = 0;
+    try {
+      globalThis.fetch = (async () => {
+        fetchCalls++;
+        return new Response(JSON.stringify({ id: 'u1' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as unknown as typeof fetch;
+
+      await callGraphAt(baseUrl, 'token-a', '/me', { method: 'GET' });
+      await callGraphAt(baseUrl, 'token-b', '/me', { method: 'GET' });
+      expect(fetchCalls).toBe(2);
     } finally {
       globalThis.fetch = originalFetch;
     }

@@ -958,18 +958,36 @@ export async function unsetChannelMessageReaction(
   }
 }
 
+/** Microsoft's v1.0 reference for `chatMessage: setReaction`/`unsetReaction` only documents a
+ *  replies-nested path (`.../replies/{id}/setReaction`) for channel messages — chat messages only
+ *  support reacting to the root message (`/chats/{id}/messages/{id}/setReaction`), with no replies
+ *  variant. Building that URL anyway would just 404 with a generic Graph error, so reject it here
+ *  with a message that says why, instead of leaving the caller to guess whether replyId was wrong. */
+function rejectUnsupportedChatReplyReaction(replyId: string | undefined): GraphResponse<void> | undefined {
+  if (!replyId?.trim()) return undefined;
+  return graphError(
+    '--reply is not supported for chat message reactions: Microsoft Graph v1.0 only supports setReaction/unsetReaction on a chat message itself, not on a reply within it (that path only exists for channel messages).',
+    'UnsupportedReplyReaction',
+    400
+  );
+}
+
 export async function setChatMessageReaction(
   token: string,
   chatId: string,
   messageId: string,
-  reactionType: string
+  reactionType: string,
+  replyId?: string
 ): Promise<GraphResponse<void>> {
+  const unsupported = rejectUnsupportedChatReplyReaction(replyId);
+  if (unsupported) return unsupported;
   try {
     const c = encodeURIComponent(chatId.trim());
     const m = encodeURIComponent(messageId.trim());
+    const path = `/chats/${c}/messages/${m}/setReaction`;
     const r = await callGraph<void>(
       token,
-      `/chats/${c}/messages/${m}/setReaction`,
+      path,
       { method: 'POST', body: JSON.stringify({ reactionType: reactionType.trim() }) },
       false
     );
@@ -987,14 +1005,18 @@ export async function unsetChatMessageReaction(
   token: string,
   chatId: string,
   messageId: string,
-  reactionType: string
+  reactionType: string,
+  replyId?: string
 ): Promise<GraphResponse<void>> {
+  const unsupported = rejectUnsupportedChatReplyReaction(replyId);
+  if (unsupported) return unsupported;
   try {
     const c = encodeURIComponent(chatId.trim());
     const m = encodeURIComponent(messageId.trim());
+    const path = `/chats/${c}/messages/${m}/unsetReaction`;
     const r = await callGraph<void>(
       token,
-      `/chats/${c}/messages/${m}/unsetReaction`,
+      path,
       { method: 'POST', body: JSON.stringify({ reactionType: reactionType.trim() }) },
       false
     );

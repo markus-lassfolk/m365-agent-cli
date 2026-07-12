@@ -172,6 +172,10 @@ export const roomsCommand = new Command('rooms')
           console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
           process.exit(1);
         }
+        if ((options.start && !options.end) || (!options.start && options.end)) {
+          console.error('Error: --start and --end must be used together (both or neither).');
+          process.exit(1);
+        }
         const hasFilters = !!(
           filters.building ||
           filters.capacityMin !== undefined ||
@@ -190,21 +194,24 @@ export const roomsCommand = new Command('rooms')
           console.error(`Error: ${result.error?.message || 'Failed to search rooms'}`);
           process.exit(1);
         }
-        let availableRooms = result.data;
+        let availableRooms: Array<Place & { availabilityUnknown?: true }> = result.data;
         if (options.start && options.end) {
-          const freeRooms: Place[] = [];
+          const freeRooms: Array<Place & { availabilityUnknown?: true }> = [];
           let availabilityCheckFailed = false;
           for (const room of availableRooms) {
             if (room.emailAddress) {
               const free = await isRoomFree(authResult.token!, room.emailAddress, options.start, options.end);
               if (free === null) {
+                // Availability check failed (permission/API error) — include the room but mark it
+                // distinctly from a confirmed-free room, so a --json consumer doesn't book it
+                // believing it was actually verified as free.
                 availabilityCheckFailed = true;
-                freeRooms.push(room);
+                freeRooms.push({ ...room, availabilityUnknown: true });
               } else if (free) {
                 freeRooms.push(room);
               }
             } else {
-              freeRooms.push(room);
+              freeRooms.push({ ...room, availabilityUnknown: true });
               availabilityCheckFailed = true;
             }
           }
@@ -227,7 +234,8 @@ export const roomsCommand = new Command('rooms')
         for (const room of availableRooms) {
           const tags = room.tags?.length ? ` [${room.tags.join(', ')}]` : '';
           const cap = room.capacity ? ` (cap: ${room.capacity})` : '';
-          console.log(`  - ${room.displayName}${cap}${tags}`);
+          const unknown = room.availabilityUnknown ? ' [availability unknown]' : '';
+          console.log(`  - ${room.displayName}${cap}${tags}${unknown}`);
           if (room.emailAddress) console.log(`    ${room.emailAddress}`);
           if (room.building) console.log(`    Building: ${room.building}`);
           console.log('');

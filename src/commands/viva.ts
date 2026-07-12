@@ -32,6 +32,7 @@ import {
   patchWorkingTimeSchedule,
   startWorkingTime
 } from '../lib/graph-viva-client.js';
+import { toJsonError } from '../lib/json-error.js';
 import { checkReadOnly } from '../lib/utils.js';
 import { registerVivaExtraSubcommands } from './viva-extra-subcommands.js';
 import { registerVivaTenantSubcommands } from './viva-tenant-subcommands.js';
@@ -39,6 +40,30 @@ import { registerVivaTenantSubcommands } from './viva-tenant-subcommands.js';
 export const vivaCommand = new Command('viva').description(
   'Microsoft Graph **beta** Viva / employee experience: user + tenant `/employeeExperience`, insights, work hours, Engage roles/learning, meeting Q&A (see docs/GRAPH_SCOPES.md)'
 );
+
+/**
+ * Prints the `--json` structured error envelope (or the matching plain-text "Auth error: .../
+ * Error: ...") for the two failure shapes viva.ts's `--json`-capable list subcommands hit — an
+ * auth failure from `resolveGraphAuth` (a plain string) or a Graph API failure
+ * (`GraphResponse.error`, a GraphError-shaped object) — then exits 1. Mirrors
+ * failBookings/failGroups so a `--json` viva call that fails gets `{ error: {...} } ` on stdout
+ * instead of plain text on stderr.
+ */
+function failViva(
+  json: boolean | undefined,
+  prefix: 'Auth error' | 'Error',
+  error: unknown,
+  fallbackMessage?: string
+): never {
+  if (json) {
+    console.log(JSON.stringify({ error: toJsonError(error, fallbackMessage) }, null, 2));
+  } else {
+    const message =
+      (typeof error === 'string' ? error : (error as { message?: string } | undefined)?.message) ?? fallbackMessage;
+    console.error(`${prefix}: ${message}`);
+  }
+  process.exit(1);
+}
 
 async function readJsonBody(path: string): Promise<unknown> {
   const raw = await readFile(path.trim(), 'utf8');
@@ -321,8 +346,7 @@ vivaCommand
     }) => {
       const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
       if (!auth.success || !auth.token) {
-        console.error(`Auth error: ${auth.error}`);
-        process.exit(1);
+        failViva(opts.json, 'Auth error', auth.error);
       }
       const q = buildVivaListQuery({
         filter: opts.filter,
@@ -333,8 +357,7 @@ vivaCommand
       });
       const r = await listEmployeeExperienceAssignedRoles(auth.token, opts.user, q);
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message || 'List failed'}`);
-        process.exit(1);
+        failViva(opts.json, 'Error', r.error, 'List failed');
       }
       if (opts.json) {
         console.log(JSON.stringify(r.data, null, 2));
@@ -486,8 +509,7 @@ vivaCommand
     }) => {
       const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
       if (!auth.success || !auth.token) {
-        console.error(`Auth error: ${auth.error}`);
-        process.exit(1);
+        failViva(opts.json, 'Auth error', auth.error);
       }
       const q = buildVivaListQuery({
         filter: opts.filter,
@@ -498,8 +520,7 @@ vivaCommand
       });
       const r = await listEmployeeExperienceAssignedRoleMembers(auth.token, opts.roleId, opts.user, q);
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message || 'List failed'}`);
-        process.exit(1);
+        failViva(opts.json, 'Error', r.error, 'List failed');
       }
       if (opts.json) {
         console.log(JSON.stringify(r.data, null, 2));
@@ -772,8 +793,7 @@ vivaCommand
     }) => {
       const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
       if (!auth.success || !auth.token) {
-        console.error(`Auth error: ${auth.error}`);
-        process.exit(1);
+        failViva(opts.json, 'Auth error', auth.error);
       }
       const q = buildVivaListQuery({
         filter: opts.filter,
@@ -790,8 +810,7 @@ vivaCommand
         q
       );
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message || 'List failed'}`);
-        process.exit(1);
+        failViva(opts.json, 'Error', r.error, 'List failed');
       }
       if (opts.json) console.log(JSON.stringify(r.data, null, 2));
       else for (const row of r.data) console.log(JSON.stringify(row));
@@ -824,8 +843,7 @@ vivaCommand
     }) => {
       const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
       if (!auth.success || !auth.token) {
-        console.error(`Auth error: ${auth.error}`);
-        process.exit(1);
+        failViva(opts.json, 'Auth error', auth.error);
       }
       const q = buildVivaListQuery({
         filter: opts.filter,
@@ -836,8 +854,7 @@ vivaCommand
       });
       const r = await listLearningCourseActivities(auth.token, opts.user, q);
       if (!r.ok || !r.data) {
-        console.error(`Error: ${r.error?.message || 'List failed'}`);
-        process.exit(1);
+        failViva(opts.json, 'Error', r.error, 'List failed');
       }
       if (opts.json) {
         console.log(JSON.stringify(r.data, null, 2));

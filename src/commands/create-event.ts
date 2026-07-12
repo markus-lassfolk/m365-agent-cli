@@ -3,7 +3,13 @@ import { Command } from 'commander';
 import { AttachmentLinkSpecError, parseAttachLinkSpec } from '../lib/attach-link-spec.js';
 import { AttachmentPathError, validateAttachmentPath } from '../lib/attachments.js';
 import { resolveAuth } from '../lib/auth.js';
-import { parseDay, parseTimeToDate, toLocalUnzonedISOString, toUTCISOString } from '../lib/dates.js';
+import {
+  parseDay,
+  parseTimeToDate,
+  toLocalUnzonedISOString,
+  toReinterpretedUTCISOString,
+  toUTCISOString
+} from '../lib/dates.js';
 import {
   areRoomsFree,
   createEvent,
@@ -24,6 +30,7 @@ import {
   listGraphRooms,
   resolveRoomDisplayNameToPlace
 } from '../lib/graph-places-helpers.js';
+import { toJsonError } from '../lib/json-error.js';
 import { lookupMimeType } from '../lib/mime-type.js';
 import { checkReadOnly } from '../lib/utils.js';
 import { createEventViaGraph } from './create-event-graph.js';
@@ -127,7 +134,7 @@ export function buildCreateEventCommand(commandName: string, description = 'Crea
           const msg =
             'Option --calendar is only supported with Microsoft Graph. Set M365_EXCHANGE_BACKEND=graph or auto, or omit --calendar.';
           if (options.json) {
-            console.log(JSON.stringify({ error: msg }, null, 2));
+            console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
           } else {
             console.error(`Error: ${msg}`);
           }
@@ -178,7 +185,9 @@ export function buildCreateEventCommand(commandName: string, description = 'Crea
               }
               if (backend === 'graph') {
                 if (options.json) {
-                  console.log(JSON.stringify({ error: lr.error?.message || 'No rooms returned', rooms: [] }, null, 2));
+                  console.log(
+                    JSON.stringify({ error: toJsonError(lr.error?.message || 'No rooms returned'), rooms: [] }, null, 2)
+                  );
                 } else {
                   console.log(lr.error?.message || 'No meeting rooms found or Places API returned no data.');
                   console.log('You can still specify a room by email address with --room <email>');
@@ -187,7 +196,7 @@ export function buildCreateEventCommand(commandName: string, description = 'Crea
               }
             } else if (backend === 'graph') {
               if (options.json) {
-                console.log(JSON.stringify({ error: ga.error || 'Graph authentication failed' }, null, 2));
+                console.log(JSON.stringify({ error: toJsonError(ga.error || 'Graph authentication failed') }, null, 2));
               } else {
                 console.error(`Error: ${ga.error || 'Graph authentication failed'}`);
               }
@@ -202,7 +211,7 @@ export function buildCreateEventCommand(commandName: string, description = 'Crea
 
           if (!authResult.success) {
             if (options.json) {
-              console.log(JSON.stringify({ error: authResult.error }, null, 2));
+              console.log(JSON.stringify({ error: toJsonError(authResult.error) }, null, 2));
             } else {
               console.error(`Error: ${authResult.error}`);
               console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
@@ -265,7 +274,9 @@ export function buildCreateEventCommand(commandName: string, description = 'Crea
         // Validate start/end times for non-all-day events
         if (!options.allDay && (!startTime || !endTime)) {
           if (options.json) {
-            console.log(JSON.stringify({ error: 'Start and end times are required for non-all-day events' }, null, 2));
+            console.log(
+              JSON.stringify({ error: toJsonError('Start and end times are required for non-all-day events') }, null, 2)
+            );
           } else {
             console.error('Error: Start and end times are required for non-all-day events');
           }
@@ -279,7 +290,7 @@ export function buildCreateEventCommand(commandName: string, description = 'Crea
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Invalid day value';
           if (options.json) {
-            console.log(JSON.stringify({ error: message }, null, 2));
+            console.log(JSON.stringify({ error: toJsonError(message) }, null, 2));
           } else {
             console.error(`Error: ${message}`);
           }
@@ -302,7 +313,7 @@ export function buildCreateEventCommand(commandName: string, description = 'Crea
           } catch (err) {
             const message = err instanceof Error ? err.message : 'Invalid start time';
             if (options.json) {
-              console.log(JSON.stringify({ error: message }, null, 2));
+              console.log(JSON.stringify({ error: toJsonError(message) }, null, 2));
             } else {
               console.error(`Error: ${message}`);
             }
@@ -314,7 +325,7 @@ export function buildCreateEventCommand(commandName: string, description = 'Crea
           } catch (err) {
             const message = err instanceof Error ? err.message : 'Invalid end time';
             if (options.json) {
-              console.log(JSON.stringify({ error: message }, null, 2));
+              console.log(JSON.stringify({ error: toJsonError(message) }, null, 2));
             } else {
               console.error(`Error: ${message}`);
             }
@@ -367,7 +378,7 @@ export function buildCreateEventCommand(commandName: string, description = 'Crea
                   roomName = res.place.displayName;
                 } else if (backend === 'graph') {
                   if (options.json) {
-                    console.log(JSON.stringify({ error: res.error }, null, 2));
+                    console.log(JSON.stringify({ error: toJsonError(res.error) }, null, 2));
                   } else {
                     console.error(`Error: ${res.error}`);
                   }
@@ -376,7 +387,7 @@ export function buildCreateEventCommand(commandName: string, description = 'Crea
               }
             } else if (backend === 'graph') {
               if (options.json) {
-                console.log(JSON.stringify({ error: ga.error || 'Graph authentication failed' }, null, 2));
+                console.log(JSON.stringify({ error: toJsonError(ga.error || 'Graph authentication failed') }, null, 2));
               } else {
                 console.error(`Error: ${ga.error || 'Graph authentication failed'}`);
               }
@@ -401,7 +412,7 @@ export function buildCreateEventCommand(commandName: string, description = 'Crea
             });
             if (!ar.success) {
               if (options.json) {
-                console.log(JSON.stringify({ error: ar.error }, null, 2));
+                console.log(JSON.stringify({ error: toJsonError(ar.error) }, null, 2));
               } else {
                 console.error(`Error: ${ar.error}`);
                 console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
@@ -492,8 +503,12 @@ export function buildCreateEventCommand(commandName: string, description = 'Crea
 
           const patternType = patternTypeMap[options.repeat.toLowerCase()];
           if (!patternType) {
-            console.error(`Invalid repeat type: ${options.repeat}`);
-            console.error('Valid options: daily, weekly, monthly, yearly');
+            const msg = `Invalid repeat type: ${options.repeat}. Valid options: daily, weekly, monthly, yearly`;
+            if (options.json) {
+              console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
+            } else {
+              console.error(`Error: ${msg}`);
+            }
             process.exit(1);
           }
 
@@ -549,7 +564,7 @@ export function buildCreateEventCommand(commandName: string, description = 'Crea
             const count = parseInt(options.count, 10);
             if (!Number.isFinite(count) || count < 1) {
               const msg = `Invalid --count: "${options.count}" (must be a positive integer)`;
-              if (options.json) console.log(JSON.stringify({ error: msg }, null, 2));
+              if (options.json) console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
               else console.error(msg);
               process.exit(1);
             }
@@ -563,7 +578,12 @@ export function buildCreateEventCommand(commandName: string, description = 'Crea
         const sensitivity = options.sensitivity ? SENSITIVITY_MAP[options.sensitivity.toLowerCase()] : undefined;
 
         if (options.sensitivity && !sensitivity) {
-          console.error(`Invalid sensitivity: ${options.sensitivity}`);
+          const msg = `Invalid sensitivity: ${options.sensitivity}`;
+          if (options.json) {
+            console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
+          } else {
+            console.error(`Error: ${msg}`);
+          }
           process.exit(1);
         }
 
@@ -624,7 +644,7 @@ export function buildCreateEventCommand(commandName: string, description = 'Crea
           const msg =
             'Options --show-as and --locations-json require Microsoft Graph. Set M365_EXCHANGE_BACKEND=graph or auto.';
           if (options.json) {
-            console.log(JSON.stringify({ error: msg }, null, 2));
+            console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
           } else {
             console.error(`Error: ${msg}`);
           }
@@ -643,7 +663,7 @@ export function buildCreateEventCommand(commandName: string, description = 'Crea
           if (!showAsAllowed.has(key)) {
             const msg = `Invalid --show-as "${options.showAs}". Use: free, tentative, busy, oof, workingElsewhere, unknown.`;
             if (options.json) {
-              console.log(JSON.stringify({ error: msg }, null, 2));
+              console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
             } else {
               console.error(`Error: ${msg}`);
             }
@@ -673,7 +693,7 @@ export function buildCreateEventCommand(commandName: string, description = 'Crea
           } catch (err) {
             const msg = err instanceof Error ? err.message : 'Invalid --locations-json file';
             if (options.json) {
-              console.log(JSON.stringify({ error: msg }, null, 2));
+              console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
             } else {
               console.error(`Error: ${msg}`);
             }
@@ -826,7 +846,7 @@ export function buildCreateEventCommand(commandName: string, description = 'Crea
             }
             if (backend === 'graph') {
               if (options.json) {
-                console.log(JSON.stringify({ error: gr.error }, null, 2));
+                console.log(JSON.stringify({ error: toJsonError(gr.error) }, null, 2));
               } else {
                 console.error(`Error: ${gr.error}`);
               }
@@ -835,7 +855,7 @@ export function buildCreateEventCommand(commandName: string, description = 'Crea
             if (options.calendar?.trim()) {
               const msg = `${gr.error}. Option --calendar requires Microsoft Graph; cannot fall back to EWS.`;
               if (options.json) {
-                console.log(JSON.stringify({ error: msg }, null, 2));
+                console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
               } else {
                 console.error(`Error: ${msg}`);
               }
@@ -846,7 +866,7 @@ export function buildCreateEventCommand(commandName: string, description = 'Crea
             }
           } else if (backend === 'graph') {
             if (options.json) {
-              console.log(JSON.stringify({ error: ga.error || 'Graph authentication failed' }, null, 2));
+              console.log(JSON.stringify({ error: toJsonError(ga.error || 'Graph authentication failed') }, null, 2));
             } else {
               console.error(`Error: ${ga.error || 'Graph authentication failed'}`);
             }
@@ -854,7 +874,7 @@ export function buildCreateEventCommand(commandName: string, description = 'Crea
           } else if (options.calendar?.trim()) {
             const msg = `Graph authentication failed (${ga.error || 'unknown'}). Option --calendar requires Microsoft Graph.`;
             if (options.json) {
-              console.log(JSON.stringify({ error: msg }, null, 2));
+              console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
             } else {
               console.error(`Error: ${msg}`);
             }
@@ -869,7 +889,7 @@ export function buildCreateEventCommand(commandName: string, description = 'Crea
           });
           if (!ar.success) {
             if (options.json) {
-              console.log(JSON.stringify({ error: ar.error }, null, 2));
+              console.log(JSON.stringify({ error: toJsonError(ar.error) }, null, 2));
             } else {
               console.error(`Error: ${ar.error}`);
               console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
@@ -879,12 +899,24 @@ export function buildCreateEventCommand(commandName: string, description = 'Crea
           ewsToken = ar.token;
         }
 
-        // Create the event (EWS)
+        // Create the event (EWS). All-day boundaries without --timezone must use the same
+        // calendar date's UTC midnight (not a raw toISOString of a local-midnight instant, which
+        // silently shifts to the previous day on hosts with a positive UTC offset).
+        const ewsStart = options.timezone
+          ? toLocalUnzonedISOString(start)
+          : options.allDay
+            ? toReinterpretedUTCISOString(start)
+            : toUTCISOString(start);
+        const ewsEnd = options.timezone
+          ? toLocalUnzonedISOString(end)
+          : options.allDay
+            ? toReinterpretedUTCISOString(end)
+            : toUTCISOString(end);
         const result = await createEvent({
           token: ewsToken!,
           subject: title,
-          start: options.timezone ? toLocalUnzonedISOString(start) : toUTCISOString(start),
-          end: options.timezone ? toLocalUnzonedISOString(end) : toUTCISOString(end),
+          start: ewsStart,
+          end: ewsEnd,
           body: options.description,
           location: roomName,
           attendees: attendees.length > 0 ? attendees : undefined,
@@ -901,7 +933,9 @@ export function buildCreateEventCommand(commandName: string, description = 'Crea
 
         if (!result.ok || !result.data) {
           if (options.json) {
-            console.log(JSON.stringify({ error: result.error?.message || 'Failed to create event' }, null, 2));
+            console.log(
+              JSON.stringify({ error: toJsonError(result.error?.message || 'Failed to create event') }, null, 2)
+            );
           } else {
             console.error(`Error: ${result.error?.message || 'Failed to create event'}`);
           }

@@ -8,6 +8,7 @@ import {
 } from '../lib/ews-client.js';
 import { getExchangeBackend } from '../lib/exchange-backend.js';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
+import { toJsonError } from '../lib/json-error.js';
 import {
   createMailFolder as graphCreateMailFolder,
   deleteMailFolder as graphDeleteMailFolder,
@@ -55,7 +56,7 @@ export const foldersCommand = new Command('folders')
       const actionCount = [options.create, options.rename, options.delete].filter((v) => v !== undefined).length;
       if (actionCount > 1) {
         const msg = 'Error: use only one of --create, --rename, or --delete at a time.';
-        if (options.json) console.log(JSON.stringify({ error: msg }, null, 2));
+        if (options.json) console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
         else console.error(msg);
         process.exit(1);
       }
@@ -181,7 +182,7 @@ export const foldersCommand = new Command('folders')
 
         if (!authResult.success) {
           if (options.json) {
-            console.log(JSON.stringify({ error: authResult.error }, null, 2));
+            console.log(JSON.stringify({ error: toJsonError(authResult.error) }, null, 2));
           } else {
             console.error(`Error: ${authResult.error}`);
             console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
@@ -328,7 +329,7 @@ export const foldersCommand = new Command('folders')
       if (backend === 'graph') {
         if (!graphAuth.success || !graphAuth.token) {
           if (options.json) {
-            console.log(JSON.stringify({ error: graphAuth.error || 'Graph auth failed' }, null, 2));
+            console.log(JSON.stringify({ error: toJsonError(graphAuth.error || 'Graph auth failed') }, null, 2));
           } else {
             console.error(`Error: ${graphAuth.error || 'Graph authentication failed'}`);
             console.error('\nSet EWS_CLIENT_ID and M365_REFRESH_TOKEN for Graph, or run `m365-agent-cli login`.');

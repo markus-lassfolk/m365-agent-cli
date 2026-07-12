@@ -469,4 +469,80 @@ describe('sharepoint-client', () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it('getSitePermission GETs /sites/{id}/permissions/{id}', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    const urls: string[] = [];
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+        urls.push(typeof input === 'string' ? input : input.toString());
+        expect(init?.method).toBe('GET');
+        return new Response(JSON.stringify({ id: 'p1', roles: ['write'] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as unknown as typeof fetch;
+      const { getSitePermission } = await import('./sharepoint-client.js');
+      const r = await getSitePermission(token, 's1', 'p1');
+      expect(r.ok).toBe(true);
+      expect(r.data?.id).toBe('p1');
+      expect(urls[0]).toContain('/sites/s1/permissions/p1');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('createSitePermission POSTs the permission body', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    const urls: string[] = [];
+    let body = '';
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+        urls.push(typeof input === 'string' ? input : input.toString());
+        body = String(init?.body ?? '');
+        expect(init?.method).toBe('POST');
+        return new Response(JSON.stringify({ id: 'new-p', roles: ['write'] }), {
+          status: 201,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as unknown as typeof fetch;
+      const { createSitePermission } = await import('./sharepoint-client.js');
+      const r = await createSitePermission(token, 's1', {
+        roles: ['write'],
+        grantedToIdentities: [{ application: { id: 'app-1', displayName: 'App' } }]
+      });
+      expect(r.ok).toBe(true);
+      expect(r.data?.id).toBe('new-p');
+      expect(urls[0]).toContain('/sites/s1/permissions');
+      expect(JSON.parse(body)).toEqual({
+        roles: ['write'],
+        grantedToIdentities: [{ application: { id: 'app-1', displayName: 'App' } }]
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('deleteSitePermission sends DELETE', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    let method = '';
+    const urls: string[] = [];
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+        urls.push(typeof input === 'string' ? input : input.toString());
+        method = init?.method ?? '';
+        return new Response(null, { status: 204 });
+      }) as unknown as typeof fetch;
+      const { deleteSitePermission } = await import('./sharepoint-client.js');
+      const r = await deleteSitePermission(token, 's1', 'p1');
+      expect(r.ok).toBe(true);
+      expect(method).toBe('DELETE');
+      expect(urls[0]).toContain('/sites/s1/permissions/p1');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

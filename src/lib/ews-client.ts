@@ -117,7 +117,32 @@ function stripXmlTagsFromXmlish(s: string): string {
 
 // ─── SOAP Core ───
 
+import { haltForDryRun, isDryRunActive } from './dry-run.js';
 import { validateUrl } from './url-validation';
+
+/**
+ * Root EWS SOAP operation names that only read data. Everything else is treated as mutating for
+ * `--dry-run` purposes (fail closed: a future operation not in this list is halted-and-shown
+ * rather than silently sent, which is the safer default for a "don't do anything" flag).
+ */
+const EWS_READ_ONLY_OPERATIONS = new Set([
+  'FindItem',
+  'GetItem',
+  'FindFolder',
+  'GetFolder',
+  'ResolveNames',
+  'GetRoomLists',
+  'GetRooms',
+  'GetAttachment',
+  'GetInboxRules',
+  'GetUserAvailabilityRequest'
+]);
+
+/** Extracts the root `<m:OperationName>` element immediately inside `<soap:Body>`. */
+function ewsRootOperation(envelope: string): string | null {
+  const m = envelope.match(/<soap:Body>\s*<m:([A-Za-z]+)/);
+  return m ? m[1] : null;
+}
 
 export const EWS_ENDPOINT = validateUrl(
   process.env.EWS_ENDPOINT || 'https://outlook.office365.com/EWS/Exchange.asmx',
@@ -148,6 +173,20 @@ export function soapEnvelope(body: string, header?: string): string {
  */
 export async function callEws(token: string, envelope: string, mailbox?: string): Promise<string> {
   const anchorMailbox = mailbox || EWS_USERNAME;
+
+  if (isDryRunActive()) {
+    const operation = ewsRootOperation(envelope);
+    if (!operation || !EWS_READ_ONLY_OPERATIONS.has(operation)) {
+      haltForDryRun({
+        backend: 'ews',
+        operation: operation || '(unknown — could not parse root SOAP operation)',
+        endpoint: EWS_ENDPOINT,
+        mailbox: anchorMailbox,
+        envelope
+      });
+    }
+  }
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), EWS_TIMEOUT_MS);
 
@@ -377,6 +416,8 @@ export interface EmailMessage {
   From?: { EmailAddress?: EmailAddress };
   ToRecipients?: Array<{ EmailAddress?: EmailAddress }>;
   CcRecipients?: Array<{ EmailAddress?: EmailAddress }>;
+  /** Only requested/populated by `getEmail`; EWS omits Bcc from the `Default` shape otherwise. */
+  BccRecipients?: Array<{ EmailAddress?: EmailAddress }>;
   ReceivedDateTime?: string;
   SentDateTime?: string;
   IsRead?: boolean;
@@ -767,6 +808,16 @@ function parseEmailMessage(block: string): EmailMessage {
     }
   }));
 
+  // Bcc (only present when explicitly requested — see getEmail's AdditionalProperties)
+  const bccBlock = extractSelfClosingOrBlock(block, 'BccRecipients');
+  const bccMailboxes = extractBlocks(bccBlock, 'Mailbox');
+  const bccRecipients = bccMailboxes.map((mb) => ({
+    EmailAddress: {
+      Name: extractTag(mb, 'Name'),
+      Address: extractTag(mb, 'EmailAddress')
+    }
+  }));
+
   // Flag
   const flagBlock = extractSelfClosingOrBlock(block, 'Flag');
   const flagStatus = extractTag(flagBlock, 'FlagStatus') as 'NotFlagged' | 'Flagged' | 'Complete' | undefined;
@@ -785,6 +836,7 @@ function parseEmailMessage(block: string): EmailMessage {
     From: fromEmail ? { EmailAddress: { Name: fromName, Address: fromEmail } } : undefined,
     ToRecipients: toRecipients.length > 0 ? toRecipients : undefined,
     CcRecipients: ccRecipients.length > 0 ? ccRecipients : undefined,
+    BccRecipients: bccRecipients.length > 0 ? bccRecipients : undefined,
     ReceivedDateTime: receivedDateTime || undefined,
     SentDateTime: sentDateTime || undefined,
     IsRead: isRead,
@@ -1739,6 +1791,7 @@ export async function getEmail(token: string, messageId: string, mailbox?: strin
           <t:FieldURI FieldURI="message:From" />
           <t:FieldURI FieldURI="message:ToRecipients" />
           <t:FieldURI FieldURI="message:CcRecipients" />
+          <t:FieldURI FieldURI="message:BccRecipients" />
           <t:FieldURI FieldURI="message:IsRead" />
           <t:FieldURI FieldURI="item:Flag" />
           <t:FieldURI FieldURI="item:Importance" />
@@ -2284,6 +2337,7 @@ export async function updateDraft(
   options: {
     to?: string[];
     cc?: string[];
+    bcc?: string[];
     subject?: string;
     body?: string;
     bodyType?: 'Text' | 'HTML';
@@ -2319,6 +2373,13 @@ export async function updateDraft(
         `<t:SetItemField><t:FieldURI FieldURI="message:CcRecipients" /><t:Message><t:CcRecipients>${options.cc
           .map((e) => `<t:Mailbox><t:EmailAddress>${xmlEscape(e)}</t:EmailAddress></t:Mailbox>`)
           .join('')}</t:CcRecipients></t:Message></t:SetItemField>`
+      );
+    }
+    if (options.bcc !== undefined) {
+      setFields.push(
+        `<t:SetItemField><t:FieldURI FieldURI="message:BccRecipients" /><t:Message><t:BccRecipients>${options.bcc
+          .map((e) => `<t:Mailbox><t:EmailAddress>${xmlEscape(e)}</t:EmailAddress></t:Mailbox>`)
+          .join('')}</t:BccRecipients></t:Message></t:SetItemField>`
       );
     }
 

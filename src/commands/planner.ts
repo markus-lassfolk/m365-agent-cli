@@ -1,12 +1,21 @@
 import { readFile } from 'node:fs/promises';
 import { Command } from 'commander';
+import { graphBatchAll } from '../lib/graph-advanced-client.js';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
+import {
+  applyBulkGraphRequests,
+  type BulkMutationOutcome,
+  type BulkSubRequestSpec,
+  parseBulkIdListOrExit,
+  printBulkOutcomeSummary
+} from '../lib/graph-bulk.js';
 import {
   applyDeltaPageToState,
   readDeltaStateFile,
   resolveDeltaContinuationUrl,
   writeDeltaStateFile
 } from '../lib/graph-delta-state-file.js';
+import { toJsonError } from '../lib/json-error.js';
 import {
   addPlannerChecklistItem,
   addPlannerFavoritePlan,
@@ -772,6 +781,99 @@ plannerCommand
       }
       if (opts.json) console.log(JSON.stringify({ deleted: opts.id }, null, 2));
       else console.log(`Deleted task: ${opts.id}`);
+    }
+  );
+
+plannerCommand
+  .command('bulk-complete-task')
+  .description(
+    'Mark many Planner tasks 100% complete: one batched round of GETs to fetch each @odata.etag (Planner requires If-Match), then one batched round of PATCHes (Graph JSON $batch, auto-chunked into <=20-request POSTs — see `graph batch`), instead of one GET+PATCH pair per task.'
+  )
+  .option('--ids <csv>', 'Comma-separated task ids')
+  .option('--json-file <path>', 'JSON array of task ids (overrides --ids)')
+  .option('--json', 'Output as JSON')
+  .option('--token <token>', 'Use a specific token')
+  .option('--identity <name>', 'Graph token cache identity (default: default)')
+  .action(
+    async (opts: { ids?: string; jsonFile?: string; json?: boolean; token?: string; identity?: string }, cmd: any) => {
+      checkReadOnly(cmd);
+      const auth = await resolveGraphAuth({ token: opts.token, identity: opts.identity });
+      if (!auth.success || !auth.token) {
+        if (opts.json) {
+          console.log(JSON.stringify({ error: toJsonError(auth.error) }, null, 2));
+        } else {
+          console.error(`Auth error: ${auth.error}`);
+        }
+        process.exit(1);
+      }
+      const taskIds = await parseBulkIdListOrExit(opts);
+
+      const getRequests: BulkSubRequestSpec[] = taskIds.map((taskId) => ({
+        id: taskId,
+        method: 'GET',
+        url: `/planner/tasks/${encodeURIComponent(taskId)}`
+      }));
+      const getResult = await graphBatchAll(
+        auth.token,
+        getRequests as unknown as Record<string, unknown>[],
+        undefined,
+        {
+          identity: opts.identity,
+          pinAccessToken: !!opts.token
+        }
+      );
+      if (!getResult.ok || !getResult.data) {
+        if (opts.json) {
+          console.log(
+            JSON.stringify({ error: toJsonError(getResult.error, 'Failed to fetch tasks for etags') }, null, 2)
+          );
+        } else {
+          console.error(`Error: ${getResult.error?.message || 'Failed to fetch tasks for etags'}`);
+        }
+        process.exit(1);
+      }
+      const byIdResp = new Map(getResult.data.responses.map((r) => [r.id, r]));
+      const etagById = new Map<string, string>();
+      const outcomes: BulkMutationOutcome[] = [];
+      for (const taskId of taskIds) {
+        const resp = byIdResp.get(taskId);
+        const ok = resp && resp.status >= 200 && resp.status < 300;
+        const etag = ok ? (resp?.body as { '@odata.etag'?: string } | undefined)?.['@odata.etag'] : undefined;
+        if (etag) {
+          etagById.set(taskId, etag);
+        } else {
+          outcomes.push({ id: taskId, ok: false, status: resp?.status, error: 'Could not fetch task/ETag' });
+        }
+      }
+
+      const patchRequests: BulkSubRequestSpec[] = [...etagById.entries()].map(([taskId, etag]) => ({
+        id: taskId,
+        method: 'PATCH',
+        url: `/planner/tasks/${encodeURIComponent(taskId)}`,
+        headers: { 'Content-Type': 'application/json', 'If-Match': etag },
+        body: { percentComplete: 100 }
+      }));
+      if (patchRequests.length > 0) {
+        const patchResult = await applyBulkGraphRequests(auth.token, patchRequests, undefined, {
+          identity: opts.identity,
+          pinAccessToken: !!opts.token
+        });
+        if (!patchResult.ok || !patchResult.data) {
+          if (opts.json) {
+            console.log(JSON.stringify({ error: toJsonError(patchResult.error, 'Bulk complete failed') }, null, 2));
+          } else {
+            console.error(`Error: ${patchResult.error?.message || 'Bulk complete failed'}`);
+          }
+          process.exit(1);
+        }
+        outcomes.push(...patchResult.data);
+      }
+
+      const order = new Map(taskIds.map((id, i) => [id, i]));
+      outcomes.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+
+      printBulkOutcomeSummary(outcomes, opts.json);
+      if (outcomes.some((o) => !o.ok)) process.exitCode = 1;
     }
   );
 

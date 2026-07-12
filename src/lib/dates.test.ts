@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'bun:test';
-import { parseDay, parseTimeToDate, toLocalUnzonedISOString, toUTCISOString } from './dates.js';
+import {
+  parseDay,
+  parseTimeToDate,
+  toLocalUnzonedISOString,
+  toReinterpretedUTCISOString,
+  toUTCISOString
+} from './dates.js';
 
 describe('dates helpers', () => {
   it('parseTimeToDate handles HH:MM and am/pm inputs', () => {
@@ -46,6 +52,33 @@ describe('dates helpers', () => {
     const date = new Date(Date.UTC(2026, 2, 27, 9, 5, 7));
     const result = toUTCISOString(date);
     expect(result).toBe('2026-03-27T09:05:07.000Z');
+  });
+
+  it('toReinterpretedUTCISOString preserves the local calendar date/time regardless of host offset (bug regression)', () => {
+    // Constructed via the local Date constructor (mirrors an all-day boundary built via
+    // .setHours(0,0,0,0)/.setHours(23,59,59,999)) — must round-trip to the same numbers with a
+    // literal "Z", not whatever UTC instant this local time happens to correspond to.
+    const midnight = new Date(2026, 3, 15, 0, 0, 0, 0); // Apr 15, local midnight
+    expect(toReinterpretedUTCISOString(midnight)).toBe('2026-04-15T00:00:00.000Z');
+
+    const endOfDay = new Date(2026, 3, 15, 23, 59, 59, 999); // Apr 15, local 23:59:59.999
+    expect(toReinterpretedUTCISOString(endOfDay)).toBe('2026-04-15T23:59:59.999Z');
+  });
+
+  it('does not shift the date on a host with a positive UTC offset, unlike plain toISOString (bug regression)', () => {
+    const originalTz = process.env.TZ;
+    try {
+      // Europe/Berlin is UTC+1/+2 — local midnight on Apr 15 is still Apr 14 in UTC, which is
+      // exactly the scenario that shifted all-day events back one day before this fix.
+      process.env.TZ = 'Europe/Berlin';
+      const midnight = new Date(2026, 3, 15, 0, 0, 0, 0);
+      // The bug this guards against: a naive date.toISOString() lands on the previous UTC day.
+      expect(midnight.toISOString().slice(0, 10)).toBe('2026-04-14');
+      expect(toReinterpretedUTCISOString(midnight)).toBe('2026-04-15T00:00:00.000Z');
+    } finally {
+      if (originalTz === undefined) delete process.env.TZ;
+      else process.env.TZ = originalTz;
+    }
   });
 
   it('parseDay supports relative values and weekday directions', () => {
