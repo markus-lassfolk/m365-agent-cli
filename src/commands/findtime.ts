@@ -293,6 +293,18 @@ export const findtimeCommand = new Command('findtime')
       const duration = parseInt(options.duration, 10);
       const workStart = parseInt(options.start, 10);
       const workEnd = parseInt(options.end, 10);
+      if (!Number.isFinite(duration) || duration <= 0) {
+        console.error(`Error: --duration must be a positive number of minutes (got "${options.duration}")`);
+        process.exit(1);
+      }
+      if (!Number.isFinite(workStart) || workStart < 0 || workStart > 23) {
+        console.error(`Error: --start must be an hour from 0 to 23 (got "${options.start}")`);
+        process.exit(1);
+      }
+      if (!Number.isFinite(workEnd) || workEnd < 0 || workEnd > 24 || workEnd <= workStart) {
+        console.error(`Error: --end must be an hour from 1 to 24 and greater than --start (got "${options.end}")`);
+        process.exit(1);
+      }
 
       const locationConstraint = buildFindMeetingTimesLocationConstraint({
         suggestLocations: options.suggestLocations,

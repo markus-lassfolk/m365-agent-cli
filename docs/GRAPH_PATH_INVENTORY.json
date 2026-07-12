@@ -1,7 +1,7 @@
 {
   "version": 1,
   "description": "Graph path patterns from static analysis of callGraph*, graphInvoke*, fetchAllPages, fetchGraphRaw, graphPostBatch. Regenerate: npm run graph:inventory",
-  "generatedAt": "2026-07-12T10:34:07.773Z",
+  "generatedAt": "2026-07-12T10:57:04.651Z",
   "entryCount": 709,
   "entries": [
     {
@@ -27,14 +27,14 @@
     },
     {
       "file": "src/commands/graph.ts",
-      "line": 89,
+      "line": 111,
       "callee": "graphInvoke",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/commands/graph.ts",
-      "line": 133,
+      "line": 158,
       "callee": "graphPostBatch",
       "pattern": "/$batch",
       "kind": "literal"

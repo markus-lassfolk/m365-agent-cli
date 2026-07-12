@@ -56,6 +56,34 @@ describe('graph-delta-state-file', () => {
     ).toThrow(/folderId/);
   });
 
+  test('assertDeltaScopeMatchesState treats the meeting organizer id case-insensitively', () => {
+    // Same organizer, different casing (UPN) — must NOT reject the saved cursor.
+    expect(() =>
+      assertDeltaScopeMatchesState(
+        {
+          version: 1,
+          kind: 'meetingRecordings',
+          updatedAt: '',
+          meetingOrganizerUserId: 'User@Contoso.com',
+          meetingRollupStart: '2026-01-01',
+          meetingRollupEnd: '2026-02-01'
+        },
+        {
+          meetingOrganizerUserId: 'user@contoso.com',
+          meetingRollupStart: '2026-01-01',
+          meetingRollupEnd: '2026-02-01'
+        }
+      )
+    ).not.toThrow();
+    // A genuinely different organizer still throws.
+    expect(() =>
+      assertDeltaScopeMatchesState(
+        { version: 1, kind: 'meetingRecordings', updatedAt: '', meetingOrganizerUserId: 'a@x.com' },
+        { meetingOrganizerUserId: 'b@x.com' }
+      )
+    ).toThrow(/organizer/);
+  });
+
   test('parseDeltaStateJson accepts todoTasks kind', () => {
     const s = parseDeltaStateJson(
       JSON.stringify({

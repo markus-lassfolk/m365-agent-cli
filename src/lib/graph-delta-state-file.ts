@@ -1,5 +1,6 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import { atomicWriteUtf8File } from './atomic-write.js';
 import type { DriveLocation } from './drive-location.js';
 
 export const DELTA_STATE_VERSION = 1 as const;
@@ -85,7 +86,9 @@ export async function readDeltaStateFile(path: string): Promise<DeltaStateFileV1
 export async function writeDeltaStateFile(path: string, state: DeltaStateFileV1): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   // codeql[js/http-to-file-access]: Persists Graph delta cursors (next/delta links) as JSON for incremental sync; content is not executed as code.
-  await writeFile(path, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
+  // Atomic temp+rename so an interrupted write can't truncate the file and lose the saved
+  // delta cursor (which would force a full resync on the next run).
+  await atomicWriteUtf8File(path, `${JSON.stringify(state, null, 2)}\n`, 0o644);
 }
 
 export interface DeltaScopeFields {
@@ -244,7 +247,9 @@ export function assertDeltaScopeMatchesState(state: DeltaStateFileV1, scope: Del
 
   if (state.kind === 'meetingRecordings' || state.kind === 'meetingTranscripts') {
     const trimEq = (a: string | undefined, b: string | undefined) => (a ?? '').trim() === (b ?? '').trim();
-    if (!trimEq(state.meetingOrganizerUserId, scope.meetingOrganizerUserId)) {
+    // Organizer id can be a UPN — compare case-insensitively (like every other identity field)
+    // so `User@contoso.com` vs `user@contoso.com` doesn't reject a valid cursor. Dates stay exact.
+    if (norm(state.meetingOrganizerUserId) !== norm(scope.meetingOrganizerUserId)) {
       throw new Error(
         `State file meeting organizer "${state.meetingOrganizerUserId ?? ''}" does not match current "${scope.meetingOrganizerUserId ?? '(none)'}"`
       );

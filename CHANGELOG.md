@@ -60,6 +60,14 @@ Pagination consistency pass (list/collection endpoints no longer silently trunca
 - `microsoftSearch` request-patch merge ignores `__proto__`/`constructor`/`prototype` keys from user-supplied JSON (no prototype pollution).
 - EWS auto-reply rule lookup (`oof`/auto-reply) matches the existing template rule regardless of XML namespace prefix, preventing a duplicate rule + orphaned template when Exchange returns a non-`t:` prefix.
 
+Additional review pass:
+
+- **`respond accept|decline|tentative --json`** no longer prints human-readable preamble lines before the JSON object (both Graph and EWS backends), so `--json` output is parseable.
+- **`findtime`** validates `--duration`/`--start`/`--end` as numbers in range; a non-numeric work-hour window used to silently drop every slot and exit 0 ("no available times") instead of erroring.
+- **`graph batch`** rejects a JSON file without a `requests` array with a clear message instead of crashing with `TypeError: undefined is not iterable`.
+- **Unguarded `--json-file`/`--body-file`/`--data` reads** in `graph`, `meeting`, and `outlook-graph` now report a clean `Error:` (missing file or invalid JSON) instead of an unhandled stack trace.
+- **Delta sync state** is written atomically (temp + rename), so an interrupted `*-delta` run can't truncate the state file and force a full resync; and the `meeting recordings/transcripts --delta` scope check compares the organizer id case-insensitively (a UPN casing difference no longer rejects a valid cursor).
+
 ---
 
 ## [2026.7.3] — 2026-07-02

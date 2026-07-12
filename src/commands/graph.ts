@@ -10,7 +10,25 @@ import {
 import { resolveGraphAuth } from '../lib/graph-auth.js';
 import { checkReadOnly } from '../lib/utils.js';
 
+/** Read + parse a JSON file, exiting with a clean message (not a raw stack trace) on failure. */
+async function readJsonFileOrExit(path: string, label: string): Promise<unknown> {
+  let raw: string;
+  try {
+    raw = await readFile(resolve(process.cwd(), path.trim()), 'utf8');
+  } catch (err) {
+    console.error(`Error: could not read ${label}: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  }
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    console.error(`Error: ${label} must contain valid JSON: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  }
+}
+
 function batchHasMutations(body: GraphBatchRequestBody): boolean {
+  if (!Array.isArray(body?.requests)) return false;
   for (const req of body.requests) {
     const m = String((req as { method?: string }).method || 'GET').toUpperCase();
     if (m !== 'GET' && m !== 'HEAD') return true;
@@ -71,10 +89,14 @@ graphCommand
 
       let body: unknown | undefined;
       if (opts.bodyFile) {
-        const raw = await readFile(resolve(process.cwd(), opts.bodyFile.trim()), 'utf8');
-        body = JSON.parse(raw) as unknown;
+        body = await readJsonFileOrExit(opts.bodyFile, '--body-file');
       } else if (opts.data) {
-        body = JSON.parse(opts.data) as unknown;
+        try {
+          body = JSON.parse(opts.data) as unknown;
+        } catch (err) {
+          console.error(`Error: --data must be valid JSON: ${err instanceof Error ? err.message : String(err)}`);
+          process.exit(1);
+        }
       }
 
       let extraHeaders: Record<string, string> | undefined;
@@ -118,8 +140,11 @@ graphCommand
   .option('--token <token>', 'Graph access token')
   .option('--identity <name>', 'Graph token cache identity')
   .action(async (opts: { file: string; beta?: boolean; token?: string; identity?: string }, cmd) => {
-    const raw = await readFile(resolve(process.cwd(), opts.file.trim()), 'utf8');
-    const body = JSON.parse(raw) as GraphBatchRequestBody;
+    const body = (await readJsonFileOrExit(opts.file, '--file')) as GraphBatchRequestBody;
+    if (!Array.isArray(body?.requests)) {
+      console.error('Error: --file must be a JSON object with a "requests" array (see --help).');
+      process.exit(1);
+    }
     if (batchHasMutations(body)) {
       checkReadOnly(cmd);
     }

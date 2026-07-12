@@ -36,6 +36,23 @@ import {
 } from '../lib/online-meetings-graph-client.js';
 import { checkReadOnly } from '../lib/utils.js';
 
+/** Read + parse a JSON file, exiting with a clean message (not a raw stack trace) on failure. */
+async function readJsonFileOrExit(path: string, label: string): Promise<Record<string, unknown>> {
+  let raw: string;
+  try {
+    raw = await readFile(path.trim(), 'utf-8');
+  } catch (err) {
+    console.error(`Error: could not read ${label}: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  }
+  try {
+    return JSON.parse(raw) as Record<string, unknown>;
+  } catch (err) {
+    console.error(`Error: ${label} must contain valid JSON: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  }
+}
+
 function parseOptionalRecordingsTop(raw?: string): number | undefined {
   if (!raw?.trim()) return undefined;
   const n = Number.parseInt(raw.trim(), 10);
@@ -108,8 +125,7 @@ meetingCommand
 
       let r: GraphResponse<OnlineMeeting>;
       if (opts.jsonFile?.trim()) {
-        const raw = await readFile(opts.jsonFile.trim(), 'utf-8');
-        const body = JSON.parse(raw) as Record<string, unknown>;
+        const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
         r = await createOnlineMeetingFromBody(auth.token!, body, opts.user);
       } else {
         if (!opts.start?.trim() || !opts.end?.trim()) {
@@ -192,8 +208,7 @@ meetingCommand
         console.error(`Auth error: ${auth.error}`);
         process.exit(1);
       }
-      const raw = await readFile(opts.jsonFile, 'utf-8');
-      const patch = JSON.parse(raw) as Record<string, unknown>;
+      const patch = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const r = await updateOnlineMeeting(auth.token!, meetingId, patch, opts.user);
       if (!r.ok || !r.data) {
         console.error(`Error: ${r.error?.message}`);

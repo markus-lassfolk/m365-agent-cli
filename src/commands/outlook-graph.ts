@@ -41,6 +41,23 @@ import {
 } from '../lib/outlook-graph-client.js';
 import { checkReadOnly } from '../lib/utils.js';
 
+/** Read + parse a JSON file, exiting with a clean message (not a raw stack trace) on failure. */
+async function readJsonFileOrExit<T = Record<string, unknown>>(path: string, label: string): Promise<T> {
+  let raw: string;
+  try {
+    raw = await readFile(path.trim(), 'utf-8');
+  } catch (err) {
+    console.error(`Error: could not read ${label}: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  }
+  try {
+    return JSON.parse(raw) as T;
+  } catch (err) {
+    console.error(`Error: ${label} must contain valid JSON: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  }
+}
+
 export const outlookGraphCommand = new Command('outlook-graph').description(
   'Microsoft Graph Outlook REST: mail folders, messages (list/send/patch/move/copy/attachments/reply), contacts (distinct from EWS mail/folders)'
 );
@@ -438,8 +455,10 @@ outlookGraphCommand
       console.error(`Auth error: ${auth.error}`);
       process.exit(1);
     }
-    const raw = await readFile(opts.jsonFile, 'utf-8');
-    const body = JSON.parse(raw) as { message: Record<string, unknown>; saveToSentItems?: boolean };
+    const body = await readJsonFileOrExit<{ message: Record<string, unknown>; saveToSentItems?: boolean }>(
+      opts.jsonFile,
+      '--json-file'
+    );
     if (!body.message) {
       console.error('JSON must include a "message" object');
       process.exit(1);
@@ -473,8 +492,7 @@ outlookGraphCommand
         console.error(`Auth error: ${auth.error}`);
         process.exit(1);
       }
-      const raw = await readFile(opts.jsonFile, 'utf-8');
-      const patch = JSON.parse(raw) as Record<string, unknown>;
+      const patch = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const r = await patchMailMessage(auth.token!, messageId, patch, opts.user);
       if (!r.ok || !r.data) {
         console.error(`Error: ${r.error?.message}`);
@@ -880,8 +898,7 @@ outlookGraphCommand
         console.error(`Auth error: ${auth.error}`);
         process.exit(1);
       }
-      const raw = await readFile(opts.jsonFile, 'utf-8');
-      const body = JSON.parse(raw) as Record<string, unknown>;
+      const body = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const r = await createContact(auth.token!, body, opts.user, opts.folder);
       if (!r.ok || !r.data) {
         console.error(`Error: ${r.error?.message}`);
@@ -913,8 +930,7 @@ outlookGraphCommand
         console.error(`Auth error: ${auth.error}`);
         process.exit(1);
       }
-      const raw = await readFile(opts.jsonFile, 'utf-8');
-      const patch = JSON.parse(raw) as Record<string, unknown>;
+      const patch = await readJsonFileOrExit(opts.jsonFile, '--json-file');
       const r = await updateContact(auth.token!, contactId, patch, opts.user);
       if (!r.ok || !r.data) {
         console.error(`Error: ${r.error?.message}`);
