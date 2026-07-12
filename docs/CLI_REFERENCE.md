@@ -166,6 +166,33 @@ identities on the same machine never share cache entries, and different query pa
 opportunistically. EWS requests are not cached (EWS operations are POST/SOAP, not idempotent GETs
 in the way Graph's REST API is).
 
+### Output Shaping (`--fields` / `--ndjson`)
+
+On commands that list many rows, `--json` combined with `--fields <dot-paths>` and/or `--ndjson`
+lets an agent shape and stream output instead of buffering a large pretty-printed array:
+
+- **`--fields "id,subject,from.emailAddress.address"`** — projects each row down to only the
+  listed dot-paths (nested paths keep their nesting; e.g. `from.emailAddress.address` produces
+  `{ "from": { "emailAddress": { "address": "..." } } }`). A path missing on a given row is
+  silently omitted from that row rather than erroring — Graph and EWS payloads aren't uniform.
+- **`--ndjson`** — prints one compact JSON object per row, one per line, instead of a single
+  pretty-printed `{ ... : [ ... ] }` array, so a large list can be parsed line-by-line as it's
+  produced rather than requiring the whole response to be buffered and parsed at once.
+
+```bash
+m365-agent-cli mail inbox --json --fields "id,subject,from.emailAddress.address" --ndjson --limit 200
+# {"id":"...","subject":"...","from":{"emailAddress":{"address":"..."}}}
+# {"id":"...","subject":"...","from":{"emailAddress":{"address":"..."}}}
+# ...
+```
+
+This is a **per-command opt-in**, not a global flag — unlike `--dry-run`/`--cache` (which hook
+into the single Graph/EWS transport layer and so apply uniformly to every command), output
+shaping happens after each command's own data-fetching and formatting logic, so each command
+wires it in explicitly. Today `mail` (list view, both the EWS and Graph backends) supports
+`--fields`/`--ndjson`; other high-volume list commands are natural candidates for the same
+`src/lib/output-shape.ts` helper as a follow-up.
+
 ---
 
 ## Calendar Commands

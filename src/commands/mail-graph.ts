@@ -29,6 +29,7 @@ import {
   patchMailMessage,
   sendMailMessage
 } from '../lib/outlook-graph-client.js';
+import { formatNdjson, parseFieldsOption, shapeRows } from '../lib/output-shape.js';
 import { safeAttachmentFileName, writeInternetShortcutUtf8File } from '../lib/safe-filename.js';
 
 export interface MailGraphCommandOptions {
@@ -68,6 +69,8 @@ export interface MailGraphCommandOptions {
   clearCategories?: string;
   category?: string[];
   json?: boolean;
+  fields?: string;
+  ndjson?: boolean;
   token?: string;
   mailbox?: string;
   identity?: string;
@@ -892,7 +895,12 @@ export async function tryMailGraphPortion(
   }
 
   if (options.json) {
-    console.log(JSON.stringify({ value: emails }, null, 2));
+    const rows = shapeRows(emails, parseFieldsOption(options.fields));
+    if (options.ndjson) {
+      console.log(formatNdjson(rows));
+    } else {
+      console.log(JSON.stringify({ value: rows }, null, 2));
+    }
     return { handled: true };
   }
 

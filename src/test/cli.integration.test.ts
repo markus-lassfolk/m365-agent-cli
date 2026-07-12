@@ -788,6 +788,27 @@ describe('mail', () => {
     expect(Array.isArray(data.emails)).toBe(true);
   });
 
+  test('--json --fields projects each email down to the requested dot-paths', async () => {
+    const result = await runM365AgentCli('mail inbox --json --fields "id,subject" --token test-token-12345');
+    expect(result.exitCode).toBe(0);
+    const data = JSON.parse(result.stdout.trim());
+    expect(Array.isArray(data.emails)).toBe(true);
+    for (const email of data.emails) {
+      expect(Object.keys(email).sort()).toEqual(['id', 'subject'].sort());
+    }
+  });
+
+  test('--json --ndjson prints one JSON object per line instead of one array', async () => {
+    const result = await runM365AgentCli('mail inbox --json --ndjson --fields "id" --token test-token-12345');
+    expect(result.exitCode).toBe(0);
+    const lines = result.stdout.trim().split('\n');
+    expect(lines.length).toBeGreaterThan(0);
+    for (const line of lines) {
+      const row = JSON.parse(line);
+      expect(Object.keys(row)).toEqual(['id']);
+    }
+  });
+
   test('--help shows help text', async () => {
     const result = await runM365AgentCli('mail --help');
     expect(result.exitCode).toBe(0);

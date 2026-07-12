@@ -29,6 +29,7 @@ import { resolveGraphAuth } from '../lib/graph-auth.js';
 import { toJsonError } from '../lib/json-error.js';
 import { markdownToHtml } from '../lib/markdown.js';
 import { lookupMimeType } from '../lib/mime-type.js';
+import { formatNdjson, parseFieldsOption, shapeRows } from '../lib/output-shape.js';
 import { safeAttachmentFileName, writeInternetShortcutUtf8File } from '../lib/safe-filename.js';
 import { checkReadOnly } from '../lib/utils.js';
 import {
@@ -195,6 +196,11 @@ export const mailCommand = new Command('mail')
   )
   .option('--markdown', 'Parse message as markdown (bold, links, lists)')
   .option('--json', 'Output as JSON')
+  .option(
+    '--fields <list>',
+    'With --json on the list view: comma-separated dot-paths to project each email down to (e.g. "id,subject,from.emailAddress.address")'
+  )
+  .option('--ndjson', 'With --json on the list view: print one JSON object per email per line, instead of one array')
   .option('--token <token>', 'Use a specific token')
   .option(
     '--mailbox <email>',
@@ -255,6 +261,8 @@ Shared mailbox: add --mailbox shared@contoso.com. Full flags: docs/CLI_REFERENCE
         message?: string;
         markdown?: boolean;
         json?: boolean;
+        fields?: string;
+        ndjson?: boolean;
         token?: string;
         draft?: boolean;
         mailbox?: string;
@@ -1072,31 +1080,28 @@ Shared mailbox: add --mailbox shared@contoso.com. Full flags: docs/CLI_REFERENCE
 
       // List emails
       if (options.json) {
-        console.log(
-          JSON.stringify(
-            {
-              folder: apiFolder,
-              page,
-              limit,
-              emails: emails.map((e, i) => ({
-                index: skip + i + 1,
-                id: e.Id,
-                from: e.From?.EmailAddress?.Address,
-                fromName: e.From?.EmailAddress?.Name,
-                subject: e.Subject,
-                preview: e.BodyPreview,
-                receivedAt: e.ReceivedDateTime,
-                isRead: e.IsRead,
-                hasAttachments: e.HasAttachments,
-                importance: e.Importance,
-                flagged: e.Flag?.FlagStatus === 'Flagged',
-                categories: e.Categories
-              }))
-            },
-            null,
-            2
-          )
+        const rows = shapeRows(
+          emails.map((e, i) => ({
+            index: skip + i + 1,
+            id: e.Id,
+            from: e.From?.EmailAddress?.Address,
+            fromName: e.From?.EmailAddress?.Name,
+            subject: e.Subject,
+            preview: e.BodyPreview,
+            receivedAt: e.ReceivedDateTime,
+            isRead: e.IsRead,
+            hasAttachments: e.HasAttachments,
+            importance: e.Importance,
+            flagged: e.Flag?.FlagStatus === 'Flagged',
+            categories: e.Categories
+          })),
+          parseFieldsOption(options.fields)
         );
+        if (options.ndjson) {
+          console.log(formatNdjson(rows));
+        } else {
+          console.log(JSON.stringify({ folder: apiFolder, page, limit, emails: rows }, null, 2));
+        }
         return;
       }
 
