@@ -117,7 +117,32 @@ function stripXmlTagsFromXmlish(s: string): string {
 
 // ─── SOAP Core ───
 
+import { haltForDryRun, isDryRunActive } from './dry-run.js';
 import { validateUrl } from './url-validation';
+
+/**
+ * Root EWS SOAP operation names that only read data. Everything else is treated as mutating for
+ * `--dry-run` purposes (fail closed: a future operation not in this list is halted-and-shown
+ * rather than silently sent, which is the safer default for a "don't do anything" flag).
+ */
+const EWS_READ_ONLY_OPERATIONS = new Set([
+  'FindItem',
+  'GetItem',
+  'FindFolder',
+  'GetFolder',
+  'ResolveNames',
+  'GetRoomLists',
+  'GetRooms',
+  'GetAttachment',
+  'GetInboxRules',
+  'GetUserAvailabilityRequest'
+]);
+
+/** Extracts the root `<m:OperationName>` element immediately inside `<soap:Body>`. */
+function ewsRootOperation(envelope: string): string | null {
+  const m = envelope.match(/<soap:Body>\s*<m:([A-Za-z]+)/);
+  return m ? m[1] : null;
+}
 
 export const EWS_ENDPOINT = validateUrl(
   process.env.EWS_ENDPOINT || 'https://outlook.office365.com/EWS/Exchange.asmx',
@@ -148,6 +173,20 @@ export function soapEnvelope(body: string, header?: string): string {
  */
 export async function callEws(token: string, envelope: string, mailbox?: string): Promise<string> {
   const anchorMailbox = mailbox || EWS_USERNAME;
+
+  if (isDryRunActive()) {
+    const operation = ewsRootOperation(envelope);
+    if (!operation || !EWS_READ_ONLY_OPERATIONS.has(operation)) {
+      haltForDryRun({
+        backend: 'ews',
+        operation: operation || '(unknown — could not parse root SOAP operation)',
+        endpoint: EWS_ENDPOINT,
+        mailbox: anchorMailbox,
+        envelope
+      });
+    }
+  }
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), EWS_TIMEOUT_MS);
 

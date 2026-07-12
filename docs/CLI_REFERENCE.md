@@ -16,6 +16,7 @@ Complete command-line reference for **m365-agent-cli**: global flags, read-only 
 
 ```bash
 --read-only         # Run in read-only mode, blocking mutating operations
+--dry-run           # Preview the resolved request for a mutating command without sending it
 --version, -V       # CLI version (semver from package)
 ```
 
@@ -93,6 +94,30 @@ You can enable Read-Only mode in two ways:
    m365-agent-cli planner update-task <taskId> --title "New"
    # Error: Command blocked. The CLI is running in read-only mode.
    ```
+
+### Dry-Run Mode
+
+`--dry-run` (root flag — works before or after the subcommand; or `M365_DRY_RUN=1` in the
+environment) previews the exact request a mutating command would send, without sending it.
+Unlike `--read-only` (which blocks before any client call), `--dry-run` lets read-only lookups
+the command needs (e.g. resolving a message's current `ChangeKey`) go through as normal, and only
+intercepts the actual mutating write, right at the transport layer:
+
+- **Graph**: prints `{ dryRun: true, backend: "graph", method, url, headers, body }` — the exact
+  resolved HTTP method, URL, and JSON body — instead of calling `fetch`.
+- **EWS**: prints `{ dryRun: true, backend: "ews", operation, endpoint, mailbox, envelope }` — the
+  resolved SOAP operation name and full envelope XML — instead of POSTing it.
+
+```bash
+m365-agent-cli mail --reply msg-123 --message "Thanks!" --cc alice@contoso.com --dry-run
+# { "dryRun": true, "backend": "graph", "method": "POST", "url": "https://graph.microsoft.com/v1.0/me/messages/msg-123/createReply", "body": { "comment": "Thanks!" } }
+```
+
+For a multi-step command (e.g. create a draft, add an attachment, then send), only the **first**
+mutating request is shown — the CLI exits immediately after printing it, exactly like a real run
+would if that first call failed, so nothing downstream can execute against state that was never
+actually written. Re-run without `--dry-run` to send it, or run again after fixing the previewed
+request. GET-only commands are unaffected by `--dry-run` (there's nothing to preview).
 
 ---
 

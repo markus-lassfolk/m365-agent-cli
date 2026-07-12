@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'bun:test';
+import { afterEach, describe, expect, it } from 'bun:test';
 import { writeFileSync } from 'node:fs';
 import { mkdtemp, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -640,6 +640,103 @@ describe('listGraphCollection shared pagination helper', () => {
       expect(r.ok).toBe(true);
       expect(r.data?.map((x) => x.id)).toEqual(['a', 'b']);
       expect(n).toBe(2);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+describe('--dry-run (M365_DRY_RUN)', () => {
+  const originalExit = process.exit;
+  const originalLog = console.log;
+  const originalEnv = process.env.M365_DRY_RUN;
+
+  afterEach(() => {
+    process.exit = originalExit;
+    console.log = originalLog;
+    if (originalEnv === undefined) delete process.env.M365_DRY_RUN;
+    else process.env.M365_DRY_RUN = originalEnv;
+  });
+
+  it('halts a mutating request before fetch and prints the resolved method/url/body', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    process.env.M365_DRY_RUN = '1';
+    const originalFetch = globalThis.fetch;
+    let fetchCalled = false;
+    let exitCode: number | undefined;
+    const logged: string[] = [];
+    process.exit = ((code?: number) => {
+      exitCode = code;
+      throw new Error('exit');
+    }) as never;
+    console.log = ((s: string) => {
+      logged.push(s);
+    }) as typeof console.log;
+
+    try {
+      globalThis.fetch = (async () => {
+        fetchCalled = true;
+        return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } });
+      }) as unknown as typeof fetch;
+
+      await expect(
+        callGraphAt(baseUrl, token, '/me/sendMail', { method: 'POST', body: JSON.stringify({ subject: 'hi' }) })
+      ).rejects.toThrow('exit');
+
+      expect(fetchCalled).toBe(false);
+      expect(exitCode).toBe(0);
+      expect(logged).toHaveLength(1);
+      const preview = JSON.parse(logged[0]);
+      expect(preview).toMatchObject({
+        dryRun: true,
+        backend: 'graph',
+        method: 'POST',
+        url: `${baseUrl}/me/sendMail`,
+        body: { subject: 'hi' }
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('does not halt a GET request (reads are never blocked by dry-run)', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    process.env.M365_DRY_RUN = '1';
+    const originalFetch = globalThis.fetch;
+    let fetchCalled = false;
+
+    try {
+      globalThis.fetch = (async () => {
+        fetchCalled = true;
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as unknown as typeof fetch;
+
+      const r = await callGraphAt<{ ok: boolean }>(baseUrl, token, '/me', { method: 'GET' });
+      expect(fetchCalled).toBe(true);
+      expect(r.ok).toBe(true);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('does nothing special when M365_DRY_RUN is unset (mutating request goes through)', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    delete process.env.M365_DRY_RUN;
+    const originalFetch = globalThis.fetch;
+    let fetchCalled = false;
+
+    try {
+      globalThis.fetch = (async () => {
+        fetchCalled = true;
+        return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } });
+      }) as unknown as typeof fetch;
+
+      const r = await callGraphAt(baseUrl, token, '/me/sendMail', { method: 'POST', body: '{}' });
+      expect(fetchCalled).toBe(true);
+      expect(r.ok).toBe(true);
     } finally {
       globalThis.fetch = originalFetch;
     }

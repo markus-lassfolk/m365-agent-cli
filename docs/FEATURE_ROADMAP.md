@@ -13,7 +13,7 @@ verification / a product decision)
 |---|---------|--------|-------|
 | 1 | `describe` — machine-readable command/option manifest | ✅ | `m365 describe` (full JSON manifest), `--list` (fast top-level overview), `--command "rules create"` (scoped lookup). `src/lib/command-manifest.ts` + `src/commands/describe.ts`. |
 | 2 | Native MCP server mode | ⬜ | Expose each CLI command as an MCP tool (built on #1's manifest for schema generation). Extends `serve.ts`. |
-| 3 | `--dry-run` for mutations | ⬜ | Print the resolved method/URL/body (Graph) or SOAP envelope (EWS) without sending. Composes with `checkReadOnly`. |
+| 3 | `--dry-run` for mutations | ✅ | Transport-level: `callGraphAt`/`callEws` halt and print the resolved request instead of sending it, gated by `M365_DRY_RUN` (synced from the root `--dry-run` flag via a Commander `preAction` hook). Works uniformly for all ~60 commands with no per-command wiring. For multi-step flows, only the first mutating request is shown. `src/lib/dry-run.ts`. |
 | 4 | Output shaping: `--select`/`--fields` projection + `--ndjson` streaming | ⬜ | Client-side field projection where Graph `$select` doesn't apply; NDJSON mode for large lists so agents can stream-process instead of buffering. |
 
 ## Reliability & safety

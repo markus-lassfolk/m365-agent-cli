@@ -65,6 +65,19 @@ function registerM365Commands(program: Command): void {
     .version(getPackageVersionSync());
 
   program.option('--read-only', 'Run in read-only mode, blocking any mutating operations');
+  program.option(
+    '--dry-run',
+    'Preview the exact request a mutating command would send (Graph URL/body or EWS SOAP envelope) without sending it, then exit 0. For a multi-step command, only the first mutating request is shown.'
+  );
+
+  // Sync --dry-run into a process-wide env var before the action runs: the transport layer
+  // (graph-client.ts / ews-client.ts) has no access to the parsed Command instance, so this is
+  // the only way to carry the flag down to where requests are actually built and sent.
+  program.hook('preAction', (_thisCommand, actionCommand) => {
+    if (actionCommand.optsWithGlobals().dryRun) {
+      process.env.M365_DRY_RUN = '1';
+    }
+  });
 
   program.addHelpText('after', 'Tip: run m365-agent-cli <command> --help for flags and examples on each command.');
 

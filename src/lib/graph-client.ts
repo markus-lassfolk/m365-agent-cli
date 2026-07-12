@@ -12,6 +12,7 @@ import {
   driveItemPath,
   driveRootSearchPath
 } from './drive-location.js';
+import { haltForDryRun, isDryRunActive, previewableBody } from './dry-run.js';
 import { getGraphBaseUrl } from './graph-constants.js';
 
 /** Shown after HTTP 404 on a v1.0-style Graph URL (preview APIs are often beta-only). */
@@ -291,7 +292,7 @@ function throttleBackoffMs(attemptIndex: number): number {
   return Math.min(GRAPH_RETRY_MAX_WAIT_MS, base + jitter);
 }
 
-function isIdempotentMethod(method: string): boolean {
+export function isIdempotentMethod(method: string): boolean {
   const m = (method || 'GET').toUpperCase();
   return m === 'GET' || m === 'HEAD';
 }
@@ -532,6 +533,18 @@ async function callGraphUrlWithRetries<T>(
   onUnauthorized?: () => Promise<string | null>
 ): Promise<GraphResponse<T>> {
   const method = (fetchInit.method || 'GET').toUpperCase();
+
+  if (!isIdempotentMethod(method) && isDryRunActive()) {
+    const { headers: previewHeaders } = fetchInit;
+    haltForDryRun({
+      backend: 'graph',
+      method,
+      url: fullUrl,
+      ...(previewHeaders ? { headers: Object.fromEntries(new Headers(previewHeaders).entries()) } : {}),
+      body: previewableBody(fetchInit.body)
+    });
+  }
+
   let accessToken = token;
   let throttleAttempt = 0;
   let did401Refresh = false;
