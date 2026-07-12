@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { resolveAuth } from '../lib/auth.js';
 import { getAutoReplyRule, setAutoReplyRule } from '../lib/ews-client.js';
 import { getExchangeBackend } from '../lib/exchange-backend.js';
+import { toJsonError } from '../lib/json-error.js';
 import { checkReadOnly } from '../lib/utils.js';
 
 export const autoReplyCommand = new Command('auto-reply')
@@ -23,7 +24,7 @@ export const autoReplyCommand = new Command('auto-reply')
       const msg =
         'auto-reply uses EWS Inbox Rules only. For Microsoft Graph, use `m365-agent-cli oof` (mailbox automatic replies). To run this command, set M365_EXCHANGE_BACKEND=ews or auto.';
       if (options.json) {
-        console.log(JSON.stringify({ error: msg }, null, 2));
+        console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
       } else {
         console.error(`Error: ${msg}`);
       }
@@ -34,7 +35,7 @@ export const autoReplyCommand = new Command('auto-reply')
       if (!auth.success || !auth.token) {
         const msg = auth.error || 'Authentication failed';
         if (options.json) {
-          console.log(JSON.stringify({ error: msg }, null, 2));
+          console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
         } else {
           console.error(`Error: ${msg}`);
         }
@@ -45,7 +46,7 @@ export const autoReplyCommand = new Command('auto-reply')
       if (options.enable && options.disable) {
         const msg = 'Error: --enable and --disable cannot be used together.';
         if (options.json) {
-          console.log(JSON.stringify({ error: msg }, null, 2));
+          console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
         } else {
           console.error(msg);
         }
@@ -60,7 +61,7 @@ export const autoReplyCommand = new Command('auto-reply')
         if (!Number.isFinite(start.getTime())) {
           const msg = 'Error: --start must be a valid ISO datetime string.';
           if (options.json) {
-            console.log(JSON.stringify({ error: msg }, null, 2));
+            console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
           } else {
             console.error(msg);
           }
@@ -72,7 +73,7 @@ export const autoReplyCommand = new Command('auto-reply')
         if (!Number.isFinite(end.getTime())) {
           const msg = 'Error: --end must be a valid ISO datetime string.';
           if (options.json) {
-            console.log(JSON.stringify({ error: msg }, null, 2));
+            console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
           } else {
             console.error(msg);
           }
@@ -89,7 +90,7 @@ export const autoReplyCommand = new Command('auto-reply')
         if (!currentRuleRes.ok) {
           const msg = `Failed to get current auto-reply rule: ${currentRuleRes.status} ${currentRuleRes.error?.message || ''}`;
           if (options.json) {
-            console.log(JSON.stringify({ error: msg }, null, 2));
+            console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
           } else {
             console.error(msg);
           }
@@ -110,7 +111,7 @@ export const autoReplyCommand = new Command('auto-reply')
           if (!messageText) {
             const msg = 'Error: --message is required when creating a new auto-reply rule.';
             if (options.json) {
-              console.log(JSON.stringify({ error: msg }, null, 2));
+              console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
             } else {
               console.error(msg);
             }
@@ -126,7 +127,7 @@ export const autoReplyCommand = new Command('auto-reply')
         if (!result.ok) {
           const msg = `Failed to set auto-reply rule: ${result.status} ${(result.error as any)?.message || result.error}`;
           if (options.json) {
-            console.log(JSON.stringify({ error: msg }, null, 2));
+            console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
           } else {
             console.error(msg);
           }
@@ -144,7 +145,7 @@ export const autoReplyCommand = new Command('auto-reply')
         if (!result.ok) {
           const msg = `Failed to get auto-reply rule: ${result.status} ${(result.error as any)?.message || result.error}`;
           if (options.json) {
-            console.log(JSON.stringify({ error: msg }, null, 2));
+            console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
           } else {
             console.error(msg);
           }
@@ -184,7 +185,7 @@ export const autoReplyCommand = new Command('auto-reply')
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'An unexpected error occurred';
       if (options.json) {
-        console.log(JSON.stringify({ error: msg }, null, 2));
+        console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
       } else {
         console.error('An unexpected error occurred:', msg);
       }

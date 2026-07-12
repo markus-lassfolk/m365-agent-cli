@@ -5,6 +5,7 @@ import { getExchangeBackend } from '../lib/exchange-backend.js';
 import { warnAutoGraphToEwsFallback } from '../lib/exchange-fallback-hint.js';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
 import { callGraph, type GraphResponse } from '../lib/graph-client.js';
+import { toJsonError } from '../lib/json-error.js';
 
 interface GraphMe {
   displayName?: string;
@@ -98,7 +99,7 @@ export const whoamiCommand = new Command('whoami')
 
       if (!authResult.success) {
         if (options.json) {
-          console.log(JSON.stringify({ error: authResult.error, backend: 'ews' }, null, 2));
+          console.log(JSON.stringify({ error: toJsonError(authResult.error), backend: 'ews' }, null, 2));
         } else {
           console.error(`Error: ${authResult.error}`);
           console.error('\nCheck your .env for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
@@ -113,7 +114,7 @@ export const whoamiCommand = new Command('whoami')
           console.log(
             JSON.stringify(
               {
-                error: userInfo.error?.message || 'Failed to fetch user info',
+                error: toJsonError(userInfo.error?.message || 'Failed to fetch user info'),
                 authenticated: true,
                 backend: 'ews'
               },
@@ -144,7 +145,7 @@ export const whoamiCommand = new Command('whoami')
           console.log(
             JSON.stringify(
               {
-                error: authResult.error || 'Graph authentication failed',
+                error: toJsonError(authResult.error || 'Graph authentication failed'),
                 backend: 'graph'
               },
               null,
@@ -167,7 +168,7 @@ export const whoamiCommand = new Command('whoami')
           console.log(
             JSON.stringify(
               {
-                error: userInfo.error?.message || 'Failed to fetch user from Graph',
+                error: toJsonError(userInfo.error?.message || 'Failed to fetch user from Graph'),
                 authenticated: false,
                 backend: 'graph'
               },

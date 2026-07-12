@@ -31,6 +31,28 @@ Many **subcommands** accept their own flags. Common patterns (not every command 
 
 **EWS shared mailbox:** use `--mailbox <email>` on calendar, mail, send, folders, drafts, respond, findtime, delegates, auto-reply, and related flows.
 
+### Structured `--json` errors
+
+When a command fails under `--json`, the error is a structured object (mirroring Microsoft
+Graph's own `{ "error": { "code", "message" } }` shape) instead of a bare string:
+
+```json
+{
+  "error": {
+    "message": "The specified object was not found in the store.",
+    "code": "ErrorItemNotFound",
+    "status": 404,
+    "retriable": false,
+    "requestId": "a1b2c3d4-..."
+  }
+}
+```
+
+Only `message` is guaranteed present — `code`/`status`/`retriable`/`requestId` are included when
+the underlying Graph/EWS error carried them. `retriable: true` marks throttling/service-unavailable
+errors (HTTP 429/502/503/504, or a `tooManyRequests`/`serviceNotAvailable` error code) — a signal
+scripts/agents can use to decide whether to back off and retry.
+
 ### Read-Only Mode
 
 When read-only mode is on (`READ_ONLY_MODE=true` in env / `~/.config/m365-agent-cli/.env`, or `--read-only` on the **root** command), the CLI calls `checkReadOnly()` before the listed actions and exits with an error **before** the mutating request is sent.

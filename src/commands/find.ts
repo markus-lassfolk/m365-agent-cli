@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
 import { expandGroup, searchGroups, searchPeople, searchUsers } from '../lib/graph-directory.js';
+import { toJsonError } from '../lib/json-error.js';
 import { findRooms } from '../lib/places-client.js';
 
 export const findCommand = new Command('find')
@@ -33,7 +34,7 @@ export const findCommand = new Command('find')
 
       if (!authResult.success) {
         if (options.json) {
-          console.log(JSON.stringify({ error: authResult.error }, null, 2));
+          console.log(JSON.stringify({ error: toJsonError(authResult.error) }, null, 2));
         } else {
           console.error(`Error: ${authResult.error}`);
           console.error('\nCheck your .env file or run m365-agent-cli auth.');
@@ -51,7 +52,7 @@ export const findCommand = new Command('find')
           if (!roomRes.ok || !roomRes.data) {
             const msg = roomRes.error?.message || 'Room search failed';
             if (options.json) {
-              console.log(JSON.stringify({ error: msg, results: [] }, null, 2));
+              console.log(JSON.stringify({ error: toJsonError(msg), results: [] }, null, 2));
             } else {
               console.error(`Error: ${msg}`);
             }
@@ -232,7 +233,7 @@ export const findCommand = new Command('find')
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
         if (options.json) {
-          console.log(JSON.stringify({ error: message }, null, 2));
+          console.log(JSON.stringify({ error: toJsonError(message) }, null, 2));
         } else {
           console.error(`Error: ${message}`);
         }

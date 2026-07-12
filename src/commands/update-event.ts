@@ -38,6 +38,7 @@ import {
   updateCalendarEvent
 } from '../lib/graph-calendar-client.js';
 import { resolveRoomDisplayNameToPlace } from '../lib/graph-places-helpers.js';
+import { toJsonError } from '../lib/json-error.js';
 import { lookupMimeType } from '../lib/mime-type.js';
 import { checkReadOnly } from '../lib/utils.js';
 import { buildGraphUpdatePatch } from './update-event-graph.js';
@@ -149,7 +150,7 @@ export const updateEventCommand = new Command('update-event')
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Invalid day value';
         if (options.json) {
-          console.log(JSON.stringify({ error: message }, null, 2));
+          console.log(JSON.stringify({ error: toJsonError(message) }, null, 2));
         } else {
           console.error(`Error: ${message}`);
         }
@@ -186,7 +187,7 @@ export const updateEventCommand = new Command('update-event')
               graphToken = ga.token;
             } else if (backend === 'graph') {
               if (options.json) {
-                console.log(JSON.stringify({ error: 'Failed to determine user email' }, null, 2));
+                console.log(JSON.stringify({ error: toJsonError('Failed to determine user email') }, null, 2));
               } else {
                 console.error('Error: Failed to determine user email');
               }
@@ -198,7 +199,9 @@ export const updateEventCommand = new Command('update-event')
             }
           } else if (backend === 'graph') {
             if (options.json) {
-              console.log(JSON.stringify({ error: lv.error?.message || 'Failed to list calendar' }, null, 2));
+              console.log(
+                JSON.stringify({ error: toJsonError(lv.error?.message || 'Failed to list calendar') }, null, 2)
+              );
             } else {
               console.error(`Error: ${lv.error?.message || 'Failed to list calendar'}`);
             }
@@ -208,7 +211,7 @@ export const updateEventCommand = new Command('update-event')
           }
         } else if (backend === 'graph') {
           if (options.json) {
-            console.log(JSON.stringify({ error: ga.error || 'Graph authentication failed' }, null, 2));
+            console.log(JSON.stringify({ error: toJsonError(ga.error || 'Graph authentication failed') }, null, 2));
           } else {
             console.error(`Error: ${ga.error || 'Graph authentication failed'}`);
           }
@@ -225,7 +228,7 @@ export const updateEventCommand = new Command('update-event')
 
         if (!authResult.success) {
           if (options.json) {
-            console.log(JSON.stringify({ error: authResult.error }, null, 2));
+            console.log(JSON.stringify({ error: toJsonError(authResult.error) }, null, 2));
           } else {
             console.error(`Error: ${authResult.error}`);
             console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
@@ -242,7 +245,9 @@ export const updateEventCommand = new Command('update-event')
 
         if (!result.ok || !result.data) {
           if (options.json) {
-            console.log(JSON.stringify({ error: result.error?.message || 'Failed to fetch events' }, null, 2));
+            console.log(
+              JSON.stringify({ error: toJsonError(result.error?.message || 'Failed to fetch events') }, null, 2)
+            );
           } else {
             console.error(`Error: ${result.error?.message || 'Failed to fetch events'}`);
           }
@@ -408,7 +413,7 @@ export const updateEventCommand = new Command('update-event')
             } catch (err) {
               const message = err instanceof Error ? err.message : 'Invalid instance date';
               if (options.json) {
-                console.log(JSON.stringify({ error: message }, null, 2));
+                console.log(JSON.stringify({ error: toJsonError(message) }, null, 2));
               } else {
                 console.error(`Error: ${message}`);
               }
@@ -467,7 +472,7 @@ export const updateEventCommand = new Command('update-event')
             } catch (err) {
               const message = err instanceof Error ? err.message : 'Invalid instance date';
               if (options.json) {
-                console.log(JSON.stringify({ error: message }, null, 2));
+                console.log(JSON.stringify({ error: toJsonError(message) }, null, 2));
               } else {
                 console.error(`Error: ${message}`);
               }
@@ -660,7 +665,7 @@ export const updateEventCommand = new Command('update-event')
           if (!gd) {
             if (backend === 'graph') {
               if (options.json) {
-                console.log(JSON.stringify({ error: 'Could not load event for attachments' }, null, 2));
+                console.log(JSON.stringify({ error: toJsonError('Could not load event for attachments') }, null, 2));
               } else {
                 console.error(`Could not load event: ${options.id}`);
               }
@@ -675,7 +680,7 @@ export const updateEventCommand = new Command('update-event')
                 console.log(
                   JSON.stringify(
                     {
-                      error: 'Only the organizer can update this event. Use `respond` if you were invited.'
+                      error: toJsonError('Only the organizer can update this event. Use `respond` if you were invited.')
                     },
                     null,
                     2
@@ -717,7 +722,9 @@ export const updateEventCommand = new Command('update-event')
             }
             if (backend === 'graph') {
               if (options.json) {
-                console.log(JSON.stringify({ error: att.error?.message || 'Failed to add attachments' }, null, 2));
+                console.log(
+                  JSON.stringify({ error: toJsonError(att.error?.message || 'Failed to add attachments') }, null, 2)
+                );
               } else {
                 console.error(`Error: ${att.error?.message || 'Failed to add attachments'}`);
               }
@@ -729,7 +736,7 @@ export const updateEventCommand = new Command('update-event')
           }
         } else if (backend === 'graph') {
           if (options.json) {
-            console.log(JSON.stringify({ error: ga.error || 'Graph authentication failed' }, null, 2));
+            console.log(JSON.stringify({ error: toJsonError(ga.error || 'Graph authentication failed') }, null, 2));
           } else {
             console.error(`Error: ${ga.error || 'Graph authentication failed'}`);
           }
@@ -762,7 +769,9 @@ export const updateEventCommand = new Command('update-event')
                   console.log(
                     JSON.stringify(
                       {
-                        error: 'Only the organizer can update this event. Use `respond` if you were invited.'
+                        error: toJsonError(
+                          'Only the organizer can update this event. Use `respond` if you were invited.'
+                        )
                       },
                       null,
                       2
@@ -797,7 +806,7 @@ export const updateEventCommand = new Command('update-event')
               } catch (err) {
                 const message = err instanceof Error ? err.message : 'Invalid time';
                 if (options.json) {
-                  console.log(JSON.stringify({ error: message }, null, 2));
+                  console.log(JSON.stringify({ error: toJsonError(message) }, null, 2));
                 } else {
                   console.error(`Error: ${message}`);
                 }
@@ -814,7 +823,7 @@ export const updateEventCommand = new Command('update-event')
                   const rr = await resolveRoomDisplayNameToPlace(ga.token, options.room);
                   if (!rr.ok) {
                     if (options.json) {
-                      console.log(JSON.stringify({ error: rr.error }, null, 2));
+                      console.log(JSON.stringify({ error: toJsonError(rr.error) }, null, 2));
                     } else {
                       console.error(`Error: ${rr.error}`);
                     }
@@ -837,7 +846,7 @@ export const updateEventCommand = new Command('update-event')
                 } catch (err) {
                   const message = err instanceof Error ? err.message : 'Invalid --locations-json file';
                   if (options.json) {
-                    console.log(JSON.stringify({ error: message }, null, 2));
+                    console.log(JSON.stringify({ error: toJsonError(message) }, null, 2));
                   } else {
                     console.error(`Error: ${message}`);
                   }
@@ -852,7 +861,7 @@ export const updateEventCommand = new Command('update-event')
                 if (!showAsAllowed.has(key)) {
                   const msg = `Invalid --show-as "${options.showAs}". Use: free, tentative, busy, oof, workingElsewhere, unknown.`;
                   if (options.json) {
-                    console.log(JSON.stringify({ error: msg }, null, 2));
+                    console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
                   } else {
                     console.error(`Error: ${msg}`);
                   }
@@ -922,7 +931,7 @@ export const updateEventCommand = new Command('update-event')
 
               if (Object.keys(patch).length === 0) {
                 if (options.json) {
-                  console.log(JSON.stringify({ error: 'No field updates to apply' }, null, 2));
+                  console.log(JSON.stringify({ error: toJsonError('No field updates to apply') }, null, 2));
                 } else {
                   console.error('No field updates to apply.');
                 }
@@ -945,7 +954,11 @@ export const updateEventCommand = new Command('update-event')
                       if (backend === 'graph') {
                         if (options.json) {
                           console.log(
-                            JSON.stringify({ error: att.error?.message || 'Failed to add attachments' }, null, 2)
+                            JSON.stringify(
+                              { error: toJsonError(att.error?.message || 'Failed to add attachments') },
+                              null,
+                              2
+                            )
                           );
                         } else {
                           console.error(`Error: ${att.error?.message || 'Failed to add attachments'}`);
@@ -955,7 +968,11 @@ export const updateEventCommand = new Command('update-event')
                       if (useGraph && backend === 'auto') {
                         if (options.json) {
                           console.log(
-                            JSON.stringify({ error: att.error?.message || 'Failed to add attachments' }, null, 2)
+                            JSON.stringify(
+                              { error: toJsonError(att.error?.message || 'Failed to add attachments') },
+                              null,
+                              2
+                            )
                           );
                         } else {
                           console.error(`Error: ${att.error?.message || 'Failed to add attachments'}`);
@@ -1001,7 +1018,9 @@ export const updateEventCommand = new Command('update-event')
                 }
                 if (backend === 'graph') {
                   if (options.json) {
-                    console.log(JSON.stringify({ error: ur.error?.message || 'Failed to update event' }, null, 2));
+                    console.log(
+                      JSON.stringify({ error: toJsonError(ur.error?.message || 'Failed to update event') }, null, 2)
+                    );
                   } else {
                     console.error(`Error: ${ur.error?.message || 'Failed to update event'}`);
                   }
@@ -1012,9 +1031,10 @@ export const updateEventCommand = new Command('update-event')
                     console.log(
                       JSON.stringify(
                         {
-                          error:
+                          error: toJsonError(
                             ur.error?.message ||
-                            'Graph update failed; cannot fall back to EWS when using Graph calendar data.'
+                              'Graph update failed; cannot fall back to EWS when using Graph calendar data.'
+                          )
                         },
                         null,
                         2
@@ -1061,9 +1081,10 @@ export const updateEventCommand = new Command('update-event')
                     JSON.stringify(
                       {
                         ...payload,
-                        error:
+                        error: toJsonError(
                           graphGetErr ||
-                          'Failed to load event from Graph; cannot fall back to EWS when using Graph calendar data.',
+                            'Failed to load event from Graph; cannot fall back to EWS when using Graph calendar data.'
+                        ),
                         cannotFallbackToEws: true
                       },
                       null,
@@ -1084,14 +1105,14 @@ export const updateEventCommand = new Command('update-event')
             }
           } else if (useGraph && backend === 'auto') {
             if (options.json) {
-              console.log(JSON.stringify({ error: ga.error || 'Graph authentication failed' }, null, 2));
+              console.log(JSON.stringify({ error: toJsonError(ga.error || 'Graph authentication failed') }, null, 2));
             } else {
               console.error(`Error: ${ga.error || 'Graph authentication failed'}`);
             }
             process.exit(1);
           } else if (backend === 'graph') {
             if (options.json) {
-              console.log(JSON.stringify({ error: ga.error || 'Graph authentication failed' }, null, 2));
+              console.log(JSON.stringify({ error: toJsonError(ga.error || 'Graph authentication failed') }, null, 2));
             } else {
               console.error(`Error: ${ga.error || 'Graph authentication failed'}`);
             }
@@ -1135,7 +1156,7 @@ export const updateEventCommand = new Command('update-event')
               } catch (err) {
                 const message = err instanceof Error ? err.message : 'Invalid start time';
                 if (options.json) {
-                  console.log(JSON.stringify({ error: message }, null, 2));
+                  console.log(JSON.stringify({ error: toJsonError(message) }, null, 2));
                 } else {
                   console.error(`Error: ${message}`);
                 }
@@ -1150,7 +1171,7 @@ export const updateEventCommand = new Command('update-event')
               } catch (err) {
                 const message = err instanceof Error ? err.message : 'Invalid end time';
                 if (options.json) {
-                  console.log(JSON.stringify({ error: message }, null, 2));
+                  console.log(JSON.stringify({ error: toJsonError(message) }, null, 2));
                 } else {
                   console.error(`Error: ${message}`);
                 }
@@ -1249,7 +1270,9 @@ export const updateEventCommand = new Command('update-event')
 
           if (!updateResult.ok) {
             if (options.json) {
-              console.log(JSON.stringify({ error: updateResult.error?.message || 'Failed to update event' }, null, 2));
+              console.log(
+                JSON.stringify({ error: toJsonError(updateResult.error?.message || 'Failed to update event') }, null, 2)
+              );
             } else {
               console.error(`\nError: ${updateResult.error?.message || 'Failed to update event'}`);
             }
@@ -1268,7 +1291,7 @@ export const updateEventCommand = new Command('update-event')
           const msg =
             'Failed to add attachments: the Graph attachment attempt failed and no EWS fallback was available. Retry with M365_EXCHANGE_BACKEND=ews.';
           if (options.json) {
-            console.log(JSON.stringify({ error: msg }, null, 2));
+            console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
           } else {
             console.error(`\nError: ${msg}`);
           }
@@ -1283,7 +1306,13 @@ export const updateEventCommand = new Command('update-event')
         );
         if (!attachResult.ok) {
           if (options.json) {
-            console.log(JSON.stringify({ error: attachResult.error?.message || 'Failed to add attachments' }, null, 2));
+            console.log(
+              JSON.stringify(
+                { error: toJsonError(attachResult.error?.message || 'Failed to add attachments') },
+                null,
+                2
+              )
+            );
           } else {
             console.error(`\nError: ${attachResult.error?.message || 'Failed to add attachments'}`);
           }

@@ -26,6 +26,7 @@ import {
 import { getExchangeBackend } from '../lib/exchange-backend.js';
 import { warnAutoGraphToEwsFallback } from '../lib/exchange-fallback-hint.js';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
+import { toJsonError } from '../lib/json-error.js';
 import { markdownToHtml } from '../lib/markdown.js';
 import { lookupMimeType } from '../lib/mime-type.js';
 import { safeAttachmentFileName, writeInternetShortcutUtf8File } from '../lib/safe-filename.js';
@@ -289,7 +290,9 @@ Shared mailbox: add --mailbox shared@contoso.com. Full flags: docs/CLI_REFERENCE
         if (options.json) {
           console.log(
             JSON.stringify({
-              error: 'There is no `mail folders` subcommand. Use the top-level `folders` command to list mail folders.',
+              error: toJsonError(
+                'There is no `mail folders` subcommand. Use the top-level `folders` command to list mail folders.'
+              ),
               hint: 'm365-agent-cli folders [--mailbox <email>]'
             })
           );
@@ -317,7 +320,7 @@ Shared mailbox: add --mailbox shared@contoso.com. Full flags: docs/CLI_REFERENCE
           if (!ga.success || !ga.token) {
             const msg = ga.error || 'Graph authentication failed';
             if (options.json) {
-              console.log(JSON.stringify({ error: msg }, null, 2));
+              console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
             } else {
               console.error(`Error: ${msg}`);
             }
@@ -325,7 +328,7 @@ Shared mailbox: add --mailbox shared@contoso.com. Full flags: docs/CLI_REFERENCE
           }
           const detail = describeMailGraphUnhandledCombination(mailGraphOpts);
           if (options.json) {
-            console.log(JSON.stringify({ error: detail }, null, 2));
+            console.log(JSON.stringify({ error: toJsonError(detail) }, null, 2));
           } else {
             console.error(detail);
           }
@@ -350,7 +353,7 @@ Shared mailbox: add --mailbox shared@contoso.com. Full flags: docs/CLI_REFERENCE
 
       if (!authResult.success) {
         if (options.json) {
-          console.log(JSON.stringify({ error: authResult.error }, null, 2));
+          console.log(JSON.stringify({ error: toJsonError(authResult.error) }, null, 2));
         } else {
           console.error(`Error: ${authResult.error}`);
           console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
@@ -409,7 +412,9 @@ Shared mailbox: add --mailbox shared@contoso.com. Full flags: docs/CLI_REFERENCE
 
       if (!result.ok || !result.data) {
         if (options.json) {
-          console.log(JSON.stringify({ error: result.error?.message || 'Failed to fetch emails' }, null, 2));
+          console.log(
+            JSON.stringify({ error: toJsonError(result.error?.message || 'Failed to fetch emails') }, null, 2)
+          );
         } else {
           console.error(`Error: ${result.error?.message || 'Failed to fetch emails'}`);
         }

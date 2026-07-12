@@ -7,6 +7,7 @@ import { getExchangeBackend } from '../lib/exchange-backend.js';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
 import { callGraph } from '../lib/graph-client.js';
 import type { FindMeetingTimesRequest } from '../lib/graph-schedule.js';
+import { toJsonError } from '../lib/json-error.js';
 import { buildFindMeetingTimesLocationConstraint } from '../lib/meeting-location-constraint.js';
 import { runFindTimeGraph, runFindTimeGraphSchedule } from './findtime-graph.js';
 
@@ -171,7 +172,7 @@ export const findtimeCommand = new Command('findtime')
           });
           if (!authResult.success) {
             if (options.json) {
-              console.log(JSON.stringify({ error: authResult.error }, null, 2));
+              console.log(JSON.stringify({ error: toJsonError(authResult.error) }, null, 2));
             } else {
               console.error(`Error: ${authResult.error}`);
               console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
@@ -182,7 +183,7 @@ export const findtimeCommand = new Command('findtime')
           const userInfo = await getOwaUserInfo(ewsToken!);
           if (!userInfo.ok || !userInfo.data?.email) {
             if (options.json) {
-              console.log(JSON.stringify({ error: 'Failed to determine user email' }, null, 2));
+              console.log(JSON.stringify({ error: toJsonError('Failed to determine user email') }, null, 2));
             } else {
               console.error('Error: Failed to determine user email');
             }
@@ -198,7 +199,7 @@ export const findtimeCommand = new Command('findtime')
           });
           if (!ga.success || !ga.token) {
             if (options.json) {
-              console.log(JSON.stringify({ error: ga.error || 'Graph authentication failed' }, null, 2));
+              console.log(JSON.stringify({ error: toJsonError(ga.error || 'Graph authentication failed') }, null, 2));
             } else {
               console.error(`Error: ${ga.error || 'Graph authentication failed'}`);
             }
@@ -212,7 +213,7 @@ export const findtimeCommand = new Command('findtime')
           const myEmail = me.data?.mail || me.data?.userPrincipalName;
           if (!myEmail) {
             if (options.json) {
-              console.log(JSON.stringify({ error: 'Failed to determine user email' }, null, 2));
+              console.log(JSON.stringify({ error: toJsonError('Failed to determine user email') }, null, 2));
             } else {
               console.error('Error: Failed to determine user email');
             }
@@ -245,7 +246,7 @@ export const findtimeCommand = new Command('findtime')
             });
             if (!authResult.success) {
               if (options.json) {
-                console.log(JSON.stringify({ error: authResult.error }, null, 2));
+                console.log(JSON.stringify({ error: toJsonError(authResult.error) }, null, 2));
               } else {
                 console.error(`Error: ${authResult.error}`);
                 console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
@@ -256,7 +257,7 @@ export const findtimeCommand = new Command('findtime')
             const userInfo = await getOwaUserInfo(ewsToken!);
             if (!userInfo.ok || !userInfo.data?.email) {
               if (options.json) {
-                console.log(JSON.stringify({ error: 'Failed to determine user email' }, null, 2));
+                console.log(JSON.stringify({ error: toJsonError('Failed to determine user email') }, null, 2));
               } else {
                 console.error('Error: Failed to determine user email');
               }
@@ -284,7 +285,7 @@ export const findtimeCommand = new Command('findtime')
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Invalid date value';
         if (options.json) {
-          console.log(JSON.stringify({ error: message }, null, 2));
+          console.log(JSON.stringify({ error: toJsonError(message) }, null, 2));
         } else {
           console.error(`Error: ${message}`);
         }
@@ -320,7 +321,7 @@ export const findtimeCommand = new Command('findtime')
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Invalid --find-meeting-json file';
           if (options.json) {
-            console.log(JSON.stringify({ error: message }, null, 2));
+            console.log(JSON.stringify({ error: toJsonError(message) }, null, 2));
           } else {
             console.error(`Error: ${message}`);
           }
@@ -336,7 +337,7 @@ export const findtimeCommand = new Command('findtime')
           });
           if (!ar.success) {
             if (options.json) {
-              console.log(JSON.stringify({ error: ar.error }, null, 2));
+              console.log(JSON.stringify({ error: toJsonError(ar.error) }, null, 2));
             } else {
               console.error(`Error: ${ar.error}`);
               console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
@@ -358,7 +359,9 @@ export const findtimeCommand = new Command('findtime')
 
         if (!result.ok || !result.data) {
           if (options.json) {
-            console.log(JSON.stringify({ error: result.error?.message || 'Failed to find meeting times' }, null, 2));
+            console.log(
+              JSON.stringify({ error: toJsonError(result.error?.message || 'Failed to find meeting times') }, null, 2)
+            );
           } else {
             console.error(`Error: ${result.error?.message || 'Failed to find meeting times'}`);
           }
@@ -428,7 +431,7 @@ export const findtimeCommand = new Command('findtime')
           });
           if (!ga.success || !ga.token) {
             if (options.json) {
-              console.log(JSON.stringify({ error: ga.error || 'Graph authentication failed' }, null, 2));
+              console.log(JSON.stringify({ error: toJsonError(ga.error || 'Graph authentication failed') }, null, 2));
             } else {
               console.error(`Error: ${ga.error || 'Graph authentication failed'}`);
             }
@@ -469,7 +472,9 @@ export const findtimeCommand = new Command('findtime')
           return;
         }
         if (options.json) {
-          console.log(JSON.stringify({ error: `findMeetingTimes: ${g.error}; getSchedule: ${gs.error}` }, null, 2));
+          console.log(
+            JSON.stringify({ error: toJsonError(`findMeetingTimes: ${g.error}; getSchedule: ${gs.error}`) }, null, 2)
+          );
         } else {
           console.error(`Error: findMeetingTimes failed (${g.error}). getSchedule failed (${gs.error}).`);
         }

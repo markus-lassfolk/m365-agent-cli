@@ -20,7 +20,7 @@ verification / a product decision)
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
-| 5 | Structured error envelope in `--json` mode | ⬜ | `{ error: { code, message, retriable, graphCode, requestId } }` instead of a bare string, surfacing what `graph-client.ts` already captures internally. |
+| 5 | Structured error envelope in `--json` mode | ✅ | `{ error: { message, code?, status?, retriable?, requestId? } }` (mirrors Graph's own error shape) instead of a bare string. `toJsonError()` in `src/lib/json-error.ts` normalizes any input (GraphError/OwaError object, string, Error, undefined); applied at all ~168 `--json` error print sites across 21 command files. Sites that already had the full error object (not just its pre-extracted `.message`) get full `code`/`status`/`requestId` fidelity; sites that only ever held a message string still get the consistent shape but without those extra fields — a follow-up could thread the full error object through more call sites for richer fidelity everywhere. |
 | 6 | Auto-chunking Graph `$batch` helper | ⬜ | Accept N requests, transparently split into ≤20-request batches, merge results. |
 | 7 | Opt-in read cache with TTL | ⬜ | `--cache <dur>` / `M365_CACHE_TTL` for idempotent GETs (folder lists, room lists, user lookups). |
 | 8 | `whoami --capabilities` — decode token scopes → usable command groups | ⬜ | Presentation layer over the scope-decoding `verify-token` already does. |

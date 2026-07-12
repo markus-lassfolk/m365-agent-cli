@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import { describeProgram, findCommandManifestByPath } from '../lib/command-manifest.js';
+import { toJsonError } from '../lib/json-error.js';
 
 export const describeCommand = new Command('describe')
   .description(
@@ -13,7 +14,7 @@ export const describeCommand = new Command('describe')
     // circular import back to m365-program.ts (which registers this command).
     const root = cmd.parent;
     if (!root) {
-      console.log(JSON.stringify({ error: 'describe: could not resolve the root command' }, null, 2));
+      console.log(JSON.stringify({ error: toJsonError('describe: could not resolve the root command') }, null, 2));
       process.exit(1);
     }
 
@@ -22,7 +23,9 @@ export const describeCommand = new Command('describe')
     if (options.command) {
       const found = findCommandManifestByPath(manifest, options.command);
       if (!found) {
-        console.log(JSON.stringify({ error: `describe: no command found at path "${options.command}"` }, null, 2));
+        console.log(
+          JSON.stringify({ error: toJsonError(`describe: no command found at path "${options.command}"`) }, null, 2)
+        );
         process.exit(1);
       }
       console.log(JSON.stringify(found, null, 2));

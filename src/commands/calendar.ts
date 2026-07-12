@@ -32,6 +32,7 @@ import {
   listEventAttachments
 } from '../lib/graph-calendar-client.js';
 import { normalizeGraphDateTimeForParsing } from '../lib/graph-datetime.js';
+import { toJsonError } from '../lib/json-error.js';
 import { safeAttachmentFileName, writeInternetShortcutUtf8File } from '../lib/safe-filename.js';
 import { buildCreateEventCommand } from './create-event.js';
 
@@ -515,7 +516,7 @@ function buildCalendarListCommand(): Command {
           const msg =
             'Option --calendar is only supported with Microsoft Graph. Set M365_EXCHANGE_BACKEND=graph or auto, or omit --calendar.';
           if (options.json) {
-            console.log(JSON.stringify({ error: msg }, null, 2));
+            console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
           } else {
             console.error(`Error: ${msg}`);
           }
@@ -534,7 +535,9 @@ function buildCalendarListCommand(): Command {
           const eventRes = await getEvent(graphToken, eventId, mailbox);
           if (!eventRes.ok || !eventRes.data) {
             if (options.json) {
-              console.log(JSON.stringify({ error: eventRes.error?.message || 'Event not found' }, null, 2));
+              console.log(
+                JSON.stringify({ error: toJsonError(eventRes.error?.message || 'Event not found') }, null, 2)
+              );
             } else {
               console.error(`Error: ${eventRes.error?.message || 'Event not found'}`);
             }
@@ -543,7 +546,9 @@ function buildCalendarListCommand(): Command {
           const attsRes = await listEventAttachments(graphToken, eventId, mailbox);
           if (!attsRes.ok || !attsRes.data) {
             if (options.json) {
-              console.log(JSON.stringify({ error: attsRes.error?.message || 'Failed to list attachments' }, null, 2));
+              console.log(
+                JSON.stringify({ error: toJsonError(attsRes.error?.message || 'Failed to list attachments') }, null, 2)
+              );
             } else {
               console.error(`Error: ${attsRes.error?.message || 'Failed to list attachments'}`);
             }
@@ -596,7 +601,7 @@ function buildCalendarListCommand(): Command {
             }
             if (backend === 'graph') {
               if (options.json) {
-                console.log(JSON.stringify({ error: ga.error || 'Graph authentication failed' }, null, 2));
+                console.log(JSON.stringify({ error: toJsonError(ga.error || 'Graph authentication failed') }, null, 2));
               } else {
                 console.error(`Error: ${ga.error || 'Graph authentication failed'}`);
               }
@@ -617,7 +622,7 @@ function buildCalendarListCommand(): Command {
 
           if (!authResult.success) {
             if (options.json) {
-              console.log(JSON.stringify({ error: authResult.error }, null, 2));
+              console.log(JSON.stringify({ error: toJsonError(authResult.error) }, null, 2));
             } else {
               console.error(`Error: ${authResult.error}`);
               console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
@@ -670,7 +675,9 @@ function buildCalendarListCommand(): Command {
               const eventRes = await getEvent(ga.token, eventId, mailbox);
               if (!eventRes.ok || !eventRes.data) {
                 if (options.json)
-                  console.log(JSON.stringify({ error: eventRes.error?.message || 'Event not found' }, null, 2));
+                  console.log(
+                    JSON.stringify({ error: toJsonError(eventRes.error?.message || 'Event not found') }, null, 2)
+                  );
                 else console.error(`Error: ${eventRes.error?.message || 'Event not found'}`);
                 process.exit(1);
               }
@@ -684,7 +691,11 @@ function buildCalendarListCommand(): Command {
               if (!attsRes.ok || !attsRes.data) {
                 if (options.json)
                   console.log(
-                    JSON.stringify({ error: attsRes.error?.message || 'Failed to fetch attachments' }, null, 2)
+                    JSON.stringify(
+                      { error: toJsonError(attsRes.error?.message || 'Failed to fetch attachments') },
+                      null,
+                      2
+                    )
                   );
                 else console.error(`Error: ${attsRes.error?.message || 'Failed to fetch attachments'}`);
                 process.exit(1);
@@ -774,7 +785,7 @@ function buildCalendarListCommand(): Command {
             }
             if (backend === 'graph') {
               if (options.json) {
-                console.log(JSON.stringify({ error: ga.error || 'Graph authentication failed' }, null, 2));
+                console.log(JSON.stringify({ error: toJsonError(ga.error || 'Graph authentication failed') }, null, 2));
               } else {
                 console.error(`Error: ${ga.error || 'Graph authentication failed'}`);
               }
@@ -795,7 +806,7 @@ function buildCalendarListCommand(): Command {
 
           if (!authResult.success) {
             if (options.json) {
-              console.log(JSON.stringify({ error: authResult.error }, null, 2));
+              console.log(JSON.stringify({ error: toJsonError(authResult.error) }, null, 2));
             } else {
               console.error(`Error: ${authResult.error}`);
               console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
@@ -808,7 +819,9 @@ function buildCalendarListCommand(): Command {
           const eventRes = await getCalendarEvent(token, eventId, mailbox);
           if (!eventRes.ok || !eventRes.data) {
             if (options.json)
-              console.log(JSON.stringify({ error: eventRes.error?.message || 'Event not found' }, null, 2));
+              console.log(
+                JSON.stringify({ error: toJsonError(eventRes.error?.message || 'Event not found') }, null, 2)
+              );
             else console.error(`Error: ${eventRes.error?.message || 'Event not found'}`);
             process.exit(1);
           }
@@ -820,7 +833,9 @@ function buildCalendarListCommand(): Command {
           const attsRes = await getAttachments(token, eventId, mailbox);
           if (!attsRes.ok || !attsRes.data) {
             if (options.json)
-              console.log(JSON.stringify({ error: attsRes.error?.message || 'Failed to fetch attachments' }, null, 2));
+              console.log(
+                JSON.stringify({ error: toJsonError(attsRes.error?.message || 'Failed to fetch attachments') }, null, 2)
+              );
             else console.error(`Error: ${attsRes.error?.message || 'Failed to fetch attachments'}`);
             process.exit(1);
           }
@@ -910,7 +925,7 @@ function buildCalendarListCommand(): Command {
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           if (options.json) {
-            console.log(JSON.stringify({ error: message }, null, 2));
+            console.log(JSON.stringify({ error: toJsonError(message) }, null, 2));
           } else {
             console.error(`Error: ${message}`);
           }
@@ -986,7 +1001,11 @@ function buildCalendarListCommand(): Command {
             if (backend === 'graph') {
               if (options.json) {
                 console.log(
-                  JSON.stringify({ error: graphResult.error?.message || 'Failed to fetch calendar (Graph)' }, null, 2)
+                  JSON.stringify(
+                    { error: toJsonError(graphResult.error?.message || 'Failed to fetch calendar (Graph)') },
+                    null,
+                    2
+                  )
                 );
               } else {
                 console.error(`Error: ${graphResult.error?.message || 'Failed to fetch calendar (Graph)'}`);
@@ -996,7 +1015,7 @@ function buildCalendarListCommand(): Command {
             if (graphCalendarId) {
               const msg = `${graphResult.error?.message || 'Failed to fetch calendar (Graph)'}. Option --calendar requires Microsoft Graph; cannot fall back to EWS.`;
               if (options.json) {
-                console.log(JSON.stringify({ error: msg }, null, 2));
+                console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
               } else {
                 console.error(`Error: ${msg}`);
               }
@@ -1010,7 +1029,7 @@ function buildCalendarListCommand(): Command {
             });
           } else if (backend === 'graph') {
             if (options.json) {
-              console.log(JSON.stringify({ error: ga.error || 'Graph authentication failed' }, null, 2));
+              console.log(JSON.stringify({ error: toJsonError(ga.error || 'Graph authentication failed') }, null, 2));
             } else {
               console.error(`Error: ${ga.error || 'Graph authentication failed'}`);
             }
@@ -1018,7 +1037,7 @@ function buildCalendarListCommand(): Command {
           } else if (graphCalendarId) {
             const msg = `Graph authentication failed (${ga.error || 'unknown'}). Option --calendar requires Microsoft Graph.`;
             if (options.json) {
-              console.log(JSON.stringify({ error: msg }, null, 2));
+              console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
             } else {
               console.error(`Error: ${msg}`);
             }
@@ -1040,7 +1059,7 @@ function buildCalendarListCommand(): Command {
 
         if (!authResult.success) {
           if (options.json) {
-            console.log(JSON.stringify({ error: authResult.error }, null, 2));
+            console.log(JSON.stringify({ error: toJsonError(authResult.error) }, null, 2));
           } else {
             console.error(`Error: ${authResult.error}`);
             console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
@@ -1052,7 +1071,9 @@ function buildCalendarListCommand(): Command {
 
         if (!result.ok || !result.data) {
           if (options.json) {
-            console.log(JSON.stringify({ error: result.error?.message || 'Failed to fetch events' }, null, 2));
+            console.log(
+              JSON.stringify({ error: toJsonError(result.error?.message || 'Failed to fetch events') }, null, 2)
+            );
           } else {
             console.error(`Error: ${result.error?.message || 'Failed to fetch events'}`);
           }

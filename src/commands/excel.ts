@@ -52,6 +52,7 @@ import {
   listExcelWorkbookComments,
   patchExcelWorkbookComment
 } from '../lib/graph-excel-comments-client.js';
+import { toJsonError } from '../lib/json-error.js';
 import { checkReadOnly } from '../lib/utils.js';
 
 export const excelCommand = new Command('excel').description(
@@ -1683,7 +1684,7 @@ excelCommand
       const r = await closeExcelWorkbookSession(auth.token, itemId, opts.sessionId, resolveDriveLocationForCli(opts));
       if (!r.ok) {
         if (opts.json) {
-          console.log(JSON.stringify({ error: r.error?.message || 'Failed' }, null, 2));
+          console.log(JSON.stringify({ error: toJsonError(r.error?.message || 'Failed') }, null, 2));
         } else {
           console.error(`Error: ${r.error?.message}`);
         }
@@ -1724,7 +1725,7 @@ excelCommand
       const r = await refreshExcelWorkbookSession(auth.token, itemId, opts.sessionId, resolveDriveLocationForCli(opts));
       if (!r.ok) {
         if (opts.json) {
-          console.log(JSON.stringify({ error: r.error?.message || 'Failed' }, null, 2));
+          console.log(JSON.stringify({ error: toJsonError(r.error?.message || 'Failed') }, null, 2));
         } else {
           console.error(`Error: ${r.error?.message}`);
         }

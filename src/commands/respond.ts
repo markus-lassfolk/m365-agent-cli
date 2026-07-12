@@ -14,6 +14,7 @@ import { type GraphCalendarEvent, getEvent, listCalendarView } from '../lib/grap
 import type { GraphResponse } from '../lib/graph-client.js';
 import { normalizeGraphDateTimeForParsing } from '../lib/graph-datetime.js';
 import { acceptEventInvitation, declineEventInvitation, tentativelyAcceptEventInvitation } from '../lib/graph-event.js';
+import { toJsonError } from '../lib/json-error.js';
 import { checkReadOnly } from '../lib/utils.js';
 
 function formatTime(dateStr: string): string {
@@ -97,7 +98,7 @@ export const respondCommand = new Command('respond')
         if (!ga.success || !ga.token) {
           if (backend === 'graph') {
             if (options.json) {
-              console.log(JSON.stringify({ error: ga.error || 'Graph authentication failed' }, null, 2));
+              console.log(JSON.stringify({ error: toJsonError(ga.error || 'Graph authentication failed') }, null, 2));
             } else {
               console.error(`Error: ${ga.error || 'Graph authentication failed'}`);
             }
@@ -109,7 +110,7 @@ export const respondCommand = new Command('respond')
         if (!attendeeEmail) {
           if (backend === 'graph') {
             if (options.json) {
-              console.log(JSON.stringify({ error: 'Failed to determine user email' }, null, 2));
+              console.log(JSON.stringify({ error: toJsonError('Failed to determine user email') }, null, 2));
             } else {
               console.error('Error: Failed to determine user email');
             }
@@ -128,7 +129,9 @@ export const respondCommand = new Command('respond')
         if (!lv.ok || !lv.data) {
           if (backend === 'graph') {
             if (options.json) {
-              console.log(JSON.stringify({ error: lv.error?.message || 'Failed to fetch events' }, null, 2));
+              console.log(
+                JSON.stringify({ error: toJsonError(lv.error?.message || 'Failed to fetch events') }, null, 2)
+              );
             } else {
               console.error(`Error: ${lv.error?.message || 'Failed to fetch events'}`);
             }
@@ -215,7 +218,7 @@ export const respondCommand = new Command('respond')
 
         if (!authResult.success) {
           if (options.json) {
-            console.log(JSON.stringify({ error: authResult.error }, null, 2));
+            console.log(JSON.stringify({ error: toJsonError(authResult.error) }, null, 2));
           } else {
             console.error(`Error: ${authResult.error}`);
             console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
@@ -229,7 +232,7 @@ export const respondCommand = new Command('respond')
 
         if (!attendeeEmail) {
           if (options.json) {
-            console.log(JSON.stringify({ error: 'Failed to determine user email' }, null, 2));
+            console.log(JSON.stringify({ error: toJsonError('Failed to determine user email') }, null, 2));
           } else {
             console.error('Error: Failed to determine user email');
           }
@@ -249,7 +252,9 @@ export const respondCommand = new Command('respond')
 
         if (!result.ok || !result.data) {
           if (options.json) {
-            console.log(JSON.stringify({ error: result.error?.message || 'Failed to fetch events' }, null, 2));
+            console.log(
+              JSON.stringify({ error: toJsonError(result.error?.message || 'Failed to fetch events') }, null, 2)
+            );
           } else {
             console.error(`Error: ${result.error?.message || 'Failed to fetch events'}`);
           }
@@ -380,8 +385,9 @@ export const respondCommand = new Command('respond')
                 console.log(
                   JSON.stringify(
                     {
-                      error:
+                      error: toJsonError(
                         "You are the organizer of this meeting. Use 'm365-agent-cli update-event' instead to modify the meeting."
+                      )
                     },
                     null,
                     2
@@ -426,7 +432,7 @@ export const respondCommand = new Command('respond')
 
             if (!gr.ok) {
               if (options.json) {
-                console.log(JSON.stringify({ error: gr.error?.message || 'Failed to respond' }, null, 2));
+                console.log(JSON.stringify({ error: toJsonError(gr.error?.message || 'Failed to respond') }, null, 2));
               } else {
                 console.error(`Error: ${gr.error?.message || 'Failed to respond'}`);
               }
@@ -443,7 +449,9 @@ export const respondCommand = new Command('respond')
           }
           if (backend === 'graph') {
             if (options.json) {
-              console.log(JSON.stringify({ error: eventResult.error?.message || 'Invalid event id' }, null, 2));
+              console.log(
+                JSON.stringify({ error: toJsonError(eventResult.error?.message || 'Invalid event id') }, null, 2)
+              );
             } else {
               console.error(`Invalid event id: ${options.id}`);
             }
@@ -454,7 +462,7 @@ export const respondCommand = new Command('respond')
           }
         } else if (backend === 'graph') {
           if (options.json) {
-            console.log(JSON.stringify({ error: ga.error || 'Graph authentication failed' }, null, 2));
+            console.log(JSON.stringify({ error: toJsonError(ga.error || 'Graph authentication failed') }, null, 2));
           } else {
             console.error(`Error: ${ga.error || 'Graph authentication failed'}`);
           }
@@ -469,7 +477,7 @@ export const respondCommand = new Command('respond')
 
       if (!authResult.success) {
         if (options.json) {
-          console.log(JSON.stringify({ error: authResult.error }, null, 2));
+          console.log(JSON.stringify({ error: toJsonError(authResult.error) }, null, 2));
         } else {
           console.error(`Error: ${authResult.error}`);
           console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
@@ -480,7 +488,7 @@ export const respondCommand = new Command('respond')
       const eventResult = await getCalendarEvent(authResult.token!, options.id, options.mailbox);
       if (!eventResult.ok || !eventResult.data) {
         if (options.json) {
-          console.log(JSON.stringify({ error: `Invalid event id: ${options.id}` }, null, 2));
+          console.log(JSON.stringify({ error: toJsonError(`Invalid event id: ${options.id}`) }, null, 2));
         } else {
           console.error(`Invalid event id: ${options.id}`);
         }
@@ -492,8 +500,9 @@ export const respondCommand = new Command('respond')
           console.log(
             JSON.stringify(
               {
-                error:
+                error: toJsonError(
                   "You are the organizer of this meeting. Use 'm365-agent-cli update-event' instead to modify the meeting."
+                )
               },
               null,
               2
@@ -532,7 +541,7 @@ export const respondCommand = new Command('respond')
 
       if (!response.ok) {
         if (options.json) {
-          console.log(JSON.stringify({ error: response.error?.message || 'Failed to respond' }, null, 2));
+          console.log(JSON.stringify({ error: toJsonError(response.error?.message || 'Failed to respond') }, null, 2));
         } else {
           console.error(`Error: ${response.error?.message || 'Failed to respond'}`);
         }

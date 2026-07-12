@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
+import { toJsonError } from '../lib/json-error.js';
 import { type DateTimeTimeZone, getMailboxSettings, type OofStatus, setMailboxSettings } from '../lib/oof-client.js';
 import { checkReadOnly } from '../lib/utils.js';
 
@@ -40,7 +41,7 @@ export const oofCommand = new Command('oof')
     if (!authResult.success || !authResult.token) {
       const msg = authResult.error || 'Graph authentication failed';
       if (options.json) {
-        console.log(JSON.stringify({ error: msg }, null, 2));
+        console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
       } else {
         console.error(`Error: ${msg}`);
       }
@@ -61,7 +62,7 @@ export const oofCommand = new Command('oof')
       if (!res.ok || !res.data) {
         const msg = res.error?.message || 'Failed to retrieve mailbox settings';
         if (options.json) {
-          console.log(JSON.stringify({ error: msg }, null, 2));
+          console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
         } else {
           console.error(`Error: ${msg}`);
         }
@@ -163,7 +164,7 @@ export const oofCommand = new Command('oof')
     if (errors.length > 0) {
       for (const e of errors) {
         if (options.json) {
-          console.log(JSON.stringify({ error: e }, null, 2));
+          console.log(JSON.stringify({ error: toJsonError(e) }, null, 2));
         } else {
           console.error(`Error: ${e}`);
         }
@@ -205,7 +206,7 @@ export const oofCommand = new Command('oof')
     if (!patchResult.ok) {
       const msg = patchResult.error?.message || 'Failed to update mailbox settings';
       if (options.json) {
-        console.log(JSON.stringify({ error: msg }, null, 2));
+        console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
       } else {
         console.error(`Error: ${msg}`);
       }

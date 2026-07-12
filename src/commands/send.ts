@@ -8,6 +8,7 @@ import { getExchangeBackend } from '../lib/exchange-backend.js';
 import { GRAPH_OUTLOOK_ATTACHMENT_SESSION_THRESHOLD_BYTES } from '../lib/graph-attachment-upload-session.js';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
 import { buildGraphSendMailPayload } from '../lib/graph-send-mail.js';
+import { toJsonError } from '../lib/json-error.js';
 import { markdownToHtml } from '../lib/markdown.js';
 import { lookupMimeType } from '../lib/mime-type.js';
 import {
@@ -171,7 +172,7 @@ export const sendCommand = new Command('send')
 
         if (!authResult.success) {
           if (options.json) {
-            console.log(JSON.stringify({ error: authResult.error }, null, 2));
+            console.log(JSON.stringify({ error: toJsonError(authResult.error) }, null, 2));
           } else {
             console.error(`Error: ${authResult.error}`);
             console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
@@ -195,7 +196,9 @@ export const sendCommand = new Command('send')
 
         if (!result.ok) {
           if (options.json) {
-            console.log(JSON.stringify({ error: result.error?.message || 'Failed to send email' }, null, 2));
+            console.log(
+              JSON.stringify({ error: toJsonError(result.error?.message || 'Failed to send email') }, null, 2)
+            );
           } else {
             console.error(`Error: ${result.error?.message || 'Failed to send email'}`);
           }
@@ -242,7 +245,7 @@ export const sendCommand = new Command('send')
       if (!graphAuth.success || !graphAuth.token) {
         if (backend === 'graph') {
           if (options.json) {
-            console.log(JSON.stringify({ error: graphAuth.error || 'Graph auth failed' }, null, 2));
+            console.log(JSON.stringify({ error: toJsonError(graphAuth.error || 'Graph auth failed') }, null, 2));
           } else {
             console.error(`Error: ${graphAuth.error || 'Graph authentication failed'}`);
             console.error('\nSet EWS_CLIENT_ID and M365_REFRESH_TOKEN for Graph, or run `m365-agent-cli login`.');
@@ -283,7 +286,11 @@ export const sendCommand = new Command('send')
           }
           if (options.json) {
             console.log(
-              JSON.stringify({ error: dr.error?.message || 'Failed to create draft for large attachments' }, null, 2)
+              JSON.stringify(
+                { error: toJsonError(dr.error?.message || 'Failed to create draft for large attachments') },
+                null,
+                2
+              )
             );
           } else {
             console.error(`Error: ${dr.error?.message || 'Failed to create draft for large attachments'}`);
@@ -304,7 +311,9 @@ export const sendCommand = new Command('send')
               return;
             }
             if (options.json) {
-              console.log(JSON.stringify({ error: ar.error?.message || 'Failed to attach file' }, null, 2));
+              console.log(
+                JSON.stringify({ error: toJsonError(ar.error?.message || 'Failed to attach file') }, null, 2)
+              );
             } else {
               console.error(`Error: ${ar.error?.message || 'Failed to attach file'}`);
             }
@@ -324,7 +333,9 @@ export const sendCommand = new Command('send')
               return;
             }
             if (options.json) {
-              console.log(JSON.stringify({ error: lr.error?.message || 'Failed to attach link' }, null, 2));
+              console.log(
+                JSON.stringify({ error: toJsonError(lr.error?.message || 'Failed to attach link') }, null, 2)
+              );
             } else {
               console.error(`Error: ${lr.error?.message || 'Failed to attach link'}`);
             }

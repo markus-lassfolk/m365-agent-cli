@@ -1,7 +1,7 @@
 {
   "version": 1,
   "description": "Graph path patterns from static analysis of callGraph*, graphInvoke*, fetchAllPages, fetchGraphRaw, graphPostBatch. Regenerate: npm run graph:inventory",
-  "generatedAt": "2026-07-12T15:03:15.575Z",
+  "generatedAt": "2026-07-12T15:14:50.555Z",
   "entryCount": 709,
   "entries": [
     {
@@ -13,14 +13,14 @@
     },
     {
       "file": "src/commands/findtime.ts",
-      "line": 208,
+      "line": 209,
       "callee": "callGraph",
       "pattern": "/me?$select=mail,userPrincipalName",
       "kind": "literal"
     },
     {
       "file": "src/commands/findtime.ts",
-      "line": 232,
+      "line": 233,
       "callee": "callGraph",
       "pattern": "/me?$select=mail,userPrincipalName",
       "kind": "literal"
@@ -41,7 +41,7 @@
     },
     {
       "file": "src/commands/whoami.ts",
-      "line": 16,
+      "line": 17,
       "callee": "callGraph",
       "pattern": "/me",
       "kind": "literal"

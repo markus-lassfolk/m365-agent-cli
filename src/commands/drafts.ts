@@ -15,6 +15,7 @@ import {
 } from '../lib/ews-client.js';
 import { getExchangeBackend } from '../lib/exchange-backend.js';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
+import { toJsonError } from '../lib/json-error.js';
 import { markdownToHtml } from '../lib/markdown.js';
 import { lookupMimeType } from '../lib/mime-type.js';
 import { getMessage, listMessagesInFolder } from '../lib/outlook-graph-client.js';
@@ -119,7 +120,9 @@ export const draftsCommand = new Command('drafts')
             if (!full.ok || !full.data) {
               if (backend === 'graph') {
                 if (options.json) {
-                  console.log(JSON.stringify({ error: full.error?.message || 'Failed to fetch draft' }, null, 2));
+                  console.log(
+                    JSON.stringify({ error: toJsonError(full.error?.message || 'Failed to fetch draft') }, null, 2)
+                  );
                 } else {
                   console.error(`Error: ${full.error?.message || 'Failed to fetch draft'}`);
                 }
@@ -171,7 +174,9 @@ export const draftsCommand = new Command('drafts')
           if (!r.ok || !r.data) {
             if (backend === 'graph') {
               if (options.json) {
-                console.log(JSON.stringify({ error: r.error?.message || 'Failed to fetch drafts' }, null, 2));
+                console.log(
+                  JSON.stringify({ error: toJsonError(r.error?.message || 'Failed to fetch drafts') }, null, 2)
+                );
               } else {
                 console.error(`Error: ${r.error?.message || 'Failed to fetch drafts'}`);
               }
@@ -233,7 +238,7 @@ export const draftsCommand = new Command('drafts')
         if (backend === 'graph') {
           const msg = ga.error || 'Graph authentication failed';
           if (options.json) {
-            console.log(JSON.stringify({ error: msg }, null, 2));
+            console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
           } else {
             console.error(`Error: ${msg}`);
             console.error('\nSet EWS_CLIENT_ID and M365_REFRESH_TOKEN for Graph, or run `m365-agent-cli login`.');
@@ -253,7 +258,7 @@ export const draftsCommand = new Command('drafts')
           if (!ga.success || !ga.token) {
             const msg = ga.error || 'Graph authentication failed';
             if (options.json) {
-              console.log(JSON.stringify({ error: msg }, null, 2));
+              console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
             } else {
               console.error(`Error: ${msg}`);
               console.error('\nSet EWS_CLIENT_ID and M365_REFRESH_TOKEN for Graph, or run `m365-agent-cli login`.');
@@ -274,7 +279,7 @@ export const draftsCommand = new Command('drafts')
 
       if (!authResult.success) {
         if (options.json) {
-          console.log(JSON.stringify({ error: authResult.error }, null, 2));
+          console.log(JSON.stringify({ error: toJsonError(authResult.error) }, null, 2));
         } else {
           console.error(`Error: ${authResult.error}`);
           console.error('\nCheck your .env file for EWS_CLIENT_ID and EWS_REFRESH_TOKEN.');
@@ -294,7 +299,9 @@ export const draftsCommand = new Command('drafts')
 
       if (!draftsResult.ok || !draftsResult.data) {
         if (options.json) {
-          console.log(JSON.stringify({ error: draftsResult.error?.message || 'Failed to fetch drafts' }, null, 2));
+          console.log(
+            JSON.stringify({ error: toJsonError(draftsResult.error?.message || 'Failed to fetch drafts') }, null, 2)
+          );
         } else {
           console.error(`Error: ${draftsResult.error?.message || 'Failed to fetch drafts'}`);
         }
