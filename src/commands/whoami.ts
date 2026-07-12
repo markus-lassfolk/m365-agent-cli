@@ -25,6 +25,8 @@ export const whoamiCommand = new Command('whoami')
   .action(async (options: { json?: boolean; token?: string; identity?: string }) => {
     const backend = getExchangeBackend();
 
+    const capabilitiesHint = "Run `verify-token --capabilities` to see this token's read/write coverage per CLI area.";
+
     const outputGraph = (
       displayName: string,
       email: string,
@@ -37,11 +39,13 @@ export const whoamiCommand = new Command('whoami')
           authenticated: boolean;
           backend: string;
           identity?: string;
+          hint: string;
         } = {
           displayName,
           email,
           authenticated: true,
-          backend: 'graph'
+          backend: 'graph',
+          hint: capabilitiesHint
         };
         if (!opts.token) {
           result.identity = opts.identity || 'default';
@@ -55,6 +59,7 @@ export const whoamiCommand = new Command('whoami')
         console.log(`  Backend: graph (M365_EXCHANGE_BACKEND=${backend})`);
         console.log(`  Name: ${displayName}`);
         console.log(`  Email: ${email}`);
+        console.log(`\n  Tip: ${capabilitiesHint}`);
       }
     };
 
@@ -70,11 +75,13 @@ export const whoamiCommand = new Command('whoami')
           authenticated: boolean;
           backend: string;
           identity?: string;
+          hint: string;
         } = {
           displayName,
           email,
           authenticated: true,
-          backend: 'ews'
+          backend: 'ews',
+          hint: capabilitiesHint
         };
         if (!opts.token) {
           result.identity = opts.identity || 'default';
@@ -88,6 +95,7 @@ export const whoamiCommand = new Command('whoami')
         console.log(`  Backend: ews (M365_EXCHANGE_BACKEND=${backend})`);
         console.log(`  Name: ${displayName}`);
         console.log(`  Email: ${email}`);
+        console.log(`\n  Tip: ${capabilitiesHint}`);
       }
     };
 

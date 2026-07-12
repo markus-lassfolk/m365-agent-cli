@@ -398,6 +398,7 @@ describe('whoami', () => {
     const data = JSON.parse(result.stdout.trim());
     expect(data.email).toBe('test@example.com');
     expect(data.authenticated).toBe(true);
+    expect(data.hint).toContain('verify-token --capabilities');
   });
 
   test('--token bypasses auth resolution', async () => {
@@ -1340,6 +1341,13 @@ describe('Graph backend (M365_EXCHANGE_BACKEND=graph)', () => {
     const data = JSON.parse(result.stdout.trim());
     expect(data.backend).toBe('graph');
     expect(data.email).toBe('graph.user@example.com');
+  });
+
+  test('whoami --json points to verify-token --capabilities for scope/capability coverage', async () => {
+    const result = await runM365AgentCli('whoami --json --token test-graph-token');
+    expect(result.exitCode).toBe(0);
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.hint).toContain('verify-token --capabilities');
   });
 
   test('update-event --json lists organizer events from calendarView', async () => {

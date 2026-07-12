@@ -1,7 +1,7 @@
 {
   "version": 1,
   "description": "Graph path patterns from static analysis of callGraph*, graphInvoke*, fetchAllPages, fetchGraphRaw, graphPostBatch. Regenerate: npm run graph:inventory",
-  "generatedAt": "2026-07-12T15:29:15.547Z",
+  "generatedAt": "2026-07-12T15:35:19.625Z",
   "entryCount": 709,
   "entries": [
     {
