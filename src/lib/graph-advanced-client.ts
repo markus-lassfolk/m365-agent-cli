@@ -135,7 +135,9 @@ export interface GraphBatchRequestBody {
   requests: Array<Record<string, unknown>>;
 }
 
-/** POST `/$batch` ([batch](https://learn.microsoft.com/en-us/graph/json-batching)). */
+export const GRAPH_BATCH_MAX_REQUESTS = 20;
+
+/** POST `/$batch` ([batch](https://learn.microsoft.com/en-us/graph/json-batching)). Rejects bodies with more than {@link GRAPH_BATCH_MAX_REQUESTS} sub-requests; use `graphBatchAll` to auto-chunk. */
 export async function graphPostBatch<T = unknown>(
   token: string,
   body: GraphBatchRequestBody,
@@ -146,9 +148,9 @@ export async function graphPostBatch<T = unknown>(
     if (!body?.requests || !Array.isArray(body.requests)) {
       return graphError('Body must be a JSON object with a "requests" array', 'InvalidBatch', 400);
     }
-    if (body.requests.length > 20) {
+    if (body.requests.length > GRAPH_BATCH_MAX_REQUESTS) {
       return graphError(
-        'JSON batch supports at most 20 sub-requests per POST. Split into multiple $batch calls.',
+        `JSON batch supports at most ${GRAPH_BATCH_MAX_REQUESTS} sub-requests per POST. Split into multiple $batch calls, or use graphBatchAll to auto-chunk.`,
         'InvalidBatch',
         400
       );
@@ -169,4 +171,90 @@ export async function graphPostBatch<T = unknown>(
     }
     return graphError(err instanceof Error ? err.message : 'Graph batch failed');
   }
+}
+
+export interface GraphBatchSubResponse {
+  id: string;
+  status: number;
+  headers?: Record<string, string>;
+  body?: unknown;
+}
+
+/**
+ * Split `requests` into chunks of at most {@link GRAPH_BATCH_MAX_REQUESTS}, in order, without
+ * splitting a `dependsOn` chain across chunk boundaries (Graph requires a request and everything
+ * it depends on to be in the same `$batch` POST).
+ */
+export function chunkGraphBatchRequests(
+  requests: Array<Record<string, unknown>>,
+  size = GRAPH_BATCH_MAX_REQUESTS
+): Array<Array<Record<string, unknown>>> {
+  const chunks: Array<Array<Record<string, unknown>>> = [];
+  for (let i = 0; i < requests.length; i += size) {
+    chunks.push(requests.slice(i, i + size));
+  }
+  return chunks;
+}
+
+/**
+ * Auto-chunking `$batch`: accepts any number of sub-requests, transparently splits them into
+ * `≤ 20`-request POSTs (Graph's per-batch cap), sends them sequentially, and merges the
+ * `responses` arrays back into one, in the original request order.
+ *
+ * Each sub-request needs a unique `id`. If a sub-request's `dependsOn` points at an id that would
+ * land in a different chunk, this fails fast with an `InvalidBatch` error before sending anything,
+ * since Graph requires dependency chains to stay within a single `$batch` POST — reorder or split
+ * such chains into batches of `≤ 20` yourself.
+ */
+export async function graphBatchAll(
+  token: string,
+  requests: Array<Record<string, unknown>>,
+  beta?: boolean,
+  auth?: { identity?: string; pinAccessToken?: boolean }
+): Promise<GraphResponse<{ responses: GraphBatchSubResponse[] }>> {
+  if (!Array.isArray(requests)) {
+    return graphError('requests must be an array', 'InvalidBatch', 400);
+  }
+  if (requests.length === 0) {
+    return { ok: true, data: { responses: [] } };
+  }
+
+  const ids: string[] = [];
+  for (const req of requests) {
+    const id = req?.id;
+    if (typeof id !== 'string' || id.length === 0) {
+      return graphError('Every batch sub-request needs a non-empty string "id"', 'InvalidBatch', 400);
+    }
+    ids.push(id);
+  }
+  if (new Set(ids).size !== ids.length) {
+    return graphError('Batch sub-request "id" values must be unique', 'InvalidBatch', 400);
+  }
+
+  const chunks = chunkGraphBatchRequests(requests);
+  for (const chunk of chunks) {
+    const idsInChunk = new Set(chunk.map((r) => r.id as string));
+    for (const req of chunk) {
+      const dependsOn = Array.isArray(req.dependsOn) ? (req.dependsOn as unknown[]) : [];
+      for (const dep of dependsOn) {
+        if (typeof dep !== 'string' || !idsInChunk.has(dep)) {
+          return graphError(
+            `Batch request "${req.id}" depends on "${String(dep)}", which is not in the same ${GRAPH_BATCH_MAX_REQUESTS}-request chunk. Reorder requests so dependency chains stay together.`,
+            'InvalidBatch',
+            400
+          );
+        }
+      }
+    }
+  }
+
+  const responses: GraphBatchSubResponse[] = [];
+  for (const chunk of chunks) {
+    const r = await graphPostBatch<{ responses: GraphBatchSubResponse[] }>(token, { requests: chunk }, beta, auth);
+    if (!r.ok) {
+      return { ok: false, error: r.error };
+    }
+    responses.push(...(r.data?.responses || []));
+  }
+  return { ok: true, data: { responses } };
 }

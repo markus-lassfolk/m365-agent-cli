@@ -1,7 +1,7 @@
 {
   "version": 1,
   "description": "Graph path patterns from static analysis of callGraph*, graphInvoke*, fetchAllPages, fetchGraphRaw, graphPostBatch. Regenerate: npm run graph:inventory",
-  "generatedAt": "2026-07-12T15:35:19.625Z",
+  "generatedAt": "2026-07-12T15:39:43.155Z",
   "entryCount": 709,
   "entries": [
     {
@@ -31,13 +31,6 @@
       "callee": "graphInvoke",
       "pattern": "{dynamic}",
       "kind": "dynamic"
-    },
-    {
-      "file": "src/commands/graph.ts",
-      "line": 158,
-      "callee": "graphPostBatch",
-      "pattern": "/$batch",
-      "kind": "literal"
     },
     {
       "file": "src/commands/whoami.ts",
@@ -832,8 +825,15 @@
     },
     {
       "file": "src/lib/graph-advanced-client.ts",
-      "line": 165,
+      "line": 167,
       "callee": "callGraphAt",
+      "pattern": "/$batch",
+      "kind": "literal"
+    },
+    {
+      "file": "src/lib/graph-advanced-client.ts",
+      "line": 253,
+      "callee": "graphPostBatch",
       "pattern": "/$batch",
       "kind": "literal"
     },
