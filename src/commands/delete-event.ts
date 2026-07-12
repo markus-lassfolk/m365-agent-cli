@@ -582,8 +582,10 @@ export const deleteEventCommand = new Command('delete-event')
       let action: string;
 
       if (hasAttendees && !options.forceDelete && scope === 'all') {
-        console.log(`  Attendees: ${attendeesEws.map((a) => a.EmailAddress?.Address).join(', ')}`);
-        console.log(`  Sending cancellation notices...`);
+        if (!options.json) {
+          console.log(`  Attendees: ${attendeesEws.map((a) => a.EmailAddress?.Address).join(', ')}`);
+          console.log(`  Sending cancellation notices...`);
+        }
         deleteResult = await cancelEvent({
           token: ewsToken!,
           eventId: targetEws!.Id,

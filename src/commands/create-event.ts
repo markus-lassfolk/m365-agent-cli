@@ -546,8 +546,15 @@ export function buildCreateEventCommand(commandName: string, description = 'Crea
             range.Type = 'EndDate';
             range.EndDate = options.until;
           } else if (options.count) {
+            const count = parseInt(options.count, 10);
+            if (!Number.isFinite(count) || count < 1) {
+              const msg = `Invalid --count: "${options.count}" (must be a positive integer)`;
+              if (options.json) console.log(JSON.stringify({ error: msg }, null, 2));
+              else console.error(msg);
+              process.exit(1);
+            }
             range.Type = 'Numbered';
-            range.NumberOfOccurrences = parseInt(options.count, 10);
+            range.NumberOfOccurrences = count;
           }
 
           recurrence = { Pattern: pattern, Range: range };
