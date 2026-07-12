@@ -96,12 +96,20 @@ function parseAttachmentIdFromLocation(location: string): string | undefined {
   } catch {
     // Not an absolute URL — treat the raw value as the path.
   }
+  // Decode first so an OData key with percent-encoded quotes (e.g. Attachments(%27ID%27))
+  // is matched the same as the literal-quote form.
+  let decodedPath = path;
+  try {
+    decodedPath = decodeURIComponent(path);
+  } catch {
+    // Leave as-is on malformed percent sequences.
+  }
   // Handle OData key syntax: .../Attachments('AAMk...')
-  const odataKey = path.match(/\(['"]([^'"]+)['"]\)\/?$/);
-  if (odataKey) return decodeURIComponent(odataKey[1]);
-  const segments = path.split('/').filter(Boolean);
+  const odataKey = decodedPath.match(/\(['"]([^'"]+)['"]\)\/?$/);
+  if (odataKey) return odataKey[1];
+  const segments = decodedPath.split('/').filter(Boolean);
   const last = segments[segments.length - 1];
-  return last ? decodeURIComponent(last) : undefined;
+  return last || undefined;
 }
 
 export async function createMailMessageFileAttachmentUploadSession(
