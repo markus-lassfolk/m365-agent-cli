@@ -321,6 +321,9 @@ function resetSharedCommandOptionLeaks() {
   draftsCommand.setOptionValue('var', []);
   draftsCommand.setOptionValue('body', undefined);
   draftsCommand.setOptionValue('json', false);
+  // update reuses a shared instance; --check leaking from one test into a later test that omits
+  // it would misroute the version-check branch (which exits 1 on stdout) ahead of any real logic.
+  updateCommand.setOptionValue('check', undefined);
 }
 
 async function runM365AgentCli(args: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
@@ -1359,6 +1362,28 @@ describe('update command', () => {
       const result = await runM365AgentCli('update --check');
       expect(result.exitCode).toBe(1);
       expect(result.stdout).toContain('Update available');
+    } finally {
+      clearMockFetch();
+    }
+  });
+
+  test('--read-only blocks the actual update (does not spawn a global install)', async () => {
+    const { clearMockFetch, setMockFetch } = await import('./mocks/index.js');
+    setMockFetch((url) => {
+      if (url.includes('registry.npmjs.org/m365-agent-cli/latest')) {
+        return {
+          status: 200,
+          body: JSON.stringify({ version: '3000.0.0' }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    try {
+      const result = await runM365AgentCli('--read-only update');
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain('read-only mode');
+      expect(result.stdout).not.toContain('Updating');
     } finally {
       clearMockFetch();
     }

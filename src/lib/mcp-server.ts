@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 import type { CommandManifest, ManifestArgument, ManifestOption, ProgramManifest } from './command-manifest.js';
 
 /** Top-level commands never exposed as MCP tools: self-referential, interactive, or long-running/blocking. */
-const MCP_EXCLUDED_TOP_LEVEL_COMMANDS = new Set(['mcp', 'serve', 'login']);
+const MCP_EXCLUDED_TOP_LEVEL_COMMANDS = new Set(['mcp', 'serve', 'login', 'update']);
 
 const MCP_PROTOCOL_VERSION = '2024-11-05';
 

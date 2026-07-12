@@ -813,7 +813,8 @@ plannerCommand
         getRequests as unknown as Record<string, unknown>[],
         undefined,
         {
-          identity: opts.identity
+          identity: opts.identity,
+          pinAccessToken: !!opts.token
         }
       );
       if (!getResult.ok || !getResult.data) {
@@ -843,7 +844,8 @@ plannerCommand
       }));
       if (patchRequests.length > 0) {
         const patchResult = await applyBulkGraphRequests(auth.token, patchRequests, undefined, {
-          identity: opts.identity
+          identity: opts.identity,
+          pinAccessToken: !!opts.token
         });
         if (!patchResult.ok || !patchResult.data) {
           console.error(`Error: ${patchResult.error?.message || 'Bulk complete failed'}`);

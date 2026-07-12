@@ -82,6 +82,7 @@ describe('mcp stdio server (real subprocess)', () => {
       expect(tools.some((t) => t.name === 'mcp')).toBe(false);
       expect(tools.some((t) => t.name === 'serve')).toBe(false);
       expect(tools.some((t) => t.name === 'login')).toBe(false);
+      expect(tools.some((t) => t.name === 'update')).toBe(false);
 
       const call = await client.request('tools/call', { name: 'describe', arguments: { list: true } });
       const result = call.result as { content: Array<{ type: string; text: string }>; isError: boolean };

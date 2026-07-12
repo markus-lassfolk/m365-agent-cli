@@ -14,7 +14,7 @@ Each leaf command (e.g. "mail", "rules create") becomes one MCP tool, named by i
 with spaces replaced by underscores (e.g. "rules_create"), with a JSON schema built from that
 command's own arguments and options. A tool call is executed by running this same CLI as a
 subprocess with the equivalent argv, so behavior (read-only mode, --dry-run, --json errors) is
-identical to running the command directly. "mcp", "serve", and "login" are not exposed as tools.
+identical to running the command directly. "mcp", "serve", "login", and "update" are not exposed as tools.
 
 Example MCP client config (stdio transport):
   { "command": "m365-agent-cli", "args": ["mcp"] }

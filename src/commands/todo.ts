@@ -908,7 +908,10 @@ todoCommand
         headers: { 'Content-Type': 'application/json' },
         body: { status: 'completed', completedDateTime: { dateTime: now, timeZone: 'UTC' } }
       }));
-      const r = await applyBulkGraphRequests(auth.token, requests, undefined, { identity: opts.identity });
+      const r = await applyBulkGraphRequests(auth.token, requests, undefined, {
+        identity: opts.identity,
+        pinAccessToken: !!opts.token
+      });
       if (!r.ok || !r.data) {
         console.error(`Error: ${r.error?.message || 'Bulk complete failed'}`);
         process.exit(1);
@@ -964,7 +967,10 @@ todoCommand
         method: 'DELETE',
         url: `${base}/${encodeURIComponent(taskId)}`
       }));
-      const r = await applyBulkGraphRequests(auth.token, requests, undefined, { identity: opts.identity });
+      const r = await applyBulkGraphRequests(auth.token, requests, undefined, {
+        identity: opts.identity,
+        pinAccessToken: !!opts.token
+      });
       if (!r.ok || !r.data) {
         console.error(`Error: ${r.error?.message || 'Bulk delete failed'}`);
         process.exit(1);

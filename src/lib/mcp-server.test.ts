@@ -30,6 +30,7 @@ function buildFixtureProgram(): Command {
   root.addCommand(new Command('mcp').description('mcp server'));
   root.addCommand(new Command('serve').description('webhook server'));
   root.addCommand(new Command('login').description('device code login'));
+  root.addCommand(new Command('update').description('self-update: npm/bun global install'));
 
   return root;
 }
@@ -80,12 +81,13 @@ describe('buildMcpTools', () => {
     expect(names).toEqual(['mail', 'rules_create']);
   });
 
-  test('excludes mcp, serve, and login', () => {
+  test('excludes mcp, serve, login, and update', () => {
     const manifest = describeProgram(buildFixtureProgram());
     const tools = buildMcpTools(manifest);
     expect(tools.some((t) => t.name === 'mcp')).toBe(false);
     expect(tools.some((t) => t.name === 'serve')).toBe(false);
     expect(tools.some((t) => t.name === 'login')).toBe(false);
+    expect(tools.some((t) => t.name === 'update')).toBe(false);
   });
 });
 
