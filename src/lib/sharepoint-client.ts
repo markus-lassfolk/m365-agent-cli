@@ -62,17 +62,13 @@ export async function getLists(
   siteId: string,
   apiBase: string = getGraphBaseUrl()
 ): Promise<GraphResponse<SharePointList[]>> {
-  let res: GraphResponse<{ value: SharePointList[] }>;
-  try {
-    res = await callGraphAt<{ value: SharePointList[] }>(apiBase, token, `/sites/${encodeURIComponent(siteId)}/lists`);
-  } catch (err) {
-    if (err instanceof GraphApiError) {
-      return graphError(err.message, err.code, err.status);
-    }
-    return graphError(err instanceof Error ? err.message : 'Failed to get lists');
-  }
-  if (!res.ok || !res.data?.value) return graphError('Failed to get lists: missing data');
-  return graphResult(res.data.value);
+  // Page through all lists (SharePoint paginates at ~200) — matches the paginating siblings.
+  return fetchAllPages<SharePointList>(
+    token,
+    `/sites/${encodeURIComponent(siteId)}/lists`,
+    'Failed to get lists',
+    apiBase
+  );
 }
 
 /** One page of list items (optional `@odata.nextLink` for more pages). */

@@ -42,21 +42,10 @@ export interface Group {
 export async function searchPeople(token: string, query: string): Promise<GraphResponse<Person[]>> {
   const escapedQuery = query.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
   const searchParam = encodeURIComponent(`"${escapedQuery}"`);
-  let result: GraphResponse<{ value: Person[] }>;
-  try {
-    result = await callGraph<{ value: Person[] }>(token, `/me/people?$search=${searchParam}`, {
-      headers: { ConsistencyLevel: 'eventual' }
-    });
-  } catch (err) {
-    if (err instanceof GraphApiError) {
-      return graphError(err.message, err.code, err.status);
-    }
-    return graphError(err instanceof Error ? err.message : 'Failed to search people');
-  }
-  if (!result.ok || !result.data) {
-    return { ok: false, error: result.error };
-  }
-  return { ok: true, data: result.data.value };
+  // Page through all matches like listPeople does (relevance-ranked, but don't cut at page 1).
+  return fetchAllPages<Person>(token, `/me/people?$search=${searchParam}`, 'Failed to search people', undefined, {
+    headers: { ConsistencyLevel: 'eventual' }
+  });
 }
 
 function peopleCollectionPath(forUser?: string): string {

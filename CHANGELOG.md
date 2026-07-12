@@ -47,6 +47,12 @@ Second review pass:
 - **`bookings staff-availability`** reads the `staffAvailabilityItem` collection from the correct `value` property (human output was always empty), and every Bookings `--json-file` read reports a clear error instead of an unhandled stack trace.
 - **Teams `@`-mention composition** inserts display names literally, so a name containing `$&`/`$$` is no longer mangled by `String.replace` substitution patterns.
 
+Pagination consistency pass (list/collection endpoints no longer silently truncate to the first page):
+
+- Added a shared `listGraphCollection` helper so every list endpoint follows the same rule: an explicit `--top`/`top` is a deliberate single bounded page; otherwise the call pages through `@odata.nextLink` to completion (and fails loudly on an unresolvable link, with the cycle/page cap).
+- Converted previously first-page-only functions to full pagination: groups (`groups`, `conversations`, `threads`, `posts`), insights (`trending`/`used`/`shared`, drive-item activities, followed sites), Teams (`team members`, `my chats`, app catalog), Excel (`table rows`), SharePoint (`lists`), and directory `search-people`.
+- **`rooms`/room-availability (`isRoomFree`)** now pages the whole calendar window, fixing a false "free" result when a busy event fell on a later `calendarView` page.
+
 ---
 
 ## [2026.7.3] — 2026-07-02

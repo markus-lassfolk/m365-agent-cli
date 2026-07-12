@@ -3,6 +3,7 @@ import {
   callGraphAt,
   type DriveLocation,
   driveItemPath,
+  fetchAllPages,
   GraphApiError,
   type GraphResponse,
   getGraphBaseUrl,
@@ -60,10 +61,15 @@ export async function listInsights(
   kind: InsightKind,
   options: { user?: string; top?: number } = {}
 ): Promise<GraphResponse<InsightListResponse>> {
-  const top = options.top && options.top > 0 ? `?$top=${Math.min(Math.max(1, options.top), 200)}` : '';
-  const path = `${graphUserPath(options.user, `insights/${kind}`)}${top}`;
+  const topN = options.top && options.top > 0 ? Math.min(Math.max(1, options.top), 200) : undefined;
+  const basePath = graphUserPath(options.user, `insights/${kind}`);
   try {
-    return await callGraph<InsightListResponse>(token, path);
+    if (topN !== undefined) {
+      return await callGraph<InsightListResponse>(token, `${basePath}?$top=${topN}`);
+    }
+    const all = await fetchAllPages<InsightItem>(token, basePath, `Failed to list insights/${kind}`);
+    if (!all.ok || !all.data) return all as unknown as GraphResponse<InsightListResponse>;
+    return graphResult({ value: all.data });
   } catch (err) {
     if (err instanceof GraphApiError) return graphErrorFromApiError(err);
     return graphError(err instanceof Error ? err.message : `Failed to list insights/${kind}`);
@@ -90,10 +96,15 @@ export async function listDriveItemActivities(
   options: { top?: number; graphBaseUrl?: string } = {}
 ): Promise<GraphResponse<ItemActivitiesResponse>> {
   const base = options.graphBaseUrl ?? getGraphBaseUrl();
-  const top = options.top && options.top > 0 ? `?$top=${Math.min(Math.max(1, options.top), 200)}` : '';
-  const path = `${driveItemPath(loc, itemId)}/activities${top}`;
+  const topN = options.top && options.top > 0 ? Math.min(Math.max(1, options.top), 200) : undefined;
+  const basePath = `${driveItemPath(loc, itemId)}/activities`;
   try {
-    return await callGraphAt<ItemActivitiesResponse>(base, token, path);
+    if (topN !== undefined) {
+      return await callGraphAt<ItemActivitiesResponse>(base, token, `${basePath}?$top=${topN}`);
+    }
+    const all = await fetchAllPages<ItemActivity>(token, basePath, 'Failed to list drive item activities', base);
+    if (!all.ok || !all.data) return all as unknown as GraphResponse<ItemActivitiesResponse>;
+    return graphResult({ value: all.data });
   } catch (err) {
     if (err instanceof GraphApiError) return graphErrorFromApiError(err);
     return graphError(err instanceof Error ? err.message : 'Failed to list drive item activities');
@@ -162,7 +173,14 @@ export async function listFollowedSites(
   graphBaseUrl: string = getGraphBaseUrl()
 ): Promise<GraphResponse<FollowedSitesResponse>> {
   try {
-    return await callGraphAt<FollowedSitesResponse>(graphBaseUrl, token, '/me/followedSites');
+    const all = await fetchAllPages<FollowedSite>(
+      token,
+      '/me/followedSites',
+      'Failed to list /me/followedSites',
+      graphBaseUrl
+    );
+    if (!all.ok || !all.data) return all as unknown as GraphResponse<FollowedSitesResponse>;
+    return graphResult({ value: all.data });
   } catch (err) {
     if (err instanceof GraphApiError) return graphErrorFromApiError(err);
     return graphError(err instanceof Error ? err.message : 'Failed to list /me/followedSites');

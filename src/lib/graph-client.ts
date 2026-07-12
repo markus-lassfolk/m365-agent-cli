@@ -451,6 +451,45 @@ export async function fetchAllPages<T>(
   return graphResult(items);
 }
 
+/**
+ * Shared list-collection pattern used across the Graph service clients so pagination is handled
+ * uniformly: an explicit `top` is treated as a deliberate single-page bound (clamped to `maxTop`),
+ * while its absence pages through `@odata.nextLink` to completion via {@link fetchAllPages} (which
+ * also errors — rather than silently truncating — on an unresolvable nextLink).
+ *
+ * `basePath` must NOT already contain a `$top`; other query params are fine (a `?`/`&` separator
+ * is chosen automatically). Returns the flattened item array.
+ */
+export async function listGraphCollection<T>(
+  token: string,
+  basePath: string,
+  errorMessage: string,
+  opts: { top?: number; maxTop?: number; baseUrl?: string; headers?: Record<string, string> } = {}
+): Promise<GraphResponse<T[]>> {
+  const { top, maxTop = 999, baseUrl, headers } = opts;
+  const requestInit: RequestInit | undefined = headers ? { headers } : undefined;
+  try {
+    if (top !== undefined && top > 0) {
+      const n = Math.min(Math.max(1, Math.floor(top)), maxTop);
+      const sep = basePath.includes('?') ? '&' : '?';
+      const r = await callGraphAt<{ value?: T[] }>(
+        baseUrl ?? getGraphBaseUrl(),
+        token,
+        `${basePath}${sep}$top=${n}`,
+        requestInit ?? {}
+      );
+      if (!r.ok || !r.data) {
+        return graphError(r.error?.message || errorMessage, r.error?.code, r.error?.status) as GraphResponse<T[]>;
+      }
+      return graphResult(r.data.value ?? []);
+    }
+    return await fetchAllPages<T>(token, basePath, errorMessage, baseUrl, requestInit);
+  } catch (err) {
+    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status) as GraphResponse<T[]>;
+    return graphError(err instanceof Error ? err.message : errorMessage) as GraphResponse<T[]>;
+  }
+}
+
 export async function fetchGraphRaw(
   token: string,
   path: string,

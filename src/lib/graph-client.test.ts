@@ -539,3 +539,61 @@ describe('callGraphAt body handling', () => {
     }
   });
 });
+
+describe('listGraphCollection shared pagination helper', () => {
+  const token = 'test-token';
+  const baseUrl = 'https://graph.microsoft.com/v1.0';
+
+  it('with an explicit top does a single bounded page ($top clamped)', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    const urls: string[] = [];
+    const originalFetch = globalThis.fetch;
+    try {
+      let n = 0;
+      globalThis.fetch = (async (input: string | URL | Request) => {
+        n++;
+        urls.push(typeof input === 'string' ? input : input.toString());
+        return new Response(JSON.stringify({ value: [{ id: 'a' }], '@odata.nextLink': `${baseUrl}/x?$skiptoken=2` }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as unknown as typeof fetch;
+      const { listGraphCollection } = await import('./graph-client.js');
+      const r = await listGraphCollection<{ id: string }>(token, '/things', 'fail', { top: 5000, maxTop: 999 });
+      expect(r.ok).toBe(true);
+      expect(r.data?.map((x) => x.id)).toEqual(['a']); // single page even though nextLink present
+      expect(n).toBe(1);
+      expect(urls[0]).toContain('$top=999'); // clamped to maxTop
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('without top pages through @odata.nextLink to completion', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    const originalFetch = globalThis.fetch;
+    try {
+      let n = 0;
+      globalThis.fetch = (async () => {
+        n++;
+        if (n === 1) {
+          return new Response(
+            JSON.stringify({ value: [{ id: 'a' }], '@odata.nextLink': `${baseUrl}/things?$skiptoken=2` }),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          );
+        }
+        return new Response(JSON.stringify({ value: [{ id: 'b' }] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as unknown as typeof fetch;
+      const { listGraphCollection } = await import('./graph-client.js');
+      const r = await listGraphCollection<{ id: string }>(token, '/things', 'fail');
+      expect(r.ok).toBe(true);
+      expect(r.data?.map((x) => x.id)).toEqual(['a', 'b']);
+      expect(n).toBe(2);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});

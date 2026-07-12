@@ -90,7 +90,7 @@ describe('sharepoint-client', () => {
     }
   });
 
-  it('getLists fails when response omits value', async () => {
+  it('getLists treats a response without value as an empty list (paginated)', async () => {
     process.env.GRAPH_BASE_URL = baseUrl;
     const originalFetch = globalThis.fetch;
     try {
@@ -101,8 +101,40 @@ describe('sharepoint-client', () => {
         })) as unknown as typeof fetch;
       const { getLists } = await import('./sharepoint-client.js');
       const r = await getLists(token, 'site-guid');
-      expect(r.ok).toBe(false);
-      expect(r.error?.message).toMatch(/missing data/);
+      // Now paginated via fetchAllPages: a missing `value` is an empty page, consistent with siblings.
+      expect(r.ok).toBe(true);
+      expect(r.data).toEqual([]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('getLists follows @odata.nextLink across pages', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    const originalFetch = globalThis.fetch;
+    try {
+      let n = 0;
+      globalThis.fetch = (async () => {
+        n++;
+        if (n === 1) {
+          return new Response(
+            JSON.stringify({
+              value: [{ id: '1', name: 'L1' }],
+              '@odata.nextLink': `${baseUrl}/sites/s/lists?$skiptoken=2`
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          );
+        }
+        return new Response(JSON.stringify({ value: [{ id: '2', name: 'L2' }] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as unknown as typeof fetch;
+      const { getLists } = await import('./sharepoint-client.js');
+      const r = await getLists(token, 'site-guid');
+      expect(r.ok).toBe(true);
+      expect(r.data?.map((l) => l.id)).toEqual(['1', '2']);
+      expect(n).toBe(2);
     } finally {
       globalThis.fetch = originalFetch;
     }

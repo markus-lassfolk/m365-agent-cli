@@ -166,14 +166,15 @@ export async function isRoomFree(
   startISO: string,
   endISO: string
 ): Promise<boolean | null> {
-  let result: any;
+  // Page through the whole window: a busy event on a later calendarView page must not be
+  // missed (that would wrongly report the room free). $select=showAs keeps the payload small.
+  const path =
+    `/users/${encodeURIComponent(roomEmail)}/calendar/calendarView` +
+    `?startDateTime=${encodeURIComponent(startISO)}&endDateTime=${encodeURIComponent(endISO)}` +
+    `&$select=showAs&$top=100`;
+  let result: GraphResponse<Array<{ showAs?: string }>>;
   try {
-    result = await callGraph<{ value: Array<{ showAs?: string }> }>(
-      token,
-      `/users/${encodeURIComponent(roomEmail)}/calendar/calendarView?startDateTime=${encodeURIComponent(
-        startISO
-      )}&endDateTime=${encodeURIComponent(endISO)}`
-    );
+    result = await fetchAllPages<{ showAs?: string }>(token, path, 'Failed to check room availability');
   } catch (_err) {
     return null;
   }
@@ -182,6 +183,6 @@ export async function isRoomFree(
     return null;
   }
 
-  const busyEvents = (result.data.value || []).filter((event: any) => event.showAs !== 'free');
+  const busyEvents = result.data.filter((event) => event.showAs !== 'free');
   return busyEvents.length === 0;
 }

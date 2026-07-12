@@ -1,4 +1,12 @@
-import { callGraph, callGraphAt, GraphApiError, type GraphResponse, graphError, graphResult } from './graph-client.js';
+import {
+  callGraph,
+  callGraphAt,
+  GraphApiError,
+  type GraphResponse,
+  graphError,
+  graphResult,
+  listGraphCollection
+} from './graph-client.js';
 import { getGraphBaseUrl, getGraphBetaUrl } from './graph-constants.js';
 import { graphUserPath } from './graph-user-path.js';
 
@@ -472,18 +480,12 @@ export async function listTeamMembers(
   teamId: string,
   top?: number
 ): Promise<GraphResponse<GraphTeamMember[]>> {
-  try {
-    const t = top && top > 0 ? Math.min(top, 999) : undefined;
-    const qs = t ? `?$top=${t}` : '';
-    const r = await callGraph<{ value: GraphTeamMember[] }>(token, `/teams/${encodeURIComponent(teamId)}/members${qs}`);
-    if (!r.ok || !r.data) {
-      return graphError(r.error?.message || 'Failed to list team members', r.error?.code, r.error?.status);
-    }
-    return graphResult(r.data.value ?? []);
-  } catch (err) {
-    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
-    return graphError(err instanceof Error ? err.message : 'Failed to list team members');
-  }
+  return listGraphCollection<GraphTeamMember>(
+    token,
+    `/teams/${encodeURIComponent(teamId)}/members`,
+    'Failed to list team members',
+    { top, maxTop: 999 }
+  );
 }
 
 /**
@@ -506,18 +508,7 @@ export async function getChat(token: string, chatId: string, expand?: string): P
 }
 
 export async function listMyChats(token: string, top?: number): Promise<GraphResponse<GraphChat[]>> {
-  try {
-    const t = top && top > 0 ? Math.min(top, 50) : undefined;
-    const qs = t ? `?$top=${t}` : '';
-    const r = await callGraph<{ value: GraphChat[] }>(token, `/me/chats${qs}`);
-    if (!r.ok || !r.data) {
-      return graphError(r.error?.message || 'Failed to list chats', r.error?.code, r.error?.status);
-    }
-    return graphResult(r.data.value ?? []);
-  } catch (err) {
-    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
-    return graphError(err instanceof Error ? err.message : 'Failed to list chats');
-  }
+  return listGraphCollection<GraphChat>(token, `/me/chats`, 'Failed to list chats', { top, maxTop: 50 });
 }
 
 export async function listChatMessages(
@@ -598,20 +589,16 @@ export async function listTeamsAppCatalog(
   filter?: string,
   expand?: string
 ): Promise<GraphResponse<TeamsAppCatalogEntry[]>> {
-  try {
-    const q: string[] = [];
-    if (filter?.trim()) q.push(`$filter=${encodeURIComponent(filter.trim())}`);
-    if (expand?.trim()) q.push(`$expand=${encodeURIComponent(expand.trim())}`);
-    const suffix = q.length > 0 ? `?${q.join('&')}` : '';
-    const r = await callGraph<{ value: TeamsAppCatalogEntry[] }>(token, `/appCatalogs/teamsApps${suffix}`);
-    if (!r.ok || !r.data) {
-      return graphError(r.error?.message || 'Failed to list app catalog', r.error?.code, r.error?.status);
-    }
-    return graphResult(r.data.value ?? []);
-  } catch (err) {
-    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
-    return graphError(err instanceof Error ? err.message : 'Failed to list app catalog');
-  }
+  const q: string[] = [];
+  if (filter?.trim()) q.push(`$filter=${encodeURIComponent(filter.trim())}`);
+  if (expand?.trim()) q.push(`$expand=${encodeURIComponent(expand.trim())}`);
+  const suffix = q.length > 0 ? `?${q.join('&')}` : '';
+  return listGraphCollection<TeamsAppCatalogEntry>(
+    token,
+    `/appCatalogs/teamsApps${suffix}`,
+    'Failed to list app catalog',
+    {}
+  );
 }
 
 export async function getTeamsAppCatalogEntry(

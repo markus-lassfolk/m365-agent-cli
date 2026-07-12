@@ -1,6 +1,13 @@
 import type { DriveLocation } from './drive-location.js';
 import { DEFAULT_DRIVE_LOCATION, driveRootPrefix } from './drive-location.js';
-import { callGraph, GraphApiError, type GraphResponse, graphError, graphResult } from './graph-client.js';
+import {
+  callGraph,
+  GraphApiError,
+  type GraphResponse,
+  graphError,
+  graphResult,
+  listGraphCollection
+} from './graph-client.js';
 
 export interface ExcelWorksheet {
   id?: string;
@@ -641,19 +648,8 @@ export async function listExcelTableRows(
   top?: number,
   location: DriveLocation = DEFAULT_DRIVE_LOCATION
 ): Promise<GraphResponse<ExcelTableRow[]>> {
-  try {
-    const t = top && top > 0 ? Math.min(top, 9999) : undefined;
-    const qs = t ? `?$top=${t}` : '';
-    const path = `${driveItemWorkbookPrefix(location, itemId)}/tables/${encodeURIComponent(tableId.trim())}/rows${qs}`;
-    const r = await callGraph<{ value: ExcelTableRow[] }>(token, path);
-    if (!r.ok || !r.data) {
-      return graphError(r.error?.message || 'Failed to list table rows', r.error?.code, r.error?.status);
-    }
-    return graphResult(r.data.value ?? []);
-  } catch (err) {
-    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
-    return graphError(err instanceof Error ? err.message : 'Failed to list table rows');
-  }
+  const basePath = `${driveItemWorkbookPrefix(location, itemId)}/tables/${encodeURIComponent(tableId.trim())}/rows`;
+  return listGraphCollection<ExcelTableRow>(token, basePath, 'Failed to list table rows', { top, maxTop: 9999 });
 }
 
 /** POST …/tables/{id}/rows/add — body e.g. `{ index: null, values: [["a","b"]] }`. */
