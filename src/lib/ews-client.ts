@@ -3294,16 +3294,13 @@ export async function getAutoReplyRule(token: string, mailbox?: string): Promise
 
     const xml = await callEws(token, envelope, address);
 
-    // Parse the rules
-    // Find the rule with DisplayName = "AutoReplyTemplate"
-    const rulesRegex = /<t:Rule>(.*?)<\/t:Rule>/gs;
-    let match: RegExpExecArray | null;
-    let ruleXml = null;
-    while (true) {
-      match = rulesRegex.exec(xml);
-      if (match === null) break;
-      if (match[1].includes('<t:DisplayName>AutoReplyTemplate</t:DisplayName>')) {
-        ruleXml = match[1];
+    // Find the rule with DisplayName = "AutoReplyTemplate". Use the prefix-agnostic block/tag
+    // extractors (not a hardcoded `<t:Rule>` regex) so a differing namespace prefix can't cause
+    // the existing rule to be missed — which would create a duplicate rule + orphaned template.
+    let ruleXml: string | null = null;
+    for (const block of extractBlocks(xml, 'Rule')) {
+      if (extractTag(block, 'DisplayName') === 'AutoReplyTemplate') {
+        ruleXml = block;
         break;
       }
     }
@@ -3379,14 +3376,12 @@ export async function setAutoReplyRule(
 
     let ruleIdStr = '';
     let oldTemplateId = '';
-    const rulesRegex = /<t:Rule>(.*?)<\/t:Rule>/gs;
-    let match: RegExpExecArray | null;
-    while (true) {
-      match = rulesRegex.exec(rulesXml);
-      if (match === null) break;
-      if (match[1].includes('<t:DisplayName>AutoReplyTemplate</t:DisplayName>')) {
-        ruleIdStr = extractTag(match[1], 'RuleId');
-        oldTemplateId = extractAttribute(match[1], 'ItemId', 'Id');
+    // Prefix-agnostic match (see getAutoReplyRule) so an existing template rule is always found
+    // and replaced rather than duplicated.
+    for (const block of extractBlocks(rulesXml, 'Rule')) {
+      if (extractTag(block, 'DisplayName') === 'AutoReplyTemplate') {
+        ruleIdStr = extractTag(block, 'RuleId');
+        oldTemplateId = extractAttribute(block, 'ItemId', 'Id');
         break;
       }
     }

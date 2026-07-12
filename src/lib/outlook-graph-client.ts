@@ -1053,23 +1053,11 @@ export async function listContactOpenExtensions(
   user?: string,
   location?: ContactExtensionLocation
 ): Promise<GraphResponse<Array<Record<string, unknown>>>> {
-  try {
-    const result = await callGraph<{ value: Array<Record<string, unknown>> }>(
-      token,
-      contactExtensionsPath(contactId, user, undefined, location)
-    );
-    if (!result.ok || !result.data) {
-      return graphError(
-        result.error?.message || 'Failed to list contact extensions',
-        result.error?.code,
-        result.error?.status
-      );
-    }
-    return graphResult(result.data.value || []);
-  } catch (err) {
-    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
-    return graphError(err instanceof Error ? err.message : 'Failed to list contact extensions');
-  }
+  return fetchAllPages<Record<string, unknown>>(
+    token,
+    contactExtensionsPath(contactId, user, undefined, location),
+    'Failed to list contact extensions'
+  );
 }
 
 export async function getContactOpenExtension(

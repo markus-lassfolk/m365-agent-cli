@@ -53,6 +53,12 @@ Pagination consistency pass (list/collection endpoints no longer silently trunca
 - Converted previously first-page-only functions to full pagination: groups (`groups`, `conversations`, `threads`, `posts`), insights (`trending`/`used`/`shared`, drive-item activities, followed sites), Teams (`team members`, `my chats`, app catalog), Excel (`table rows`), SharePoint (`lists`), and directory `search-people`.
 - **`rooms`/room-availability (`isRoomFree`)** now pages the whole calendar window, fixing a false "free" result when a busy event fell on a later `calendarView` page.
 - Completed the sweep by moving the remaining Teams (`joined teams`, channels, channel/chat members, installed apps, message/chat replies) and Excel (worksheets, tables, workbook/worksheet names, table columns, charts, pivot tables) list functions onto the same `listGraphCollection` pattern. Conversation-history listings (chat/channel messages) intentionally remain bounded recent-N pages.
+- Final grep-verified sweep caught the last truncating list functions: Bookings (businesses, appointments, services, staff, calendar view, customers, custom questions, currencies), Outlook master categories, Graph subscriptions, and the contact/todo open-extension lists — all now page to completion.
+
+### Fixed (misc)
+
+- `microsoftSearch` request-patch merge ignores `__proto__`/`constructor`/`prototype` keys from user-supplied JSON (no prototype pollution).
+- EWS auto-reply rule lookup (`oof`/auto-reply) matches the existing template rule regardless of XML namespace prefix, preventing a duplicate rule + orphaned template when Exchange returns a non-`t:` prefix.
 
 ---
 

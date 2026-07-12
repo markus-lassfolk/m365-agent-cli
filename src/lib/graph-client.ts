@@ -584,6 +584,9 @@ async function callGraphUrlWithRetries<T>(
       }
       throw new GraphApiError(err instanceof Error ? err.message : 'Graph request failed');
     }
+    // The abort timer bounds the request up to the point headers are received (the common hang).
+    // Body consumption below runs without it; this is deliberate to keep the retry-loop timer
+    // lifecycle simple — a rare "headers then stalled body" server is not defended against here.
     clearTimeout(timeout);
 
     if (response.status === 401 && onUnauthorized && !did401Refresh && !bodyIsOneShotStream) {

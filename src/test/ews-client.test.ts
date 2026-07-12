@@ -440,4 +440,34 @@ describe('ewsAvailabilityTimeToUtcMs', () => {
     expect(Number.isNaN(ewsAvailabilityTimeToUtcMs(''))).toBe(true);
     expect(Number.isNaN(ewsAvailabilityTimeToUtcMs(undefined))).toBe(true);
   });
+
+  it('getAutoReplyRule finds the template rule regardless of XML namespace prefix', async () => {
+    // Response uses an `n0:` types prefix instead of `t:` — the old hardcoded /<t:Rule>/ regex
+    // would miss it (and later create a duplicate); the prefix-agnostic extractors must find it.
+    globalThis.fetch = mock(async () => {
+      return new Response(
+        `<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages" xmlns:n0="http://schemas.microsoft.com/exchange/services/2006/types">
+  <soap:Body>
+    <m:GetInboxRulesResponse>
+      <m:ResponseCode>NoError</m:ResponseCode>
+      <m:InboxRules>
+        <n0:Rule>
+          <n0:DisplayName>AutoReplyTemplate</n0:DisplayName>
+          <n0:IsEnabled>true</n0:IsEnabled>
+        </n0:Rule>
+      </m:InboxRules>
+    </m:GetInboxRulesResponse>
+  </soap:Body>
+</soap:Envelope>`,
+        { status: 200 }
+      );
+    }) as unknown as typeof fetch;
+
+    const { getAutoReplyRule } = await import('../lib/ews-client.js');
+    const result = await getAutoReplyRule('token', 'user@example.com');
+    expect(result.ok).toBe(true);
+    expect(result.data).not.toBeNull();
+    expect(result.data?.enabled).toBe(true);
+  });
 });

@@ -1,4 +1,11 @@
-import { callGraph, GraphApiError, type GraphResponse, graphError, graphResult } from './graph-client.js';
+import {
+  callGraph,
+  fetchAllPages,
+  GraphApiError,
+  type GraphResponse,
+  graphError,
+  graphResult
+} from './graph-client.js';
 
 export interface BookingBusiness {
   id: string;
@@ -44,16 +51,7 @@ export interface BookingCustomQuestion {
 }
 
 export async function listBookingBusinesses(token: string): Promise<GraphResponse<BookingBusiness[]>> {
-  try {
-    const r = await callGraph<{ value: BookingBusiness[] }>(token, '/solutions/bookingBusinesses');
-    if (!r.ok || !r.data) {
-      return graphError(r.error?.message || 'Failed to list booking businesses', r.error?.code, r.error?.status);
-    }
-    return graphResult(r.data.value ?? []);
-  } catch (err) {
-    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
-    return graphError(err instanceof Error ? err.message : 'Failed to list booking businesses');
-  }
+  return fetchAllPages<BookingBusiness>(token, '/solutions/bookingBusinesses', 'Failed to list booking businesses');
 }
 
 export async function getBookingBusiness(token: string, businessId: string): Promise<GraphResponse<BookingBusiness>> {
@@ -110,35 +108,19 @@ export async function listBookingAppointments(
   token: string,
   businessId: string
 ): Promise<GraphResponse<BookingAppointment[]>> {
-  try {
-    const r = await callGraph<{ value: BookingAppointment[] }>(
-      token,
-      `/solutions/bookingBusinesses/${encodeURIComponent(businessId)}/appointments`
-    );
-    if (!r.ok || !r.data) {
-      return graphError(r.error?.message || 'Failed to list appointments', r.error?.code, r.error?.status);
-    }
-    return graphResult(r.data.value ?? []);
-  } catch (err) {
-    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
-    return graphError(err instanceof Error ? err.message : 'Failed to list appointments');
-  }
+  return fetchAllPages<BookingAppointment>(
+    token,
+    `/solutions/bookingBusinesses/${encodeURIComponent(businessId)}/appointments`,
+    'Failed to list appointments'
+  );
 }
 
 export async function listBookingServices(token: string, businessId: string): Promise<GraphResponse<BookingService[]>> {
-  try {
-    const r = await callGraph<{ value: BookingService[] }>(
-      token,
-      `/solutions/bookingBusinesses/${encodeURIComponent(businessId)}/services`
-    );
-    if (!r.ok || !r.data) {
-      return graphError(r.error?.message || 'Failed to list booking services', r.error?.code, r.error?.status);
-    }
-    return graphResult(r.data.value ?? []);
-  } catch (err) {
-    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
-    return graphError(err instanceof Error ? err.message : 'Failed to list booking services');
-  }
+  return fetchAllPages<BookingService>(
+    token,
+    `/solutions/bookingBusinesses/${encodeURIComponent(businessId)}/services`,
+    'Failed to list booking services'
+  );
 }
 
 export async function getBookingService(
@@ -164,19 +146,11 @@ export async function listBookingStaffMembers(
   token: string,
   businessId: string
 ): Promise<GraphResponse<BookingStaffMember[]>> {
-  try {
-    const r = await callGraph<{ value: BookingStaffMember[] }>(
-      token,
-      `/solutions/bookingBusinesses/${encodeURIComponent(businessId)}/staffMembers`
-    );
-    if (!r.ok || !r.data) {
-      return graphError(r.error?.message || 'Failed to list staff members', r.error?.code, r.error?.status);
-    }
-    return graphResult(r.data.value ?? []);
-  } catch (err) {
-    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
-    return graphError(err instanceof Error ? err.message : 'Failed to list staff members');
-  }
+  return fetchAllPages<BookingStaffMember>(
+    token,
+    `/solutions/bookingBusinesses/${encodeURIComponent(businessId)}/staffMembers`,
+    'Failed to list staff members'
+  );
 }
 
 export async function getBookingStaffMember(
@@ -205,39 +179,23 @@ export async function listBookingCalendarView(
   start: string,
   end: string
 ): Promise<GraphResponse<BookingAppointment[]>> {
-  try {
-    const q = `?start=${encodeURIComponent(start.trim())}&end=${encodeURIComponent(end.trim())}`;
-    const r = await callGraph<{ value: BookingAppointment[] }>(
-      token,
-      `/solutions/bookingBusinesses/${encodeURIComponent(businessId)}/calendarView${q}`
-    );
-    if (!r.ok || !r.data) {
-      return graphError(r.error?.message || 'Failed to list calendar view', r.error?.code, r.error?.status);
-    }
-    return graphResult(r.data.value ?? []);
-  } catch (err) {
-    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
-    return graphError(err instanceof Error ? err.message : 'Failed to list calendar view');
-  }
+  const q = `?start=${encodeURIComponent(start.trim())}&end=${encodeURIComponent(end.trim())}`;
+  return fetchAllPages<BookingAppointment>(
+    token,
+    `/solutions/bookingBusinesses/${encodeURIComponent(businessId)}/calendarView${q}`,
+    'Failed to list calendar view'
+  );
 }
 
 export async function listBookingCustomers(
   token: string,
   businessId: string
 ): Promise<GraphResponse<BookingCustomer[]>> {
-  try {
-    const r = await callGraph<{ value: BookingCustomer[] }>(
-      token,
-      `/solutions/bookingBusinesses/${encodeURIComponent(businessId)}/customers`
-    );
-    if (!r.ok || !r.data) {
-      return graphError(r.error?.message || 'Failed to list customers', r.error?.code, r.error?.status);
-    }
-    return graphResult(r.data.value ?? []);
-  } catch (err) {
-    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
-    return graphError(err instanceof Error ? err.message : 'Failed to list customers');
-  }
+  return fetchAllPages<BookingCustomer>(
+    token,
+    `/solutions/bookingBusinesses/${encodeURIComponent(businessId)}/customers`,
+    'Failed to list customers'
+  );
 }
 
 export async function getBookingCustomer(
@@ -284,19 +242,11 @@ export async function listBookingCustomQuestions(
   token: string,
   businessId: string
 ): Promise<GraphResponse<BookingCustomQuestion[]>> {
-  try {
-    const r = await callGraph<{ value: BookingCustomQuestion[] }>(
-      token,
-      `/solutions/bookingBusinesses/${encodeURIComponent(businessId)}/customQuestions`
-    );
-    if (!r.ok || !r.data) {
-      return graphError(r.error?.message || 'Failed to list custom questions', r.error?.code, r.error?.status);
-    }
-    return graphResult(r.data.value ?? []);
-  } catch (err) {
-    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
-    return graphError(err instanceof Error ? err.message : 'Failed to list custom questions');
-  }
+  return fetchAllPages<BookingCustomQuestion>(
+    token,
+    `/solutions/bookingBusinesses/${encodeURIComponent(businessId)}/customQuestions`,
+    'Failed to list custom questions'
+  );
 }
 
 export async function getBookingCustomQuestion(
@@ -325,16 +275,7 @@ export interface BookingCurrency {
 
 /** Tenant-wide currency catalog for Bookings (not scoped to one business). */
 export async function listBookingCurrencies(token: string): Promise<GraphResponse<BookingCurrency[]>> {
-  try {
-    const r = await callGraph<{ value: BookingCurrency[] }>(token, '/solutions/bookingCurrencies');
-    if (!r.ok || !r.data) {
-      return graphError(r.error?.message || 'Failed to list booking currencies', r.error?.code, r.error?.status);
-    }
-    return graphResult(r.data.value ?? []);
-  } catch (err) {
-    if (err instanceof GraphApiError) return graphError(err.message, err.code, err.status);
-    return graphError(err instanceof Error ? err.message : 'Failed to list booking currencies');
-  }
+  return fetchAllPages<BookingCurrency>(token, '/solutions/bookingCurrencies', 'Failed to list booking currencies');
 }
 
 export async function getBookingCurrency(token: string, currencyId: string): Promise<GraphResponse<BookingCurrency>> {
