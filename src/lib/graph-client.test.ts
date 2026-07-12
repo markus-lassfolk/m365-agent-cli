@@ -503,3 +503,39 @@ describe('fetchAllPages pagination safety', () => {
     }
   });
 });
+
+describe('callGraphAt body handling', () => {
+  const token = 'test-token';
+  const baseUrl = 'https://graph.microsoft.com/v1.0';
+
+  it('treats an empty 200 body as no content', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = (async () => new Response('', { status: 200 })) as unknown as typeof fetch;
+      const r = await callGraphAt(baseUrl, token, '/me', { method: 'GET' });
+      expect(r.ok).toBe(true);
+      expect(r.data).toBeUndefined();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('shapes a non-JSON 200 body as a GraphApiError with status', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = (async () =>
+        new Response('<html>nope</html>', {
+          status: 200,
+          headers: { 'content-type': 'text/html' }
+        })) as unknown as typeof fetch;
+      await expect(callGraphAt(baseUrl, token, '/me', { method: 'GET' })).rejects.toMatchObject({
+        code: 'InvalidJsonResponse',
+        status: 200
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});

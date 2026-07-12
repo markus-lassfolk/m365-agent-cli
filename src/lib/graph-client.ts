@@ -590,8 +590,22 @@ async function callGraphUrlWithRetries<T>(
       return graphResult(undefined as T);
     }
 
-    const result = await response.json();
-    return graphResult(result as T);
+    // Some 2xx Graph actions return an empty body; and an intermediary can return non-JSON.
+    // Treat empty as no content, and shape a JSON parse failure as a GraphApiError (with the
+    // status) instead of leaking a raw SyntaxError with no status/code to callers.
+    const raw = await response.text();
+    if (!raw.trim()) {
+      return graphResult(undefined as T);
+    }
+    try {
+      return graphResult(JSON.parse(raw) as T);
+    } catch {
+      throw new GraphApiError(
+        `Microsoft Graph returned a non-JSON ${response.status} response`,
+        'InvalidJsonResponse',
+        response.status
+      );
+    }
   }
 }
 
@@ -1084,7 +1098,9 @@ export async function downloadFile(
       }
 
       const contentLength = response.headers.get('content-length');
-      const tmpFileName = `.${resolvedItem.name ?? itemId}.${randomBytes(8).toString('hex')}.tmp`;
+      // basename() the server-supplied name so a name containing path separators / `..`
+      // can't relocate the temp file outside the intended tmp/ directory.
+      const tmpFileName = `.${basename(resolvedItem.name ?? itemId)}.${randomBytes(8).toString('hex')}.tmp`;
       tmpPath = resolve(dirname(targetPath), 'tmp', tmpFileName);
       await mkdir(dirname(tmpPath), { recursive: true });
 
@@ -1671,7 +1687,7 @@ export async function downloadConvertedFile(
       return graphError('Response body is empty');
     }
 
-    const tmpFileName = `.${newName}.${randomBytes(8).toString('hex')}.tmp`;
+    const tmpFileName = `.${basename(newName)}.${randomBytes(8).toString('hex')}.tmp`;
     tmpPath = resolve(dirname(targetPath), 'tmp', tmpFileName);
     await mkdir(dirname(tmpPath), { recursive: true });
 
