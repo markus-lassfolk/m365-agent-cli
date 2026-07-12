@@ -704,3 +704,57 @@ describe('--dry-run (M365_DRY_RUN)', () => {
     expect(fetchCalled).toBe(true);
   });
 });
+
+describe('draft BCC parity (getEmail parses BccRecipients; updateDraft can set it)', () => {
+  const originalFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    mock.restore();
+  });
+
+  it('getEmail parses BccRecipients when present in the GetItem response', async () => {
+    globalThis.fetch = mock(
+      async () =>
+        new Response(
+          `<?xml version="1.0"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages" xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types"><soap:Body><m:ResponseCode>NoError</m:ResponseCode><m:GetItemResponse><m:Items><t:Message><t:ItemId Id="draft-1" ChangeKey="ck0" /><t:Subject>Hi</t:Subject><t:ToRecipients><t:Mailbox><t:EmailAddress>to@x.com</t:EmailAddress></t:Mailbox></t:ToRecipients><t:BccRecipients><t:Mailbox><t:Name>Hidden</t:Name><t:EmailAddress>bcc@x.com</t:EmailAddress></t:Mailbox></t:BccRecipients></t:Message></m:Items></m:GetItemResponse></soap:Body></soap:Envelope>`,
+          { status: 200 }
+        )
+    ) as unknown as typeof fetch;
+
+    const { getEmail } = await import('../lib/ews-client.js');
+    const result = await getEmail('token', 'draft-1');
+    expect(result.ok).toBe(true);
+    expect(result.data?.BccRecipients).toEqual([{ EmailAddress: { Name: 'Hidden', Address: 'bcc@x.com' } }]);
+  });
+
+  it('updateDraft sends a BccRecipients SetItemField when bcc is provided', async () => {
+    const bodies: string[] = [];
+    let call = 0;
+    globalThis.fetch = mock(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      bodies.push(String(init?.body || ''));
+      call += 1;
+      if (call === 1) {
+        // resolveMessageForWrite -> getEmail (GetItem), no attendee data needed for this test.
+        return new Response(
+          `<?xml version="1.0"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages" xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types"><soap:Body><m:ResponseCode>NoError</m:ResponseCode><m:GetItemResponse><m:Items><t:Message><t:ItemId Id="draft-1" ChangeKey="ck0" /></t:Message></m:Items></m:GetItemResponse></soap:Body></soap:Envelope>`,
+          { status: 200 }
+        );
+      }
+      // UpdateItem
+      return new Response(
+        `<?xml version="1.0"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages"><soap:Body><m:ResponseCode>NoError</m:ResponseCode></soap:Body></soap:Envelope>`,
+        { status: 200 }
+      );
+    }) as unknown as typeof fetch;
+
+    const { updateDraft } = await import('../lib/ews-client.js');
+    const result = await updateDraft('token', 'draft-1', { bcc: ['bcc1@x.com', 'bcc2@x.com'] });
+    expect(result.ok).toBe(true);
+    expect(call).toBe(2);
+    const updateBody = bodies[1];
+    expect(updateBody).toContain('FieldURI="message:BccRecipients"');
+    expect(updateBody).toContain('<t:BccRecipients>');
+    expect(updateBody).toContain('bcc1@x.com');
+    expect(updateBody).toContain('bcc2@x.com');
+  });
+});

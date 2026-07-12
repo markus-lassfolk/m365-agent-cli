@@ -551,6 +551,10 @@ m365-agent-cli drafts --create --to "a@b.com" --subject "Hi" --body "..." --cate
 m365-agent-cli drafts --edit <draftId> --category Review --category "Follow up"
 m365-agent-cli drafts --edit <draftId> --clear-categories
 
+# CC/BCC on drafts (create or edit; comma-separated)
+m365-agent-cli drafts --create --to "a@b.com" --cc "cc@b.com" --bcc "hidden@b.com" --subject "Hi" --body "..."
+m365-agent-cli drafts --edit <draftId> --bcc "hidden@b.com"
+
 # Create with attachment
 m365-agent-cli drafts --create \
   --to "user@example.com" \

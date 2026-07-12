@@ -416,6 +416,8 @@ export interface EmailMessage {
   From?: { EmailAddress?: EmailAddress };
   ToRecipients?: Array<{ EmailAddress?: EmailAddress }>;
   CcRecipients?: Array<{ EmailAddress?: EmailAddress }>;
+  /** Only requested/populated by `getEmail`; EWS omits Bcc from the `Default` shape otherwise. */
+  BccRecipients?: Array<{ EmailAddress?: EmailAddress }>;
   ReceivedDateTime?: string;
   SentDateTime?: string;
   IsRead?: boolean;
@@ -806,6 +808,16 @@ function parseEmailMessage(block: string): EmailMessage {
     }
   }));
 
+  // Bcc (only present when explicitly requested — see getEmail's AdditionalProperties)
+  const bccBlock = extractSelfClosingOrBlock(block, 'BccRecipients');
+  const bccMailboxes = extractBlocks(bccBlock, 'Mailbox');
+  const bccRecipients = bccMailboxes.map((mb) => ({
+    EmailAddress: {
+      Name: extractTag(mb, 'Name'),
+      Address: extractTag(mb, 'EmailAddress')
+    }
+  }));
+
   // Flag
   const flagBlock = extractSelfClosingOrBlock(block, 'Flag');
   const flagStatus = extractTag(flagBlock, 'FlagStatus') as 'NotFlagged' | 'Flagged' | 'Complete' | undefined;
@@ -824,6 +836,7 @@ function parseEmailMessage(block: string): EmailMessage {
     From: fromEmail ? { EmailAddress: { Name: fromName, Address: fromEmail } } : undefined,
     ToRecipients: toRecipients.length > 0 ? toRecipients : undefined,
     CcRecipients: ccRecipients.length > 0 ? ccRecipients : undefined,
+    BccRecipients: bccRecipients.length > 0 ? bccRecipients : undefined,
     ReceivedDateTime: receivedDateTime || undefined,
     SentDateTime: sentDateTime || undefined,
     IsRead: isRead,
@@ -1778,6 +1791,7 @@ export async function getEmail(token: string, messageId: string, mailbox?: strin
           <t:FieldURI FieldURI="message:From" />
           <t:FieldURI FieldURI="message:ToRecipients" />
           <t:FieldURI FieldURI="message:CcRecipients" />
+          <t:FieldURI FieldURI="message:BccRecipients" />
           <t:FieldURI FieldURI="message:IsRead" />
           <t:FieldURI FieldURI="item:Flag" />
           <t:FieldURI FieldURI="item:Importance" />
@@ -2323,6 +2337,7 @@ export async function updateDraft(
   options: {
     to?: string[];
     cc?: string[];
+    bcc?: string[];
     subject?: string;
     body?: string;
     bodyType?: 'Text' | 'HTML';
@@ -2358,6 +2373,13 @@ export async function updateDraft(
         `<t:SetItemField><t:FieldURI FieldURI="message:CcRecipients" /><t:Message><t:CcRecipients>${options.cc
           .map((e) => `<t:Mailbox><t:EmailAddress>${xmlEscape(e)}</t:EmailAddress></t:Mailbox>`)
           .join('')}</t:CcRecipients></t:Message></t:SetItemField>`
+      );
+    }
+    if (options.bcc !== undefined) {
+      setFields.push(
+        `<t:SetItemField><t:FieldURI FieldURI="message:BccRecipients" /><t:Message><t:BccRecipients>${options.bcc
+          .map((e) => `<t:Mailbox><t:EmailAddress>${xmlEscape(e)}</t:EmailAddress></t:Mailbox>`)
+          .join('')}</t:BccRecipients></t:Message></t:SetItemField>`
       );
     }
 

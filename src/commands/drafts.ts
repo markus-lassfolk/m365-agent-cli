@@ -51,6 +51,7 @@ export const draftsCommand = new Command('drafts')
   .option('--delete <id>', 'Delete draft by ID')
   .option('--to <emails>', 'Recipient(s) for create/edit, comma-separated')
   .option('--cc <emails>', 'CC recipient(s), comma-separated')
+  .option('--bcc <emails>', 'BCC recipient(s), comma-separated')
   .option('--subject <text>', 'Subject for create/edit')
   .option('--body <text>', 'Body for create/edit')
   .option('--attach <files>', 'Attach file(s), comma-separated paths')
@@ -84,6 +85,7 @@ export const draftsCommand = new Command('drafts')
         delete?: string;
         to?: string;
         cc?: string;
+        bcc?: string;
         subject?: string;
         body?: string;
         attach?: string;
@@ -324,6 +326,12 @@ export const draftsCommand = new Command('drafts')
               .map((e) => e.trim())
               .filter(Boolean)
           : undefined;
+        const bccList = options.bcc
+          ? options.bcc
+              .split(',')
+              .map((e) => e.trim())
+              .filter(Boolean)
+          : undefined;
 
         let body = options.body;
         if (body) body = body.replace(/\\n/g, '\n');
@@ -345,6 +353,7 @@ export const draftsCommand = new Command('drafts')
         const result = await createDraft(authResult.token!, {
           to: toList,
           cc: ccList,
+          bcc: bccList,
           subject: options.subject,
           body,
           bodyType,
@@ -492,6 +501,12 @@ export const draftsCommand = new Command('drafts')
               .map((e) => e.trim())
               .filter(Boolean)
           : undefined;
+        const bccList = options.bcc
+          ? options.bcc
+              .split(',')
+              .map((e) => e.trim())
+              .filter(Boolean)
+          : undefined;
 
         let body = options.body;
         if (body) body = body.replace(/\\n/g, '\n');
@@ -513,6 +528,7 @@ export const draftsCommand = new Command('drafts')
         const result = await updateDraft(authResult.token!, id, {
           to: toList,
           cc: ccList,
+          bcc: bccList,
           subject: options.subject,
           body,
           bodyType,
