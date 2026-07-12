@@ -1741,7 +1741,9 @@ excelCommand
 
 excelCommand
   .command('comments-list <itemId>')
-  .description('List threaded workbook comments (Microsoft Graph beta; requires beta or GRAPH_BETA_URL)')
+  .description(
+    'List threaded workbook comments (always uses the Microsoft Graph beta root — workbookComment has no v1.0 equivalent; set GRAPH_BETA_URL to target a different beta host)'
+  )
   .option('--user <upn>', "Target user's default OneDrive (not with --drive-id / --site-id)")
   .option('--drive-id <id>', 'Explicit drive id (e.g. SharePoint document library)')
   .option('--site-id <id>', 'SharePoint site id (default document library)')
@@ -1779,7 +1781,7 @@ excelCommand
 
 excelCommand
   .command('comments-get <itemId> <commentId>')
-  .description('Get one workbook comment by id (Graph beta)')
+  .description('Get one workbook comment by id (always uses the Microsoft Graph beta root; see GRAPH_BETA_URL)')
   .option('--user <upn>', "Target user's default OneDrive (not with --drive-id / --site-id)")
   .option('--drive-id <id>', 'Explicit drive id (e.g. SharePoint document library)')
   .option('--site-id <id>', 'SharePoint site id (default document library)')
@@ -1818,7 +1820,9 @@ excelCommand
 
 excelCommand
   .command('comments-create <itemId>')
-  .description('POST a new workbook comment (Graph beta; body shape see workbookComment)')
+  .description(
+    'POST a new workbook comment (always uses the Microsoft Graph beta root; body shape see workbookComment; see GRAPH_BETA_URL)'
+  )
   .requiredOption('--body <path>', 'JSON file for the new comment resource')
   .option('--user <upn>', "Target user's default OneDrive (not with --drive-id / --site-id)")
   .option('--drive-id <id>', 'Explicit drive id (e.g. SharePoint document library)')
@@ -1865,7 +1869,7 @@ excelCommand
 
 excelCommand
   .command('comments-reply <itemId> <commentId>')
-  .description('POST a reply on a workbook comment (Graph beta)')
+  .description('POST a reply on a workbook comment (always uses the Microsoft Graph beta root; see GRAPH_BETA_URL)')
   .requiredOption('--body <path>', 'JSON file for the reply resource')
   .option('--user <upn>', "Target user's default OneDrive (not with --drive-id / --site-id)")
   .option('--drive-id <id>', 'Explicit drive id (e.g. SharePoint document library)')
@@ -1913,7 +1917,9 @@ excelCommand
 
 excelCommand
   .command('comments-patch <itemId> <commentId>')
-  .description('PATCH a workbook comment (Graph beta; e.g. update content or associated task)')
+  .description(
+    'PATCH a workbook comment (always uses the Microsoft Graph beta root; e.g. update content or associated task; see GRAPH_BETA_URL)'
+  )
   .requiredOption('--body <path>', 'JSON file for the PATCH body')
   .option('--user <upn>', "Target user's default OneDrive (not with --drive-id / --site-id)")
   .option('--drive-id <id>', 'Explicit drive id (e.g. SharePoint document library)')
