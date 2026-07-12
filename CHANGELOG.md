@@ -6,7 +6,7 @@ For install and tagging, see [docs/RELEASE.md](docs/RELEASE.md).
 
 ---
 
-## [Unreleased]
+## [2026.7.4] — 2026-07-12
 
 ### Mail
 
@@ -67,6 +67,23 @@ Additional review pass:
 - **`graph batch`** rejects a JSON file without a `requests` array with a clear message instead of crashing with `TypeError: undefined is not iterable`.
 - **Unguarded `--json-file`/`--body-file`/`--data` reads** in `graph`, `meeting`, and `outlook-graph` now report a clean `Error:` (missing file or invalid JSON) instead of an unhandled stack trace.
 - **Delta sync state** is written atomically (temp + rename), so an interrupted `*-delta` run can't truncate the state file and force a full resync; and the `meeting recordings/transcripts --delta` scope check compares the organizer id case-insensitively (a UPN casing difference no longer rejects a valid cursor).
+
+### Fixed (extended QA review)
+
+Deeper multi-pass review across the whole CLI:
+
+- **EWS reply / reply-all / forward with `--cc`/`--bcc` produced schema-invalid SOAP and failed.** The response object emitted `ReferenceItemId` before the recipient/body elements, violating the EWS `Types.xsd` child-order for `ReplyToItem`/`ForwardItem`/`AcceptItem`. Recipients/body now precede `ReferenceItemId` (verified against the published schema), so CC/BCC on EWS replies and forwards work. Plain forward and accept/decline/tentative-with-comment were affected too.
+- **Path traversal / `.url` injection via EWS attachment names.** `mail download-attachments` (EWS) joined the raw, sender-controlled attachment name onto the output dir and hand-built `.url` shortcuts from a raw URL. Names are now reduced to a safe path component and `.url` writes go through the http(s)-validating helper (matching the Graph and calendar paths).
+- **Planner `remove-reference` / `checklist remove` / `--remove-assign` / `--clear-assign` / `--assign` were silent no-ops.** Graph open-type dictionaries are merged per-key on PATCH, so a removed entry must be sent as `null`; the code deleted/omitted the key, leaving it in place while reporting success. All five paths now null the removed keys.
+- **`calendar <date>` silently coerced an invalid date to "today".** A garbage date argument is now rejected with a clean error instead of listing today's events.
+- **EWS folder listings always showed 0 unread / 0 total.** `parseFolder` read the Microsoft Graph property names (`UnreadItemCount`/`TotalItemCount`) instead of the EWS elements (`UnreadCount`/`TotalCount`) the request asks for.
+- **Excel `usedRange --values-only` was ignored.** `valuesOnly` was sent as a query option; it is an OData function parameter (`usedRange(valuesOnly=true)`), so Graph returned the formatting-inclusive range.
+- **Graph did not retry-storm mutations into duplicates on 503.** Non-idempotent POST/PATCH/DELETE were retried on 503 when `Retry-After` was present; a 503 can occur after the server began processing, so `sendMail`/`createEvent` could send twice. 503 retry is now idempotent-only (429 behavior unchanged).
+- **`--json` stdout corruption fixed across many commands** (`mail` reply/forward/move, `drafts`, `rules`, `rooms`, `update-event`, `delete-event`, `calendar --download-attachments`, `create-event --list-rooms`, `auto-reply`): a human-readable preamble or confirmation printed before/instead of the JSON branch is now suppressed or emitted as JSON, so piping `--json` to a parser works.
+- **`CalendarView` (EWS) no longer silently truncates** at the server's ~1000-item page cap — it pages by advancing `StartDate` (de-duping the boundary item) to the end of the range.
+- **`--json-file` handling unified**: ~60 sites in `copilot`/`teams`/`presence` that read+parsed a user file with no guard now report a clean error instead of a silent `exit 1` plus a spurious exception report.
+- **Assorted validation/exit-code/parity fixes**: empty recipients from a trailing comma (`rules`), `folders` mutually-exclusive action flags, `whoami` EWS/Graph exit parity, `onenote operation` / `planner update-task` exit codes, `meeting --top` / `create-event --count` numeric validation, and the CLI now prints a clean message instead of exiting silently on an uncaught error.
+- **Removed a duplicate no-assertion test file** and corrected several tests whose expectations were wrong or vacuous (e.g. the calendar invalid-date tests now actually assert the error).
 
 ---
 
