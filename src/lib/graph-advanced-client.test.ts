@@ -198,6 +198,36 @@ describe('graphBatchAll', () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it('preserves responses from earlier successful chunks when a later chunk fails outright (bug regression)', async () => {
+    process.env.GRAPH_BASE_URL = 'https://graph.microsoft.com/v1.0';
+    const originalFetch = globalThis.fetch;
+    let calls = 0;
+    try {
+      globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+        calls += 1;
+        if (calls === 1) {
+          const parsed = JSON.parse(String(init?.body ?? '{}')) as { requests: Array<{ id: string }> };
+          const responses = parsed.requests.map((req) => ({ id: req.id, status: 200, body: {} }));
+          return new Response(JSON.stringify({ responses }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' }
+          });
+        }
+        return new Response('server error', { status: 500 });
+      }) as unknown as typeof fetch;
+
+      const requests = Array.from({ length: 25 }, (_, i) => ({ id: String(i), method: 'GET', url: '/me' }));
+      const r = await graphBatchAll('tok', requests);
+      expect(r.ok).toBe(false);
+      expect(calls).toBe(2);
+      const data = r.data as { responses: Array<{ id: string }> } | undefined;
+      const responses = data?.responses ?? [];
+      expect(responses.map((x) => x.id)).toEqual(requests.slice(0, 20).map((x) => x.id));
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });
 
 describe('graphInvoke / graphInvokeText', () => {

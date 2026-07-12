@@ -5,7 +5,7 @@
  * that operate on an ID list (`--ids <csv>` / `--json-file <path>`).
  */
 
-import { graphBatchAll } from './graph-advanced-client.js';
+import { type GraphBatchSubResponse, graphBatchAll } from './graph-advanced-client.js';
 import type { GraphResponse } from './graph-client.js';
 import { readJsonFileOrExit } from './read-json-file.js';
 
@@ -29,22 +29,16 @@ function extractBatchErrorMessage(body: unknown): string | undefined {
   return (body as { error?: { message?: string } }).error?.message;
 }
 
-/** Runs one batched Graph mutation per target id, matching each `/$batch` sub-response back to its request by `id`. */
-export async function applyBulkGraphRequests(
-  token: string,
+function buildBulkOutcomes(
   requests: BulkSubRequestSpec[],
-  beta?: boolean,
-  auth?: { identity?: string; pinAccessToken?: boolean }
-): Promise<GraphResponse<BulkMutationOutcome[]>> {
-  const r = await graphBatchAll(token, requests as unknown as Array<Record<string, unknown>>, beta, auth);
-  if (!r.ok) {
-    return { ok: false, error: r.error };
-  }
-  const byId = new Map((r.data?.responses ?? []).map((resp) => [resp.id, resp]));
-  const outcomes: BulkMutationOutcome[] = requests.map((req) => {
+  responses: GraphBatchSubResponse[],
+  missingError: (id: string) => string
+): BulkMutationOutcome[] {
+  const byId = new Map(responses.map((resp) => [resp.id, resp]));
+  return requests.map((req) => {
     const resp = byId.get(req.id);
     if (!resp) {
-      return { id: req.id, ok: false, error: 'No response returned for this request (unexpected)' };
+      return { id: req.id, ok: false, error: missingError(req.id) };
     }
     const ok = resp.status >= 200 && resp.status < 300;
     return {
@@ -54,7 +48,39 @@ export async function applyBulkGraphRequests(
       ...(ok ? {} : { error: extractBatchErrorMessage(resp.body) || `HTTP ${resp.status}` })
     };
   });
-  return { ok: true, data: outcomes };
+}
+
+/** Runs one batched Graph mutation per target id, matching each `/$batch` sub-response back to its request by `id`. */
+export async function applyBulkGraphRequests(
+  token: string,
+  requests: BulkSubRequestSpec[],
+  beta?: boolean,
+  auth?: { identity?: string; pinAccessToken?: boolean }
+): Promise<GraphResponse<BulkMutationOutcome[]>> {
+  const r = await graphBatchAll(token, requests as unknown as Array<Record<string, unknown>>, beta, auth);
+  if (!r.ok) {
+    // On a hard batch failure (e.g. a later chunk's POST never went through), graphBatchAll still
+    // returns responses collected from earlier, successfully-sent chunks in r.data — surface those
+    // as real per-id outcomes, and mark the rest as not-attempted, rather than reporting one opaque
+    // top-level error that leaves the caller unable to tell which ids already mutated.
+    const responses = r.data?.responses ?? [];
+    if (responses.length === 0) {
+      return { ok: false, error: r.error };
+    }
+    const batchErrorMessage = r.error?.message || 'Batch request failed';
+    return {
+      ok: true,
+      data: buildBulkOutcomes(requests, responses, () => `Not attempted: ${batchErrorMessage}`)
+    };
+  }
+  return {
+    ok: true,
+    data: buildBulkOutcomes(
+      requests,
+      r.data?.responses ?? [],
+      () => 'No response returned for this request (unexpected)'
+    )
+  };
 }
 
 /**

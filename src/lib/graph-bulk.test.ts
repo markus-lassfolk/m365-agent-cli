@@ -75,6 +75,35 @@ describe('applyBulkGraphRequests', () => {
     const r = await applyBulkGraphRequests(token, [{ id: 'a', method: 'DELETE', url: '/x' }]);
     expect(r.ok).toBe(false);
   });
+
+  it('reports real outcomes for an earlier successful chunk and "not attempted" for the rest when a later chunk fails (bug regression)', async () => {
+    process.env.GRAPH_BASE_URL = 'https://graph.microsoft.com/v1.0';
+    let calls = 0;
+    globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+      calls += 1;
+      if (calls === 1) {
+        const parsed = JSON.parse(String(init?.body ?? '{}')) as { requests: Array<{ id: string }> };
+        const responses = parsed.requests.map((req) => ({ id: req.id, status: 200, body: {} }));
+        return new Response(JSON.stringify({ responses }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }
+      return new Response('server error', { status: 500 });
+    }) as unknown as typeof fetch;
+
+    const requests: BulkSubRequestSpec[] = Array.from({ length: 25 }, (_, i) => ({
+      id: String(i),
+      method: 'DELETE',
+      url: `/x/${i}`
+    }));
+    const r = await applyBulkGraphRequests(token, requests);
+    expect(r.ok).toBe(true);
+    expect(calls).toBe(2);
+    const outcomes = r.data ?? [];
+    expect(outcomes.slice(0, 20).every((o) => o.ok && o.status === 200)).toBe(true);
+    expect(outcomes.slice(20).every((o) => !o.ok && o.error?.startsWith('Not attempted:'))).toBe(true);
+  });
 });
 
 describe('parseBulkIdListOrExit', () => {

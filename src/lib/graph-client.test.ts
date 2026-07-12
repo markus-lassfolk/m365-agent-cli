@@ -803,6 +803,69 @@ describe('--dry-run (M365_DRY_RUN)', () => {
     }
   });
 
+  it('does not halt a /$batch POST whose sub-requests are all GET (bug regression)', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    process.env.M365_DRY_RUN = '1';
+    const originalFetch = globalThis.fetch;
+    let fetchCalled = false;
+
+    try {
+      globalThis.fetch = (async () => {
+        fetchCalled = true;
+        return new Response(JSON.stringify({ responses: [] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as unknown as typeof fetch;
+
+      const r = await callGraphAt(baseUrl, token, '/$batch', {
+        method: 'POST',
+        body: JSON.stringify({ requests: [{ id: '1', method: 'GET', url: '/me' }] })
+      });
+      expect(fetchCalled).toBe(true);
+      expect(r.ok).toBe(true);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('still halts a /$batch POST that contains a mutating sub-request', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    process.env.M365_DRY_RUN = '1';
+    const originalFetch = globalThis.fetch;
+    let fetchCalled = false;
+    let exitCode: number | undefined;
+    process.exit = ((code?: number) => {
+      exitCode = code;
+      throw new Error('exit');
+    }) as never;
+    console.log = (() => {}) as typeof console.log;
+
+    try {
+      globalThis.fetch = (async () => {
+        fetchCalled = true;
+        return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } });
+      }) as unknown as typeof fetch;
+
+      await expect(
+        callGraphAt(baseUrl, token, '/$batch', {
+          method: 'POST',
+          body: JSON.stringify({
+            requests: [
+              { id: '1', method: 'GET', url: '/me' },
+              { id: '2', method: 'PATCH', url: '/me/messages/1', body: { subject: 'x' } }
+            ]
+          })
+        })
+      ).rejects.toThrow('exit');
+
+      expect(fetchCalled).toBe(false);
+      expect(exitCode).toBe(0);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it('does nothing special when M365_DRY_RUN is unset (mutating request goes through)', async () => {
     process.env.GRAPH_BASE_URL = baseUrl;
     delete process.env.M365_DRY_RUN;

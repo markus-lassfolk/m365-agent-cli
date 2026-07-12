@@ -298,6 +298,23 @@ export function isIdempotentMethod(method: string): boolean {
   return m === 'GET' || m === 'HEAD';
 }
 
+/** True when `fullUrl` is a Graph `/$batch` POST whose body is a well-formed batch request whose
+ *  every sub-request uses GET/HEAD — i.e. nothing would actually mutate data, so `--dry-run`
+ *  shouldn't halt it. Any parse failure or non-batch URL returns false (treat as mutating, the
+ *  safe default). */
+function isReadOnlyBatchRequest(fullUrl: string, fetchInit: RequestInit): boolean {
+  try {
+    if (!new URL(fullUrl).pathname.endsWith('/$batch')) return false;
+    const bodyStr = typeof fetchInit.body === 'string' ? fetchInit.body : undefined;
+    if (!bodyStr) return false;
+    const parsed = JSON.parse(bodyStr) as { requests?: Array<{ method?: string }> };
+    if (!Array.isArray(parsed.requests) || parsed.requests.length === 0) return false;
+    return parsed.requests.every((r) => isIdempotentMethod(String(r?.method || 'GET')));
+  } catch {
+    return false;
+  }
+}
+
 function isTransientNetworkError(err: unknown): boolean {
   if (!(err instanceof Error)) return false;
   return (
@@ -535,7 +552,7 @@ async function callGraphUrlWithRetries<T>(
 ): Promise<GraphResponse<T>> {
   const method = (fetchInit.method || 'GET').toUpperCase();
 
-  if (!isIdempotentMethod(method) && isDryRunActive()) {
+  if (!isIdempotentMethod(method) && !isReadOnlyBatchRequest(fullUrl, fetchInit) && isDryRunActive()) {
     const { headers: previewHeaders } = fetchInit;
     haltForDryRun({
       backend: 'graph',
@@ -548,7 +565,7 @@ async function callGraphUrlWithRetries<T>(
 
   const cacheTtlMs = method === 'GET' ? activeCacheTtlMs() : null;
   if (cacheTtlMs) {
-    const cached = await readGraphCache(token, method, fullUrl);
+    const cached = await readGraphCache(token, method, fullUrl, fetchInit.headers);
     if (cached) {
       return graphResult(cached.body as T);
     }
@@ -659,7 +676,7 @@ async function callGraphUrlWithRetries<T>(
     if (responseMode === 'text') {
       const text = await response.text();
       if (cacheTtlMs) {
-        await writeGraphCache(token, method, fullUrl, response.status, text, cacheTtlMs);
+        await writeGraphCache(token, method, fullUrl, response.status, text, cacheTtlMs, fetchInit.headers);
       }
       return graphResult(text as unknown as T);
     }
@@ -678,7 +695,7 @@ async function callGraphUrlWithRetries<T>(
     try {
       const parsed = JSON.parse(raw) as T;
       if (cacheTtlMs) {
-        await writeGraphCache(token, method, fullUrl, response.status, parsed, cacheTtlMs);
+        await writeGraphCache(token, method, fullUrl, response.status, parsed, cacheTtlMs, fetchInit.headers);
       }
       return graphResult(parsed);
     } catch {

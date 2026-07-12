@@ -65,4 +65,21 @@ describe('renderMailTemplate', () => {
   it('ignores extra vars not referenced by the template', () => {
     expect(renderMailTemplate('Hello {{name}}!', { name: 'Alice', unused: 'x' })).toBe('Hello Alice!');
   });
+
+  it('throws on a malformed placeholder (leading digit) instead of passing it through literally', () => {
+    expect(() => renderMailTemplate('Hello {{1name}}!', {})).toThrow(MailTemplateError);
+    expect(() => renderMailTemplate('Hello {{1name}}!', {})).toThrow(/malformed placeholder/);
+  });
+
+  it('throws on a malformed placeholder (hyphenated name)', () => {
+    expect(() => renderMailTemplate('Hello {{my-name}}!', { 'my-name': 'x' })).toThrow(/malformed placeholder/);
+  });
+
+  it('throws on an empty placeholder', () => {
+    expect(() => renderMailTemplate('Hello {{}}!', {})).toThrow(/malformed placeholder/);
+  });
+
+  it('does not flag a valid placeholder as malformed once resolved', () => {
+    expect(renderMailTemplate('Hello {{name}}!', { name: 'Alice' })).toBe('Hello Alice!');
+  });
 });

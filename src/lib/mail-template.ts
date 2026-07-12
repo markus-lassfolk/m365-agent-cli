@@ -5,6 +5,9 @@
  */
 
 const PLACEHOLDER_RE = /\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:\|([^}]*))?\}\}/g;
+/** Catches `{{...}}`-shaped tokens PLACEHOLDER_RE's strict identifier grammar doesn't match
+ *  (hyphenated names, leading digits, empty braces, ...) so they don't pass through unsubstituted. */
+const MALFORMED_PLACEHOLDER_RE = /\{\{[^}]*\}\}/g;
 
 export class MailTemplateError extends Error {}
 
@@ -43,6 +46,12 @@ export function renderMailTemplate(source: string, vars: Record<string, string>)
   if (unresolved.size > 0) {
     throw new MailTemplateError(
       `Template has unresolved placeholder(s) with no --var and no default: ${[...unresolved].join(', ')}`
+    );
+  }
+  const malformed = [...new Set([...rendered.matchAll(MALFORMED_PLACEHOLDER_RE)].map((m) => m[0]))];
+  if (malformed.length > 0) {
+    throw new MailTemplateError(
+      `Template has malformed placeholder(s) — expected {{name}} or {{name|default}}: ${malformed.join(', ')}`
     );
   }
   return rendered;

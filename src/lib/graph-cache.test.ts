@@ -96,6 +96,37 @@ describe('readGraphCache / writeGraphCache', () => {
     expect(await readGraphCache('tok', 'GET', 'https://graph.microsoft.com/v1.0/me/messages')).toBeNull();
   });
 
+  it('isolates entries by headers (bug regression: Prefer/ConsistencyLevel must not collide)', async () => {
+    const url = 'https://graph.microsoft.com/v1.0/me/events';
+    await writeGraphCache('tok', 'GET', url, 200, { tz: 'UTC' }, 60_000, {
+      Prefer: 'outlook.timezone="UTC"'
+    });
+    await writeGraphCache('tok', 'GET', url, 200, { tz: 'America/New_York' }, 60_000, {
+      Prefer: 'outlook.timezone="America/New_York"'
+    });
+
+    const utcEntry = await readGraphCache('tok', 'GET', url, { Prefer: 'outlook.timezone="UTC"' });
+    const nyEntry = await readGraphCache('tok', 'GET', url, { Prefer: 'outlook.timezone="America/New_York"' });
+    expect(utcEntry?.body).toEqual({ tz: 'UTC' });
+    expect(nyEntry?.body).toEqual({ tz: 'America/New_York' });
+
+    // No headers at all is a third, distinct cache slot.
+    expect(await readGraphCache('tok', 'GET', url)).toBeNull();
+  });
+
+  it('is unaffected by header key case or declaration order', async () => {
+    const url = 'https://graph.microsoft.com/v1.0/me/events';
+    await writeGraphCache('tok', 'GET', url, 200, { ok: true }, 60_000, {
+      Prefer: 'a',
+      ConsistencyLevel: 'eventual'
+    });
+    const entry = await readGraphCache('tok', 'GET', url, {
+      consistencylevel: 'eventual',
+      prefer: 'a'
+    });
+    expect(entry?.body).toEqual({ ok: true });
+  });
+
   it('prunes expired entries opportunistically on every write, keeping only live entries', async () => {
     const dir = join(testHome, 'graph-cache');
 

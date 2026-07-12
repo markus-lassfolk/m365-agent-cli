@@ -205,6 +205,12 @@ export function chunkGraphBatchRequests(
  * land in a different chunk, this fails fast with an `InvalidBatch` error before sending anything,
  * since Graph requires dependency chains to stay within a single `$batch` POST — reorder or split
  * such chains into batches of `≤ 20` yourself.
+ *
+ * If a later chunk's POST fails outright (network error, exhausted retries, ...), the responses
+ * already collected from earlier, successfully-sent chunks are NOT discarded: they're returned
+ * alongside the error as `data.responses`, so a caller like `applyBulkGraphRequests` can report
+ * accurate per-id outcomes instead of leaving the caller to guess whether already-mutated items
+ * need to be retried (which could double-apply a non-idempotent mutation).
  */
 export async function graphBatchAll(
   token: string,
@@ -252,7 +258,8 @@ export async function graphBatchAll(
   for (const chunk of chunks) {
     const r = await graphPostBatch<{ responses: GraphBatchSubResponse[] }>(token, { requests: chunk }, beta, auth);
     if (!r.ok) {
-      return { ok: false, error: r.error };
+      // Preserve responses already collected from earlier, successfully-sent chunks.
+      return { ok: false, error: r.error, data: { responses } };
     }
     responses.push(...(r.data?.responses || []));
   }
