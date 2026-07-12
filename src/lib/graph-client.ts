@@ -76,8 +76,13 @@ const GRAPH_TIMEOUT_MS = Number(process.env.GRAPH_TIMEOUT_MS) > 0 ? Number(proce
 /** Optional delay between `@odata.nextLink` pages (milliseconds). Default 0. */
 const GRAPH_PAGE_DELAY_MS = Math.max(0, Number(process.env.GRAPH_PAGE_DELAY_MS) || 0);
 
-/** Hard cap on pages followed in one `fetchAllPages` call — guards against nextLink cycles/runaway. */
-const GRAPH_MAX_PAGES = Math.max(1, Number(process.env.GRAPH_MAX_PAGES) || 10_000);
+/**
+ * Hard cap on pages followed in one `fetchAllPages` call — guards against nextLink cycles/runaway.
+ * Read at call time (not module load) so `GRAPH_MAX_PAGES` can be adjusted at runtime and in tests.
+ */
+function graphMaxPages(): number {
+  return Math.max(1, Number(process.env.GRAPH_MAX_PAGES) || 10_000);
+}
 
 const GRAPH_RETRY_MAX_ATTEMPTS = Math.min(8, Math.max(1, Number(process.env.GRAPH_MAX_RETRIES) || 4));
 
@@ -398,13 +403,14 @@ export async function fetchAllPages<T>(
   const items: T[] = [];
   let path = initialPath;
   let pageCount = 0;
+  const maxPages = graphMaxPages();
 
   while (path) {
     // Runaway/cycle guard: a buggy or hostile server returning a perpetually-advancing or
     // self-referential nextLink must not loop or grow memory forever.
-    if (++pageCount > GRAPH_MAX_PAGES) {
+    if (++pageCount > maxPages) {
       return graphError(
-        `${errorMessage}: pagination exceeded ${GRAPH_MAX_PAGES} pages (possible nextLink cycle). Set GRAPH_MAX_PAGES to raise the limit.`,
+        `${errorMessage}: pagination exceeded ${maxPages} pages (possible nextLink cycle). Set GRAPH_MAX_PAGES to raise the limit.`,
         'TooManyPages',
         508
       ) as GraphResponse<T[]>;

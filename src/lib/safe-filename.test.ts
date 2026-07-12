@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { join } from 'node:path';
 import { safeAttachmentFileName } from './safe-filename.js';
 
 /**
@@ -20,5 +21,26 @@ describe('safeAttachmentFileName', () => {
   test('truncates very long names to 255 chars', () => {
     const long = 'a'.repeat(300);
     expect(safeAttachmentFileName(long, 'f').length).toBe(255);
+  });
+
+  test('neutralizes deep traversal payloads so join() stays inside the output dir', () => {
+    // Exact attack strings a malicious sender could set as the attachment name.
+    for (const payload of [
+      '../../../../home/user/.bashrc',
+      '..\\..\\..\\Windows\\System32\\drivers\\etc\\hosts',
+      '/etc/passwd',
+      '../.ssh/authorized_keys',
+      '../.config/m365-agent-cli/.env'
+    ]) {
+      const safe = safeAttachmentFileName(payload, 'attachment');
+      // Reduced to a single path component: no separators, no parent refs.
+      expect(safe).not.toContain('/');
+      expect(safe).not.toContain('\\');
+      expect(safe).not.toContain('..');
+      // And the resolved path never escapes the trusted output directory.
+      const outDir = join('/tmp', 'downloads');
+      const resolved = join(outDir, safe);
+      expect(resolved.startsWith(`${outDir}/`)).toBe(true);
+    }
   });
 });

@@ -28,6 +28,7 @@ import { warnAutoGraphToEwsFallback } from '../lib/exchange-fallback-hint.js';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
 import { markdownToHtml } from '../lib/markdown.js';
 import { lookupMimeType } from '../lib/mime-type.js';
+import { safeAttachmentFileName, writeInternetShortcutUtf8File } from '../lib/safe-filename.js';
 import { checkReadOnly } from '../lib/utils.js';
 import {
   describeMailGraphUnhandledCombination,
@@ -531,7 +532,7 @@ Shared mailbox: add --mailbox shared@contoso.com. Full flags: docs/CLI_REFERENCE
               console.error(`  Failed to resolve link: ${att.Name}`);
               continue;
             }
-            const safeBase = (att.Name || 'link').replace(/[/\\?%*:|"<>]/g, '_').trim() || 'link';
+            const safeBase = safeAttachmentFileName(att.Name, 'link').replace(/\.url$/i, '') || 'link';
             let filePath = join(options.output, `${safeBase}.url`);
             let counter = 1;
             while (usedPaths.has(filePath)) {
@@ -550,8 +551,12 @@ Shared mailbox: add --mailbox shared@contoso.com. Full flags: docs/CLI_REFERENCE
               }
             }
             usedPaths.add(filePath);
-            const shortcut = `[InternetShortcut]\r\nURL=${url}\r\n`;
-            await writeFile(filePath, shortcut, 'utf8');
+            const ok = await writeInternetShortcutUtf8File(filePath, url);
+            if (!ok) {
+              usedPaths.delete(filePath);
+              console.error(`  Refusing unsafe or invalid link URL (only http/https allowed): ${att.Name}`);
+              continue;
+            }
             console.log(`  \u2713 ${filePath.split(/[\\/]/).pop()} (link)`);
             continue;
           }
@@ -564,14 +569,18 @@ Shared mailbox: add --mailbox shared@contoso.com. Full flags: docs/CLI_REFERENCE
 
           const content = Buffer.from(fullAtt.data.ContentBytes, 'base64');
 
+          // Reduce the server-supplied name to a single safe path component before joining
+          // (mitigates path traversal / arbitrary file write via attacker-controlled attachment names).
+          const safeName = safeAttachmentFileName(att.Name, 'attachment');
+
           // Resolve the actual file path, avoiding collisions and existing files
-          let filePath = join(options.output, att.Name);
+          let filePath = join(options.output, safeName);
           let counter = 1;
           while (true) {
             // Always check for intra-download collisions
             if (usedPaths.has(filePath)) {
-              const ext = extname(att.Name);
-              const base = att.Name.slice(0, att.Name.length - ext.length);
+              const ext = extname(safeName);
+              const base = safeName.slice(0, safeName.length - ext.length);
               filePath = join(options.output, `${base} (${counter})${ext}`);
               counter++;
               continue;
@@ -582,8 +591,8 @@ Shared mailbox: add --mailbox shared@contoso.com. Full flags: docs/CLI_REFERENCE
               try {
                 await access(filePath);
                 // File exists — resolve collision with a numeric suffix
-                const ext = extname(att.Name);
-                const base = att.Name.slice(0, att.Name.length - ext.length);
+                const ext = extname(safeName);
+                const base = safeName.slice(0, safeName.length - ext.length);
                 filePath = join(options.output, `${base} (${counter})${ext}`);
                 counter++;
                 continue;
@@ -600,7 +609,7 @@ Shared mailbox: add --mailbox shared@contoso.com. Full flags: docs/CLI_REFERENCE
           await writeFile(filePath, content);
 
           const sizeKB = Math.round(content.length / 1024);
-          const written = filePath === join(options.output, att.Name) ? att.Name : filePath.split(/[\\/]/).pop();
+          const written = filePath === join(options.output, safeName) ? safeName : filePath.split(/[\\/]/).pop();
           console.log(`  \u2713 ${written} (${sizeKB} KB)`);
         }
 

@@ -146,4 +146,60 @@ describe('graph-delta-state-file', () => {
     expect(s?.kind).toBe('sharePointListItems');
     expect(s?.sharePointSiteId).toBe('a');
   });
+  test('assertDeltaScopeMatchesState throws on generic user mismatch', () => {
+    expect(() =>
+      assertDeltaScopeMatchesState(
+        { version: 1, kind: 'mailMessages', updatedAt: '', folderId: 'inbox', user: 'a@x.com' },
+        { folderId: 'inbox', user: 'b@x.com' }
+      )
+    ).toThrow(/user/);
+  });
+
+  test('assertDeltaScopeMatchesState throws on todoLists user mismatch', () => {
+    expect(() =>
+      assertDeltaScopeMatchesState(
+        { version: 1, kind: 'todoLists', updatedAt: '', user: 'a@x.com' },
+        { user: 'b@x.com' }
+      )
+    ).toThrow(/user/);
+  });
+
+  test('assertDeltaScopeMatchesState throws on sharePointListItems site or list mismatch', () => {
+    expect(() =>
+      assertDeltaScopeMatchesState(
+        { version: 1, kind: 'sharePointListItems', updatedAt: '', sharePointSiteId: 's1', sharePointListId: 'l1' },
+        { sharePointSiteId: 's2', sharePointListId: 'l1' }
+      )
+    ).toThrow(/sharePointSiteId/);
+    expect(() =>
+      assertDeltaScopeMatchesState(
+        { version: 1, kind: 'sharePointListItems', updatedAt: '', sharePointSiteId: 's1', sharePointListId: 'l1' },
+        { sharePointSiteId: 's1', sharePointListId: 'l2' }
+      )
+    ).toThrow(/sharePointListId/);
+  });
+
+  test('assertDeltaScopeMatchesState throws on driveDelta user / site mismatch', () => {
+    expect(() =>
+      assertDeltaScopeMatchesState(
+        { version: 1, kind: 'driveDelta', updatedAt: '', driveLocKind: 'user', driveLocUser: 'a@x.com' },
+        driveDeltaScopeFromLocation({ kind: 'user', user: 'b@x.com' }, undefined)
+      )
+    ).toThrow(/driveLocUser/);
+    expect(() =>
+      assertDeltaScopeMatchesState(
+        { version: 1, kind: 'driveDelta', updatedAt: '', driveLocKind: 'site', driveLocSiteId: 's1' },
+        driveDeltaScopeFromLocation({ kind: 'site', siteId: 's2' }, undefined)
+      )
+    ).toThrow(/driveLocSiteId/);
+  });
+
+  test('assertDeltaScopeMatchesState accepts a fully-matching scope (no throw)', () => {
+    expect(() =>
+      assertDeltaScopeMatchesState(
+        { version: 1, kind: 'mailMessages', updatedAt: '', folderId: 'inbox', user: 'a@x.com' },
+        { folderId: 'inbox', user: 'A@x.com' }
+      )
+    ).not.toThrow();
+  });
 });
