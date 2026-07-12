@@ -582,11 +582,56 @@ describe('findtime', () => {
     expect(result.stderr).toContain('Invalid attendee email');
   });
 
-  test('--optional, --min-attendee-percentage, and --timezone are accepted (EWS path ignores them)', async () => {
+  test('--optional, --min-attendee-percentage, and --timezone are accepted (EWS path ignores --optional/--min-attendee-percentage)', async () => {
     const result = await runM365AgentCli(
       'findtime nextweek user@example.com --optional user@example.com --min-attendee-percentage 50 --timezone America/New_York --token test-token-12345'
     );
     expect(result.exitCode).toBe(0);
+  });
+
+  test('EWS backend honors --timezone: sends TimeZoneDefinition and filters/displays without double-shifting (bug regression)', async () => {
+    let capturedBody = '';
+    setMockFetch((url, _request, body) => {
+      if (!url.includes('outlook.office365.com/EWS/Exchange.asmx')) return null;
+      if (!body.includes('GetUserAvailabilityRequest')) return null;
+      capturedBody = body;
+      return {
+        status: 200,
+        contentType: 'text/xml',
+        body: `<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages" xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types">
+  <soap:Body>
+    <m:GetUserAvailabilityResponse>
+      <m:SuggestionsResponse>
+        <m:ResponseMessage ResponseClass="Success"><m:ResponseCode>NoError</m:ResponseCode></m:ResponseMessage>
+        <m:SuggestionDayResultArray>
+          <t:SuggestionDayResult>
+            <t:Date>2026-07-13T00:00:00</t:Date>
+            <t:SuggestionArray>
+              <t:Suggestion>
+                <t:MeetingTime>2026-07-13T14:00:00</t:MeetingTime>
+                <t:IsWorkTime>true</t:IsWorkTime>
+              </t:Suggestion>
+            </t:SuggestionArray>
+          </t:SuggestionDayResult>
+        </m:SuggestionDayResultArray>
+      </m:SuggestionsResponse>
+    </m:GetUserAvailabilityResponse>
+  </soap:Body>
+</soap:Envelope>`
+      };
+    });
+
+    // 2026-07-13T14:00:00 in the mocked SuggestionsResponse means 2pm America/New_York (per the
+    // TimeZoneDefinition sent in the request) — inside the default 9-17 work hours window, and
+    // must display as 14:00, not shifted by the host machine's local offset.
+    const result = await runM365AgentCli(
+      'findtime nextweek user@example.com --solo --timezone America/New_York --token test-token-12345'
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(capturedBody).toContain('TimeZoneDefinition Id="America/New_York"');
+    expect(result.stdout).toContain('14:00');
   });
 
   test('--min-attendee-percentage out of range shows error', async () => {

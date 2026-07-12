@@ -392,7 +392,7 @@ export const findtimeCommand = new Command('findtime')
           start.toISOString(),
           end.toISOString(),
           duration,
-          undefined,
+          options.timezone,
           options.mailbox
         );
 
@@ -409,7 +409,13 @@ export const findtimeCommand = new Command('findtime')
 
         const freeSlots = (result.data[0]?.scheduleItems || []).filter((item) => {
           if (item.status !== 'Free') return false;
-          const hour = new Date(item.start.dateTime).getHours();
+          // item.start.dateTime already carries wall-clock digits for the effective request
+          // zone (options.timezone, or UTC by default) tagged as a "Z" instant by
+          // ewsAvailabilityTimeToUtcMs — read the hour with the UTC accessor to get that zone's
+          // hour directly. Using local getHours() applies the host machine's offset (wrong unless
+          // the host happens to be in that zone); re-projecting through hourInTimeZone would
+          // double-shift since the digits are already zoned.
+          const hour = new Date(item.start.dateTime).getUTCHours();
           return hour >= workStart && hour < workEnd;
         });
 
@@ -451,11 +457,22 @@ export const findtimeCommand = new Command('findtime')
             byDay.get(day)?.push(slot);
           }
 
+          // slot.start/end.dateTime carry wall-clock digits for the effective request zone
+          // (options.timezone, or UTC by default) tagged as a "Z" instant — read them directly
+          // (UTC accessors / string slicing) rather than through formatDate/formatTime, which
+          // apply the host machine's local offset and would shift the displayed day/time.
           for (const [day, slots] of byDay) {
-            const dayLabel = formatDate(new Date(day).toISOString());
+            const dayLabel = new Date(`${day}T12:00:00Z`).toLocaleDateString('en-US', {
+              weekday: 'short',
+              month: 'short',
+              day: 'numeric',
+              timeZone: 'UTC'
+            });
             console.log(`  ${dayLabel}:`);
             for (const slot of slots) {
-              console.log(`    🟢 ${formatTime(slot.start.dateTime)} - ${formatTime(slot.end.dateTime)}`);
+              const st = slot.start.dateTime.slice(11, 16);
+              const en = slot.end.dateTime.slice(11, 16);
+              console.log(`    🟢 ${st} - ${en}`);
             }
           }
         }

@@ -143,9 +143,16 @@ export async function runFindTimeGraph(opts: {
   const filtered = suggestions.filter((s) => {
     const start = s.meetingTimeSlot?.start;
     if (!start?.dateTime) return false;
+    // Graph returns dateTime as wall-clock time already expressed in the zone we sent via the
+    // Prefer header (tz — opts.timezone or the UTC default), so when opts.timezone is set the
+    // hour digits can be read directly; round-tripping through graphEventStartMs (which only
+    // understands UTC/GMT) + hourInTimeZone would re-project an already-zoned time and double-shift it.
+    if (opts.timezone) {
+      const hour = Number(start.dateTime.slice(11, 13));
+      return hour >= opts.workStartHour && hour < opts.workEndHour;
+    }
     const ms = graphEventStartMs(start);
-    const d = Number.isFinite(ms) ? new Date(ms) : new Date(start.dateTime);
-    const hour = opts.timezone ? hourInTimeZone(d, opts.timezone) : d.getHours();
+    const hour = Number.isFinite(ms) ? new Date(ms).getHours() : new Date(start.dateTime).getHours();
     return hour >= opts.workStartHour && hour < opts.workEndHour;
   });
 
@@ -304,24 +311,37 @@ export async function runFindTimeGraphSchedule(opts: {
     console.log(`\n  ✅ Found ${freeSlots.length} available slot${freeSlots.length > 1 ? 's' : ''}:\n`);
     const byDay = new Map<string, typeof freeSlots>();
     for (const slot of freeSlots) {
-      const day = slot.start.split('T')[0];
+      // Bucket by the requested zone's calendar day when --timezone is set, not the UTC ISO date
+      // — otherwise a slot near midnight can print under the wrong day header.
+      const day = opts.timezone
+        ? formatDateInTimeZone(new Date(slot.start), opts.timezone).slice(0, 10)
+        : slot.start.split('T')[0];
       if (!byDay.has(day)) byDay.set(day, []);
       byDay.get(day)?.push(slot);
     }
     for (const [day, slots] of byDay) {
-      const dayLabel = new Date(day).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+      const dayLabel = new Date(`${day}T12:00:00Z`).toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        timeZone: 'UTC'
+      });
       console.log(`  ${dayLabel}:`);
       for (const slot of slots) {
-        const st = new Date(slot.start).toLocaleTimeString('en-US', {
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: false
-        });
-        const en = new Date(slot.end).toLocaleTimeString('en-US', {
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: false
-        });
+        const st = opts.timezone
+          ? formatDateInTimeZone(new Date(slot.start), opts.timezone).slice(11, 16)
+          : new Date(slot.start).toLocaleTimeString('en-US', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false
+            });
+        const en = opts.timezone
+          ? formatDateInTimeZone(new Date(slot.end), opts.timezone).slice(11, 16)
+          : new Date(slot.end).toLocaleTimeString('en-US', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false
+            });
         console.log(`    🟢 ${st} - ${en}`);
       }
     }

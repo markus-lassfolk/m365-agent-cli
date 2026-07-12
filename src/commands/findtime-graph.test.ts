@@ -143,6 +143,53 @@ describe('runFindTimeGraph', () => {
     expect(mock.header()).toBe('outlook.timezone="America/New_York"');
   });
 
+  test('honors --timezone in the work-hours filter without double-shifting (bug regression)', async () => {
+    process.env.GRAPH_BASE_URL = 'https://graph.microsoft.com/v1.0';
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          meetingTimeSuggestions: [
+            {
+              // Graph returns dateTime as wall-clock digits already in the requested zone (per the
+              // Prefer header) — 14:00 here means 2pm America/New_York, inside 9-17 work hours.
+              meetingTimeSlot: {
+                start: { dateTime: '2026-06-15T14:00:00', timeZone: 'America/New_York' },
+                end: { dateTime: '2026-06-15T14:30:00', timeZone: 'America/New_York' }
+              },
+              confidence: 90
+            },
+            {
+              // 8pm America/New_York — outside 9-17 work hours, must be filtered out.
+              meetingTimeSlot: {
+                start: { dateTime: '2026-06-15T20:00:00', timeZone: 'America/New_York' },
+                end: { dateTime: '2026-06-15T20:30:00', timeZone: 'America/New_York' }
+              },
+              confidence: 80
+            }
+          ]
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      )) as unknown as typeof fetch;
+    const logged: string[] = [];
+    console.log = ((s: string) => logged.push(String(s))) as typeof console.log;
+
+    await runFindTimeGraph({
+      token: 'tok',
+      emails: ['alice@x.com'],
+      start: new Date('2026-06-15T00:00:00Z'),
+      end: new Date('2026-06-16T00:00:00Z'),
+      durationMinutes: 30,
+      workStartHour: 9,
+      workEndHour: 17,
+      label: 'test',
+      json: false,
+      timezone: 'America/New_York'
+    });
+
+    const out = logged.join('\n');
+    expect(out).toContain('Found 1 suggested slot');
+  });
+
   test('surfaces attendeeAvailability in the JSON output', async () => {
     process.env.GRAPH_BASE_URL = 'https://graph.microsoft.com/v1.0';
     mockFindMeetingTimesFetch();
@@ -244,5 +291,34 @@ describe('runFindTimeGraphSchedule', () => {
     expect((captured.body.startTime as { timeZone: string }).timeZone).toBe('Asia/Tokyo');
     expect((captured.body.startTime as { dateTime: string }).dateTime).toBe('2026-06-15T21:00:00');
     expect(captured.header).toBe('outlook.timezone="Asia/Tokyo"');
+  });
+
+  test('displays slot times in --timezone rather than host-local (bug regression)', async () => {
+    process.env.GRAPH_BASE_URL = 'https://graph.microsoft.com/v1.0';
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ value: [{ scheduleId: 'alice@x.com', availabilityView: '000000' }] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })) as unknown as typeof fetch;
+    const logged: string[] = [];
+    console.log = ((s: string) => logged.push(String(s))) as typeof console.log;
+
+    await runFindTimeGraphSchedule({
+      token: 'tok',
+      emails: ['alice@x.com'],
+      // 18:00 UTC = 14:00 America/New_York (EDT, UTC-4) in June.
+      start: new Date('2026-06-15T18:00:00Z'),
+      end: new Date('2026-06-15T19:00:00Z'),
+      durationMinutes: 30,
+      workStartHour: 0,
+      workEndHour: 24,
+      label: 'test',
+      json: false,
+      timezone: 'America/New_York'
+    });
+
+    const out = logged.join('\n');
+    expect(out).toContain('14:00');
+    expect(out).not.toContain('18:00');
   });
 });
