@@ -41,6 +41,27 @@ import {
 } from '../lib/onenote-graph-client.js';
 import { checkReadOnly, resolveOutputFilePath } from '../lib/utils.js';
 
+/** Read a text file, exiting with a clear message (not a bare stack trace) on failure. */
+async function readTextFileOrExit(path: string, label: string): Promise<string> {
+  try {
+    return await readFile(path, 'utf-8');
+  } catch (err) {
+    console.error(`Error: could not read ${label}: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  }
+}
+
+/** Read and parse a JSON file, exiting with a clear message on a read or parse error. */
+async function readJsonFileOrExit<T>(path: string, label: string): Promise<T> {
+  const raw = await readTextFileOrExit(path, label);
+  try {
+    return JSON.parse(raw) as T;
+  } catch (err) {
+    console.error(`Error: ${label} must contain valid JSON: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  }
+}
+
 /** Resolves `--user` vs `--group` / `--site` OneNote roots (mutually exclusive). */
 function parseOneNoteRoot(opts: { user?: string; group?: string; site?: string }): {
   user?: string;
@@ -443,7 +464,7 @@ addOneNoteRootOptions(
     const token = await requireGraphAuth(opts);
     const { user, scope } = parseOneNoteRoot(opts);
     const wd = process.cwd();
-    const html = await readFile(resolve(wd, opts.file), 'utf-8');
+    const html = await readTextFileOrExit(resolve(wd, opts.file), '--file');
     const parts = parseOneNoteAttachSpecs(opts.attach ?? []);
     const r = await createOneNotePageMultipart(token, opts.section, html, parts, user, scope);
     if (!r.ok || !r.data) {
@@ -486,7 +507,7 @@ addOneNoteRootOptions(
     checkReadOnly(cmd);
     const token = await requireGraphAuth(opts);
     const { user, scope } = parseOneNoteRoot(opts);
-    const html = await readFile(opts.file, 'utf-8');
+    const html = await readTextFileOrExit(opts.file, '--file');
     const r = await createOneNotePageFromHtml(token, opts.section, html, user, scope);
     if (!r.ok || !r.data) {
       console.error(`Error: ${r.error?.message}`);
@@ -657,7 +678,7 @@ addOneNoteRootOptions(
     checkReadOnly(cmd);
     const token = await requireGraphAuth(opts);
     const { user, scope } = parseOneNoteRoot(opts);
-    const patch = JSON.parse(await readFile(opts.jsonFile, 'utf-8')) as Record<string, unknown>;
+    const patch = await readJsonFileOrExit<Record<string, unknown>>(opts.jsonFile, '--json-file');
     const r = await updateOneNoteNotebook(token, notebookId, patch, user, scope);
     if (!r.ok) {
       console.error(`Error: ${r.error?.message}`);
@@ -838,7 +859,7 @@ addOneNoteRootOptions(
     checkReadOnly(cmd);
     const token = await requireGraphAuth(opts);
     const { user, scope } = parseOneNoteRoot(opts);
-    const patch = JSON.parse(await readFile(opts.jsonFile, 'utf-8')) as Record<string, unknown>;
+    const patch = await readJsonFileOrExit<Record<string, unknown>>(opts.jsonFile, '--json-file');
     const r = await updateOneNoteSectionGroup(token, sectionGroupId, patch, user, scope);
     if (!r.ok) {
       console.error(`Error: ${r.error?.message}`);
@@ -1032,7 +1053,7 @@ addOneNoteRootOptions(
     checkReadOnly(cmd);
     const token = await requireGraphAuth(opts);
     const { user, scope } = parseOneNoteRoot(opts);
-    const patch = JSON.parse(await readFile(opts.jsonFile, 'utf-8')) as Record<string, unknown>;
+    const patch = await readJsonFileOrExit<Record<string, unknown>>(opts.jsonFile, '--json-file');
     const r = await updateOneNoteSection(token, sectionId, patch, user, scope);
     if (!r.ok) {
       console.error(`Error: ${r.error?.message}`);
@@ -1230,7 +1251,7 @@ addOneNoteRootOptions(
     checkReadOnly(cmd);
     const token = await requireGraphAuth(opts);
     const { user, scope } = parseOneNoteRoot(opts);
-    const commands = JSON.parse(await readFile(opts.jsonFile, 'utf-8'));
+    const commands = await readJsonFileOrExit<unknown>(opts.jsonFile, '--json-file');
     const r = await updateOneNotePageContent(token, pageId, commands, user, scope);
     if (!r.ok) {
       console.error(`Error: ${r.error?.message}`);
@@ -1275,7 +1296,7 @@ addOneNoteRootOptions(
     const token = await requireGraphAuth(opts);
     const { user, scope } = parseOneNoteRoot(opts);
     const wd = process.cwd();
-    const commands = JSON.parse(await readFile(resolve(wd, opts.jsonFile), 'utf-8')) as unknown[];
+    const commands = await readJsonFileOrExit<unknown[]>(resolve(wd, opts.jsonFile), '--json-file');
     if (!Array.isArray(commands)) {
       console.error('Error: --json-file must contain a JSON array of patch commands');
       process.exit(1);

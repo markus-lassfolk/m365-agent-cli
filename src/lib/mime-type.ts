@@ -72,7 +72,7 @@ const MIME_TYPES: Record<string, string> = {
   '.tar': 'application/x-tar',
   '.tbz': 'application/x-bzip-compressed-tar',
   '.tbz2': 'application/x-bzip-compressed-tar',
-  '.tgz': 'application/x-tar-gz',
+  '.tgz': 'application/gzip',
   '.tif': 'image/tiff',
   '.tiff': 'image/tiff',
   '.ts': 'video/mp2t',

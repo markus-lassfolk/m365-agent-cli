@@ -76,8 +76,19 @@ presenceCommand
     }
     let idList: string[];
     if (opts.jsonFile?.trim()) {
-      const raw = JSON.parse(await readFile(opts.jsonFile.trim(), 'utf-8')) as unknown;
-      idList = Array.isArray(raw) ? (raw as string[]).map(String) : [];
+      let raw: unknown;
+      try {
+        raw = JSON.parse(await readFile(opts.jsonFile.trim(), 'utf-8'));
+      } catch (err) {
+        console.error(`Error: could not read --json-file: ${err instanceof Error ? err.message : String(err)}`);
+        process.exit(1);
+      }
+      idList = Array.isArray(raw)
+        ? raw
+            .map(String)
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : [];
     } else if (opts.ids?.trim()) {
       idList = opts.ids
         .split(',')
@@ -85,6 +96,10 @@ presenceCommand
         .filter(Boolean);
     } else {
       console.error('Error: provide --ids or --json-file with a JSON array of GUIDs');
+      process.exit(1);
+    }
+    if (idList.length === 0) {
+      console.error('Error: no user ids provided (list was empty after removing blanks)');
       process.exit(1);
     }
     const r = await getPresencesByUserIds(auth.token, idList);

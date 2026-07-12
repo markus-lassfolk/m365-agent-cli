@@ -59,12 +59,16 @@ export function markdownToHtml(text: string): string {
   const links: Array<{ placeholder: string; html: string }> = [];
   let linkIndex = 0;
 
+  // Placeholder uses private-use-area sentinels so that no later transform
+  // (HTML-escape, bold/italic emphasis, list/line-break handling) can match or
+  // corrupt it — restoring the real <a> HTML only at the very end keeps `_`/`*`
+  // characters inside a link's URL or label from being rewritten into emphasis tags.
   let html = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, rawUrl) => {
     const safeUrl = sanitizeLinkUrl(rawUrl);
     const escapedLabel = escapeHtml(label);
     const escapedUrl = escapeHtml(safeUrl);
     const linkHtml = `<a href="${escapedUrl}">${escapedLabel}</a>`;
-    const placeholder = `__LINK_${linkIndex}__`;
+    const placeholder = `${linkIndex}`;
     links.push({ placeholder, html: linkHtml });
     linkIndex++;
     return placeholder;
@@ -72,11 +76,6 @@ export function markdownToHtml(text: string): string {
 
   // Escape HTML in the rest of the text
   html = escapeHtml(html);
-
-  // Restore links
-  for (const { placeholder, html: linkHtml } of links) {
-    html = html.replaceAll(placeholder, linkHtml);
-  }
 
   // Bold: **text** or __text__
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
@@ -144,6 +143,12 @@ export function markdownToHtml(text: string): string {
   // Convert line breaks to <br> (but not inside lists)
   // Split by list tags, process non-list parts
   html = html.replace(/\n(?!<\/?[uo]l>|<\/?li>)/g, '<br>\n');
+
+  // Restore link HTML last, after every other transform, so emphasis/list/break
+  // passes can never rewrite characters inside a link's href or label.
+  for (const { placeholder, html: linkHtml } of links) {
+    html = html.replaceAll(placeholder, linkHtml);
+  }
 
   // Wrap in basic HTML structure for email
   return `<!DOCTYPE html>

@@ -6,8 +6,14 @@
 import { callGraph, GraphApiError, type GraphResponse, graphError, graphResult } from './graph-client.js';
 import { graphUserPath } from './graph-user-path.js';
 
-/** Raw file size above which we prefer upload session over inline base64 POST. */
-export const GRAPH_OUTLOOK_ATTACHMENT_SESSION_THRESHOLD_BYTES = 2 * 1024 * 1024;
+/**
+ * Raw file size above which we MUST use an upload session instead of an inline base64 POST.
+ * Graph rejects `createUploadSession` for files smaller than 3 MB
+ * (`ErrorAttachmentSizeShouldNotBeLessThanMinimumSize`) and rejects a single inline POST for
+ * files 3 MB or larger, so 3 MB is the exact crossover — not a tunable preference.
+ * @see https://learn.microsoft.com/graph/outlook-large-attachments
+ */
+export const GRAPH_OUTLOOK_ATTACHMENT_SESSION_THRESHOLD_BYTES = 3 * 1024 * 1024;
 
 export interface GraphAttachmentUploadSession {
   uploadUrl: string;
@@ -30,6 +36,7 @@ export async function uploadBufferViaGraphUploadUrl(
   }
   let start = 0;
   let lastJson: Record<string, unknown> | undefined;
+  let locationId: string | undefined;
   while (start < total) {
     const end = Math.min(start + CHUNK_SIZE, total);
     const slice = data.subarray(start, end);
@@ -52,6 +59,12 @@ export async function uploadBufferViaGraphUploadUrl(
     if (!response.ok) {
       return graphError(text || `Upload failed: HTTP ${response.status}`, undefined, response.status);
     }
+    // The final successful PUT carries the attachment ID in the Location header URL
+    // (the response body is often empty for large attachments), so capture it here.
+    const location = response.headers.get('location');
+    if (location) {
+      locationId = parseAttachmentIdFromLocation(location) ?? locationId;
+    }
     if (text) {
       try {
         const parsed = JSON.parse(text) as Record<string, unknown>;
@@ -64,7 +77,31 @@ export async function uploadBufferViaGraphUploadUrl(
     }
     start = end;
   }
-  return graphResult(lastJson);
+  // Prefer an id from the response body; otherwise fall back to the Location-header id.
+  const result: Record<string, unknown> = { ...(lastJson ?? {}) };
+  if (typeof result.id !== 'string' && locationId) {
+    result.id = locationId;
+  }
+  return graphResult(Object.keys(result).length > 0 ? result : undefined);
+}
+
+/**
+ * Extract the attachment id from an upload-session `Location` header URL, e.g.
+ * `.../messages/{id}/attachments/{attachmentId}` or an EWS-style `...('{attachmentId}')`.
+ */
+function parseAttachmentIdFromLocation(location: string): string | undefined {
+  let path = location;
+  try {
+    path = new URL(location).pathname;
+  } catch {
+    // Not an absolute URL — treat the raw value as the path.
+  }
+  // Handle OData key syntax: .../Attachments('AAMk...')
+  const odataKey = path.match(/\(['"]([^'"]+)['"]\)\/?$/);
+  if (odataKey) return decodeURIComponent(odataKey[1]);
+  const segments = path.split('/').filter(Boolean);
+  const last = segments[segments.length - 1];
+  return last ? decodeURIComponent(last) : undefined;
 }
 
 export async function createMailMessageFileAttachmentUploadSession(

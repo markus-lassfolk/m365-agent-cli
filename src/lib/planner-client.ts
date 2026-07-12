@@ -902,6 +902,16 @@ export async function removePlannerChecklistItem(
   return updatePlannerTaskDetails(token, dr.data.id, etag, { checklist });
 }
 
+/**
+ * Encode a reference URL for use as a `plannerExternalReferences` open-type property name.
+ * OData forbids `.`, `:`, `%`, `@`, `#` in Open Type property names, so they must be
+ * percent-encoded (encode `%` first to avoid double-encoding).
+ * @see https://learn.microsoft.com/graph/api/resources/plannerexternalreferences
+ */
+function encodePlannerReferenceKey(url: string): string {
+  return url.replace(/%/g, '%25').replace(/\./g, '%2E').replace(/:/g, '%3A').replace(/@/g, '%40').replace(/#/g, '%23');
+}
+
 /** Add or replace a reference URL entry on task details. */
 export async function addPlannerReference(
   token: string,
@@ -917,7 +927,7 @@ export async function addPlannerReference(
   const etag = dr.data['@odata.etag'];
   if (!etag) return graphError('Task details missing ETag', 'MISSING_ETAG', 500);
   const references = { ...(dr.data.references || {}) };
-  references[resourceUrl] = {
+  references[encodePlannerReferenceKey(resourceUrl)] = {
     '@odata.type': '#microsoft.graph.plannerExternalReference',
     alias,
     ...(type ? { type } : {}),
@@ -939,7 +949,8 @@ export async function removePlannerReference(
   const etag = dr.data['@odata.etag'];
   if (!etag) return graphError('Task details missing ETag', 'MISSING_ETAG', 500);
   const references = { ...(dr.data.references || {}) };
-  delete references[resourceUrl];
+  // Stored keys are percent-encoded; encode the incoming URL the same way so the delete matches.
+  delete references[encodePlannerReferenceKey(resourceUrl)];
   return updatePlannerTaskDetails(token, dr.data.id, etag, { references });
 }
 

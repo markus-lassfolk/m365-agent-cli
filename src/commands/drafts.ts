@@ -391,6 +391,7 @@ export const draftsCommand = new Command('drafts')
 
               if (!attachResult.ok) {
                 console.error(`Failed to attach ${validated.fileName}: ${attachResult.error?.message}`);
+                process.exit(1);
               } else if (!options.json) {
                 console.log(`  Attached: ${validated.fileName}`);
               }
@@ -531,7 +532,7 @@ export const draftsCommand = new Command('drafts')
               const content = await readFile(validated.absolutePath);
               const contentType = lookupMimeType(validated.fileName) || 'application/octet-stream';
 
-              await addAttachmentToDraft(
+              const attachResult = await addAttachmentToDraft(
                 authResult.token!,
                 id,
                 {
@@ -542,7 +543,10 @@ export const draftsCommand = new Command('drafts')
                 options.mailbox
               );
 
-              if (!options.json) {
+              if (!attachResult.ok) {
+                console.error(`Failed to attach ${validated.fileName}: ${attachResult.error?.message}`);
+                process.exit(1);
+              } else if (!options.json) {
                 console.log(`  Attached: ${validated.fileName}`);
               }
             } catch (err) {

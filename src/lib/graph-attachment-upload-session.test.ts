@@ -7,8 +7,25 @@ import {
 } from './graph-attachment-upload-session.js';
 
 describe('graph-attachment-upload-session', () => {
-  it('exports threshold constant', () => {
-    expect(GRAPH_OUTLOOK_ATTACHMENT_SESSION_THRESHOLD_BYTES).toBe(2 * 1024 * 1024);
+  it('exports threshold constant (3 MB — Graph upload-session minimum)', () => {
+    expect(GRAPH_OUTLOOK_ATTACHMENT_SESSION_THRESHOLD_BYTES).toBe(3 * 1024 * 1024);
+  });
+
+  it('uploadBufferViaGraphUploadUrl derives attachment id from the Location header', async () => {
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = (async () =>
+        new Response('', {
+          status: 201,
+          headers: { location: 'https://outlook.office.com/api/v2.0/me/messages/AAA/attachments/ATTACH-99' }
+        })) as unknown as typeof fetch;
+
+      const r = await uploadBufferViaGraphUploadUrl('https://u.example/x', Buffer.from([1, 2, 3]));
+      expect(r.ok).toBe(true);
+      expect(r.data?.id).toBe('ATTACH-99');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 
   it('uploadBufferViaGraphUploadUrl rejects zero bytes', async () => {

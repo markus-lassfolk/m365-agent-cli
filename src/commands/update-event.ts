@@ -1250,11 +1250,24 @@ export const updateEventCommand = new Command('update-event')
         }
       }
 
-      const eventIdForAttach = occurrenceItemId || updateResult?.data?.Id || displayEws!.Id;
+      const eventIdForAttach = occurrenceItemId || updateResult?.data?.Id || displayEws?.Id;
 
       if (wantsAttachments) {
+        // If we reached here without EWS state (e.g. an auto-mode Graph attachments-only
+        // attempt failed and no EWS fallback context was established), fail with a clear,
+        // actionable message instead of dereferencing undefined and crashing silently.
+        if (!eventIdForAttach || !authResult?.token) {
+          const msg =
+            'Failed to add attachments: the Graph attachment attempt failed and no EWS fallback was available. Retry with M365_EXCHANGE_BACKEND=ews.';
+          if (options.json) {
+            console.log(JSON.stringify({ error: msg }, null, 2));
+          } else {
+            console.error(`\nError: ${msg}`);
+          }
+          process.exit(1);
+        }
         const attachResult = await addCalendarEventAttachments(
-          authResult!.token!,
+          authResult.token,
           eventIdForAttach,
           options.mailbox,
           fileAttachments ?? [],

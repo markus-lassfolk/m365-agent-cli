@@ -398,6 +398,8 @@ plannerCommand
       if (opts.conversationThread !== undefined) extras.conversationThreadId = opts.conversationThread;
       if (opts.orderHint !== undefined) extras.orderHint = opts.orderHint;
       if (opts.assigneePriority !== undefined) extras.assigneePriority = opts.assigneePriority;
+      if (opts.priority !== undefined) extras.priority = parseInt(opts.priority, 10);
+      if (opts.previewType !== undefined) extras.previewType = opts.previewType;
       const extrasOut = Object.keys(extras).length > 0 ? extras : undefined;
       const result = await createTask(auth.token!, opts.plan, opts.title, opts.bucket, assignments, applied, extrasOut);
       if (!result.ok || !result.data) {

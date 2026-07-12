@@ -30,6 +30,18 @@ describe('markdownToHtml', () => {
     expect(html).toContain('href="#"');
   });
 
+  it('does not corrupt link URLs or labels containing emphasis characters', () => {
+    // Emphasis passes must not rewrite `_`/`*` inside a restored link.
+    const html = markdownToHtml('[report](https://host.com/_a_b_)');
+    expect(html).toContain('href="https://host.com/_a_b_"');
+    expect(html).not.toContain('<em>');
+    const html2 = markdownToHtml('see [my_file](https://x.com/p) and *emph*');
+    expect(html2).toContain('href="https://x.com/p"');
+    expect(html2).toContain('my_file');
+    // Emphasis outside links still renders.
+    expect(html2).toContain('<em>emph</em>');
+  });
+
   it('renders bold, italic, lists, line breaks, and wraps document', () => {
     const md = '**B** and *I*\n\n- a\n- b\n\n1. x\n2. y\n\nplain';
     const html = markdownToHtml(md);

@@ -522,13 +522,31 @@ todoCommand
         process.exit(1);
       }
 
+      // Validate importance/status up front (matches `todo update`) so an invalid value
+      // fails with a clear message instead of a Graph 400.
+      if (opts.importance !== undefined && !(['low', 'normal', 'high'] as string[]).includes(opts.importance)) {
+        console.error(`Invalid importance: ${opts.importance} (expected low, normal, or high)`);
+        process.exit(1);
+      }
+      if (
+        opts.status !== undefined &&
+        !(['notStarted', 'inProgress', 'completed', 'waitingOnOthers', 'deferred'] as string[]).includes(opts.status)
+      ) {
+        console.error(`Invalid status: ${opts.status}`);
+        process.exit(1);
+      }
+
       const listName = opts.list || 'Tasks';
       const { listId } = await resolveListId(auth.token!, listName, opts.user);
 
       let recurrence: Record<string, unknown> | undefined;
       if (opts.recurrenceJson) {
-        const raw = await readFile(opts.recurrenceJson, 'utf-8');
-        recurrence = JSON.parse(raw) as Record<string, unknown>;
+        try {
+          recurrence = JSON.parse(await readFile(opts.recurrenceJson, 'utf-8')) as Record<string, unknown>;
+        } catch (err) {
+          console.error(`Error: could not read --recurrence-json: ${err instanceof Error ? err.message : String(err)}`);
+          process.exit(1);
+        }
       }
 
       let linkedResources: any[] | undefined;

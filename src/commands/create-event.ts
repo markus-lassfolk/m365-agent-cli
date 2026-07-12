@@ -312,7 +312,13 @@ export function buildCreateEventCommand(commandName: string, description = 'Crea
 
         // Parse attendees
         const attendees: Array<{ email: string; name?: string; type?: 'Required' | 'Optional' | 'Resource' }> =
-          options.attendees ? options.attendees.split(',').map((e) => ({ email: e.trim() })) : [];
+          options.attendees
+            ? options.attendees
+                .split(',')
+                .map((e) => e.trim())
+                .filter(Boolean)
+                .map((email) => ({ email }))
+            : [];
 
         const roomNeedsEwsLookup = Boolean(options.room && !options.room.includes('@'));
 

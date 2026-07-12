@@ -12,6 +12,27 @@ For install and tagging, see [docs/RELEASE.md](docs/RELEASE.md).
 
 - **`mail --reply` / `--reply-all` / `--forward` now accept `--cc` and `--bcc`** (comma-separated) to add CC/BCC recipients to the outgoing reply or forward. Previously these commands had no way to set CC/BCC, so agents could only reply to the original participants. Recipients are **added** on top of the To/Cc a reply-all already carries (deduped case-insensitively), rather than replacing them. Works on both the Microsoft Graph path (patches the reply/forward draft before send) and the EWS path (adds `CcRecipients`/`BccRecipients` to the response object).
 
+### Fixed (QA sweep)
+
+Correctness and robustness fixes surfaced by a full-repo review:
+
+- **Graph large-attachment threshold was 2 MB, below Graph's 3 MB minimum.** Files sized 2–3 MB were routed to an upload session and rejected with `ErrorAttachmentSizeShouldNotBeLessThanMinimumSize`. The crossover is now the correct 3 MB (single POST below, upload session at/above).
+- **Large (upload-session) attachments now return the real attachment id** parsed from the final PUT's `Location` header instead of the placeholder string `"uploaded"`.
+- **EWS multi-attachment sends used a stale ChangeKey.** `CreateAttachment` returns the parent's new change key as attributes on `<t:AttachmentId>` (`RootItemId` / `RootItemChangeKey`), not as a `<RootItemId>` element — the previous extraction always missed it, so a second attachment or the final `SendItem` could fail with `ErrorIrresolvableConflict`.
+- **EWS `sendEmail` with attachments dropped all BCC recipients** — the attachment path built the draft via `createDraft`, which had no `bcc` parameter. BCC is now threaded through.
+- **`drafts --create` / `--edit` (EWS) reported success when a file attachment failed.** The create path logged the error but didn't exit; the edit path discarded the result entirely. Both now exit non-zero on attachment failure.
+- **`planner create-task --priority` / `--preview-type` were parsed (and `--priority` range-checked) but never sent.** Both are now applied to the created task.
+- **Planner `reference add`/`remove` sent raw URLs as Open Type property names.** OData forbids `.`, `:`, `%`, `@`, `#` in those names; they are now percent-encoded, so adding/removing a normal `https://` reference works.
+- **`copilot packages zip-download`** now refuses to overwrite an existing output file unless `--force` is passed.
+- **`mail --force`** (used by the attachment-download overwrite logic) was referenced but never registered as an option; it is now a real flag.
+- **`update-event` (auto backend)** no longer crashes with no message when a Graph attachments-only attempt fails without an EWS fallback context — it now exits with a clear, actionable error.
+- **Date parsing** (`--day`) no longer silently rolls over out-of-range values (`2026-02-30` → Mar 2); invalid calendar dates are rejected.
+- **Markdown → HTML** no longer corrupts link URLs/labels containing `_` or `*` (emphasis was applied after links were restored, rewriting `href` internals); links are now restored after all other transforms.
+- **Input validation:** empty comma-split entries are dropped for `mail`/`create-event`/`suggest` attendee/recipient lists and `presence bulk --json-file`; `excel table-rows --top` rejects non-numeric values; `excel table-rows-add --json` always emits JSON; `todo create` validates `--importance`/`--status`; `onenote` and `presence` file reads report a clear error instead of an empty non-zero exit.
+- **Webhook receiver hardening (`serve`):** caps request body size, sets request/header timeouts (slow-loris), handles bind errors (`EADDRINUSE`/`EACCES`) gracefully, redacts `clientState` from logs, compares `clientState` in constant time, warns when verification is disabled, and logs the actual bind interface.
+- **Auth:** EWS token refresh now preserves the `graphNarrowScopeAccepted` flag, avoiding a redundant Graph refresh on the next call.
+- **Mime types:** `.tgz` now maps to `application/gzip`.
+
 ---
 
 ## [2026.7.3] — 2026-07-02

@@ -322,6 +322,55 @@ describe('ews-client safety and conflict behavior', () => {
     expect(fetchCalls[1]).toContain('bcc2@contoso.com');
   });
 
+  it('sendEmail with an attachment threads the CreateAttachment change key into SendItem', async () => {
+    const bodies: string[] = [];
+    let call = 0;
+    const soap = (inner: string) =>
+      `<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages" xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types">
+  <soap:Body><m:ResponseCode>NoError</m:ResponseCode>${inner}</soap:Body>
+</soap:Envelope>`;
+
+    globalThis.fetch = mock(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      bodies.push(String(init?.body || ''));
+      call += 1;
+      if (call === 1) {
+        // createDraft (CreateItem SaveOnly) — returns the draft id and its initial change key.
+        return new Response(
+          soap(
+            '<m:CreateItemResponse><m:Items><t:Message><t:ItemId Id="draft-1" ChangeKey="ck0" /></t:Message></m:Items></m:CreateItemResponse>'
+          ),
+          { status: 200 }
+        );
+      }
+      if (call === 2) {
+        // CreateAttachment — returns the new root change key as attributes on <t:AttachmentId>.
+        return new Response(
+          soap(
+            '<m:CreateAttachmentResponse><m:Attachments><t:FileAttachment><t:AttachmentId Id="att-1" RootItemId="draft-1" RootItemChangeKey="ck1-updated" /></t:FileAttachment></m:Attachments></m:CreateAttachmentResponse>'
+          ),
+          { status: 200 }
+        );
+      }
+      // SendItem
+      return new Response(soap('<m:SendItemResponse />'), { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const { sendEmail } = await import('../lib/ews-client.js');
+    const result = await sendEmail('token', {
+      to: ['a@b.com'],
+      subject: 'S',
+      body: 'B',
+      attachments: [{ name: 'f.txt', contentType: 'text/plain', contentBytes: Buffer.from('x').toString('base64') }]
+    });
+
+    expect(result.ok).toBe(true);
+    expect(call).toBe(3);
+    // The final SendItem must carry the change key returned by CreateAttachment, not the stale ck0.
+    expect(bodies[2]).toContain('ck1-updated');
+    expect(bodies[2]).not.toContain('ck0');
+  });
+
   it('replyToEmailDraft sends ReferenceItemId with ChangeKey after GetItem', async () => {
     const fetchCalls: string[] = [];
     let callCount = 0;

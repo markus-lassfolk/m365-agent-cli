@@ -15,7 +15,7 @@ import { getGlobalEnvFilePath, resolveEnvFilePathArgument } from './utils.js';
  * to keep rotated refresh tokens landing in the same file the CLI loaded from.
  */
 export function getActiveEnvFilePath(explicitEnvPath?: string): string {
-  if (explicitEnvPath && explicitEnvPath.trim()) {
+  if (explicitEnvPath?.trim()) {
     return resolveEnvFilePathArgument(explicitEnvPath);
   }
   return getGlobalEnvFilePath();

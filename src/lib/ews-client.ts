@@ -1782,6 +1782,7 @@ export async function sendEmail(
     const draftResult = await createDraft(token, {
       to: options.to,
       cc: options.cc,
+      bcc: options.bcc,
       subject: options.subject,
       body: options.body,
       bodyType,
@@ -2140,6 +2141,7 @@ export async function createDraft(
   options: {
     to?: string[];
     cc?: string[];
+    bcc?: string[];
     subject?: string;
     body?: string;
     bodyType?: 'Text' | 'HTML';
@@ -2165,6 +2167,13 @@ export async function createDraft(
             .join('')}</t:CcRecipients>`
         : '';
 
+    const bccXml =
+      options.bcc && options.bcc.length > 0
+        ? `<t:BccRecipients>${options.bcc
+            .map((e) => `<t:Mailbox><t:EmailAddress>${xmlEscape(e)}</t:EmailAddress></t:Mailbox>`)
+            .join('')}</t:BccRecipients>`
+        : '';
+
     const bodyType = options.bodyType || 'Text';
 
     const savedDraftFolderXml = mailbox
@@ -2181,6 +2190,7 @@ export async function createDraft(
           ${options.categories && options.categories.length > 0 ? `<t:Categories>${options.categories.map((c) => `<t:String>${xmlEscape(c)}</t:String>`).join('')}</t:Categories>` : ''}
           ${toXml}
           ${ccXml}
+          ${bccXml}
         </t:Message>
       </m:Items>
     </m:CreateItem>`);
@@ -2405,8 +2415,12 @@ async function addAttachmentToItem(
   </m:CreateAttachment>`);
   const xml = await callEws(token, envelope, mailbox);
 
-  const rootId = extractAttribute(xml, 'RootItemId', 'Id')?.trim();
-  const rootCk = extractAttribute(xml, 'RootItemId', 'ChangeKey')?.trim();
+  // CreateAttachment returns the parent's new id/change key as attributes on
+  // <t:AttachmentId> (RootItemId / RootItemChangeKey) — NOT as a <RootItemId> element.
+  // Capturing them keeps the change key fresh so a subsequent attachment or SendItem
+  // doesn't fail with ErrorIrresolvableConflict.
+  const rootId = extractAttribute(xml, 'AttachmentId', 'RootItemId')?.trim();
+  const rootCk = extractAttribute(xml, 'AttachmentId', 'RootItemChangeKey')?.trim();
   if (rootId) {
     return { id: rootId, changeKey: rootCk || pck };
   }
@@ -2450,8 +2464,9 @@ async function addReferenceAttachmentToItem(
   </m:CreateAttachment>`);
   const xml = await callEws(token, envelope, mailbox);
 
-  const rootId = extractAttribute(xml, 'RootItemId', 'Id')?.trim();
-  const rootCk = extractAttribute(xml, 'RootItemId', 'ChangeKey')?.trim();
+  // See addAttachmentToItem: parent id/change key come back as attributes on <t:AttachmentId>.
+  const rootId = extractAttribute(xml, 'AttachmentId', 'RootItemId')?.trim();
+  const rootCk = extractAttribute(xml, 'AttachmentId', 'RootItemChangeKey')?.trim();
   if (rootId) {
     return { id: rootId, changeKey: rootCk || pck };
   }

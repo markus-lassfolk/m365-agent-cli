@@ -1,4 +1,4 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { access, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { Command } from 'commander';
 import {
@@ -1711,14 +1711,26 @@ packagesCmd
   .description('GET /copilot/admin/catalog/packages/{id}/zipFile — write binary to --output (beta)')
   .argument('<packageId>', 'Package id')
   .requiredOption('-o, --output <path>', 'Local file path for .zip bytes')
+  .option('--force', 'Overwrite the output file if it already exists')
   .option('--token <token>', 'Graph access token')
   .option('--identity <name>', 'Graph token cache identity')
-  .action(async (packageId: string, opts: AuthOpts & { output: string }) => {
+  .action(async (packageId: string, opts: AuthOpts & { output: string; force?: boolean }) => {
     const token = await resolveTokenOrExit(opts);
+    const outPath = resolve(process.cwd(), opts.output.trim());
+    if (!opts.force) {
+      const exists = await access(outPath).then(
+        () => true,
+        () => false
+      );
+      if (exists) {
+        console.error(`Error: ${opts.output} already exists. Pass --force to overwrite.`);
+        process.exit(1);
+      }
+    }
     const r = await copilotPackageZipDownload(token, packageId);
     if (!r.ok) exitGraphError('Error: ', r.error?.message);
     if (!r.data) exitGraphError('Error: ', 'Empty response');
-    await writeFile(resolve(process.cwd(), opts.output.trim()), r.data);
+    await writeFile(outPath, r.data);
     console.log(`Wrote ${r.data.byteLength} bytes to ${opts.output}`);
   });
 

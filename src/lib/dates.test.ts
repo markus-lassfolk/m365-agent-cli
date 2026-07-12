@@ -71,4 +71,15 @@ describe('dates helpers', () => {
   it('parseDay throws on invalid input when configured', () => {
     expect(() => parseDay('not-a-date', { throwOnInvalid: true })).toThrow('Invalid day value: not-a-date');
   });
+
+  it('parseDay rejects out-of-range padded dates instead of silently rolling over', () => {
+    // Without round-trip validation, `2026-02-30` would become Mar 2 and `2026-13-01` Jan 2027.
+    expect(() => parseDay('2026-02-30', { throwOnInvalid: true })).toThrow('Invalid day value: 2026-02-30');
+    expect(() => parseDay('2026-13-01', { throwOnInvalid: true })).toThrow('Invalid day value: 2026-13-01');
+    // A valid date still parses to the exact day.
+    const ok = parseDay('2026-02-28');
+    expect(ok.getFullYear()).toBe(2026);
+    expect(ok.getMonth()).toBe(1);
+    expect(ok.getDate()).toBe(28);
+  });
 });
