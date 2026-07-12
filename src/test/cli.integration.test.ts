@@ -263,6 +263,41 @@ function resetSharedCommandOptionLeaks() {
   deleteEventCommand.setOptionValue('day', 'today');
   respondCommand.setOptionValue('json', false);
   respondCommand.setOptionValue('id', undefined);
+  // mail reuses a shared instance; earlier runs (e.g. `mail inbox -s`, read-only --flag/--mark-read)
+  // can leave options set that would misroute a later reply/forward invocation (Graph eligibility
+  // checks reject any stray mutating/list flag). Clear the leak-prone ones before each parse.
+  for (const opt of [
+    'flag',
+    'unflag',
+    'complete',
+    'markRead',
+    'markUnread',
+    'reply',
+    'replyAll',
+    'forward',
+    'move',
+    'to',
+    'toAddr',
+    'cc',
+    'bcc',
+    'message',
+    'draft',
+    'setCategories',
+    'clearCategories',
+    'sensitivity',
+    'level',
+    'search',
+    'read',
+    'download',
+    'unread',
+    'flagged',
+    'startDate',
+    'due',
+    'markdown',
+    'json'
+  ]) {
+    mailCommand.setOptionValue(opt, undefined);
+  }
 }
 
 async function runM365AgentCli(args: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
@@ -1421,6 +1456,41 @@ describe('Graph backend (M365_EXCHANGE_BACKEND=graph)', () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain('Updated title');
     expect(result.stdout).toContain('Event updated successfully');
+  });
+
+  test('mail --reply --bcc patches the reply draft with bccRecipients before sending', async () => {
+    const patchBodies: string[] = [];
+    let sendCalled = false;
+    setMockFetch((url, request, body) => {
+      if (!url.includes('graph.microsoft.com/v1.0')) return null;
+      const method = (request?.method || 'GET').toUpperCase();
+      const path = new URL(url).pathname;
+      if (method === 'POST' && path.endsWith('/createReply')) {
+        return {
+          status: 201,
+          body: JSON.stringify({ id: 'reply-draft-1', ccRecipients: [] }),
+          contentType: 'application/json'
+        };
+      }
+      if (method === 'PATCH' && /\/me\/messages\/[^/]+$/.test(path)) {
+        patchBodies.push(body);
+        return { status: 200, body: JSON.stringify({ id: 'reply-draft-1' }), contentType: 'application/json' };
+      }
+      if (method === 'POST' && path.endsWith('/send')) {
+        sendCalled = true;
+        return { status: 202, body: '', contentType: 'application/json' };
+      }
+      return null;
+    });
+
+    const result = await runM365AgentCli(
+      'mail --reply msg-1 --message "Thanks" --bcc archive@contoso.com --token test-graph-token'
+    );
+    expect(result.exitCode).toBe(0);
+    expect(sendCalled).toBe(true);
+    const bccPatch = patchBodies.find((b) => b.includes('bccRecipients'));
+    expect(bccPatch).toBeDefined();
+    expect(bccPatch).toContain('archive@contoso.com');
   });
 
   test('respond --json list uses Graph calendarView', async () => {

@@ -62,7 +62,11 @@ function npmRegistryMockLatestVersion(): string {
   }
 }
 
-type MockFn = (url: string, request: Request) => { status: number; body: string; contentType: string } | null;
+type MockFn = (
+  url: string,
+  request: Request,
+  body: string
+) => { status: number; body: string; contentType: string } | null;
 
 let mockFetchImpl: MockFn | null = null;
 
@@ -110,7 +114,7 @@ export function createMockFetch(): any {
 
     // Let custom mock take priority
     if (mockFetchImpl) {
-      const custom = mockFetchImpl(url, new Request(url, init as RequestInit));
+      const custom = mockFetchImpl(url, new Request(url, init as RequestInit), body);
       if (custom) return makeResponse(custom.body, custom.status, custom.contentType);
     }
 

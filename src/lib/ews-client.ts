@@ -1808,13 +1808,28 @@ export async function sendEmail(
   }
 }
 
+/** Optional recipients (cc/bcc) added to a reply/reply-all/forward response object. */
+export interface ReplyForwardRecipients {
+  cc?: string[];
+  bcc?: string[];
+}
+
+/** Build a `<t:CcRecipients>`/`<t:BccRecipients>` block, or `''` when the list is empty. */
+function recipientsBlockXml(tag: 'CcRecipients' | 'BccRecipients', addresses?: string[]): string {
+  const list = (addresses ?? []).map((e) => e.trim()).filter(Boolean);
+  if (list.length === 0) return '';
+  const inner = list.map((e) => `<t:Mailbox><t:EmailAddress>${xmlEscape(e)}</t:EmailAddress></t:Mailbox>`).join('');
+  return `<t:${tag}>${inner}</t:${tag}>`;
+}
+
 export async function replyToEmail(
   token: string,
   messageId: string,
   comment: string,
   replyAll: boolean = false,
   isHtml: boolean = false,
-  mailbox?: string
+  mailbox?: string,
+  recipients?: ReplyForwardRecipients
 ): Promise<OwaResponse<void>> {
   try {
     const resolved = await resolveMessageForWrite(token, messageId, mailbox);
@@ -1825,12 +1840,16 @@ export async function replyToEmail(
 
     const tag = replyAll ? 'ReplyAllToItem' : 'ReplyToItem';
     const bodyType = isHtml ? 'HTML' : 'Text';
+    const ccXml = recipientsBlockXml('CcRecipients', recipients?.cc);
+    const bccXml = recipientsBlockXml('BccRecipients', recipients?.bcc);
 
     const envelope = soapEnvelope(`
     <m:CreateItem MessageDisposition="SendAndSaveCopy">
       <m:Items>
         <t:${tag}>
           ${referenceItemIdXml(refId, refCk)}
+          ${ccXml}
+          ${bccXml}
           <t:NewBodyContent BodyType="${bodyType}">${xmlEscape(comment)}</t:NewBodyContent>
         </t:${tag}>
       </m:Items>
@@ -1849,7 +1868,8 @@ export async function replyToEmailDraft(
   comment: string,
   replyAll: boolean = false,
   isHtml: boolean = false,
-  mailbox?: string
+  mailbox?: string,
+  recipients?: ReplyForwardRecipients
 ): Promise<OwaResponse<{ draftId: string }>> {
   try {
     const resolved = await resolveMessageForWrite(token, messageId, mailbox);
@@ -1860,12 +1880,16 @@ export async function replyToEmailDraft(
 
     const tag = replyAll ? 'ReplyAllToItem' : 'ReplyToItem';
     const bodyType = isHtml ? 'HTML' : 'Text';
+    const ccXml = recipientsBlockXml('CcRecipients', recipients?.cc);
+    const bccXml = recipientsBlockXml('BccRecipients', recipients?.bcc);
 
     const envelope = soapEnvelope(`
     <m:CreateItem MessageDisposition="SaveOnly">
       <m:Items>
         <t:${tag}>
           ${referenceItemIdXml(refId, refCk)}
+          ${ccXml}
+          ${bccXml}
           <t:NewBodyContent BodyType="${bodyType}">${xmlEscape(comment)}</t:NewBodyContent>
         </t:${tag}>
       </m:Items>
@@ -1891,7 +1915,8 @@ export async function forwardEmail(
   messageId: string,
   toRecipients: string[],
   comment?: string,
-  mailbox?: string
+  mailbox?: string,
+  recipients?: ReplyForwardRecipients
 ): Promise<OwaResponse<void>> {
   try {
     const resolved = await resolveMessageForWrite(token, messageId, mailbox);
@@ -1903,6 +1928,8 @@ export async function forwardEmail(
     const toXml = toRecipients
       .map((e) => `<t:Mailbox><t:EmailAddress>${xmlEscape(e)}</t:EmailAddress></t:Mailbox>`)
       .join('');
+    const ccXml = recipientsBlockXml('CcRecipients', recipients?.cc);
+    const bccXml = recipientsBlockXml('BccRecipients', recipients?.bcc);
 
     const envelope = soapEnvelope(`
     <m:CreateItem MessageDisposition="SendAndSaveCopy">
@@ -1910,6 +1937,8 @@ export async function forwardEmail(
         <t:ForwardItem>
           ${referenceItemIdXml(refId, refCk)}
           <t:ToRecipients>${toXml}</t:ToRecipients>
+          ${ccXml}
+          ${bccXml}
           ${comment ? `<t:NewBodyContent BodyType="Text">${xmlEscape(comment)}</t:NewBodyContent>` : ''}
         </t:ForwardItem>
       </m:Items>
@@ -1928,7 +1957,8 @@ export async function forwardEmailDraft(
   messageId: string,
   toRecipients: string[],
   comment?: string,
-  mailbox?: string
+  mailbox?: string,
+  recipients?: ReplyForwardRecipients
 ): Promise<OwaResponse<{ draftId: string }>> {
   try {
     const resolved = await resolveMessageForWrite(token, messageId, mailbox);
@@ -1940,6 +1970,8 @@ export async function forwardEmailDraft(
     const toXml = toRecipients
       .map((e) => `<t:Mailbox><t:EmailAddress>${xmlEscape(e)}</t:EmailAddress></t:Mailbox>`)
       .join('');
+    const ccXml = recipientsBlockXml('CcRecipients', recipients?.cc);
+    const bccXml = recipientsBlockXml('BccRecipients', recipients?.bcc);
 
     const envelope = soapEnvelope(`
     <m:CreateItem MessageDisposition="SaveOnly">
@@ -1947,6 +1979,8 @@ export async function forwardEmailDraft(
         <t:ForwardItem>
           ${referenceItemIdXml(refId, refCk)}
           <t:ToRecipients>${toXml}</t:ToRecipients>
+          ${ccXml}
+          ${bccXml}
           ${comment ? `<t:NewBodyContent BodyType="Text">${xmlEscape(comment)}</t:NewBodyContent>` : ''}
         </t:ForwardItem>
       </m:Items>

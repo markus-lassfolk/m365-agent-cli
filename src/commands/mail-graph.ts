@@ -56,6 +56,8 @@ export interface MailGraphCommandOptions {
   forward?: string;
   to?: string;
   toAddr?: string;
+  cc?: string;
+  bcc?: string;
   message?: string;
   markdown?: boolean;
   draft?: boolean;
@@ -122,6 +124,41 @@ const DEST_FOLDER_MAP: Record<string, string> = {
   sent: 'sentitems',
   sentitems: 'sentitems'
 };
+
+/** Split a comma-separated recipient string into trimmed, non-empty addresses. */
+function parseRecipientList(value?: string): string[] {
+  return (value ?? '')
+    .split(',')
+    .map((e) => e.trim())
+    .filter(Boolean);
+}
+
+type GraphRecipient = { emailAddress?: { name?: string; address?: string } };
+
+/**
+ * Merge additional addresses into an existing recipient list (e.g. the CC list Graph
+ * auto-populates on a reply-all draft), deduping by address case-insensitively so that
+ * `--cc`/`--bcc` add recipients rather than replacing what the reply already carries.
+ */
+function mergeRecipients(existing: GraphRecipient[] | undefined, additions: string[]): GraphRecipient[] {
+  const seen = new Set<string>();
+  const merged: GraphRecipient[] = [];
+  for (const r of existing ?? []) {
+    const addr = r.emailAddress?.address?.trim();
+    if (!addr) continue;
+    const key = addr.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(r);
+  }
+  for (const addr of additions) {
+    const key = addr.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push({ emailAddress: { address: addr } });
+  }
+  return merged;
+}
 
 /** Whether `opts` only uses the mail operations allowed by the mask (others must be absent). */
 function mailOpsMatch(
@@ -640,6 +677,26 @@ export async function tryMailGraphPortion(
           console.error(`Error: ${pr.error?.message || 'Failed to set forward body'}`);
           process.exit(1);
         }
+      }
+    }
+
+    const ccList = parseRecipientList(options.cc);
+    const bccList = parseRecipientList(options.bcc);
+    if (ccList.length || bccList.length) {
+      // Merge onto the draft's current recipients so --cc/--bcc add to (not replace)
+      // the To/Cc that reply-all and forward already populate. bcc is never returned
+      // by Graph on a reply/forward draft, so it starts empty and just receives --bcc.
+      const recipientPatch: Record<string, unknown> = {};
+      if (ccList.length) {
+        recipientPatch.ccRecipients = mergeRecipients(draftR.data.ccRecipients, ccList);
+      }
+      if (bccList.length) {
+        recipientPatch.bccRecipients = mergeRecipients(draftR.data.bccRecipients, bccList);
+      }
+      const rr = await patchMailMessage(token, messageIdForSend, recipientPatch, user);
+      if (!rr.ok) {
+        console.error(`Error: ${rr.error?.message || 'Failed to set cc/bcc on draft'}`);
+        process.exit(1);
       }
     }
 

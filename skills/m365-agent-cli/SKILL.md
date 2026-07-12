@@ -86,6 +86,7 @@ File and link attachments in the **EWS** flows below apply to **messages** and *
 | Drafts | **`drafts --create` / `--edit`** with **`--attach`** and **`--attach-link`** (same pattern as `send`) |
 | Download from a message | **`mail -d <id>`** (or **`--download`**), **`--output <dir>`** for save location |
 | Reply / forward with attachments or outgoing categories | **`mail --reply` / `--reply-all` / `--forward`** with **`--attach`**, **`--attach-link`**, **`--with-category`** (uses draft + send; **`--draft`** to save only). Use **message id** from list/read, not the numeric index, for non-interactive scripts. |
+| Add CC / BCC recipients when replying or forwarding | **`mail --reply` / `--reply-all` / `--forward`** with **`--cc <emails>`** and/or **`--bcc <emails>`** (comma-separated). These **add** recipients on top of the To/Cc a reply-all already includes. |
 | Calendar event files / links | **`create-event`** / **`update-event`**: **`--attach`**, **`--attach-link`** (adds after the item exists; paths relative to cwd where documented) |
 | List or download event attachments | **`calendar --list-attachments <eventId>`**, **`calendar --download-attachments <eventId>`** with **`--output`**, **`--force`** to overwrite |
 | Inbox rules | **`rules`**: conditions like **`--hasAttachments`**, actions like **`--forwardAsAttachmentTo`** (see **`rules --help`**) |

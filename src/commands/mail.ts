@@ -60,6 +60,19 @@ function truncate(str: string, maxLen: number): string {
   return `${str.substring(0, maxLen - 1)}\u2026`;
 }
 
+/** Parse comma-separated `--cc`/`--bcc` into a recipients object, or undefined when neither is set. */
+function parseReplyForwardRecipients(cc?: string, bcc?: string): { cc?: string[]; bcc?: string[] } | undefined {
+  const split = (v?: string) =>
+    v
+      ?.split(',')
+      .map((e) => e.trim())
+      .filter(Boolean);
+  const ccList = split(cc);
+  const bccList = split(bcc);
+  if (!ccList?.length && !bccList?.length) return undefined;
+  return { cc: ccList, bcc: bccList };
+}
+
 async function applyDraftCategoriesAttachments(
   token: string,
   draftId: string,
@@ -161,6 +174,8 @@ export const mailCommand = new Command('mail')
   .option('--draft', 'Create a reply or forward draft (do not send); use with --reply, --reply-all, or --forward')
   .option('--forward <id>', 'Forward email by ID (use with --to-addr)')
   .option('--to-addr <emails>', 'Forward recipients (comma-separated)')
+  .option('--cc <emails>', 'On reply/reply-all/forward: CC recipient(s), comma-separated')
+  .option('--bcc <emails>', 'On reply/reply-all/forward: BCC recipient(s), comma-separated')
   .option('--message <text>', 'Reply/forward message text')
   .option('--attach <files>', 'On reply/forward: comma-separated file paths (uses draft + send)')
   .option(
@@ -232,6 +247,8 @@ Shared mailbox: add --mailbox shared@contoso.com. Full flags: docs/CLI_REFERENCE
         replyAll?: string;
         forward?: string;
         toAddr?: string;
+        cc?: string;
+        bcc?: string;
         message?: string;
         markdown?: boolean;
         json?: boolean;
@@ -821,13 +838,22 @@ Shared mailbox: add --mailbox shared@contoso.com. Full flags: docs/CLI_REFERENCE
           isHtml = true;
         }
 
+        const replyRecipients = parseReplyForwardRecipients(options.cc, options.bcc);
         const withCat = options.withCategory ?? [];
         const hasAttach = !!options.attach?.trim();
         const hasLinks = (options.attachLink?.length ?? 0) > 0;
         const hasOutgoingExtras = hasAttach || hasLinks || withCat.filter((c) => c.trim()).length > 0;
 
         if (options.draft && !hasOutgoingExtras) {
-          const result = await replyToEmailDraft(authResult.token!, id, message, isReplyAll, isHtml, options.mailbox);
+          const result = await replyToEmailDraft(
+            authResult.token!,
+            id,
+            message,
+            isReplyAll,
+            isHtml,
+            options.mailbox,
+            replyRecipients
+          );
 
           if (!result.ok || !result.data) {
             console.error(`Error: ${result.error?.message || 'Failed to create reply draft'}`);
@@ -840,7 +866,15 @@ Shared mailbox: add --mailbox shared@contoso.com. Full flags: docs/CLI_REFERENCE
         }
 
         if (hasOutgoingExtras) {
-          const draftR = await replyToEmailDraft(authResult.token!, id, message, isReplyAll, isHtml, options.mailbox);
+          const draftR = await replyToEmailDraft(
+            authResult.token!,
+            id,
+            message,
+            isReplyAll,
+            isHtml,
+            options.mailbox,
+            replyRecipients
+          );
           if (!draftR.ok || !draftR.data) {
             console.error(`Error: ${draftR.error?.message || 'Failed to create reply draft'}`);
             process.exit(1);
@@ -867,7 +901,15 @@ Shared mailbox: add --mailbox shared@contoso.com. Full flags: docs/CLI_REFERENCE
           return;
         }
 
-        const result = await replyToEmail(authResult.token!, id, message, isReplyAll, isHtml, options.mailbox);
+        const result = await replyToEmail(
+          authResult.token!,
+          id,
+          message,
+          isReplyAll,
+          isHtml,
+          options.mailbox,
+          replyRecipients
+        );
 
         if (!result.ok) {
           console.error(`Error: ${result.error?.message || 'Failed to send reply'}`);
@@ -899,13 +941,21 @@ Shared mailbox: add --mailbox shared@contoso.com. Full flags: docs/CLI_REFERENCE
           process.exit(1);
         }
 
+        const forwardRecipients = parseReplyForwardRecipients(options.cc, options.bcc);
         const withCat = options.withCategory ?? [];
         const hasAttach = !!options.attach?.trim();
         const hasLinks = (options.attachLink?.length ?? 0) > 0;
         const hasOutgoingExtras = hasAttach || hasLinks || withCat.filter((c) => c.trim()).length > 0;
 
         if (options.draft && !hasOutgoingExtras) {
-          const result = await forwardEmailDraft(authResult.token!, id, recipients, options.message, options.mailbox);
+          const result = await forwardEmailDraft(
+            authResult.token!,
+            id,
+            recipients,
+            options.message,
+            options.mailbox,
+            forwardRecipients
+          );
           if (!result.ok || !result.data) {
             console.error(`Error: ${result.error?.message || 'Failed to create forward draft'}`);
             process.exit(1);
@@ -915,7 +965,14 @@ Shared mailbox: add --mailbox shared@contoso.com. Full flags: docs/CLI_REFERENCE
         }
 
         if (hasOutgoingExtras) {
-          const draftR = await forwardEmailDraft(authResult.token!, id, recipients, options.message, options.mailbox);
+          const draftR = await forwardEmailDraft(
+            authResult.token!,
+            id,
+            recipients,
+            options.message,
+            options.mailbox,
+            forwardRecipients
+          );
           if (!draftR.ok || !draftR.data) {
             console.error(`Error: ${draftR.error?.message || 'Failed to create forward draft'}`);
             process.exit(1);
@@ -940,7 +997,14 @@ Shared mailbox: add --mailbox shared@contoso.com. Full flags: docs/CLI_REFERENCE
           return;
         }
 
-        const result = await forwardEmail(authResult.token!, id, recipients, options.message, options.mailbox);
+        const result = await forwardEmail(
+          authResult.token!,
+          id,
+          recipients,
+          options.message,
+          options.mailbox,
+          forwardRecipients
+        );
 
         if (!result.ok) {
           console.error(`Error: ${result.error?.message || 'Failed to forward email'}`);

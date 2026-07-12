@@ -53,6 +53,7 @@ export interface OutlookMessage {
   from?: { emailAddress?: { name?: string; address?: string } };
   toRecipients?: Array<{ emailAddress?: { name?: string; address?: string } }>;
   ccRecipients?: Array<{ emailAddress?: { name?: string; address?: string } }>;
+  bccRecipients?: Array<{ emailAddress?: { name?: string; address?: string } }>;
   /** Open in Outlook on the web (when returned by Graph). */
   webLink?: string;
   hasAttachments?: boolean;

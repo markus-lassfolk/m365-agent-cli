@@ -430,12 +430,20 @@ m365-agent-cli mail --reply-all 1 --message "Thanks everyone!"
 # Reply with markdown
 m365-agent-cli mail --reply 1 --message "**Got it!** Will do." --markdown
 
+# Reply (or reply-all) with additional CC / BCC recipients (comma-separated)
+m365-agent-cli mail --reply 1 --message "Looping in" --cc "manager@example.com"
+m365-agent-cli mail --reply-all 1 --message "For the record" --bcc "archive@example.com"
+m365-agent-cli mail --reply 1 --message "..." --cc "a@example.com,b@example.com" --bcc "audit@example.com"
+
 # Save reply as draft instead of sending
 m365-agent-cli mail --reply 1 --message "Draft reply" --draft
 
 # Forward an email (uses --to-addr, not --to)
 m365-agent-cli mail --forward 1 --to-addr "colleague@example.com"
 m365-agent-cli mail --forward 1 --to-addr "a@example.com,b@example.com" --message "FYI"
+
+# Forward with extra CC / BCC recipients
+m365-agent-cli mail --forward 1 --to-addr "colleague@example.com" --cc "team@example.com" --bcc "archive@example.com"
 
 # Reply or forward with file/link attachments and/or Outlook categories (draft workflow)
 m365-agent-cli mail --reply <messageId> --message "See attached" --attach "report.pdf"

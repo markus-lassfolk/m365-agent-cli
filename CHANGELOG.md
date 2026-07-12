@@ -8,6 +8,10 @@ For install and tagging, see [docs/RELEASE.md](docs/RELEASE.md).
 
 ## [Unreleased]
 
+### Mail
+
+- **`mail --reply` / `--reply-all` / `--forward` now accept `--cc` and `--bcc`** (comma-separated) to add CC/BCC recipients to the outgoing reply or forward. Previously these commands had no way to set CC/BCC, so agents could only reply to the original participants. Recipients are **added** on top of the To/Cc a reply-all already carries (deduped case-insensitively), rather than replacing them. Works on both the Microsoft Graph path (patches the reply/forward draft before send) and the EWS path (adds `CcRecipients`/`BccRecipients` to the response object).
+
 ---
 
 ## [2026.7.3] — 2026-07-02
