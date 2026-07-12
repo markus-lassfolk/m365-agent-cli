@@ -930,6 +930,7 @@ These commands are not expanded step-by-step above; use **`m365-agent-cli <comma
 
 | Command | What it does |
 | --- | --- |
+| **`describe`** | Machine-readable **JSON manifest** of every command/subcommand, option, and argument — for agents/tools discovering the CLI surface programmatically instead of parsing `--help` text. **`--list`** for a fast top-level overview, **`--command "rules create"`** to scope to one (sub)command. |
 | **`contacts`** | **Graph-only** Outlook contacts: folders (CRUD), list/search/delta, photo, attachments (file + **link** via `attachments add-link`), **`--user`** for delegated mailboxes ([GRAPH_SCOPES.md](./GRAPH_SCOPES.md)). |
 | **`onenote`** | **Graph-only** OneNote: notebooks (incl. **resolve by web URL** — `notebook from-web-url`), section groups, sections (**copy-to-notebook**, **copy-to-section-group**), pages, HTML export/create, **patch-page-content**, **copy-page**, async **operation** poll; **`--group`** / **`--site`** roots. |
 | **`meeting`** | **Graph** standalone Teams meetings (`/me/onlineMeetings`): create (simple or **`--json-file`**), get, update, delete. Calendar invitations with Teams: use **`create-event … --teams`**. |

@@ -9,6 +9,7 @@ import { counterCommand } from '../commands/counter.js';
 import { createEventCommand } from '../commands/create-event.js';
 import { delegatesCommand } from '../commands/delegates.js';
 import { deleteEventCommand } from '../commands/delete-event.js';
+import { describeCommand } from '../commands/describe.js';
 import { draftsCommand } from '../commands/drafts.js';
 import { excelCommand } from '../commands/excel.js';
 import { filesCommand } from '../commands/files.js';
@@ -68,6 +69,7 @@ function registerM365Commands(program: Command): void {
   program.addHelpText('after', 'Tip: run m365-agent-cli <command> --help for flags and examples on each command.');
 
   program.addCommand(whoamiCommand);
+  program.addCommand(describeCommand);
   program.addCommand(updateCommand);
   program.addCommand(loginCommand);
   program.addCommand(sitePagesCommand);

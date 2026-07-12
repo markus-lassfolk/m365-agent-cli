@@ -11,7 +11,7 @@ verification / a product decision)
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
-| 1 | `describe` — machine-readable command/option manifest | ⬜ | Reflects the Commander tree to JSON: every command, option (name/type/required/description), and `--json` output shape. Lets an agent discover the surface without parsing `--help` prose. |
+| 1 | `describe` — machine-readable command/option manifest | ✅ | `m365 describe` (full JSON manifest), `--list` (fast top-level overview), `--command "rules create"` (scoped lookup). `src/lib/command-manifest.ts` + `src/commands/describe.ts`. |
 | 2 | Native MCP server mode | ⬜ | Expose each CLI command as an MCP tool (built on #1's manifest for schema generation). Extends `serve.ts`. |
 | 3 | `--dry-run` for mutations | ⬜ | Print the resolved method/URL/body (Graph) or SOAP envelope (EWS) without sending. Composes with `checkReadOnly`. |
 | 4 | Output shaping: `--select`/`--fields` projection + `--ndjson` streaming | ⬜ | Client-side field projection where Graph `$select` doesn't apply; NDJSON mode for large lists so agents can stream-process instead of buffering. |
