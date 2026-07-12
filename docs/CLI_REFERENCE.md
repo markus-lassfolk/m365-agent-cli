@@ -526,7 +526,22 @@ m365-agent-cli send \
   --subject "From shared mailbox" \
   --body "..." \
   --mailbox shared@company.com
+
+# Render the body from a reusable template file instead of --body
+# (welcome.txt: "Hi {{name}}, welcome to {{company|our team}}!")
+m365-agent-cli send \
+  --to "recipient@example.com" \
+  --subject "Welcome" \
+  --template ./templates/welcome.txt \
+  --var name=Alice \
+  --var company=Acme
 ```
+
+`--template <path>` reads the body from a file with `{{variable}}` (or `{{variable|default}}`)
+placeholders, filled in from repeatable `--var name=value` flags; `--template` and `--body` are
+mutually exclusive. A placeholder with neither a supplied `--var` nor a default is an error
+(listing every unresolved name) rather than silently mailing a literal `{{name}}`. Also available
+on `drafts --create` / `drafts --edit` for the same reusable-draft-body use case.
 
 ### Reply & Forward
 

@@ -310,6 +310,17 @@ function resetSharedCommandOptionLeaks() {
   findtimeCommand.setOptionValue('optional', []);
   findtimeCommand.setOptionValue('minAttendeePercentage', '100');
   findtimeCommand.setOptionValue('timezone', undefined);
+  // send/drafts reuse shared instances; --template/--var/--body/--json leaking from one test into
+  // a later test that omits them would misroute the mutual-exclusivity check, resend a stale
+  // body, or send an error to stdout (--json) instead of stderr where a later test expects it.
+  sendCommand.setOptionValue('template', undefined);
+  sendCommand.setOptionValue('var', []);
+  sendCommand.setOptionValue('body', '');
+  sendCommand.setOptionValue('json', false);
+  draftsCommand.setOptionValue('template', undefined);
+  draftsCommand.setOptionValue('var', []);
+  draftsCommand.setOptionValue('body', undefined);
+  draftsCommand.setOptionValue('json', false);
 }
 
 async function runM365AgentCli(args: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
@@ -948,6 +959,49 @@ describe('send', () => {
     //     // (skip) expect(result.stdout).toContain('--body');
     //     expect(result.stdout).toContain('--markdown');
   });
+
+  test('--template renders variables into the body', async () => {
+    const { mkdtemp, writeFile, rm } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const dir = await mkdtemp(join(tmpdir(), 'm365-send-template-'));
+    const templatePath = join(dir, 'welcome.txt');
+    await writeFile(templatePath, 'Hi {{name}}, welcome to {{company|our team}}!');
+    try {
+      const result = await runM365AgentCli(
+        `send --to recipient@example.com --subject "Welcome" --template "${templatePath}" --var name=Alice --token test-token-12345`
+      );
+      expect(result.exitCode).toBe(0);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('--template with an unresolved placeholder (no --var, no default) errors', async () => {
+    const { mkdtemp, writeFile, rm } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const dir = await mkdtemp(join(tmpdir(), 'm365-send-template-'));
+    const templatePath = join(dir, 'welcome.txt');
+    await writeFile(templatePath, 'Hi {{name}}!');
+    try {
+      const result = await runM365AgentCli(
+        `send --to recipient@example.com --subject "Welcome" --template "${templatePath}" --token test-token-12345`
+      );
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toContain('unresolved placeholder');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('--template and --body together error', async () => {
+    const result = await runM365AgentCli(
+      'send --to recipient@example.com --subject "Test" --body "hi" --template "/nonexistent.txt" --token test-token-12345'
+    );
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain('mutually exclusive');
+  });
 });
 
 // ─── 12. drafts ────────────────────────────────────────────────────────────
@@ -973,6 +1027,41 @@ describe('drafts', () => {
     );
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toMatch(/Draft|draft/i);
+  });
+
+  test('--create --template renders variables into the body', async () => {
+    const { mkdtemp, writeFile, rm } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const dir = await mkdtemp(join(tmpdir(), 'm365-drafts-template-'));
+    const templatePath = join(dir, 'welcome.txt');
+    await writeFile(templatePath, 'Hi {{name}}, from {{company|our team}}.');
+    try {
+      const result = await runM365AgentCli(
+        `drafts --create --to recipient@example.com --subject "Draft Test" --template "${templatePath}" --var name=Bob --token test-token-12345`
+      );
+      expect(result.exitCode).toBe(0);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('--create --template with an unresolved placeholder errors', async () => {
+    const { mkdtemp, writeFile, rm } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const dir = await mkdtemp(join(tmpdir(), 'm365-drafts-template-'));
+    const templatePath = join(dir, 'welcome.txt');
+    await writeFile(templatePath, 'Hi {{name}}!');
+    try {
+      const result = await runM365AgentCli(
+        `drafts --create --to recipient@example.com --subject "Draft Test" --template "${templatePath}" --token test-token-12345`
+      );
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toContain('unresolved placeholder');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   test('--send with invalid id shows error', async () => {

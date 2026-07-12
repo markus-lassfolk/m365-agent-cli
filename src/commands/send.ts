@@ -9,6 +9,7 @@ import { GRAPH_OUTLOOK_ATTACHMENT_SESSION_THRESHOLD_BYTES } from '../lib/graph-a
 import { resolveGraphAuth } from '../lib/graph-auth.js';
 import { buildGraphSendMailPayload } from '../lib/graph-send-mail.js';
 import { toJsonError } from '../lib/json-error.js';
+import { MailTemplateError, parseTemplateVars, renderMailTemplate } from '../lib/mail-template.js';
 import { markdownToHtml } from '../lib/markdown.js';
 import { lookupMimeType } from '../lib/mime-type.js';
 import {
@@ -35,6 +36,16 @@ export const sendCommand = new Command('send')
   .requiredOption('--to <emails>', 'Recipient email(s), comma-separated')
   .requiredOption('--subject <text>', 'Email subject')
   .option('--body <text>', 'Email body', '')
+  .option(
+    '--template <path>',
+    'Read the body from a template file with {{variable}} / {{variable|default}} placeholders (mutually exclusive with --body)'
+  )
+  .option(
+    '--var <nameValue>',
+    'Template variable "name=value" (repeatable; use with --template)',
+    (v: string, prev: string[]) => [...prev, v],
+    [] as string[]
+  )
   .option('--category <name>', 'Category label (repeatable)', (v, acc) => [...acc, v], [] as string[])
   .option('--cc <emails>', 'CC recipient(s), comma-separated')
   .option('--bcc <emails>', 'BCC recipient(s), comma-separated')
@@ -57,6 +68,8 @@ export const sendCommand = new Command('send')
         to: string;
         subject: string;
         body?: string;
+        template?: string;
+        var?: string[];
         cc?: string;
         bcc?: string;
         attach?: string;
@@ -97,7 +110,30 @@ export const sendCommand = new Command('send')
         process.exit(1);
       }
 
+      if (options.template && options.body) {
+        console.error('Error: --template and --body are mutually exclusive.');
+        process.exit(1);
+      }
+
       let body = options.body ?? '';
+      if (options.template) {
+        try {
+          const source = await readFile(options.template.trim(), 'utf-8');
+          const vars = parseTemplateVars(options.var ?? []);
+          body = renderMailTemplate(source, vars);
+        } catch (err) {
+          const message =
+            err instanceof MailTemplateError
+              ? err.message
+              : `Could not read/render --template: ${err instanceof Error ? err.message : String(err)}`;
+          if (options.json) {
+            console.log(JSON.stringify({ error: toJsonError(message) }, null, 2));
+          } else {
+            console.error(`Error: ${message}`);
+          }
+          process.exit(1);
+        }
+      }
       let html = Boolean(options.html);
       if (options.markdown) {
         body = markdownToHtml(body);
