@@ -1,7 +1,7 @@
 {
   "version": 1,
   "description": "Graph path patterns from static analysis of callGraph*, graphInvoke*, fetchAllPages, fetchGraphRaw, graphPostBatch. Regenerate: npm run graph:inventory",
-  "generatedAt": "2026-07-12T11:47:57.210Z",
+  "generatedAt": "2026-07-12T11:57:20.486Z",
   "entryCount": 709,
   "entries": [
     {
@@ -1700,224 +1700,224 @@
     },
     {
       "file": "src/lib/graph-excel-client.ts",
-      "line": 130,
+      "line": 132,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-excel-client.ts",
-      "line": 161,
+      "line": 163,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-excel-client.ts",
-      "line": 182,
+      "line": 184,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-excel-client.ts",
-      "line": 213,
+      "line": 215,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-excel-client.ts",
-      "line": 243,
+      "line": 245,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-excel-client.ts",
-      "line": 266,
+      "line": 268,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-excel-client.ts",
-      "line": 299,
+      "line": 301,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-excel-client.ts",
-      "line": 332,
+      "line": 334,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-excel-client.ts",
-      "line": 353,
+      "line": 355,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-excel-client.ts",
-      "line": 397,
+      "line": 399,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-excel-client.ts",
-      "line": 432,
+      "line": 434,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-excel-client.ts",
-      "line": 451,
+      "line": 453,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-excel-client.ts",
-      "line": 474,
+      "line": 476,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-excel-client.ts",
-      "line": 505,
+      "line": 507,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-excel-client.ts",
-      "line": 535,
+      "line": 537,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-excel-client.ts",
-      "line": 568,
+      "line": 570,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-excel-client.ts",
-      "line": 590,
+      "line": 592,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-excel-client.ts",
-      "line": 633,
+      "line": 635,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-excel-client.ts",
-      "line": 666,
+      "line": 668,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-excel-client.ts",
-      "line": 697,
+      "line": 699,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-excel-client.ts",
-      "line": 732,
+      "line": 734,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-excel-client.ts",
-      "line": 770,
+      "line": 772,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-excel-client.ts",
-      "line": 802,
+      "line": 804,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-excel-client.ts",
-      "line": 839,
+      "line": 841,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-excel-client.ts",
-      "line": 860,
+      "line": 862,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-excel-client.ts",
-      "line": 892,
+      "line": 894,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-excel-client.ts",
-      "line": 923,
+      "line": 925,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-excel-client.ts",
-      "line": 944,
+      "line": 946,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-excel-client.ts",
-      "line": 976,
+      "line": 978,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-excel-client.ts",
-      "line": 1008,
+      "line": 1010,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-excel-client.ts",
-      "line": 1031,
+      "line": 1033,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"
     },
     {
       "file": "src/lib/graph-excel-client.ts",
-      "line": 1063,
+      "line": 1065,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"

@@ -637,14 +637,11 @@ plannerCommand
         process.exit(1);
       }
 
-      // Since PATCH returns 204 No Content, get task again to show updated state
+      // Since PATCH returns 204 No Content, get task again to show updated state. The update already
+      // succeeded, so a failed display-refetch must NOT be reported as a failure (mirrors update-plan
+      // / update-bucket / update-task-details).
       const updatedTaskRes = await getTask(auth.token!, opts.id);
-      if (!updatedTaskRes.ok || !updatedTaskRes.data) {
-        console.error(`Error fetching updated task: ${updatedTaskRes.error?.message}`);
-        process.exit(1);
-      }
-
-      if (opts.json) {
+      if (opts.json && updatedTaskRes.ok && updatedTaskRes.data) {
         console.log(JSON.stringify(updatedTaskRes.data, null, 2));
       } else {
         console.log(`Updated task: ${opts.id}`);

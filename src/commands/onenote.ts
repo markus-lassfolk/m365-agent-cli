@@ -1381,4 +1381,9 @@ onenoteCommand
       if (r.data.resourceLocation) console.log(`resourceLocation: ${r.data.resourceLocation}`);
       if (r.data.error?.message) console.error(`error: ${r.data.error.message}`);
     }
+    // A completed-but-failed async operation must not report success (exit 0), or `&&` chains
+    // treat a failed copy as done.
+    if (r.data.status === 'failed' || r.data.error?.message) {
+      process.exit(1);
+    }
   });

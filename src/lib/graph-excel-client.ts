@@ -125,7 +125,9 @@ export async function getExcelUsedRange(
 ): Promise<GraphResponse<ExcelRange>> {
   try {
     const sheetEnc = encodeURIComponent(sheet.trim());
-    const q = valuesOnly ? '?valuesOnly=true' : '';
+    // `valuesOnly` is an OData function parameter (usedRange(valuesOnly=true)), NOT a query option;
+    // sent as `?valuesOnly=true` Graph ignores it and returns the formatting-inclusive range.
+    const q = valuesOnly ? '(valuesOnly=true)' : '';
     const path = `${driveItemWorkbookPrefix(location, itemId)}/worksheets/${sheetEnc}/usedRange${q}`;
     const r = await callGraph<ExcelRange>(token, path);
     if (!r.ok || !r.data) {

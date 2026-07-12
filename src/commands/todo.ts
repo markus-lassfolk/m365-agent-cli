@@ -683,6 +683,10 @@ todoCommand
         console.error('Error: use either --start or --clear-start, not both');
         process.exit(1);
       }
+      if (opts.clearReminder && opts.reminder !== undefined) {
+        console.error('Error: use either --reminder or --clear-reminder, not both');
+        process.exit(1);
+      }
 
       const hasField =
         opts.title !== undefined ||

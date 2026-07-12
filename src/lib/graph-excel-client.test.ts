@@ -129,6 +129,34 @@ describe('listExcelWorksheets / getExcelRange', () => {
     }
   });
 
+  it('getExcelUsedRange sends valuesOnly as an OData function parameter, not a query option', async () => {
+    process.env.GRAPH_BASE_URL = baseUrl;
+    const urls: string[] = [];
+    const originalFetch = globalThis.fetch;
+
+    try {
+      globalThis.fetch = (async (input: string | URL | Request) => {
+        urls.push(typeof input === 'string' ? input : input.toString());
+        return new Response(JSON.stringify({ address: 'A1:B2', values: [[1, 2]] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }) as unknown as typeof fetch;
+
+      const withValues = await getExcelUsedRange(token, 'item-42', 'Sheet1', true);
+      expect(withValues.ok).toBe(true);
+      expect(urls[0]).toContain('/worksheets/Sheet1/usedRange(valuesOnly=true)');
+      expect(urls[0]).not.toContain('?valuesOnly=true');
+
+      const noValues = await getExcelUsedRange(token, 'item-42', 'Sheet1', false);
+      expect(noValues.ok).toBe(true);
+      expect(urls[1]).toContain('/worksheets/Sheet1/usedRange');
+      expect(urls[1]).not.toContain('valuesOnly');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it('returns graphError when list worksheets fails', async () => {
     process.env.GRAPH_BASE_URL = baseUrl;
     const originalFetch = globalThis.fetch;
