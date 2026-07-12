@@ -263,6 +263,11 @@ function resetSharedCommandOptionLeaks() {
   deleteEventCommand.setOptionValue('day', 'today');
   respondCommand.setOptionValue('json', false);
   respondCommand.setOptionValue('id', undefined);
+  // folders reuses a shared instance and now rejects >1 of create/rename/delete; clear the
+  // action flags so a leftover value from a prior test doesn't trip the mutual-exclusion guard.
+  for (const opt of ['create', 'rename', 'delete', 'to', 'json']) {
+    foldersCommand.setOptionValue(opt, undefined);
+  }
   // mail reuses a shared instance; earlier runs (e.g. `mail inbox -s`, read-only --flag/--mark-read)
   // can leave options set that would misroute a later reply/forward invocation (Graph eligibility
   // checks reject any stray mutating/list flag). Clear the leak-prone ones before each parse.
@@ -823,8 +828,9 @@ describe('folders', () => {
 
   test('--rename requires --to', async () => {
     const result = await runM365AgentCli('folders --rename "Old Name" --token test-token-12345');
-    expect(result.exitCode).toBe(0);
-    // exitCode checked
+    // Missing --to is an error, so the command must exit non-zero.
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toMatch(/--to/);
   });
 
   test('--delete works', async () => {
