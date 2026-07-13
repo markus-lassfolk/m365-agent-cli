@@ -1936,6 +1936,46 @@ describe('Graph backend (M365_EXCHANGE_BACKEND=graph)', () => {
     expect(result.stdout).toContain('Event updated successfully');
   });
 
+  test('update-event --all-day patches isAllDay via Graph (bug regression)', async () => {
+    let patchBody = '';
+    setMockFetch((url, request, body) => {
+      if (!url.includes('graph.microsoft.com/v1.0')) return null;
+      const method = (request?.method || 'GET').toUpperCase();
+      const path = new URL(url).pathname;
+      if (method === 'PATCH' && /^\/v1\.0\/me\/events\/[^/]+$/.test(path)) {
+        patchBody = body;
+        return {
+          status: 200,
+          body: JSON.stringify({ id: 'graph-cal-event-1', subject: 'Standup', changeKey: 'ck2' }),
+          contentType: 'application/json'
+        };
+      }
+      return null;
+    });
+    const result = await runM365AgentCli('update-event --id graph-cal-event-1 --all-day --token test-graph-token');
+    expect(result.exitCode).toBe(0);
+    expect(patchBody).not.toBe('');
+    const patch = JSON.parse(patchBody);
+    expect(patch.isAllDay).toBe(true);
+  });
+
+  test('update-event with no update flags shows the correct (normalized) time on a non-UTC host (bug regression)', async () => {
+    const originalTz = process.env.TZ;
+    try {
+      // The mock event is start=09:00/end=09:30 UTC (unzoned dateTime, timeZone:"UTC"). On a
+      // Europe/Berlin host (UTC+2 in April), the correct displayed times are 11:00-11:30 — a raw
+      // `new Date(unzoned string)` would misinterpret it as already-local and show 09:00-09:30.
+      process.env.TZ = 'Europe/Berlin';
+      const result = await runM365AgentCli('update-event --id graph-cal-event-1 --token test-graph-token');
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain('11:00');
+      expect(result.stdout).not.toContain('09:00 - 09:30');
+    } finally {
+      if (originalTz === undefined) delete process.env.TZ;
+      else process.env.TZ = originalTz;
+    }
+  });
+
   test('mail --reply --bcc patches the reply draft with bccRecipients before sending', async () => {
     const patchBodies: string[] = [];
     let sendCalled = false;
@@ -2500,5 +2540,68 @@ describe('viva-tenant-subcommands --json error envelope (bug regression)', () =>
     expect(result.exitCode).toBe(1);
     expect(result.stdout).toBe('');
     expect(result.stderr).toContain('Access denied');
+  });
+});
+
+describe('suggest --days validation (bug regression)', () => {
+  test('--days -3 is rejected instead of silently producing an inverted date range', async () => {
+    const result = await runM365AgentCli('suggest --days -3 --json --token test-graph-token');
+    expect(result.exitCode).not.toBe(0);
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.error.message).toContain('Invalid --days');
+  });
+
+  test('--days 0 is honored (not silently substituted with the default of 5)', async () => {
+    let requestBody = '';
+    setMockFetch((url, request, body) => {
+      if (!url.includes('graph.microsoft.com/v1.0') || !url.includes('findMeetingTimes')) return null;
+      requestBody = body;
+      return {
+        status: 200,
+        body: JSON.stringify({ meetingTimeSuggestions: [], emptySuggestionsReason: 'None' }),
+        contentType: 'application/json'
+      };
+    });
+    const result = await runM365AgentCli('suggest --days 0 --json --token test-graph-token');
+    expect(result.exitCode).toBe(0);
+    expect(requestBody).not.toBe('');
+    const req = JSON.parse(requestBody);
+    const start = new Date(req.timeConstraint.timeSlots[0].start.dateTime);
+    const end = new Date(req.timeConstraint.timeSlots[0].end.dateTime);
+    // With --days 0, the window should not span more than the same day (previously "0 || 5" silently
+    // widened this to a 5-day window).
+    expect(end.getTime() - start.getTime()).toBeLessThan(24 * 60 * 60 * 1000);
+  });
+});
+
+describe('oof fetch-failure guard (bug regression)', () => {
+  test('--internal-message aborts instead of silently disabling OOF when the pre-fetch fails', async () => {
+    let patchedStatus: string | undefined;
+    setMockFetch((url, request, body) => {
+      if (!url.includes('graph.microsoft.com/v1.0') || !url.includes('/mailboxSettings')) return null;
+      const method = (request?.method || 'GET').toUpperCase();
+      if (method === 'GET') {
+        // The pre-fetch (needed to preserve the existing OOF status/schedule before a partial
+        // --internal-message-only PATCH) fails here.
+        return {
+          status: 403,
+          body: JSON.stringify({ error: { code: 'ErrorAccessDenied', message: 'Access denied' } }),
+          contentType: 'application/json'
+        };
+      }
+      // The PATCH itself would succeed if the command incorrectly proceeded anyway — capturing the
+      // status sent lets the test distinguish "aborted before PATCH" from "PATCH sent status:disabled".
+      try {
+        patchedStatus = JSON.parse(body)?.automaticRepliesSetting?.status;
+      } catch {
+        // ignore
+      }
+      return { status: 200, body: JSON.stringify({}), contentType: 'application/json' };
+    });
+    const result = await runM365AgentCli('oof --internal-message "back soon" --json --token test-graph-token');
+    expect(result.exitCode).not.toBe(0);
+    expect(patchedStatus).toBeUndefined();
+    const data = JSON.parse(result.stdout.trim());
+    expect(data.error).toBeDefined();
   });
 });

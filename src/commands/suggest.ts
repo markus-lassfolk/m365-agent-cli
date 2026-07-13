@@ -75,7 +75,16 @@ export const suggestCommand = new Command('suggest')
       }
 
       const durationStr = durationMapping[durationKey];
-      const days = parseInt(options.days, 10) || 5;
+      const days = parseInt(options.days, 10);
+      if (Number.isNaN(days) || days < 0) {
+        const message = `Invalid --days "${options.days}". Must be a non-negative integer.`;
+        if (options.json) {
+          console.log(JSON.stringify({ error: toJsonError(message) }, null, 2));
+        } else {
+          console.error(`Error: ${message}`);
+        }
+        process.exit(1);
+      }
 
       const startDateTime = new Date();
       const endDateTime = new Date(startDateTime);

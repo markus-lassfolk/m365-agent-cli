@@ -178,7 +178,19 @@ export const oofCommand = new Command('oof')
     if (!status && (options.internalMessage !== undefined || options.externalMessage !== undefined)) {
       statusWasUndefined = true;
       const currentRes = await getMailboxSettings(token, options.user);
-      if (currentRes.ok && currentRes.data?.automaticRepliesSetting) {
+      if (!currentRes.ok) {
+        // Don't guess: if the fetch itself failed (throttling, network blip, etc.), defaulting to
+        // 'disabled' here would silently turn off a live out-of-office reply as a side effect of
+        // an unrelated --internal-message/--external-message edit.
+        const msg = currentRes.error?.message || 'Failed to fetch current mailbox settings';
+        if (options.json) {
+          console.log(JSON.stringify({ error: toJsonError(msg) }, null, 2));
+        } else {
+          console.error(`Error: ${msg}`);
+        }
+        process.exit(1);
+      }
+      if (currentRes.data?.automaticRepliesSetting) {
         status = currentRes.data.automaticRepliesSetting.status;
         if (status === 'scheduled') {
           scheduledStartDateTime =
@@ -186,7 +198,7 @@ export const oofCommand = new Command('oof')
           scheduledEndDateTime = scheduledEndDateTime ?? currentRes.data.automaticRepliesSetting.scheduledEndDateTime;
         }
       } else {
-        status = 'disabled'; // fallback if we couldn't fetch
+        status = 'disabled'; // fetch succeeded; no automaticRepliesSetting configured yet
       }
     }
 
