@@ -6,6 +6,19 @@ For install and tagging, see [docs/RELEASE.md](docs/RELEASE.md).
 
 ---
 
+## [2026.7.6] — 2026-07-13
+
+### Fixed
+
+Follow-up QA-review fixes found after 2026.7.5 shipped:
+
+- **`update-event` (Graph path) silently dropped `--all-day`/`--no-all-day`.** An edit earlier in the same review pass accidentally removed `allDay: options.allDay` from the Graph PATCH-building call; if `--all-day` was the only flag given, the command now hit a spurious "No field updates to apply" error, and if combined with another change, the command reported success while leaving the event's all-day flag unchanged.
+- **`update-event`/`delete-event` still showed the wrong event time on non-UTC hosts in several display/JSON paths.** The earlier fix for Graph's zone-less `dateTime` covered the PATCH-building computation but missed the event-listing, occurrence-selection, and post-update confirmation display paths, which still read `start`/`end` raw. All remaining call sites now go through the same normalization.
+- **`oof` could silently disable a live out-of-office reply.** Updating only `--internal-message`/`--external-message` fetches the current settings first to preserve status/schedule across the partial update; if that fetch failed (throttling, network blip), the code defaulted to `status: 'disabled'` instead of aborting, turning off OOF as a side effect of an unrelated text edit.
+- **`suggest --days 0` was silently treated as the default of 5** (`parseInt(...) || 5` mistook the falsy `0` for "not provided"), and negative values weren't rejected, which could send Graph an inverted time window. `--days` is now validated as a non-negative integer.
+
+---
+
 ## [2026.7.5] — 2026-07-12
 
 ### Added (feature roadmap)
