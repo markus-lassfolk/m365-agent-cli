@@ -55,7 +55,11 @@ function formatDate(dateStr: string): string {
 }
 
 function graphStartDt(e: GraphCalendarEvent): string {
-  return e.start?.dateTime ?? '';
+  return normalizeGraphDateTimeForParsing(e.start?.dateTime, e.start?.timeZone);
+}
+
+function graphEndDt(e: GraphCalendarEvent): string {
+  return normalizeGraphDateTimeForParsing(e.end?.dateTime, e.end?.timeZone);
 }
 
 export const updateEventCommand = new Command('update-event')
@@ -279,7 +283,7 @@ export const updateEventCommand = new Command('update-event')
                     id: (e as GraphCalendarEvent).id,
                     subject: (e as GraphCalendarEvent).subject,
                     start: graphStartDt(e as GraphCalendarEvent),
-                    end: (e as GraphCalendarEvent).end?.dateTime
+                    end: graphEndDt(e as GraphCalendarEvent)
                   }))
                 },
                 null,
@@ -322,7 +326,7 @@ export const updateEventCommand = new Command('update-event')
           if (useGraph) {
             const ge = event as GraphCalendarEvent;
             const st = graphStartDt(ge);
-            const en = ge.end?.dateTime ?? '';
+            const en = graphEndDt(ge);
             console.log(`\n  [${i + 1}] ${ge.subject ?? '(no subject)'}`);
             console.log(`      ${formatTime(st)} - ${formatTime(en)}`);
             console.log(`      ID: ${ge.id}`);
@@ -438,7 +442,7 @@ export const updateEventCommand = new Command('update-event')
             if (!options.json) {
               console.log(`\nUpdating single occurrence of: ${occEvent.subject ?? '(no subject)'}`);
               console.log(
-                `  ${formatDate(graphStartDt(occEvent))} ${formatTime(graphStartDt(occEvent))} - ${formatTime(occEvent.end?.dateTime ?? '')}`
+                `  ${formatDate(graphStartDt(occEvent))} ${formatTime(graphStartDt(occEvent))} - ${formatTime(graphEndDt(occEvent))}`
               );
             }
           } else if (options.occurrence) {
@@ -456,7 +460,7 @@ export const updateEventCommand = new Command('update-event')
             if (!options.json) {
               console.log(`\nUpdating occurrence ${idx} of: ${occEvent.subject ?? '(no subject)'}`);
               console.log(
-                `  ${formatDate(graphStartDt(occEvent))} ${formatTime(graphStartDt(occEvent))} - ${formatTime(occEvent.end?.dateTime ?? '')}`
+                `  ${formatDate(graphStartDt(occEvent))} ${formatTime(graphStartDt(occEvent))} - ${formatTime(graphEndDt(occEvent))}`
               );
             }
           }
@@ -558,7 +562,7 @@ export const updateEventCommand = new Command('update-event')
         if (useGraph && targetGraph) {
           const tg = targetGraph;
           const st = graphStartDt(tg);
-          const en = tg.end?.dateTime ?? '';
+          const en = graphEndDt(tg);
           console.log(`\nEvent: ${tg.subject ?? '(no subject)'}`);
           console.log(`  When: ${formatDate(st)} ${formatTime(st)} - ${formatTime(en)}`);
           if (tg.location?.displayName) {
@@ -894,6 +898,7 @@ export const updateEventCommand = new Command('update-event')
                 location: graphLocationsPatch?.length ? undefined : locationText,
                 graphLocations: graphLocationsPatch,
                 showAs: showAsPatch,
+                allDay: options.allDay,
                 sensitivity: sensitivityEws,
                 categories: options.category && options.category.length > 0 ? options.category : undefined,
                 clearCategories: options.clearCategories,
@@ -996,8 +1001,8 @@ export const updateEventCommand = new Command('update-event')
                             id: ur.data.id,
                             changeKey: ur.data.changeKey,
                             subject: ur.data.subject,
-                            start: ur.data.start?.dateTime,
-                            end: ur.data.end?.dateTime
+                            start: graphStartDt(ur.data),
+                            end: graphEndDt(ur.data)
                           },
                           fileAttachmentsAdded: files.length,
                           referenceAttachmentsAdded: links.length
@@ -1009,8 +1014,8 @@ export const updateEventCommand = new Command('update-event')
                   } else {
                     console.log('\n\u2713 Event updated successfully.');
                     console.log(`\n  Title: ${ur.data.subject ?? ''}`);
-                    const st = ur.data.start?.dateTime ?? '';
-                    const en = ur.data.end?.dateTime ?? '';
+                    const st = graphStartDt(ur.data);
+                    const en = graphEndDt(ur.data);
                     if (st && en) {
                       console.log(`  When:  ${formatDate(st)} ${formatTime(st)} - ${formatTime(en)}`);
                     }

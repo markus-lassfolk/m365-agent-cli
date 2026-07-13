@@ -18,6 +18,7 @@ import {
   listCalendarView
 } from '../lib/graph-calendar-client.js';
 import { truncateRecurringSeriesBeforeCut } from '../lib/graph-calendar-recurrence.js';
+import { normalizeGraphDateTimeForParsing } from '../lib/graph-datetime.js';
 import { toJsonError } from '../lib/json-error.js';
 import { checkReadOnly } from '../lib/utils.js';
 
@@ -32,7 +33,11 @@ function formatDate(dateStr: string): string {
 }
 
 function graphStartDt(e: GraphCalendarEvent): string {
-  return e.start?.dateTime ?? '';
+  return normalizeGraphDateTimeForParsing(e.start?.dateTime, e.start?.timeZone);
+}
+
+function graphEndDt(e: GraphCalendarEvent): string {
+  return normalizeGraphDateTimeForParsing(e.end?.dateTime, e.end?.timeZone);
 }
 
 export const deleteEventCommand = new Command('delete-event')
@@ -197,7 +202,7 @@ export const deleteEventCommand = new Command('delete-event')
                     id: (e as GraphCalendarEvent).id,
                     subject: (e as GraphCalendarEvent).subject,
                     start: graphStartDt(e as GraphCalendarEvent),
-                    end: (e as GraphCalendarEvent).end?.dateTime
+                    end: graphEndDt(e as GraphCalendarEvent)
                   }))
                 },
                 null,
@@ -239,7 +244,7 @@ export const deleteEventCommand = new Command('delete-event')
           if (useGraph) {
             const ge = event as GraphCalendarEvent;
             const st = graphStartDt(ge);
-            const en = ge.end?.dateTime ?? '';
+            const en = graphEndDt(ge);
             const startTime = formatTime(st);
             const endTime = formatTime(en);
             const ac = graphNonResourceAttendeeCount(ge);
@@ -367,7 +372,7 @@ export const deleteEventCommand = new Command('delete-event')
               console.log(`\nDeleting single occurrence: ${targetGraph.subject ?? '(no subject)'}`);
             }
             console.log(
-              `  ${formatDate(graphStartDt(targetGraph))} ${formatTime(graphStartDt(targetGraph))} - ${formatTime(targetGraph.end?.dateTime ?? '')}`
+              `  ${formatDate(graphStartDt(targetGraph))} ${formatTime(graphStartDt(targetGraph))} - ${formatTime(graphEndDt(targetGraph))}`
             );
           }
         } else if (!targetGraph) {
@@ -384,14 +389,14 @@ export const deleteEventCommand = new Command('delete-event')
           if (!options.json) {
             console.log(`\nDeleting: ${targetGraph.subject ?? '(no subject)'}`);
             console.log(
-              `  ${formatDate(graphStartDt(targetGraph))} ${formatTime(graphStartDt(targetGraph))} - ${formatTime(targetGraph.end?.dateTime ?? '')}`
+              `  ${formatDate(graphStartDt(targetGraph))} ${formatTime(graphStartDt(targetGraph))} - ${formatTime(graphEndDt(targetGraph))}`
             );
           }
         } else {
           if (!options.json) {
             console.log(`\nDeleting: ${targetGraph.subject ?? '(no subject)'} (scope: ${scope})`);
             console.log(
-              `  ${formatDate(graphStartDt(targetGraph))} ${formatTime(graphStartDt(targetGraph))} - ${formatTime(targetGraph.end?.dateTime ?? '')}`
+              `  ${formatDate(graphStartDt(targetGraph))} ${formatTime(graphStartDt(targetGraph))} - ${formatTime(graphEndDt(targetGraph))}`
             );
           }
         }
