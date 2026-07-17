@@ -14,6 +14,7 @@ import {
   type M365TokenCacheV1,
   saveM365TokenCache
 } from './m365-token-cache.js';
+import { withRefreshTokenLock } from './refresh-token-lock.js';
 
 /**
  * Sanitize an OAuth token-endpoint error for surfacing in CLI output / tests.
@@ -140,90 +141,104 @@ export async function resolveAuth(options?: {
 
     const tenant = getMicrosoftTenantPathSegment();
 
-    const cached = await loadM365TokenCache(identity);
-    if (cached?.ews && cached.ews.expiresAt > Date.now() + 60_000) {
-      if (isValidJwtStructure(cached.ews.accessToken)) {
-        const tokenAppId = getJwtPayloadAppId(cached.ews.accessToken);
-        const expectId = clientId.trim();
-        const appIdMismatch = tokenAppId && expectId && tokenAppId.toLowerCase() !== expectId.toLowerCase();
-        const tokenTenantId = getJwtPayloadTenantId(cached.ews.accessToken);
-        // Only enforce tenant equality when the operator pinned a concrete tenant GUID — `common` /
-        // `organizations` / `consumers` / domain-name tenants resolve to a `tid` that legitimately
-        // varies per user, so comparing those would produce false-positive refreshes.
-        const tenantMismatch =
-          isPinnedTenantGuid(tenant) && tokenTenantId && tokenTenantId.toLowerCase() !== tenant.toLowerCase();
-        if (appIdMismatch) {
-          console.warn(
-            `[auth] Ignoring cached EWS access token: token app id (${tokenAppId}) does not match EWS_CLIENT_ID (${expectId}). Refreshing.`
-          );
-        } else if (tenantMismatch) {
-          console.warn(
-            `[auth] Ignoring cached EWS access token: token tenant (${tokenTenantId}) does not match configured tenant (${tenant}). Refreshing.`
-          );
-        } else {
-          return { success: true, token: cached.ews.accessToken };
-        }
+    const tryCachedEws = (cached: M365TokenCacheV1 | null | undefined): AuthResult | null => {
+      if (!(cached?.ews && cached.ews.expiresAt > Date.now() + 60_000)) return null;
+      if (!isValidJwtStructure(cached.ews.accessToken)) return null;
+      const tokenAppId = getJwtPayloadAppId(cached.ews.accessToken);
+      const expectId = clientId.trim();
+      const appIdMismatch = tokenAppId && expectId && tokenAppId.toLowerCase() !== expectId.toLowerCase();
+      const tokenTenantId = getJwtPayloadTenantId(cached.ews.accessToken);
+      // Only enforce tenant equality when the operator pinned a concrete tenant GUID — `common` /
+      // `organizations` / `consumers` / domain-name tenants resolve to a `tid` that legitimately
+      // varies per user, so comparing those would produce false-positive refreshes.
+      const tenantMismatch =
+        isPinnedTenantGuid(tenant) && tokenTenantId && tokenTenantId.toLowerCase() !== tenant.toLowerCase();
+      if (appIdMismatch) {
+        console.warn(
+          `[auth] Ignoring cached EWS access token: token app id (${tokenAppId}) does not match EWS_CLIENT_ID (${expectId}). Refreshing.`
+        );
+        return null;
       }
-    }
-
-    const refreshTokens = [...new Set([cached?.refreshToken, envRefreshToken].filter((t): t is string => !!t))];
-
-    // Resolve the active env file once so all refresh attempts persist to the same file the
-    // CLI loaded from (M365_AGENT_ENV_FILE / --env-file / default). Without this, refreshes
-    // can silently write rotated tokens to the default global .env.
-    const activeEnvPath = getActiveEnvFilePath(options?.envPath);
-    const lastRefreshErrors: string[] = [];
-    let interactionRequired = false;
-
-    for (const rt of refreshTokens) {
-      try {
-        const result = await refreshAccessToken(clientId, rt, tenant);
-        const next: M365TokenCacheV1 = {
-          version: 1,
-          refreshToken: result.refreshToken,
-          ews: { accessToken: result.accessToken, expiresAt: result.expiresAt },
-          graph: cached?.graph,
-          // Preserve the narrow-scope acceptance flag across EWS refreshes so a later Graph
-          // auth doesn't force a redundant refresh believing the scope was never accepted.
-          graphNarrowScopeAccepted: cached?.graphNarrowScopeAccepted
-        };
-        await saveM365TokenCache(identity, next);
-        await persistRefreshTokenToEnv(result.refreshToken, {
-          envPath: activeEnvPath,
-          previousRefreshToken: cached?.refreshToken ?? envRefreshToken
-        });
-        return { success: true, token: result.accessToken };
-      } catch (err) {
-        // Capture the most recent OAuth error (AADSTS code, description, HTTP status) per attempt
-        // so the caller can surface it on failure instead of a generic message.
-        const msg = err instanceof Error ? err.message : String(err);
-        const detailed =
-          err && typeof err === 'object' && 'lastRefreshError' in err
-            ? (err as { lastRefreshError?: string }).lastRefreshError
-            : undefined;
-        if (err && typeof err === 'object' && (err as { interactionRequired?: boolean }).interactionRequired) {
-          interactionRequired = true;
-        }
-        lastRefreshErrors.push(sanitizeRefreshError(detailed || msg));
+      if (tenantMismatch) {
+        console.warn(
+          `[auth] Ignoring cached EWS access token: token tenant (${tokenTenantId}) does not match configured tenant (${tenant}). Refreshing.`
+        );
+        return null;
       }
-    }
-
-    // Aggregate the last error from each candidate so the caller can see AADSTS / interaction_required
-    // details instead of a generic "Token refresh failed" message. The env-persist call above
-    // re-resolves via getActiveEnvFilePath(options?.envPath) when envPath is omitted, so the
-    // default path remains correct.
-    const lastErrorDetail = lastRefreshErrors[lastRefreshErrors.length - 1] ?? '';
-    const interactiveHint = interactionRequired
-      ? ' Azure requires re-authentication (interaction_required / AADSTS500133). Run `m365-agent-cli login` again.'
-      : '';
-    return {
-      success: false,
-      error:
-        'Token refresh failed. Update M365_REFRESH_TOKEN (or GRAPH_REFRESH_TOKEN / EWS_REFRESH_TOKEN) in .env or run `login`.' +
-        (lastErrorDetail ? ` Last error: ${lastErrorDetail}` : '') +
-        interactiveHint,
-      lastRefreshError: lastErrorDetail || undefined
+      return { success: true, token: cached.ews.accessToken };
     };
+
+    const cachedBeforeLock = await loadM365TokenCache(identity);
+    const hit = tryCachedEws(cachedBeforeLock);
+    if (hit) return hit;
+
+    // Serialize refresh against Graph auth for the same identity (shared refresh token).
+    return await withRefreshTokenLock(identity, async () => {
+      const cached = await loadM365TokenCache(identity);
+      const afterWait = tryCachedEws(cached);
+      if (afterWait) return afterWait;
+
+      const refreshTokens = [
+        ...new Set([cached?.refreshToken, getUnifiedRefreshTokenFromEnv() ?? envRefreshToken].filter((t): t is string => !!t))
+      ];
+
+      // Resolve the active env file once so all refresh attempts persist to the same file the
+      // CLI loaded from (M365_AGENT_ENV_FILE / --env-file / default). Without this, refreshes
+      // can silently write rotated tokens to the default global .env.
+      const activeEnvPath = getActiveEnvFilePath(options?.envPath);
+      const lastRefreshErrors: string[] = [];
+      let interactionRequired = false;
+
+      for (const rt of refreshTokens) {
+        try {
+          const result = await refreshAccessToken(clientId, rt, tenant);
+          const next: M365TokenCacheV1 = {
+            version: 1,
+            refreshToken: result.refreshToken,
+            ews: { accessToken: result.accessToken, expiresAt: result.expiresAt },
+            graph: cached?.graph,
+            // Preserve the narrow-scope acceptance flag across EWS refreshes so a later Graph
+            // auth doesn't force a redundant refresh believing the scope was never accepted.
+            graphNarrowScopeAccepted: cached?.graphNarrowScopeAccepted
+          };
+          await saveM365TokenCache(identity, next);
+          await persistRefreshTokenToEnv(result.refreshToken, {
+            envPath: activeEnvPath,
+            previousRefreshToken: cached?.refreshToken ?? envRefreshToken
+          });
+          return { success: true, token: result.accessToken };
+        } catch (err) {
+          // Capture the most recent OAuth error (AADSTS code, description, HTTP status) per attempt
+          // so the caller can surface it on failure instead of a generic message.
+          const msg = err instanceof Error ? err.message : String(err);
+          const detailed =
+            err && typeof err === 'object' && 'lastRefreshError' in err
+              ? (err as { lastRefreshError?: string }).lastRefreshError
+              : undefined;
+          if (err && typeof err === 'object' && (err as { interactionRequired?: boolean }).interactionRequired) {
+            interactionRequired = true;
+          }
+          lastRefreshErrors.push(sanitizeRefreshError(detailed || msg));
+        }
+      }
+
+      // Aggregate the last error from each candidate so the caller can see AADSTS / interaction_required
+      // details instead of a generic "Token refresh failed" message. The env-persist call above
+      // re-resolves via getActiveEnvFilePath(options?.envPath) when envPath is omitted, so the
+      // default path remains correct.
+      const lastErrorDetail = lastRefreshErrors[lastRefreshErrors.length - 1] ?? '';
+      const interactiveHint = interactionRequired
+        ? ' Azure requires re-authentication (interaction_required / AADSTS500133). Run `m365-agent-cli login` again.'
+        : '';
+      return {
+        success: false,
+        error:
+          'Token refresh failed. Update M365_REFRESH_TOKEN (or GRAPH_REFRESH_TOKEN / EWS_REFRESH_TOKEN) in .env or run `login`.' +
+          (lastErrorDetail ? ` Last error: ${lastErrorDetail}` : '') +
+          interactiveHint,
+        lastRefreshError: lastErrorDetail || undefined
+      };
+    });
   } catch (err) {
     return {
       success: false,

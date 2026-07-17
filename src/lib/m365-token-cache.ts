@@ -13,7 +13,11 @@ import { atomicWriteUtf8File } from './atomic-write.js';
  * Optional absolute path to the `m365-agent-cli` config directory (same folder as `token-cache-*.json`).
  * Tests use this to avoid mutating global HOME/XDG across parallel cases.
  */
-function configDir(): string {
+/**
+ * Config directory for `.env`, token caches, and refresh locks.
+ * Honors `M365_AGENT_CLI_CONFIG_DIR`, then `XDG_CONFIG_HOME/m365-agent-cli`, else `~/.config/m365-agent-cli`.
+ */
+export function getM365AgentCliConfigDir(): string {
   const dirOverride = process.env.M365_AGENT_CLI_CONFIG_DIR?.trim();
   if (dirOverride) {
     return resolve(dirOverride);
@@ -23,6 +27,10 @@ function configDir(): string {
     return join(xdg, 'm365-agent-cli');
   }
   return join(homedir(), '.config', 'm365-agent-cli');
+}
+
+function configDir(): string {
+  return getM365AgentCliConfigDir();
 }
 
 function tokenCachePath(identity: string): string {

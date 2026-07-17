@@ -6,6 +6,14 @@ For install and tagging, see [docs/RELEASE.md](docs/RELEASE.md).
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **Concurrent refresh-token races.** `resolveAuth` (EWS) and `resolveGraphAuth` share one refresh token per identity. Parallel CLI processes could both redeem the same RT; Entra rotates/invalidates one grant and the loser could persist a stale token. Refresh now takes an exclusive per-identity lock (`.refresh-{identity}.lock` under the config dir), re-loads the cache after acquiring it, and short-circuits if another process already refreshed a valid access token.
+
+---
+
 ## [2026.7.6] — 2026-07-13
 
 ### Fixed

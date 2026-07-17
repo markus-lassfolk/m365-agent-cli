@@ -16,6 +16,7 @@ import {
   type M365TokenCacheV1,
   saveM365TokenCache
 } from './m365-token-cache.js';
+import { withRefreshTokenLock } from './refresh-token-lock.js';
 
 export interface GraphAuthResult {
   success: boolean;
@@ -149,105 +150,121 @@ export async function resolveGraphAuth(options?: {
 
     const tenant = getMicrosoftTenantPathSegment();
 
-    const cached = await loadM365TokenCache(identity);
-    if (!options?.forceRefresh && cached?.graph && cached.graph.expiresAt > Date.now() + 60_000) {
-      if (isValidJwtStructure(cached.graph.accessToken)) {
-        const tokenAppId = getJwtPayloadAppId(cached.graph.accessToken);
-        const expectId = clientId.trim();
-        const appIdMismatch = tokenAppId && expectId && tokenAppId.toLowerCase() !== expectId.toLowerCase();
-        const tokenTenantId = getJwtPayloadTenantId(cached.graph.accessToken);
-        // Only enforce tenant equality when the operator pinned a concrete tenant GUID — `common` /
-        // `organizations` / `consumers` / domain-name tenants resolve to a `tid` that legitimately
-        // varies per user, so comparing those would produce false-positive refreshes.
-        const tenantMismatch =
-          isPinnedTenantGuid(tenant) && tokenTenantId && tokenTenantId.toLowerCase() !== tenant.toLowerCase();
-        if (appIdMismatch) {
-          console.warn(
-            `[graph-auth] Ignoring cached Graph access token: token app id (${tokenAppId}) does not match EWS_CLIENT_ID (${expectId}). Refreshing.`
-          );
-        } else if (tenantMismatch) {
-          console.warn(
-            `[graph-auth] Ignoring cached Graph access token: token tenant (${tokenTenantId}) does not match configured tenant (${tenant}). Refreshing.`
-          );
-        } else {
-          const scopeSet = getJwtPayloadScopeSet(cached.graph.accessToken);
-          const missingCritical = GRAPH_CRITICAL_DELEGATED_SCOPES.filter((s) => !scopeSet.has(s));
-          const narrowOk = cached.graphNarrowScopeAccepted === true;
-          if (missingCritical.length > 0 && !narrowOk) {
-            console.warn(
-              `[graph-auth] Ignoring cached Graph access token: missing delegated scopes ${missingCritical.join(', ')} (narrow token — e.g. stale cache from another host). Refreshing.`
-            );
-          } else {
-            return { success: true, token: cached.graph.accessToken };
-          }
-        }
-      } else {
+    const tryCachedGraph = (cached: M365TokenCacheV1 | null | undefined): GraphAuthResult | null => {
+      if (options?.forceRefresh) return null;
+      if (!(cached?.graph && cached.graph.expiresAt > Date.now() + 60_000)) return null;
+      if (!isValidJwtStructure(cached.graph.accessToken)) {
         console.warn(
           '[graph-auth] Cached Graph token has an invalid JWT structure — falling back to token refresh. ' +
             'You may need to re-authenticate if this persists.'
         );
+        return null;
       }
-    }
-
-    const refreshTokens = [...new Set([cached?.refreshToken, envRefreshToken].filter((t): t is string => !!t))];
-
-    // Resolve the active env file once so all refresh attempts persist to the same file the
-    // CLI loaded from (M365_AGENT_ENV_FILE / --env-file / default). Without this, refreshes
-    // can silently write rotated tokens to the default global .env.
-    const activeEnvPath = getActiveEnvFilePath(options?.envPath);
-    const lastRefreshErrors: string[] = [];
-    let interactionRequired = false;
-
-    for (let i = 0; i < refreshTokens.length; i++) {
-      try {
-        const result = await refreshGraphAccessToken(clientId, refreshTokens[i], tenant);
-        const newScopeSet = getJwtPayloadScopeSet(result.accessToken);
-        const missingAfterRefresh = GRAPH_CRITICAL_DELEGATED_SCOPES.filter((s) => !newScopeSet.has(s));
-        const next: M365TokenCacheV1 = {
-          version: 1,
-          refreshToken: result.refreshToken,
-          ews: cached?.ews,
-          graph: { accessToken: result.accessToken, expiresAt: result.expiresAt },
-          graphNarrowScopeAccepted: missingAfterRefresh.length > 0
-        };
-        await saveM365TokenCache(identity, next);
-        await persistRefreshTokenToEnv(result.refreshToken, {
-          envPath: activeEnvPath,
-          previousRefreshToken: cached?.refreshToken ?? envRefreshToken
-        });
-        return { success: true, token: result.accessToken };
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        const isLast = i === refreshTokens.length - 1;
-        // Capture detailed OAuth error context (AADSTS codes, sub-error, descriptions) for
-        // surfacing in the returned `error` / `lastRefreshError` fields. Falls back to the
-        // formatted Error.message if the refresh helper did not attach a structured detail.
-        const detailed =
-          err && typeof err === 'object' && 'lastRefreshError' in err
-            ? (err as { lastRefreshError?: string }).lastRefreshError
-            : undefined;
-        if (err && typeof err === 'object' && (err as { interactionRequired?: boolean }).interactionRequired) {
-          interactionRequired = true;
-        }
-        lastRefreshErrors.push(sanitizeRefreshError(detailed || msg));
+      const tokenAppId = getJwtPayloadAppId(cached.graph.accessToken);
+      const expectId = clientId.trim();
+      const appIdMismatch = tokenAppId && expectId && tokenAppId.toLowerCase() !== expectId.toLowerCase();
+      const tokenTenantId = getJwtPayloadTenantId(cached.graph.accessToken);
+      // Only enforce tenant equality when the operator pinned a concrete tenant GUID — `common` /
+      // `organizations` / `consumers` / domain-name tenants resolve to a `tid` that legitimately
+      // varies per user, so comparing those would produce false-positive refreshes.
+      const tenantMismatch =
+        isPinnedTenantGuid(tenant) && tokenTenantId && tokenTenantId.toLowerCase() !== tenant.toLowerCase();
+      if (appIdMismatch) {
         console.warn(
-          `[graph-auth] Token refresh attempt failed: ${msg}${isLast ? '.' : ' — trying next token candidate.'}`
+          `[graph-auth] Ignoring cached Graph access token: token app id (${tokenAppId}) does not match EWS_CLIENT_ID (${expectId}). Refreshing.`
         );
+        return null;
       }
-    }
-
-    const lastErrorDetail = lastRefreshErrors[lastRefreshErrors.length - 1] ?? '';
-    const interactiveHint = interactionRequired
-      ? ' Azure requires re-authentication (interaction_required / AADSTS500133). Run `m365-agent-cli login` again.'
-      : '';
-    return {
-      success: false,
-      error:
-        'Graph token refresh failed. Update M365_REFRESH_TOKEN (or GRAPH_REFRESH_TOKEN) in .env or run `login`.' +
-        (lastErrorDetail ? ` Last error: ${lastErrorDetail}` : '') +
-        interactiveHint,
-      lastRefreshError: lastErrorDetail || undefined
+      if (tenantMismatch) {
+        console.warn(
+          `[graph-auth] Ignoring cached Graph access token: token tenant (${tokenTenantId}) does not match configured tenant (${tenant}). Refreshing.`
+        );
+        return null;
+      }
+      const scopeSet = getJwtPayloadScopeSet(cached.graph.accessToken);
+      const missingCritical = GRAPH_CRITICAL_DELEGATED_SCOPES.filter((s) => !scopeSet.has(s));
+      const narrowOk = cached.graphNarrowScopeAccepted === true;
+      if (missingCritical.length > 0 && !narrowOk) {
+        console.warn(
+          `[graph-auth] Ignoring cached Graph access token: missing delegated scopes ${missingCritical.join(', ')} (narrow token — e.g. stale cache from another host). Refreshing.`
+        );
+        return null;
+      }
+      return { success: true, token: cached.graph.accessToken };
     };
+
+    const cachedBeforeLock = await loadM365TokenCache(identity);
+    const hit = tryCachedGraph(cachedBeforeLock);
+    if (hit) return hit;
+
+    // Serialize refresh against EWS auth for the same identity (shared refresh token).
+    return await withRefreshTokenLock(identity, async () => {
+      const cached = await loadM365TokenCache(identity);
+      const afterWait = tryCachedGraph(cached);
+      if (afterWait) return afterWait;
+
+      const refreshTokens = [
+        ...new Set([cached?.refreshToken, getUnifiedRefreshTokenFromEnv() ?? envRefreshToken].filter((t): t is string => !!t))
+      ];
+
+      // Resolve the active env file once so all refresh attempts persist to the same file the
+      // CLI loaded from (M365_AGENT_ENV_FILE / --env-file / default). Without this, refreshes
+      // can silently write rotated tokens to the default global .env.
+      const activeEnvPath = getActiveEnvFilePath(options?.envPath);
+      const lastRefreshErrors: string[] = [];
+      let interactionRequired = false;
+
+      for (let i = 0; i < refreshTokens.length; i++) {
+        try {
+          const result = await refreshGraphAccessToken(clientId, refreshTokens[i], tenant);
+          const newScopeSet = getJwtPayloadScopeSet(result.accessToken);
+          const missingAfterRefresh = GRAPH_CRITICAL_DELEGATED_SCOPES.filter((s) => !newScopeSet.has(s));
+          const next: M365TokenCacheV1 = {
+            version: 1,
+            refreshToken: result.refreshToken,
+            ews: cached?.ews,
+            graph: { accessToken: result.accessToken, expiresAt: result.expiresAt },
+            graphNarrowScopeAccepted: missingAfterRefresh.length > 0
+          };
+          await saveM365TokenCache(identity, next);
+          await persistRefreshTokenToEnv(result.refreshToken, {
+            envPath: activeEnvPath,
+            previousRefreshToken: cached?.refreshToken ?? envRefreshToken
+          });
+          return { success: true, token: result.accessToken };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          const isLast = i === refreshTokens.length - 1;
+          // Capture detailed OAuth error context (AADSTS codes, sub-error, descriptions) for
+          // surfacing in the returned `error` / `lastRefreshError` fields. Falls back to the
+          // formatted Error.message if the refresh helper did not attach a structured detail.
+          const detailed =
+            err && typeof err === 'object' && 'lastRefreshError' in err
+              ? (err as { lastRefreshError?: string }).lastRefreshError
+              : undefined;
+          if (err && typeof err === 'object' && (err as { interactionRequired?: boolean }).interactionRequired) {
+            interactionRequired = true;
+          }
+          lastRefreshErrors.push(sanitizeRefreshError(detailed || msg));
+          console.warn(
+            `[graph-auth] Token refresh attempt failed: ${msg}${isLast ? '.' : ' — trying next token candidate.'}`
+          );
+        }
+      }
+
+      const lastErrorDetail = lastRefreshErrors[lastRefreshErrors.length - 1] ?? '';
+      const interactiveHint = interactionRequired
+        ? ' Azure requires re-authentication (interaction_required / AADSTS500133). Run `m365-agent-cli login` again.'
+        : '';
+      return {
+        success: false,
+        error:
+          'Graph token refresh failed. Update M365_REFRESH_TOKEN (or GRAPH_REFRESH_TOKEN) in .env or run `login`.' +
+          (lastErrorDetail ? ` Last error: ${lastErrorDetail}` : '') +
+          interactiveHint,
+        lastRefreshError: lastErrorDetail || undefined
+      };
+    });
   } catch (err) {
     return {
       success: false,
