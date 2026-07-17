@@ -41,7 +41,7 @@ Trusted Publishing only applies **after** the package exists under your npm acco
 1. **Create an access token** on npm: [Access tokens](https://docs.npmjs.com/creating-and-viewing-access-tokens) — use a **Granular Access Token** with **Read and write** for the package (or **Automation** classic token if you prefer).
 2. **Locally** (or in a one-off CI job), from this repo at the release commit:
    - `npm run embed-sha`
-   - `npm pack` (optional sanity check — expect `skills/m365-agent-cli/SKILL.md`, `packaging/tools-md-snippet.md`, and `scripts/install-*.mjs` in the file list)
+   - `npm pack` (optional sanity check — expect `dist/cli.js`, `dist/index.js`, `skills/m365-agent-cli/SKILL.md`, `packaging/tools-md-snippet.md`, and `scripts/install-*.mjs` in the file list)
    - `npm publish --access public`  
      With a token: `npm config set //registry.npmjs.org/:_authToken=YOUR_TOKEN` (or `NPM_TOKEN` env with `npm publish` per npm docs). Do **not** commit the token.
 3. On [npmjs.com](https://www.npmjs.com/) open **`m365-agent-cli` → Package → Access → Trusted publishers** and add **GitHub Actions** with repository `markus-lassfolk/m365-agent-cli` and workflow file **`release.yml`** (see section above).
@@ -79,6 +79,15 @@ or:
 npm install -g m365-agent-cli@latest
 ```
 
+## Build
+
+`npm pack` / `npm publish` compile `src/` to a Node-runnable `dist/` via the `prepack` script
+(`npm run build`, i.e. `tsc -p tsconfig.build.json` plus a `#!/usr/bin/env node` shebang on
+`dist/cli.js`) — this is what `bin`/`main` in `package.json` point at, so `npm install -g
+m365-agent-cli` produces a working executable without a separately installed Bun runtime (see
+issue #239). `dist/` is git-ignored and generated fresh on every pack/publish; there is nothing to
+commit for it.
+
 ## Local dry run (optional)
 
 From a clean checkout at the release commit:
@@ -88,4 +97,5 @@ npm run embed-sha
 npm pack
 ```
 
-Inspect the tarball; `package.json` and `src/lib/git-commit.ts` should reflect the release.
+`npm pack` triggers the build above automatically. Inspect the tarball; `package.json` and
+`src/lib/git-commit.ts` (compiled into `dist/lib/git-commit.js`) should reflect the release.

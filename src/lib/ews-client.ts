@@ -118,7 +118,7 @@ function stripXmlTagsFromXmlish(s: string): string {
 // ─── SOAP Core ───
 
 import { haltForDryRun, isDryRunActive } from './dry-run.js';
-import { validateUrl } from './url-validation';
+import { validateUrl } from './url-validation.js';
 
 /**
  * Root EWS SOAP operation names that only read data. Everything else is treated as mutating for

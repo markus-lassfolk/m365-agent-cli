@@ -11,6 +11,7 @@ For install and tagging, see [docs/RELEASE.md](docs/RELEASE.md).
 ### Fixed
 
 - **Concurrent refresh-token races.** `resolveAuth` (EWS) and `resolveGraphAuth` share one refresh token per identity. Parallel CLI processes could both redeem the same RT; Entra rotates/invalidates one grant and the loser could persist a stale token. Refresh now takes an exclusive per-identity lock (`.refresh-{identity}.lock` under the config dir), re-loads the cache after acquiring it, and short-circuits if another process already refreshed a valid access token.
+- **`npm install -g m365-agent-cli` required a separately installed Bun runtime.** The published `bin`/`main` pointed straight at raw TypeScript source with a `#!/usr/bin/env bun` shebang, so the installed command failed with `env: 'bun': No such file or directory` on any host without Bun — even though Bun was never declared as a dependency (#239). `npm pack`/`npm publish` now compile `src/` to a Node-runnable `dist/` (`prepack` → `npm run build`) and `bin`/`main` point at `dist/cli.js` / `dist/index.js` with a `#!/usr/bin/env node` shebang, so the installed executable runs on plain Node with no Bun involved. Also fixed two relative imports (`url-validation`) missing their `.js` extension, and the MCP server's CLI subprocess path (previously hardcoded to `../cli.ts`) now matches its own module extension so it resolves in both the source checkout and the compiled build.
 
 ---
 
