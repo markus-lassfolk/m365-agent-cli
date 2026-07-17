@@ -34,6 +34,14 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
+      - name: Build (Node-compatible CLI bundle)
+        run: bun run build
+
+      - name: Smoke test built CLI under plain Node (no Bun) — see issue #239
+        run: |
+          node dist/cli.js --version
+          node dist/cli.js --help >/dev/null
+
       - name: Biome (lint + format + assist)
         run: bun run biome:check
 

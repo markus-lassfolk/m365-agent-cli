@@ -1,6 +1,6 @@
 {
   "name": "m365-agent-cli",
-  "version": "2026.7.6",
+  "version": "2026.7.7",
   "description": "Microsoft 365 from your terminal: calendar, mail, OneDrive, Planner, Teams, Graph \u2014 one OAuth login",
   "repository": {
     "type": "git",
@@ -10,13 +10,15 @@
     "url": "https://github.com/markus-lassfolk/m365-agent-cli/issues"
   },
   "type": "module",
-  "main": "src/index.ts",
+  "main": "dist/index.js",
   "bin": {
-    "m365-agent-cli": "src/cli.ts"
+    "m365-agent-cli": "dist/cli.js"
   },
   "scripts": {
     "start": "bun run src/cli.ts",
     "cli:tsx": "tsx src/cli.ts",
+    "build": "node scripts/build.mjs",
+    "prepack": "node scripts/build.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "biome lint --max-diagnostics=none --diagnostic-level=error .",
     "lint:fix": "biome lint --write --unsafe --diagnostic-level=error .",
@@ -46,7 +48,7 @@
     "test:coverage": "node scripts/run-bun-test.mjs test --isolate --coverage --coverage-reporter=lcov --coverage-reporter=text"
   },
   "files": [
-    "src",
+    "dist",
     "package.json",
     "LICENSE",
     "CHANGELOG.md",

@@ -1,6 +1,6 @@
 ---
 name: m365-agent-cli
-version: 2026.7.6
+version: 2026.7.7
 description: Microsoft 365 CLI (EWS + Graph) for calendar, mail, OneDrive, Planner, SharePoint, To Do, Teams, Bookings, Excel-on-drive, presence, inbox rules, delegates, subscriptions, Graph Search, Microsoft Viva / employee experience (`viva` — Graph beta: tenant `/employeeExperience`, user work time/insights/roles/learning, admin+org itemInsights, workHoursAndLocations, meeting Engage Q&A), Microsoft 365 Copilot APIs (`copilot` — retrieval, search, chat, reports, packages, meeting insights, interaction export, notify-help), and raw `graph invoke`/`graph batch`. Use when the user needs Outlook/Exchange, Graph, or M365 automation from the terminal.
 # `version` matches the npm CLI release; run `npm run sync-skill` after bumping package.json.
 metadata:
@@ -151,7 +151,8 @@ Do **not** combine the span modes (`--days` / `--previous-days` / `--business-da
 End users can describe intent in **natural language** (e.g. “read mail in the shared mailbox”). The **agent** maps that to the right flags: use **`--mailbox`** for **EWS** commands and **`--user`** for **Microsoft Graph** commands, according to the command’s API (see the next bullet). The end user does **not** need to know whether a call is EWS or Graph.
 
 - Start with **list/read** commands, then use IDs from output for updates.
-- If auth fails, suggest `verify-token` and re-`login`; wrong **identity** profile means wrong cache file—check `--identity`.
+- If auth fails, suggest `verify-token` and re-`login`; wrong **identity** profile means wrong cache file—check `--identity`. Treat `AADSTS50173` / `TokensValidFrom` / `invalid_grant` as **revoked refresh grant** — stop and ask for interactive `login`; do not invent alternate mail backends.
+- Refresh-token exchange is serialized per `--identity` (shared EWS/Graph RT). Concurrent CLI processes wait on `.refresh-{identity}.lock` under the config dir instead of racing Entra rotation.
 - **Graph vs EWS “acting as another mailbox”:** use **`--user`** (or **`--drive-id`** / **`--site-id`**) on Graph commands per **`--help`**. For **OneDrive/SharePoint drive items**, **`--user`** selects **`/users/{id}/drive`**, not the mailbox SOAP model. Use **`--mailbox <email>`** on **EWS** commands (`calendar`, `mail`, `send`, `drafts`, `respond`, `findtime`, `delegates`, …) for **shared mailboxes** via Exchange SOAP. They are **not** interchangeable. Confirm flags on that subcommand’s **`--help`**.
 - **External agents / orchestration:** Cursor or other agents should map natural language to **`files`** / **`excel`** / **`word`** / **`powerpoint`** ( **`word`**/**`powerpoint`** cover the same per-item lifecycle as **`files`** for `.docx`/`.pptx`); for Word/PowerPoint **comments** or undocumented Graph paths, prefer **`graph invoke`** with a JSON body file and scopes from **`docs/GRAPH_SCOPES.md`**. For MCP-based hosts, see **`packages/m365-agent-cli-mcp`** (stdio tools wrapping a subset of CLI calls).
 - If a user still sees EWS change-key or conflict errors after an update, suggest **re-fetching the item ID** (another process may have modified the message/event) and retrying.

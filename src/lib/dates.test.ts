@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+import { join } from 'node:path';
 import {
   parseDay,
   parseTimeToDate,
@@ -66,19 +67,31 @@ describe('dates helpers', () => {
   });
 
   it('does not shift the date on a host with a positive UTC offset, unlike plain toISOString (bug regression)', () => {
-    const originalTz = process.env.TZ;
-    try {
-      // Europe/Berlin is UTC+1/+2 — local midnight on Apr 15 is still Apr 14 in UTC, which is
-      // exactly the scenario that shifted all-day events back one day before this fix.
-      process.env.TZ = 'Europe/Berlin';
+    // A mid-process `process.env.TZ` mutation is not reliably honored by every Bun build for
+    // Date objects created afterward — observed to work in some environments and be silently
+    // ignored in others (e.g. CI) despite an identical reported Bun version. Spawn a fresh child
+    // process with TZ set from birth instead: every runtime respects that unambiguously via
+    // normal env inheritance, so this can't flake regardless of engine-internal timezone caching.
+    const modulePath = join(import.meta.dir, 'dates.js');
+    const script = `
+      import { toReinterpretedUTCISOString } from ${JSON.stringify(modulePath)};
       const midnight = new Date(2026, 3, 15, 0, 0, 0, 0);
-      // The bug this guards against: a naive date.toISOString() lands on the previous UTC day.
-      expect(midnight.toISOString().slice(0, 10)).toBe('2026-04-14');
-      expect(toReinterpretedUTCISOString(midnight)).toBe('2026-04-15T00:00:00.000Z');
-    } finally {
-      if (originalTz === undefined) delete process.env.TZ;
-      else process.env.TZ = originalTz;
-    }
+      console.log(JSON.stringify({
+        plainIsoDay: midnight.toISOString().slice(0, 10),
+        reinterpreted: toReinterpretedUTCISOString(midnight)
+      }));
+    `;
+    const result = Bun.spawnSync({
+      cmd: [process.execPath, '-e', script],
+      env: { ...process.env, TZ: 'Europe/Berlin' }
+    });
+    expect(result.exitCode).toBe(0);
+    const out = JSON.parse(result.stdout.toString());
+    // Europe/Berlin is UTC+1/+2 — local midnight on Apr 15 is still Apr 14 in UTC, which is
+    // exactly the scenario that shifted all-day events back one day before this fix. The bug
+    // this guards against: a naive date.toISOString() lands on the previous UTC day.
+    expect(out.plainIsoDay).toBe('2026-04-14');
+    expect(out.reinterpreted).toBe('2026-04-15T00:00:00.000Z');
   });
 
   it('parseDay supports relative values and weekday directions', () => {

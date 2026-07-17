@@ -1,4 +1,4 @@
-import { validateUrl } from './url-validation';
+import { validateUrl } from './url-validation.js';
 
 const DEFAULT_GRAPH_BASE = 'https://graph.microsoft.com/v1.0';
 const DEFAULT_GRAPH_BETA = 'https://graph.microsoft.com/beta';

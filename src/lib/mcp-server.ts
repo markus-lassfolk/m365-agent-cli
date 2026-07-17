@@ -1,7 +1,7 @@
 /**
  * Native MCP (Model Context Protocol) stdio server: reflects the CLI's own Commander tree (via
  * `command-manifest.ts`) into MCP tools, one per leaf command, and executes a tool call by
- * spawning `bun src/cli.ts <argv>` — the exact same entry point a human or script would run —
+ * spawning this package's own CLI entry point — the exact same one a human or script would run —
  * rather than re-implementing each command's logic. This guarantees identical behavior (including
  * read-only mode, `--dry-run`, and the structured `--json` error envelope) between a direct CLI
  * invocation and an MCP tool call, and sidesteps Commander's per-command `Option` state being
@@ -9,6 +9,7 @@
  * for unrelated tool calls would otherwise leak stale option values between calls).
  */
 import { spawn } from 'node:child_process';
+import { dirname, extname, join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import type { CommandManifest, ManifestArgument, ManifestOption, ProgramManifest } from './command-manifest.js';
@@ -201,7 +202,10 @@ export interface RunCliResult {
   timedOut: boolean;
 }
 
-const CLI_ENTRY = fileURLToPath(new URL('../cli.ts', import.meta.url));
+// Match this module's own extension (.ts in a source checkout under bun/tsx, .js in the
+// published dist/ build under Node) so the spawned entry point exists in either layout.
+const SELF_PATH = fileURLToPath(import.meta.url);
+const CLI_ENTRY = join(dirname(SELF_PATH), '..', `cli${extname(SELF_PATH)}`);
 
 const MCP_TOOL_TIMEOUT_MS =
   Number(process.env.M365_MCP_TOOL_TIMEOUT_MS) > 0 ? Number(process.env.M365_MCP_TOOL_TIMEOUT_MS) : 120_000;
@@ -226,7 +230,7 @@ export function killChildTree(child: ReturnType<typeof spawn>, signal: NodeJS.Si
   }
 }
 
-/** Spawns `bun src/cli.ts <argv>` (the same entry point a human runs) and captures its output. */
+/** Spawns this package's own CLI entry point (the same one a human runs) and captures its output. */
 function runCli(argv: string[]): Promise<RunCliResult> {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [CLI_ENTRY, ...argv], {
