@@ -2,10 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import {
-  refreshTokenLockPath,
-  withRefreshTokenLock
-} from './refresh-token-lock.js';
+import { refreshTokenLockPath, withRefreshTokenLock } from './refresh-token-lock.js';
 
 describe('withRefreshTokenLock', () => {
   let originalEnv: NodeJS.ProcessEnv;
@@ -70,11 +67,7 @@ describe('withRefreshTokenLock', () => {
     // PID 1 is usually init and alive; use an extremely unlikely dead PID with old timestamp.
     await writeFile(lockPath, `999999999\n${Date.now() - 200_000}\n`, 'utf8');
 
-    const result = await withRefreshTokenLock(
-      'default',
-      async () => 'ok',
-      { staleMs: 1000, maxWaitMs: 5000 }
-    );
+    const result = await withRefreshTokenLock('default', async () => 'ok', { staleMs: 1000, maxWaitMs: 5000 });
     expect(result).toBe('ok');
     await expect(readFile(lockPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
   });

@@ -179,7 +179,9 @@ export async function resolveAuth(options?: {
       if (afterWait) return afterWait;
 
       const refreshTokens = [
-        ...new Set([cached?.refreshToken, getUnifiedRefreshTokenFromEnv() ?? envRefreshToken].filter((t): t is string => !!t))
+        ...new Set(
+          [cached?.refreshToken, getUnifiedRefreshTokenFromEnv() ?? envRefreshToken].filter((t): t is string => !!t)
+        )
       ];
 
       // Resolve the active env file once so all refresh attempts persist to the same file the
