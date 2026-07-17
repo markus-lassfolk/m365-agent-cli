@@ -1960,20 +1960,33 @@ describe('Graph backend (M365_EXCHANGE_BACKEND=graph)', () => {
   });
 
   test('update-event with no update flags shows the correct (normalized) time on a non-UTC host (bug regression)', async () => {
-    const originalTz = process.env.TZ;
-    try {
-      // The mock event is start=09:00/end=09:30 UTC (unzoned dateTime, timeZone:"UTC"). On a
-      // Europe/Berlin host (UTC+2 in April), the correct displayed times are 11:00-11:30 — a raw
-      // `new Date(unzoned string)` would misinterpret it as already-local and show 09:00-09:30.
-      process.env.TZ = 'Europe/Berlin';
-      const result = await runM365AgentCli('update-event --id graph-cal-event-1 --token test-graph-token');
-      expect(result.exitCode).toBe(0);
-      expect(result.stdout).toContain('11:00');
-      expect(result.stdout).not.toContain('09:00 - 09:30');
-    } finally {
-      if (originalTz === undefined) delete process.env.TZ;
-      else process.env.TZ = originalTz;
-    }
+    // A mid-process `process.env.TZ` mutation is not reliably honored by every Bun build for
+    // Date objects created afterward — observed to work in some environments and be silently
+    // ignored in others (e.g. CI) despite an identical reported Bun version. Run this one command
+    // in a genuinely fresh child process with TZ set from birth instead (reusing the same
+    // mock-fetch + program setup runM365AgentCli uses above), which every runtime respects
+    // unambiguously via normal env inheritance, so this can't flake regardless of engine-internal
+    // timezone caching.
+    const { join } = await import('node:path');
+    const script = `
+      import ${JSON.stringify(join(import.meta.dir, '../lib/global-env.js'))};
+      import { createMockFetch } from ${JSON.stringify(join(import.meta.dir, 'mocks/index.js'))};
+      import { createM365Program } from ${JSON.stringify(join(import.meta.dir, '../lib/m365-program.js'))};
+      globalThis.fetch = createMockFetch();
+      const program = createM365Program();
+      await program.parseAsync(['node', 'cli.ts', 'update-event', '--id', 'graph-cal-event-1', '--token', 'test-graph-token']);
+    `;
+    const result = Bun.spawnSync({
+      cmd: [process.execPath, '-e', script],
+      env: { ...process.env, TZ: 'Europe/Berlin', M365_EXCHANGE_BACKEND: 'graph' }
+    });
+    expect(result.exitCode).toBe(0);
+    const out = result.stdout.toString();
+    // The mock event is start=09:00/end=09:30 UTC (unzoned dateTime, timeZone:"UTC"). On a
+    // Europe/Berlin host (UTC+2 in April), the correct displayed times are 11:00-11:30 — a raw
+    // `new Date(unzoned string)` would misinterpret it as already-local and show 09:00-09:30.
+    expect(out).toContain('11:00');
+    expect(out).not.toContain('09:00 - 09:30');
   });
 
   test('mail --reply --bcc patches the reply draft with bccRecipients before sending', async () => {
