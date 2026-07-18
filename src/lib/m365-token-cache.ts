@@ -33,7 +33,9 @@ function configDir(): string {
   return getM365AgentCliConfigDir();
 }
 
-function tokenCachePath(identity: string): string {
+/** Path to `token-cache-{identity}.json` — exported for diagnostics (`doctor`) that report file
+ *  presence/size/mtime without loading (and thus never touching) the cache contents themselves. */
+export function tokenCachePath(identity: string): string {
   return join(configDir(), `token-cache-${identity}.json`);
 }
 

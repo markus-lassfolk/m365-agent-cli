@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import { approvalsCommand } from '../commands/approvals.js';
+import { authCommand } from '../commands/auth.js';
 import { autoReplyCommand } from '../commands/auto-reply.js';
 import { bookingsCommand } from '../commands/bookings.js';
 import { calendarCommand } from '../commands/calendar.js';
@@ -10,6 +11,7 @@ import { createEventCommand } from '../commands/create-event.js';
 import { delegatesCommand } from '../commands/delegates.js';
 import { deleteEventCommand } from '../commands/delete-event.js';
 import { describeCommand } from '../commands/describe.js';
+import { doctorCommand } from '../commands/doctor.js';
 import { draftsCommand } from '../commands/drafts.js';
 import { excelCommand } from '../commands/excel.js';
 import { filesCommand } from '../commands/files.js';
@@ -36,6 +38,8 @@ import { peopleCommand } from '../commands/people.js';
 import { plannerCommand } from '../commands/planner.js';
 import { powerpointCommand } from '../commands/powerpoint.js';
 import { presenceCommand } from '../commands/presence.js';
+import { profilesCommand } from '../commands/profiles.js';
+import { readinessCommand } from '../commands/readiness.js';
 import { respondCommand } from '../commands/respond.js';
 import { roomsCommand } from '../commands/rooms.js';
 import { rulesCommand } from '../commands/rules.js';
@@ -55,6 +59,8 @@ import { verifyTokenCommand } from '../commands/verify-token.js';
 import { vivaCommand } from '../commands/viva.js';
 import { whoamiCommand } from '../commands/whoami.js';
 import { wordCommand } from '../commands/word.js';
+import { checkIdentityGuards } from './identity-guard.js';
+import { toJsonError } from './json-error.js';
 import { installM365HelpOnCommandTree } from './m365-help.js';
 import { getPackageVersionSync } from './package-info.js';
 
@@ -74,11 +80,19 @@ function registerM365Commands(program: Command): void {
     '--cache <duration>',
     'Cache idempotent Microsoft Graph GET responses on disk for this long (e.g. 30s, 5m, 1h; bare number = seconds), keyed by identity token + URL. Off by default.'
   );
+  program.option(
+    '--require-identity <upn>',
+    'Wrong-account guardrail: fail before running any command unless the signed-in identity (decoded from the access token) matches this UPN/email exactly.'
+  );
+  program.option(
+    '--as-delegate-of <upn>',
+    'Wrong-account guardrail: assert you are signed in as this UPN before operating on --mailbox (distinguishes "signed in as X" from "operating on mailbox Y via delegation"). Requires --mailbox on the command being run.'
+  );
 
   // Sync --dry-run / --cache into process-wide env vars before the action runs: the transport
   // layer (graph-client.ts / ews-client.ts) has no access to the parsed Command instance, so this
   // is the only way to carry the flags down to where requests are actually built and sent.
-  program.hook('preAction', (_thisCommand, actionCommand) => {
+  program.hook('preAction', async (_thisCommand, actionCommand) => {
     const opts = actionCommand.optsWithGlobals();
     if (opts.dryRun) {
       process.env.M365_DRY_RUN = '1';
@@ -86,11 +100,31 @@ function registerM365Commands(program: Command): void {
     if (opts.cache) {
       process.env.M365_CACHE_TTL = String(opts.cache);
     }
+    if (opts.requireIdentity || opts.asDelegateOf) {
+      const guard = await checkIdentityGuards({
+        identity: opts.identity,
+        requireIdentity: opts.requireIdentity,
+        asDelegateOf: opts.asDelegateOf,
+        mailbox: opts.mailbox
+      });
+      if (!guard.ok) {
+        if (opts.json) {
+          console.log(JSON.stringify({ error: toJsonError(guard.message) }, null, 2));
+        } else {
+          console.error(`Error: ${guard.message}`);
+        }
+        process.exit(1);
+      }
+    }
   });
 
   program.addHelpText('after', 'Tip: run m365-agent-cli <command> --help for flags and examples on each command.');
 
   program.addCommand(whoamiCommand);
+  program.addCommand(profilesCommand);
+  program.addCommand(authCommand);
+  program.addCommand(readinessCommand);
+  program.addCommand(doctorCommand);
   program.addCommand(describeCommand);
   program.addCommand(mcpCommand);
   program.addCommand(updateCommand);

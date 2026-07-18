@@ -33,6 +33,11 @@ function buildFixtureProgram(): Command {
   root.addCommand(new Command('serve').description('webhook server'));
   root.addCommand(new Command('login').description('device code login'));
   root.addCommand(new Command('update').description('self-update: npm/bun global install'));
+  const auth = new Command('auth').description('auth diagnostics');
+  auth.addCommand(
+    new Command('repair').description('diagnose and repair auth').option('--start-login', 'launch login')
+  );
+  root.addCommand(auth);
 
   return root;
 }
@@ -83,13 +88,16 @@ describe('buildMcpTools', () => {
     expect(names).toEqual(['mail', 'rules_create']);
   });
 
-  test('excludes mcp, serve, login, and update', () => {
+  test('excludes mcp, serve, login, update, and auth', () => {
     const manifest = describeProgram(buildFixtureProgram());
     const tools = buildMcpTools(manifest);
     expect(tools.some((t) => t.name === 'mcp')).toBe(false);
     expect(tools.some((t) => t.name === 'serve')).toBe(false);
     expect(tools.some((t) => t.name === 'login')).toBe(false);
     expect(tools.some((t) => t.name === 'update')).toBe(false);
+    // `auth repair --start-login` launches the same interactive device-code flow as `login` — an
+    // MCP client could otherwise hang the subprocess waiting on a terminal no one is attached to.
+    expect(tools.some((t) => t.name === 'auth_repair')).toBe(false);
   });
 });
 

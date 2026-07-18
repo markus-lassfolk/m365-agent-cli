@@ -119,6 +119,29 @@ export function isPinnedTenantGuid(tenant: string): boolean {
   return TENANT_GUID_RE.test(tenant);
 }
 
+/**
+ * Best-effort signed-in identity (UPN/email) embedded in an access token.
+ * Prefers `upn`, then `preferred_username`, then `email` — the same precedence `whoami`/
+ * `verify-token` already use ad hoc when reading `payload.upn || payload.email`. Centralized here
+ * so identity-guardrail checks (`--require-identity`, `--as-delegate-of`, `auth repair`, `readiness`)
+ * compare against one consistent claim order.
+ */
+export function getJwtPayloadUpn(token: string): string | undefined {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return undefined;
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as {
+      upn?: string;
+      preferred_username?: string;
+      email?: string;
+    };
+    const candidate = payload.upn || payload.preferred_username || payload.email;
+    return typeof candidate === 'string' && candidate.trim() ? candidate.trim() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Space-separated delegated scopes on a Graph access token (`scp` claim). */
 export function getJwtPayloadScopeSet(token: string): Set<string> {
   try {

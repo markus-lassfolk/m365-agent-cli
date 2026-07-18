@@ -14,8 +14,14 @@ import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import type { CommandManifest, ManifestArgument, ManifestOption, ProgramManifest } from './command-manifest.js';
 
-/** Top-level commands never exposed as MCP tools: self-referential, interactive, or long-running/blocking. */
-const MCP_EXCLUDED_TOP_LEVEL_COMMANDS = new Set(['mcp', 'serve', 'login', 'update']);
+/**
+ * Top-level commands never exposed as MCP tools: self-referential, interactive, or long-running/blocking.
+ * `auth` is excluded alongside `login` because `auth repair --start-login` launches the same
+ * interactive device-code flow — an MCP client invoking that flag would hang the subprocess
+ * waiting on a terminal prompt no one is attached to. `auth repair` itself (no `--start-login`) is
+ * still available directly via the CLI.
+ */
+const MCP_EXCLUDED_TOP_LEVEL_COMMANDS = new Set(['mcp', 'serve', 'login', 'update', 'auth']);
 
 const MCP_PROTOCOL_VERSION = '2024-11-05';
 

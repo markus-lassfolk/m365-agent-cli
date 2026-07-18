@@ -80,3 +80,101 @@ m365-agent-cli whoami
 m365-agent-cli verify-token
 m365-agent-cli verify-token --capabilities
 ```
+
+### Browser login (`login --browser`)
+
+Device-code login (`m365-agent-cli login`) is the default and works well headless. As an alternative,
+`login --browser` runs an OAuth2 authorization-code + PKCE flow through your system browser — useful
+when a tenant's MFA method selection is richer in the ordinary sign-in page than in the device-code
+prompt:
+
+```bash
+m365-agent-cli login --browser
+m365-agent-cli login --browser --identity doris
+m365-agent-cli login --browser --no-open          # print the URL instead of launching a browser (SSH/remote)
+m365-agent-cli login --browser --localhost-port 0 --callback-timeout 10m
+```
+
+It starts a loopback listener on `127.0.0.1` (never `0.0.0.0`), uses PKCE (no client secret), never
+logs the authorization code or tokens, and times out the listener if no redirect arrives. Both login
+modes support `--identity <name>` to bind the login to a named identity profile (see below); if that
+identity slug was previously verified against a different Microsoft account, the login refuses to
+complete (`--force-identity-switch` to intentionally rebind).
+
+### Identity profiles and wrong-account guardrails
+
+Named profiles bind a friendly name to a token-cache identity slot and record the last-verified
+signed-in account, so `--identity` selection has a default and re-logins can catch a wrong-account
+mistake:
+
+```bash
+m365-agent-cli profiles list [--json]
+m365-agent-cli profiles show [<name>] [--json]
+m365-agent-cli profiles set-default <name>
+m365-agent-cli profiles delete <name> [--purge-cache]
+```
+
+`profiles set-default <name>` becomes the fallback identity for every command that omits
+`--identity` (including `login`, `whoami`, `verify-token`, `readiness`, `auth repair`, `doctor`, …).
+
+Two global flags enforce identity at the point of use, before any command does real work:
+
+```bash
+m365-agent-cli --require-identity doris@lassfolk.net mail list
+m365-agent-cli --as-delegate-of doris@lassfolk.net --mailbox lotta@lassfolk.net mail list
+```
+
+`--require-identity <upn>` fails closed (exits 1, no work done) unless the signed-in identity's UPN
+matches exactly — including when the identity can't be verified at all (an unverifiable identity is
+treated as a mismatch, not a pass-through). `--as-delegate-of <upn>` additionally requires `--mailbox`
+on the command being run, so it always reads as "I am X, operating on mailbox Y."
+
+### Auth repair (`auth repair`)
+
+Diagnoses common failure modes (revoked/expired refresh grant, interaction required, MFA/conditional
+access, missing credentials, malformed cache, tenant/client mismatch) and prints one safe next step —
+never raw token/refresh material:
+
+```bash
+m365-agent-cli auth repair
+m365-agent-cli auth repair --identity doris --json
+m365-agent-cli auth repair --start-login   # launch device-code login immediately if repair is needed
+```
+
+`AADSTS50173` (revoked grant / `TokensValidFrom` after grant issue time) is classified as
+tenant-side grant invalidation, not local cache corruption, and always recommends interactive login
+over repeated refresh attempts. Exits `0` even when repair is required — the JSON `status` /
+`failureClass` fields carry that signal, not the exit code.
+
+### Readiness contract (`readiness --json`)
+
+A stable, versioned JSON contract for "can I safely send mail / read calendar for this identity right
+now?" — built for scripts and agents:
+
+```bash
+m365-agent-cli readiness --json
+m365-agent-cli readiness --identity doris --mailbox lotta@lassfolk.net --json
+m365-agent-cli readiness --require mail.read --require mail.send --require calendar.read --json
+m365-agent-cli readiness --expect-identity doris@lassfolk.net --json
+```
+
+Returns one object with `ready`, `signedInAs`, `authHealth`, `cacheHealth`, `capabilities`/
+`missingCapabilities`, an optional `mailboxAccess` result, and — whenever `ready` is `false` — a
+`recommendedAction` and `safeCommand`. Exits `0` whenever the CLI itself ran successfully, whether or
+not `ready` is `true`; only CLI/runtime errors exit non-zero.
+
+### Diagnostic bundle (`doctor`)
+
+A non-secret diagnostic summary, safe to attach to an issue:
+
+```bash
+m365-agent-cli doctor                                  # human summary
+m365-agent-cli doctor --json                            # machine-readable summary
+m365-agent-cli doctor --redacted-bundle                 # writes ./m365-diagnostic.zip
+m365-agent-cli doctor --redacted-bundle ./out.zip
+m365-agent-cli doctor --redacted-bundle --format dir --output ./m365-diagnostic
+```
+
+The bundle includes CLI/Node/platform versions, config/cache file **presence, size, and mtime**
+(never contents), the classified auth failure (if any), and a capability summary — never access
+values, refresh values, auth codes, passwords, cookies, raw `.env` values, or message content.
