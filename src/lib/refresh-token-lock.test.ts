@@ -72,6 +72,18 @@ describe('withRefreshTokenLock', () => {
     await expect(readFile(lockPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
+  test('does not delete a lock that was taken over by another owner', async () => {
+    const lockPath = refreshTokenLockPath('default');
+    await withRefreshTokenLock('default', async () => {
+      // Simulate a stale takeover: another process replaces our lock with its own owner token.
+      await writeFile(lockPath, `12345\n${Date.now()}\n${'other-owner-token'}\n`, 'utf8');
+    });
+    // Our finally must verify ownership and leave the successor's lock intact.
+    const raw = await readFile(lockPath, 'utf8');
+    expect(raw).toContain('other-owner-token');
+    await rm(lockPath, { force: true });
+  });
+
   test('rejects invalid identity names', async () => {
     await expect(withRefreshTokenLock('bad id', async () => 1)).rejects.toThrow(/Invalid identity/);
   });

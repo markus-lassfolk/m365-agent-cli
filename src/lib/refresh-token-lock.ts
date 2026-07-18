@@ -5,14 +5,18 @@
  * processes can otherwise both redeem the same RT, Entra rotates/invalidates one grant, and
  * the loser persists a stale RT (or leaves `.env`/cache divergent).
  *
- * Lock file: `{configDir}/.refresh-{identity}.lock`
+ * Lock file: `{configDir}/.refresh-{identity}.lock` — three lines: pid, acquire-timestamp, and a
+ * unique owner token so release/reclaim can verify ownership instead of unlinking by path.
  */
+import { randomUUID } from 'node:crypto';
 import { mkdir, open, readFile, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { getM365AgentCliConfigDir } from './m365-token-cache.js';
 
 const DEFAULT_STALE_MS = 120_000;
-const DEFAULT_MAX_WAIT_MS = 60_000;
+// Must exceed DEFAULT_STALE_MS: a waiter should be able to reclaim a stale lock rather than
+// timing out first. With maxWait < stale, a legitimately slow holder makes siblings hard-fail.
+const DEFAULT_MAX_WAIT_MS = 180_000;
 const DEFAULT_POLL_MS = 50;
 
 export function refreshTokenLockPath(identity: string): string {
@@ -52,11 +56,11 @@ async function lockLooksStale(lockPath: string, staleMs: number): Promise<boolea
   }
 }
 
-async function tryAcquireExclusive(lockPath: string): Promise<boolean> {
+async function tryAcquireExclusive(lockPath: string, token: string): Promise<boolean> {
   try {
     const fh = await open(lockPath, 'wx');
     try {
-      await fh.writeFile(`${process.pid}\n${Date.now()}\n`, 'utf8');
+      await fh.writeFile(`${process.pid}\n${Date.now()}\n${token}\n`, 'utf8');
     } finally {
       await fh.close();
     }
@@ -69,10 +73,32 @@ async function tryAcquireExclusive(lockPath: string): Promise<boolean> {
   }
 }
 
+/** The owner token (third line) a lock file was written with, or null if absent/unreadable. */
+async function readLockToken(lockPath: string): Promise<string | null> {
+  try {
+    const raw = await readFile(lockPath, 'utf8');
+    return raw.trim().split(/\r?\n/)[2] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Release the lock only if we still own it. After a stale takeover, another process may hold the
+ * lock under a different token; unlinking by path unconditionally would delete the new owner's lock
+ * and break mutual exclusion. A tiny check-then-unlink window remains, but this closes the case
+ * where a slow original holder stomps a legitimate successor.
+ */
+async function releaseIfOwned(lockPath: string, token: string): Promise<void> {
+  if ((await readLockToken(lockPath)) === token) {
+    await unlink(lockPath).catch(() => {});
+  }
+}
+
 export type RefreshTokenLockOptions = {
   /** Consider a lock stale after this age (or sooner if holder PID is gone). Default 120s. */
   staleMs?: number;
-  /** Give up waiting after this long. Default 60s. */
+  /** Give up waiting after this long. Should exceed staleMs so a stale lock can be reclaimed. Default 180s. */
   maxWaitMs?: number;
   /** Poll interval while waiting. Default 50ms. */
   pollMs?: number;
@@ -98,11 +124,13 @@ export async function withRefreshTokenLock<T>(
   const dir = getM365AgentCliConfigDir();
   await mkdir(dir, { recursive: true, mode: 0o700 });
 
+  // Unique per-acquisition token so release/reclaim verify ownership rather than unlinking by path.
+  const token = `${process.pid}.${randomUUID()}`;
   const started = Date.now();
   let acquired = false;
 
   while (!acquired) {
-    acquired = await tryAcquireExclusive(lockPath);
+    acquired = await tryAcquireExclusive(lockPath, token);
     if (acquired) break;
 
     if (await lockLooksStale(lockPath, staleMs)) {
@@ -122,6 +150,6 @@ export async function withRefreshTokenLock<T>(
   try {
     return await fn();
   } finally {
-    await unlink(lockPath).catch(() => {});
+    await releaseIfOwned(lockPath, token);
   }
 }

@@ -11,6 +11,7 @@
  *   M365_PASSWORD      the account password
  *   M365_TOTP_SECRET   base32 TOTP seed for the account's authenticator app
  *   M365_USER_CODE     the user_code from the CLI's `device_code` JSON event
+ *                      (required unless M365_VERIFICATION_URI_COMPLETE is set)
  * Optional env:
  *   M365_VERIFICATION_URI           default https://microsoft.com/devicelogin
  *   M365_VERIFICATION_URI_COMPLETE  if set, opened directly (code pre-filled)
@@ -41,6 +42,12 @@ const USER_CODE = process.env.M365_USER_CODE?.trim() ?? '';
 const VERIFICATION_URI = process.env.M365_VERIFICATION_URI?.trim() || 'https://microsoft.com/devicelogin';
 const VERIFICATION_URI_COMPLETE = process.env.M365_VERIFICATION_URI_COMPLETE?.trim() || '';
 const STEP_TIMEOUT = Number(process.env.M365_LOGIN_TIMEOUT_MS || '20000');
+
+// A user code is required unless a complete verification URL (with the code pre-filled) is provided.
+if (!USER_CODE && !VERIFICATION_URI_COMPLETE) {
+  console.error('[device-login] missing required env: M365_USER_CODE (or set M365_VERIFICATION_URI_COMPLETE)');
+  process.exit(2);
+}
 
 // Log to stderr only, and never a secret value (not even its length) — page context only.
 function step(msg) {

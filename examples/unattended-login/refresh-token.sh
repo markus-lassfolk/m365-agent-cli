@@ -40,6 +40,15 @@ run_once() {
       verification_uri="$(printf '%s' "$line" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write((JSON.parse(s).verification_uri)||""))')"
       break
     fi
+    # Fail fast if the CLI emitted an error (e.g. missing EWS_CLIENT_ID) instead of a device code,
+    # rather than waiting out the full 30s for a device_code event that will never arrive.
+    if err_line="$(grep -m1 '"event":"error"' "$out" 2>/dev/null)"; then
+      echo "login reported an error before any device code: ${err_line}" >&2
+      kill "$login_pid" 2>/dev/null || true
+      wait "$login_pid" 2>/dev/null || true
+      rm -f "$out"
+      return 1
+    fi
     if [ "$(date +%s)" -ge "$deadline" ]; then
       echo "no device_code event within 30s" >&2
       kill "$login_pid" 2>/dev/null || true
@@ -80,8 +89,12 @@ main() {
   for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
     echo "=== attempt ${attempt}/${MAX_ATTEMPTS} ===" >&2
     if run_once "$email" "$password" "$totp_secret"; then
-      m365-agent-cli whoami
-      m365-agent-cli verify-token --capabilities
+      # The token is already persisted (run_once saw the `complete` event). Keep these confirmation
+      # commands best-effort so a transient failure here doesn't flip a real success to a failure
+      # (they run under `set -e`, which would otherwise abort before FINAL_RESULT=SUCCESS).
+      m365-agent-cli whoami || echo "warning: whoami failed after a successful login (transient?)" >&2
+      m365-agent-cli verify-token --capabilities ||
+        echo "warning: verify-token failed after a successful login (transient?)" >&2
       echo "FINAL_RESULT=SUCCESS"
       exit 0
     fi
