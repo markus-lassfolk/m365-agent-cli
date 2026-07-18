@@ -1,17 +1,17 @@
 import { Command } from 'commander';
-import { permissionSetFromGraphPayload } from '../lib/graph-capability-matrix.js';
+import { capabilitiesFromToken } from '../lib/auth-diagnostics.js';
 import {
+  assertValidProfileName,
   type CacheHealth,
   deleteProfile,
-  getDefaultProfileName,
-  getProfile,
-  listProfiles,
+  getProfilesSnapshot,
   type ProfileEntry,
   probeCacheHealth,
   setDefaultProfile
 } from '../lib/identity-profiles.js';
 import { toJsonError } from '../lib/json-error.js';
 import { loadM365TokenCache } from '../lib/m365-token-cache.js';
+import { deepRedact, IDENTITY_LABEL_SAFE_KEYS } from '../lib/redact.js';
 
 interface ProfileSummary {
   name: string;
@@ -28,15 +28,7 @@ interface ProfileSummary {
 /** Offline (no network) capability list decoded from whatever Graph access token is already cached. */
 async function offlineCapabilities(identity: string): Promise<string[]> {
   const cache = await loadM365TokenCache(identity).catch(() => null);
-  if (!cache?.graph?.accessToken) return [];
-  try {
-    const parts = cache.graph.accessToken.split('.');
-    if (parts.length !== 3) return [];
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
-    return [...permissionSetFromGraphPayload(payload)].sort();
-  } catch {
-    return [];
-  }
+  return capabilitiesFromToken(cache?.graph?.accessToken);
 }
 
 async function summarizeProfile(entry: ProfileEntry, defaultProfile: string | undefined): Promise<ProfileSummary> {
@@ -57,6 +49,19 @@ async function summarizeProfile(entry: ProfileEntry, defaultProfile: string | un
   };
 }
 
+/** Print a `{error}` JSON envelope (or plain-text error, plus any extra tip lines) and exit 1 —
+ *  single source of truth for every error path in this file so every `--json` caller gets the
+ *  same shape and every text-mode caller gets the same "Error: " prefix. */
+function failWith(json: boolean | undefined, message: string, extraTextLines: string[] = []): never {
+  if (json) {
+    console.log(JSON.stringify({ error: toJsonError(message) }, null, 2));
+  } else {
+    console.error(`Error: ${message}`);
+    for (const line of extraTextLines) console.error(line);
+  }
+  process.exit(1);
+}
+
 function printProfileText(p: ProfileSummary): void {
   console.log(`  ${p.name}${p.isDefault ? '  (default)' : ''}`);
   console.log(`    identity (cache slot): ${p.identity}`);
@@ -74,11 +79,20 @@ const listCmd = new Command('list')
   .description('List registered identity profiles')
   .option('--json', 'Output as JSON')
   .action(async (opts: { json?: boolean }) => {
-    const [entries, defaultProfile] = await Promise.all([listProfiles(), getDefaultProfileName()]);
+    const { profiles: entries, defaultProfile } = await getProfilesSnapshot();
     const summaries = await Promise.all(entries.map((e) => summarizeProfile(e, defaultProfile)));
 
     if (opts.json) {
-      console.log(JSON.stringify({ defaultProfile: defaultProfile ?? null, profiles: summaries }, null, 2));
+      console.log(
+        JSON.stringify(
+          deepRedact(
+            { defaultProfile: defaultProfile ?? null, profiles: summaries },
+            { safeKeys: IDENTITY_LABEL_SAFE_KEYS }
+          ),
+          null,
+          2
+        )
+      );
       return;
     }
 
@@ -102,34 +116,33 @@ const showCmd = new Command('show')
   .argument('[name]', 'Profile name (defaults to the current default profile)')
   .option('--json', 'Output as JSON')
   .action(async (name: string | undefined, opts: { json?: boolean }) => {
-    const defaultProfile = await getDefaultProfileName();
-    const resolvedName = name ?? defaultProfile;
+    const { profiles: entries, defaultProfile } = await getProfilesSnapshot();
 
-    if (!resolvedName) {
-      const message = 'No profile name given and no default profile is set.';
-      if (opts.json) {
-        console.log(JSON.stringify({ error: toJsonError(message) }, null, 2));
-      } else {
-        console.error(`Error: ${message}`);
-        console.error('Tip: `m365-agent-cli profiles set-default <name>` first, or pass a profile name.');
-      }
-      process.exit(1);
+    // Narrow try/catch around just the validating call — NOT around the failWith calls below,
+    // which themselves call `process.exit` (mocked to throw in tests): wrapping them too would
+    // catch that throw here and re-report it as a generic "process.exit(1)" error instead of the
+    // real message.
+    let resolvedName: string | undefined;
+    try {
+      resolvedName = name ? assertValidProfileName(name) : defaultProfile;
+    } catch (err) {
+      failWith(opts.json, err instanceof Error ? err.message : String(err));
     }
 
-    const entry = await getProfile(resolvedName);
+    if (!resolvedName) {
+      failWith(opts.json, 'No profile name given and no default profile is set.', [
+        'Tip: `m365-agent-cli profiles set-default <name>` first, or pass a profile name.'
+      ]);
+    }
+
+    const entry = entries.find((e) => e.name === resolvedName);
     if (!entry) {
-      const message = `No such profile: ${resolvedName}`;
-      if (opts.json) {
-        console.log(JSON.stringify({ error: toJsonError(message) }, null, 2));
-      } else {
-        console.error(`Error: ${message}`);
-      }
-      process.exit(1);
+      failWith(opts.json, `No such profile: ${resolvedName}`);
     }
 
     const summary = await summarizeProfile(entry, defaultProfile);
     if (opts.json) {
-      console.log(JSON.stringify(summary, null, 2));
+      console.log(JSON.stringify(deepRedact(summary, { safeKeys: IDENTITY_LABEL_SAFE_KEYS }), null, 2));
       return;
     }
     printProfileText(summary);
@@ -145,18 +158,21 @@ const setDefaultCmd = new Command('set-default')
     try {
       const entry = await setDefaultProfile(name);
       if (opts.json) {
-        console.log(JSON.stringify({ defaultProfile: entry.name, identity: entry.identity }, null, 2));
+        console.log(
+          JSON.stringify(
+            deepRedact(
+              { defaultProfile: entry.name, identity: entry.identity },
+              { safeKeys: IDENTITY_LABEL_SAFE_KEYS }
+            ),
+            null,
+            2
+          )
+        );
       } else {
         console.log(`✓ Default profile set to "${entry.name}" (cache identity: ${entry.identity}).`);
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      if (opts.json) {
-        console.log(JSON.stringify({ error: toJsonError(message) }, null, 2));
-      } else {
-        console.error(`Error: ${message}`);
-      }
-      process.exit(1);
+      failWith(opts.json, err instanceof Error ? err.message : String(err));
     }
   });
 
@@ -168,18 +184,28 @@ const deleteCmd = new Command('delete')
   .option('--purge-cache', 'Also delete the underlying token-cache file for this profile’s identity')
   .option('--json', 'Output as JSON')
   .action(async (name: string, opts: { purgeCache?: boolean; json?: boolean }) => {
-    const removed = await deleteProfile(name, { purgeCache: opts.purgeCache });
-    if (!removed) {
-      const message = `No such profile: ${name}`;
-      if (opts.json) {
-        console.log(JSON.stringify({ error: toJsonError(message) }, null, 2));
-      } else {
-        console.error(`Error: ${message}`);
-      }
-      process.exit(1);
+    // `removed` is resolved inside try/catch (deleteProfile validates the name and can throw);
+    // the not-found failWith below stays OUTSIDE the try so its `process.exit` (mocked to throw in
+    // tests) isn't re-caught here and re-reported as a generic "process.exit(1)" error.
+    let removed: boolean;
+    try {
+      removed = await deleteProfile(name, { purgeCache: opts.purgeCache });
+    } catch (err) {
+      failWith(opts.json, err instanceof Error ? err.message : String(err));
     }
+
+    if (!removed) {
+      failWith(opts.json, `No such profile: ${name}`);
+    }
+
     if (opts.json) {
-      console.log(JSON.stringify({ deleted: name, purgedCache: Boolean(opts.purgeCache) }, null, 2));
+      console.log(
+        JSON.stringify(
+          deepRedact({ deleted: name, purgedCache: Boolean(opts.purgeCache) }, { safeKeys: IDENTITY_LABEL_SAFE_KEYS }),
+          null,
+          2
+        )
+      );
     } else {
       console.log(`✓ Deleted profile "${name}"${opts.purgeCache ? ' (and its token cache)' : ''}.`);
     }

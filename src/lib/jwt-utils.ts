@@ -94,17 +94,9 @@ export function getJwtPayloadAppId(token: string): string | undefined {
   }
 }
 
-/** Tenant id embedded in an access token (`tid` claim). */
+/** Tenant id embedded in an access token (`tid` claim). See {@link tenantIdFromJwtPayload}. */
 export function getJwtPayloadTenantId(token: string): string | undefined {
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return undefined;
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as { tid?: string };
-    if (typeof payload.tid === 'string' && payload.tid.length > 0) return payload.tid;
-    return undefined;
-  } catch {
-    return undefined;
-  }
+  return tenantIdFromJwtPayload(decodeJwtPayload(token));
 }
 
 const TENANT_GUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
@@ -119,27 +111,59 @@ export function isPinnedTenantGuid(tenant: string): boolean {
   return TENANT_GUID_RE.test(tenant);
 }
 
+export interface DecodedJwtPayload {
+  upn?: string;
+  preferred_username?: string;
+  email?: string;
+  tid?: string;
+  scp?: string;
+  roles?: string[];
+  [key: string]: unknown;
+}
+
 /**
- * Best-effort signed-in identity (UPN/email) embedded in an access token.
- * Prefers `upn`, then `preferred_username`, then `email` — the same precedence `whoami`/
- * `verify-token` already use ad hoc when reading `payload.upn || payload.email`. Centralized here
- * so identity-guardrail checks (`--require-identity`, `--as-delegate-of`, `auth repair`, `readiness`)
- * compare against one consistent claim order.
+ * Decode a JWT's payload segment once. Callers that need more than one claim (e.g. `diagnoseAuth`
+ * deriving UPN + tenant id + capabilities from the same token) should decode once via this and
+ * pass the result to {@link upnFromJwtPayload} / {@link tenantIdFromJwtPayload} instead of calling
+ * the token-accepting per-claim getters below multiple times on the same token.
  */
-export function getJwtPayloadUpn(token: string): string | undefined {
+export function decodeJwtPayload(token: string): DecodedJwtPayload | undefined {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return undefined;
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as {
-      upn?: string;
-      preferred_username?: string;
-      email?: string;
-    };
-    const candidate = payload.upn || payload.preferred_username || payload.email;
-    return typeof candidate === 'string' && candidate.trim() ? candidate.trim() : undefined;
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as unknown;
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return undefined;
+    return payload as DecodedJwtPayload;
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Best-effort signed-in identity (UPN/email) from an already-decoded token payload.
+ * Prefers `upn`, then `preferred_username`, then `email` — the same precedence `whoami`/
+ * `verify-token` already use ad hoc when reading `payload.upn || payload.email`. Centralized here
+ * so identity-guardrail checks (`--require-identity`, `--as-delegate-of`, `auth repair`, `readiness`)
+ * compare against one consistent claim order. Strips embedded CR/LF (not just leading/trailing
+ * whitespace) before returning — a claim value is attacker-influenceable IdP output, and downstream
+ * callers echo it into terminal/log lines and persist it into profiles.json, so an embedded newline
+ * could otherwise forge extra output lines.
+ */
+export function upnFromJwtPayload(payload: DecodedJwtPayload | undefined): string | undefined {
+  const candidate = payload?.upn || payload?.preferred_username || payload?.email;
+  if (typeof candidate !== 'string') return undefined;
+  const cleaned = candidate.replace(/[\r\n]/g, '').trim();
+  return cleaned ? cleaned : undefined;
+}
+
+/** Tenant id from an already-decoded token payload (`tid` claim). */
+export function tenantIdFromJwtPayload(payload: DecodedJwtPayload | undefined): string | undefined {
+  return typeof payload?.tid === 'string' && payload.tid.length > 0 ? payload.tid : undefined;
+}
+
+/** Best-effort signed-in identity (UPN/email) embedded in an access token. See {@link upnFromJwtPayload}. */
+export function getJwtPayloadUpn(token: string): string | undefined {
+  return upnFromJwtPayload(decodeJwtPayload(token));
 }
 
 /** Space-separated delegated scopes on a Graph access token (`scp` claim). */

@@ -8,6 +8,14 @@
 
 const REDACTED = '[REDACTED]';
 
+/**
+ * Key names that display a free-form identity/profile label across `doctor-bundle.ts`,
+ * `profiles.ts`, and `readiness.ts` JSON output. Shared here so the exemption list stays
+ * consistent across every surface that prints one of these fields — see {@link deepRedact}'s
+ * `safeKeys` doc for why they need one.
+ */
+export const IDENTITY_LABEL_SAFE_KEYS = ['name', 'names', 'identity', 'defaultProfile', 'deleted', 'profile'] as const;
+
 /** Field-name patterns that always redact their value, whatever it looks like. */
 const SECRET_KEY_PATTERN =
   /(token|secret|password|passwd|pwd|refresh|access[-_]?key|api[-_]?key|apikey|authorization|auth[-_]?code|cookie|client[-_]?secret|private[-_]?key|credential)/i;
@@ -45,9 +53,17 @@ export function looksLikeSecretValue(value: unknown): boolean {
  * Recursively redact any object/array: a key matching a known secret-field pattern, or any string
  * value that looks token/secret-shaped, becomes `"[REDACTED]"`. Everything else (numbers,
  * booleans, dates, short/safe strings) passes through unchanged.
+ *
+ * `safeKeys` opts specific key names (case-insensitive) out of the VALUE-shape heuristic only —
+ * `isSecretKeyName` still applies. Use it for fields whose entire purpose is to display a
+ * free-form human identifier (a profile name, a cache identity slug): those are operator-chosen
+ * strings that can legitimately be long and mixed-case (e.g. "ContosoProdMailboxAcct2024") and
+ * would otherwise be indistinguishable from an opaque token by shape alone, defeating the very
+ * field that exists so a diagnostic bundle/JSON output can say which identity it's about.
  */
-export function deepRedact<T>(value: T, options?: { maxDepth?: number }): T {
+export function deepRedact<T>(value: T, options?: { maxDepth?: number; safeKeys?: readonly string[] }): T {
   const maxDepth = options?.maxDepth ?? 10;
+  const safeKeys = new Set((options?.safeKeys ?? []).map((k) => k.toLowerCase()));
 
   function walk(v: unknown, depth: number): unknown {
     if (depth > maxDepth) return '[TRUNCATED]';
@@ -55,12 +71,24 @@ export function deepRedact<T>(value: T, options?: { maxDepth?: number }): T {
     if (v && typeof v === 'object') {
       const out: Record<string, unknown> = {};
       for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+        const isSafeKey = safeKeys.has(k.toLowerCase());
         // Key-name matching only redacts STRING leaves — a boolean/number field whose name merely
         // contains "secret"/"token" (e.g. a `secretsPrinted: false` marker) is not itself secret
         // material. Objects/arrays under such a key are still walked so any real nested secret
         // leaf gets caught by its own key or value shape.
-        if (typeof val === 'string' && (isSecretKeyName(k) || looksLikeSecretValue(val))) {
-          out[k] = REDACTED;
+        if (typeof val === 'string') {
+          if (isSecretKeyName(k)) {
+            out[k] = REDACTED;
+          } else if (!isSafeKey && looksLikeSecretValue(val)) {
+            out[k] = REDACTED;
+          } else {
+            out[k] = val;
+          }
+        } else if (isSafeKey && Array.isArray(val)) {
+          // A declared-safe key holding an array of display identifiers (e.g. profile names) —
+          // pass string elements through unredacted; non-string elements still walk normally so
+          // nested secret material under the same key is still caught.
+          out[k] = val.map((item) => (typeof item === 'string' ? item : walk(item, depth + 1)));
         } else {
           out[k] = walk(val, depth + 1);
         }

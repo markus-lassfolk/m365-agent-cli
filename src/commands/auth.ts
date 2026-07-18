@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import type { AuthFailureClass } from '../lib/auth-diagnostics.js';
 import { diagnoseAuth } from '../lib/auth-diagnostics.js';
-import { getDefaultProfileIdentity } from '../lib/identity-profiles.js';
+import { resolveIdentitySlug } from '../lib/identity-profiles.js';
 import { toJsonError } from '../lib/json-error.js';
 import { LoginAccountMismatchError } from '../lib/login-identity-binding.js';
 import { applyEnvFileOverrides, resolveEnvFilePathArgument } from '../lib/utils.js';
@@ -45,7 +45,7 @@ const repairCmd = new Command('repair')
       applyEnvFileOverrides(resolveEnvFilePathArgument(opts.envFile));
     }
     const resolvedEnvPath = opts.envFile ? resolveEnvFilePathArgument(opts.envFile) : undefined;
-    const identity = opts.identity || (await getDefaultProfileIdentity()) || 'default';
+    const identity = await resolveIdentitySlug(opts.identity);
 
     const diag = await diagnoseAuth({ identity, envPath: resolvedEnvPath });
 
@@ -72,7 +72,11 @@ const repairCmd = new Command('repair')
         console.log('\nStarting interactive login...');
       }
       try {
-        await runDeviceCodeLogin({ envFile: opts.envFile, identity: opts.identity });
+        // Use the resolved `identity` (explicit --identity, else the default profile's bound
+        // slot), not the raw `opts.identity` flag — otherwise a repair that relied on the default
+        // profile to resolve `identity` above would bind/verify the login against no identity at
+        // all, silently bypassing the wrong-account guardrail this diagnosis was just run against.
+        await runDeviceCodeLogin({ envFile: opts.envFile, identity });
       } catch (err) {
         const message =
           err instanceof LoginAccountMismatchError

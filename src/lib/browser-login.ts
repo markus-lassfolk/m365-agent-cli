@@ -21,6 +21,21 @@ import { generateOAuthState, generatePkcePair } from './pkce.js';
 
 export class BrowserLoginError extends Error {}
 
+/**
+ * Strip control characters and cap length — the same treatment `auth.ts`/`graph-auth.ts` apply to
+ * token-endpoint error text (their `sanitizeRefreshError`) before it's ever surfaced, so a
+ * malformed/hostile `error_description` from the token endpoint can't inject control sequences
+ * into terminal output here either.
+ */
+function sanitizeOAuthError(raw: string | undefined | null): string {
+  if (!raw) return '';
+  return raw
+    .replace(/\p{Cc}/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 500);
+}
+
 const SUCCESS_HTML =
   '<!doctype html><html><body style="font-family:sans-serif"><h2>Signed in.</h2><p>You can close this tab and return to the terminal.</p></body></html>';
 const FAILURE_HTML =
@@ -224,7 +239,8 @@ export async function runBrowserLogin(options: BrowserLoginOptions): Promise<Bro
   };
 
   if (!tokenRes.ok || !json.access_token || !json.refresh_token) {
-    const detail = [json.error, json.error_description].filter(Boolean).join(': ') || `HTTP ${tokenRes.status}`;
+    const detail =
+      sanitizeOAuthError([json.error, json.error_description].filter(Boolean).join(': ')) || `HTTP ${tokenRes.status}`;
     throw new BrowserLoginError(`Token exchange failed: ${detail}`);
   }
   if (!isValidJwtStructure(json.access_token)) {

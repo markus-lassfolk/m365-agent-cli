@@ -83,6 +83,18 @@ export async function getProfile(name: string): Promise<ProfileEntry | undefined
   return data.profiles[n];
 }
 
+/**
+ * Find the profile bound to a given token-cache identity slot. A profile's `name` (the
+ * `profiles.json` key) and its `identity` (the cache slot it points at) can differ — see
+ * `upsertProfile`'s `fields.identity` override — so looking a profile up by identity is NOT the
+ * same as `getProfile(identity)`, which only matches when the identity happens to equal the name.
+ */
+export async function getProfileByIdentity(identity: string): Promise<ProfileEntry | undefined> {
+  const data = await readProfilesFile();
+  if (data.profiles[identity]) return data.profiles[identity];
+  return Object.values(data.profiles).find((p) => p.identity === identity);
+}
+
 /** Name of the default profile, or undefined when none is set. */
 export async function getDefaultProfileName(): Promise<string | undefined> {
   const data = await readProfilesFile();
@@ -98,6 +110,37 @@ export async function getDefaultProfileIdentity(): Promise<string | undefined> {
   const data = await readProfilesFile();
   if (!data.defaultProfile) return undefined;
   return data.profiles[data.defaultProfile]?.identity;
+}
+
+/**
+ * Resolve the identity/cache-slot to use for a command: an explicit `--identity`, else the
+ * default profile's bound identity, else the literal `'default'` cache slot. Centralizes the
+ * fallback so callers (`auth repair`, `doctor`, `readiness`, the identity guard) don't each
+ * re-derive the same precedence independently.
+ */
+export async function resolveIdentitySlug(explicitIdentity?: string): Promise<string> {
+  if (explicitIdentity) return explicitIdentity;
+  const data = await readProfilesFile();
+  if (data.defaultProfile) {
+    const identity = data.profiles[data.defaultProfile]?.identity;
+    if (identity) return identity;
+  }
+  return 'default';
+}
+
+export interface ProfilesSnapshot {
+  profiles: ProfileEntry[];
+  defaultProfile: string | undefined;
+}
+
+/**
+ * Read `profiles.json` once and return both the profile list and the default profile name —
+ * avoids the double read `Promise.all([listProfiles(), getDefaultProfileName()])` would otherwise
+ * cause (each of those independently calls {@link readProfilesFile}).
+ */
+export async function getProfilesSnapshot(): Promise<ProfilesSnapshot> {
+  const data = await readProfilesFile();
+  return { profiles: Object.values(data.profiles), defaultProfile: data.defaultProfile };
 }
 
 /**

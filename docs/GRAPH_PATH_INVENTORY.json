@@ -1,7 +1,7 @@
 {
   "version": 1,
   "description": "Graph path patterns from static analysis of callGraph*, graphInvoke*, fetchAllPages, fetchGraphRaw, graphPostBatch. Regenerate: npm run graph:inventory",
-  "generatedAt": "2026-07-18T19:45:54.825Z",
+  "generatedAt": "2026-07-18T21:42:37.211Z",
   "entryCount": 714,
   "entries": [
     {
@@ -41,7 +41,7 @@
     },
     {
       "file": "src/lib/auth-diagnostics.ts",
-      "line": 248,
+      "line": 271,
       "callee": "callGraph",
       "pattern": "{dynamic}",
       "kind": "dynamic"

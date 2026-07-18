@@ -64,6 +64,26 @@ import { toJsonError } from './json-error.js';
 import { installM365HelpOnCommandTree } from './m365-help.js';
 import { getPackageVersionSync } from './package-info.js';
 
+/**
+ * `login`, `auth` (repair), and `profiles` exist specifically to establish or fix the signed-in
+ * identity that `--require-identity`/`--as-delegate-of` verify — applying the root guard to them
+ * too would make e.g. `login --require-identity X` on a machine with no verifiable identity yet
+ * permanently unable to succeed (the guard blocks the exact command meant to satisfy it). These
+ * commands already have their own finer-grained wrong-account protection (`login-identity-binding.ts`'s
+ * `LoginAccountMismatchError`, refused unless `--force-identity-switch`), so exempting them from
+ * the coarse root guard doesn't remove wrong-account protection — it relies on the right layer.
+ */
+const IDENTITY_GUARD_EXEMPT_COMMANDS: ReadonlySet<string> = new Set(['login', 'auth', 'profiles']);
+
+/** Walk up to the top-level command name (e.g. `repair` under `auth` → `'auth'`). */
+function topLevelCommandName(cmd: Command): string {
+  let current = cmd;
+  while (current.parent && current.parent.parent) {
+    current = current.parent;
+  }
+  return current.name();
+}
+
 /** Register all root subcommands and options (same tree as `src/cli.ts`). */
 function registerM365Commands(program: Command): void {
   program
@@ -100,7 +120,10 @@ function registerM365Commands(program: Command): void {
     if (opts.cache) {
       process.env.M365_CACHE_TTL = String(opts.cache);
     }
-    if (opts.requireIdentity || opts.asDelegateOf) {
+    if (
+      (opts.requireIdentity || opts.asDelegateOf) &&
+      !IDENTITY_GUARD_EXEMPT_COMMANDS.has(topLevelCommandName(actionCommand))
+    ) {
       const guard = await checkIdentityGuards({
         identity: opts.identity,
         requireIdentity: opts.requireIdentity,

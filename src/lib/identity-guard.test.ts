@@ -111,6 +111,22 @@ describe('identity-guard', () => {
     expect(result).toEqual({ ok: true, signedInAs: 'doris@lassfolk.net' });
   });
 
+  test('--require-identity and --as-delegate-of are checked independently when both are set', async () => {
+    // Previously `wanted = requireIdentity ?? asDelegateOf` only ever verified one of the two
+    // flags (whichever came first) — a matching --require-identity silently let a mismatched
+    // --as-delegate-of value through unverified (found in QA review).
+    await seedCache('doris', 'doris@lassfolk.net');
+    const result = await checkIdentityGuards({
+      identity: 'doris',
+      requireIdentity: 'doris@lassfolk.net',
+      asDelegateOf: 'someone-else@lassfolk.net',
+      mailbox: 'shared@lassfolk.net'
+    });
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain('--as-delegate-of');
+    expect(result.message).toContain('someone-else@lassfolk.net');
+  });
+
   test('falls back to the default profile identity when --identity is omitted', async () => {
     await seedCache('doris-slot', 'doris@lassfolk.net');
     await setDefaultProfile('doris-slot');

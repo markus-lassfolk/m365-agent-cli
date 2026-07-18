@@ -85,19 +85,32 @@ describe('buildMcpTools', () => {
     const manifest = describeProgram(buildFixtureProgram());
     const tools = buildMcpTools(manifest);
     const names = tools.map((t) => t.name).sort();
-    expect(names).toEqual(['mail', 'rules_create']);
+    // `auth repair` is a safe, read-only diagnostic (unlike `login`/`mcp`/`serve`/`update`, which
+    // are self-referential/interactive/long-running) — it's exposed, just without `--start-login`
+    // (see the next test): that flag alone launches an interactive device-code flow.
+    expect(names).toEqual(['auth_repair', 'mail', 'rules_create']);
   });
 
-  test('excludes mcp, serve, login, update, and auth', () => {
+  test('excludes mcp, serve, login, and update entirely', () => {
     const manifest = describeProgram(buildFixtureProgram());
     const tools = buildMcpTools(manifest);
     expect(tools.some((t) => t.name === 'mcp')).toBe(false);
     expect(tools.some((t) => t.name === 'serve')).toBe(false);
     expect(tools.some((t) => t.name === 'login')).toBe(false);
     expect(tools.some((t) => t.name === 'update')).toBe(false);
+  });
+
+  test('exposes auth_repair but structurally omits --start-login from its schema', () => {
+    const manifest = describeProgram(buildFixtureProgram());
+    const tools = buildMcpTools(manifest);
+    const authRepair = tools.find((t) => t.name === 'auth_repair');
+    expect(authRepair).toBeDefined();
     // `auth repair --start-login` launches the same interactive device-code flow as `login` — an
     // MCP client could otherwise hang the subprocess waiting on a terminal no one is attached to.
-    expect(tools.some((t) => t.name === 'auth_repair')).toBe(false);
+    // Structural exclusion: the flag never appears in the schema/argSpecs, so it can't be smuggled
+    // in via an out-of-schema property either (toolArgsToArgv only emits flags present in argSpecs).
+    expect(authRepair?.inputSchema.properties.start_login).toBeUndefined();
+    expect(authRepair?.argSpecs.some((s) => s.flag === '--start-login')).toBe(false);
   });
 });
 

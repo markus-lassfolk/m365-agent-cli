@@ -2,7 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { Command } from 'commander';
 import { buildDoctorBundle } from '../lib/doctor-bundle.js';
-import { getDefaultProfileIdentity } from '../lib/identity-profiles.js';
+import { resolveIdentitySlug } from '../lib/identity-profiles.js';
 import { createStoredZip } from '../lib/minimal-zip.js';
 import { applyEnvFileOverrides, resolveEnvFilePathArgument, resolveOutputFilePath } from '../lib/utils.js';
 
@@ -33,7 +33,7 @@ export const doctorCommand = new Command('doctor')
       applyEnvFileOverrides(resolveEnvFilePathArgument(opts.envFile));
     }
     const resolvedEnvPath = opts.envFile ? resolveEnvFilePathArgument(opts.envFile) : undefined;
-    const identity = opts.identity || (await getDefaultProfileIdentity()) || 'default';
+    const identity = await resolveIdentitySlug(opts.identity);
 
     const bundle = await buildDoctorBundle({
       identity,

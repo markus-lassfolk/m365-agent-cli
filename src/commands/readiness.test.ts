@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { GRAPH_CRITICAL_DELEGATED_SCOPES } from '../lib/graph-oauth-scopes.js';
+import { upsertProfile } from '../lib/identity-profiles.js';
 import { computeReadiness, READINESS_SCHEMA_VERSION } from './readiness.js';
 
 const CLIENT_ID = '5f2abcea-d6ea-4460-b468-3d80d7a900eb';
@@ -157,6 +158,52 @@ describe('computeReadiness', () => {
     });
     expect(result.recommendedAction).toBe('check_config');
     expect(result.safeCommand).toContain('delegates list --mailbox lotta@lassfolk.net');
+  });
+
+  test('scenario: EWS-only healthy identity + --mailbox — reports unchecked, not a false failure', async () => {
+    // Mailbox delegation is only checkable via Graph today; an EWS-only-healthy identity used to
+    // get a misleading "could not obtain a token" mailboxAccess failure (and ready:false) purely
+    // because it isn't Graph-authenticated, even though it's genuinely healthy (found in QA review).
+    process.env.EWS_CLIENT_ID = CLIENT_ID;
+    process.env.M365_REFRESH_TOKEN = 'fake-refresh-token';
+    // No graph cache entry and every fetch fails — resolveGraphAuth can't succeed, so diagnoseAuth
+    // (and the mailbox check) fall through to / gate on the EWS branch below.
+    global.fetch = (async () => new Response('', { status: 500 })) as unknown as typeof fetch;
+
+    const dir = process.env.M365_AGENT_CLI_CONFIG_DIR as string;
+    await mkdir(dir, { recursive: true });
+    const h = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url');
+    const p = Buffer.from(JSON.stringify({ exp: 2_000_000_000, appid: CLIENT_ID, upn: 'doris@lassfolk.net' })).toString(
+      'base64url'
+    );
+    await writeFile(
+      join(dir, 'token-cache-default.json'),
+      JSON.stringify({
+        version: 1,
+        refreshToken: 'fake-refresh-token',
+        ews: { accessToken: `${h}.${p}.x`, expiresAt: Date.now() + 3_600_000 }
+      }),
+      'utf8'
+    );
+
+    const result = await computeReadiness({ mailbox: 'lotta@lassfolk.net' });
+    expect(result.authHealth).toBe('healthy');
+    expect(result.mailboxAccess).toEqual({ checked: false, mailbox: 'lotta@lassfolk.net' });
+    expect(result.ready).toBe(true);
+  });
+
+  test('scenario: profile field resolves by bound identity, not just by matching name', async () => {
+    // A profile can be registered under a name that differs from the cache-slot identity it's
+    // bound to (`upsertProfile('work', {identity: 'acct2'})`); `getProfile(identity)` used to look
+    // up by that mismatched key and always return undefined for such profiles (found in QA review).
+    process.env.EWS_CLIENT_ID = CLIENT_ID;
+    process.env.M365_REFRESH_TOKEN = 'fake-refresh-token';
+    await seedHealthyCache('acct2', { upn: 'doris@lassfolk.net' });
+    await upsertProfile('work', { identity: 'acct2' });
+
+    const result = await computeReadiness({ identity: 'acct2' });
+    expect(result.identity).toBe('acct2');
+    expect(result.profile).toBe('work');
   });
 
   test('missing capabilities are reported and block readiness even when auth is healthy', async () => {

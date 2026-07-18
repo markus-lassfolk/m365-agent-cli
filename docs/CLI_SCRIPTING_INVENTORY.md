@@ -27,7 +27,7 @@
 | `graph` | `src/commands/graph.ts` | no | yes |
 | `groups` | `src/commands/groups.ts` | yes | yes |
 | `insights` | `src/commands/insights.ts` | yes | no |
-| `login` | `src/commands/login.ts` | no | no |
+| `login` | `src/commands/login.ts` | yes | no |
 | `mail` | `src/commands/mail.ts` | yes | yes |
 | `mailbox-settings` | `src/commands/mailbox-settings.ts` | yes | yes |
 | `mcp` | `src/commands/mcp.ts` | no | no |

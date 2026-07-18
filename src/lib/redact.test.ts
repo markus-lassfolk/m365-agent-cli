@@ -118,4 +118,26 @@ describe('deepRedact', () => {
     }
     expect(() => deepRedact(node, { maxDepth: 5 })).not.toThrow();
   });
+
+  test('safeKeys exempts a declared display-identifier field from the value-shape heuristic (regression)', () => {
+    // A long, mixed-case, digit-containing operator-chosen identifier (e.g. a profile name or
+    // cache identity slug) would otherwise match looksLikeSecretValue's high-entropy heuristic and
+    // get blanked out of the exact field that exists to say which identity a bundle is about.
+    const input = { name: 'ContosoProdMailboxAcct2024', other: 'ContosoProdMailboxAcct2024' };
+    const result = deepRedact(input, { safeKeys: ['name'] });
+    expect(result.name).toBe('ContosoProdMailboxAcct2024');
+    expect(result.other).toBe('[REDACTED]');
+  });
+
+  test('safeKeys exempts string elements of a declared array field (e.g. profile names list)', () => {
+    const input = { names: ['ContosoProdMailboxAcct2024', 'short'] };
+    const result = deepRedact(input, { safeKeys: ['names'] });
+    expect(result.names).toEqual(['ContosoProdMailboxAcct2024', 'short']);
+  });
+
+  test('safeKeys does NOT exempt a secret-named key even if declared safe — key-name pattern always wins', () => {
+    const input = { name: 'not-a-secret-value', apiKey: 'ContosoProdMailboxAcct2024' };
+    const result = deepRedact(input, { safeKeys: ['apiKey'] });
+    expect(result.apiKey).toBe('[REDACTED]');
+  });
 });

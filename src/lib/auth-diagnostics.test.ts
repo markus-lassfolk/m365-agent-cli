@@ -51,6 +51,20 @@ describe('classifyAuthFailure', () => {
     expect(classifyAuthFailure('AADSTS50076: MFA required').recommendedAction).toBe('interactive_login_browser');
   });
 
+  test(
+    'MFA is classified as mfa_required (not the generic interaction_required) even when the ' +
+      'response also carries the generic "interaction_required" error code — a real conditional-MFA ' +
+      'token-endpoint response commonly has both signals in the same text',
+    () => {
+      const result = classifyAuthFailure(
+        'interaction_required: AADSTS50076: Due to a configuration change made by your administrator, ' +
+          'or because you moved to a new location, you must use multi-factor authentication.'
+      );
+      expect(result.failureClass).toBe('mfa_required');
+      expect(result.recommendedAction).toBe('interactive_login_browser');
+    }
+  );
+
   test('empty/undefined error text classifies as unknown_error', () => {
     expect(classifyAuthFailure(undefined).failureClass).toBe('unknown_error');
     expect(classifyAuthFailure('').failureClass).toBe('unknown_error');
@@ -130,6 +144,43 @@ describe('diagnoseAuth', () => {
     expect(diag.tenantId).toBe('11111111-2222-4333-8444-555555555555');
     expect(diag.cacheHealth).toBe('healthy');
     expect(diag.capabilities.length).toBeGreaterThan(0);
+    expect(diag.authBackend).toBe('graph');
+  });
+
+  test('healthy via EWS fallback maps to a non-empty synthetic capability set and authBackend "ews"', async () => {
+    // EWS.AccessAsUser.All is an all-or-nothing grant that isn't representable in a Graph token's
+    // scp/roles claims — a healthy EWS-only diagnosis used to leave `capabilities: []`, making
+    // `readiness --require mail.read` falsely report the capability missing for an identity that
+    // can, in fact, read mail via EWS (found in QA review).
+    process.env.EWS_CLIENT_ID = CLIENT_ID;
+    process.env.M365_REFRESH_TOKEN = 'fake-refresh-token';
+    // No `graph` cache entry and every fetch fails — resolveGraphAuth can't succeed, so
+    // diagnoseAuth falls through to the EWS branch, which hits the seeded `ews` cache entry below
+    // without ever needing a real network call.
+    global.fetch = (async () => new Response('', { status: 500 })) as unknown as typeof fetch;
+
+    const dir = process.env.M365_AGENT_CLI_CONFIG_DIR as string;
+    await mkdir(dir, { recursive: true });
+    const h = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url');
+    const p = Buffer.from(JSON.stringify({ exp: 2_000_000_000, appid: CLIENT_ID, upn: 'doris@lassfolk.net' })).toString(
+      'base64url'
+    );
+    await writeFile(
+      join(dir, 'token-cache-default.json'),
+      JSON.stringify({
+        version: 1,
+        refreshToken: 'fake-refresh-token',
+        ews: { accessToken: `${h}.${p}.x`, expiresAt: Date.now() + 3_600_000 }
+      }),
+      'utf8'
+    );
+
+    const diag = await diagnoseAuth({ identity: 'default' });
+    expect(diag.status).toBe('healthy');
+    expect(diag.authBackend).toBe('ews');
+    expect(diag.signedInAs).toBe('doris@lassfolk.net');
+    expect(diag.capabilities.length).toBeGreaterThan(0);
+    expect(diag.capabilities).toContain('Mail.ReadWrite');
   });
 
   test('classifies a revoked refresh grant (AADSTS50173) from a failed refresh attempt', async () => {

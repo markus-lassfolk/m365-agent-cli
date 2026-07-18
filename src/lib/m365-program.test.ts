@@ -215,4 +215,30 @@ describe('createM365Program --require-identity wiring', () => {
     await program.parseAsync(['node', 'm365-agent-cli', '__guard_probe_off__']);
     expect(ran).toBe(true);
   });
+
+  test('exempts login/auth/profiles from the guard so they can run even with an unverifiable identity', async () => {
+    // No token cache seeded at all — resolveSignedInUpn would return undefined, which the guard
+    // normally fails closed on. `auth`/`login`/`profiles` exist to establish/repair identity, so
+    // they must still run in exactly this situation instead of being permanently locked out.
+    const program = createM365Program();
+    const authCmd = program.commands.find((c) => c.name() === 'auth');
+    if (!authCmd) throw new Error('auth command not registered');
+    let ran = false;
+    authCmd.addCommand(
+      new Command('__guard_probe_auth__').action(() => {
+        ran = true;
+      })
+    );
+    program.exitOverride();
+
+    await program.parseAsync([
+      'node',
+      'm365-agent-cli',
+      '--require-identity',
+      'nomatch@lassfolk.net',
+      'auth',
+      '__guard_probe_auth__'
+    ]);
+    expect(ran).toBe(true);
+  });
 });

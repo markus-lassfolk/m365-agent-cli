@@ -13,7 +13,7 @@ import { permissionSetFromGraphPayload } from './graph-capability-matrix.js';
 import { callGraph, GraphApiError } from './graph-client.js';
 import { graphUserPath } from './graph-user-path.js';
 import { type CacheHealth, probeCacheHealth } from './identity-profiles.js';
-import { getJwtPayloadTenantId, getJwtPayloadUpn } from './jwt-utils.js';
+import { type DecodedJwtPayload, decodeJwtPayload, tenantIdFromJwtPayload, upnFromJwtPayload } from './jwt-utils.js';
 import { getUnifiedRefreshTokenFromEnv } from './m365-token-cache.js';
 
 export type AuthFailureClass =
@@ -62,6 +62,16 @@ export function classifyAuthFailure(errorText: string | undefined | null): Class
     if (text.includes('tokensvalidfrom')) evidence.push('tokens_valid_from_after_grant');
     return { failureClass: 'refresh_grant_revoked', evidence, recommendedAction: 'interactive_login' };
   }
+  // MFA (AADSTS50076/50079) is checked BEFORE the generic `interaction_required`/AADSTS500133
+  // branch below: a real conditional-MFA token-endpoint response commonly has the shape
+  // `{"error":"interaction_required","error_description":"AADSTS50076: ... multi-factor
+  // authentication ..."}` — both signals present in the same text. Checking the generic case
+  // first would always shadow the more specific (and more actionable — `interactive_login_browser`
+  // vs `interactive_login`) MFA classification.
+  if (text.includes('aadsts50076') || text.includes('aadsts50079')) {
+    evidence.push('mfa_required');
+    return { failureClass: 'mfa_required', evidence, recommendedAction: 'interactive_login_browser' };
+  }
   if (text.includes('interaction_required') || text.includes('aadsts500133')) {
     evidence.push('interaction_required');
     return { failureClass: 'interaction_required', evidence, recommendedAction: 'interactive_login' };
@@ -79,10 +89,6 @@ export function classifyAuthFailure(errorText: string | undefined | null): Class
       recommendedAction: 'contact_admin_or_interactive_login'
     };
   }
-  if (text.includes('aadsts50076') || text.includes('aadsts50079')) {
-    evidence.push('mfa_required');
-    return { failureClass: 'mfa_required', evidence, recommendedAction: 'interactive_login_browser' };
-  }
   if (
     text.includes('aadsts700016') ||
     text.includes('aadsts7000215') ||
@@ -90,9 +96,6 @@ export function classifyAuthFailure(errorText: string | undefined | null): Class
     text.includes('invalid_client')
   ) {
     return { failureClass: 'tenant_client_mismatch', evidence, recommendedAction: 'check_config' };
-  }
-  if (!text.trim()) {
-    return { failureClass: 'unknown_error', evidence, recommendedAction: 'interactive_login' };
   }
   return { failureClass: 'unknown_error', evidence, recommendedAction: 'interactive_login' };
 }
@@ -102,6 +105,10 @@ export interface AuthDiagnosis {
   identity: string;
   signedInAs?: string;
   tenantId?: string;
+  /** Which backend the healthy diagnosis actually resolved through. Only set when `status` is
+   *  `'healthy'` — a mailbox/capability check that requires Graph should gate on this rather than
+   *  assume `resolveGraphAuth` will succeed just because the identity is generally healthy. */
+  authBackend?: 'graph' | 'ews';
   failureClass: AuthFailureClass;
   evidence: string[];
   recommendedAction: RecommendedAction;
@@ -116,13 +123,11 @@ function safeCommandFor(action: RecommendedAction, identity: string): string | u
   const idFlag = identity !== 'default' ? ` --identity ${identity}` : '';
   switch (action) {
     case 'run_login':
-      return `m365-agent-cli login${idFlag}`;
     case 'interactive_login':
+    case 'contact_admin_or_interactive_login':
       return `m365-agent-cli login${idFlag}`;
     case 'interactive_login_browser':
       return `m365-agent-cli login --browser${idFlag}`;
-    case 'contact_admin_or_interactive_login':
-      return `m365-agent-cli login${idFlag}`;
     case 'check_config':
       return 'm365-agent-cli verify-token --capabilities';
     default:
@@ -130,17 +135,31 @@ function safeCommandFor(action: RecommendedAction, identity: string): string | u
   }
 }
 
-/** Offline (no network) capability list decoded from whatever Graph access token was just obtained. */
-function capabilitiesFromToken(token: string | undefined): string[] {
-  if (!token) return [];
+/**
+ * `EWS.AccessAsUser.All` is an all-or-nothing delegated grant covering full mail + calendar
+ * read/write for the signed-in mailbox — it isn't represented in a Graph token's `scp`/`roles`
+ * claims at all (see `graph-capability-matrix.ts`'s `ews` row), so a healthy EWS-only diagnosis
+ * maps onto the Graph-scope-shaped capability ids that `readiness --require`/`doctor` check
+ * against, instead of leaving `capabilities` empty (which would make `readiness --require
+ * mail.read` report `missingCapabilities` for an identity that can, in fact, read mail via EWS).
+ */
+const EWS_FULL_ACCESS_CAPABILITIES = ['Mail.ReadWrite', 'Mail.Send', 'Calendars.ReadWrite'];
+
+/** Offline (no network) capability list decoded from an already-decoded token payload. */
+function capabilitiesFromTokenPayload(payload: DecodedJwtPayload | undefined): string[] {
+  if (!payload) return [];
   try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return [];
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
     return [...permissionSetFromGraphPayload(payload)].sort();
   } catch {
     return [];
   }
+}
+
+/** Offline (no network) capability list decoded from a Graph access token. Exported so other
+ *  commands (e.g. `profiles show`) that need the same decode don't each reimplement it. */
+export function capabilitiesFromToken(token: string | undefined): string[] {
+  if (!token) return [];
+  return capabilitiesFromTokenPayload(decodeJwtPayload(token));
 }
 
 /**
@@ -177,32 +196,36 @@ export async function diagnoseAuth(options: { identity: string; envPath?: string
   // still get a real diagnosis instead of a Graph-only false negative.
   const graph = await resolveGraphAuth({ identity, envPath });
   if (graph.success && graph.token) {
+    const payload = decodeJwtPayload(graph.token);
     return {
       status: 'healthy',
       identity,
-      signedInAs: getJwtPayloadUpn(graph.token),
-      tenantId: getJwtPayloadTenantId(graph.token),
+      signedInAs: upnFromJwtPayload(payload),
+      tenantId: tenantIdFromJwtPayload(payload),
+      authBackend: 'graph',
       failureClass: 'healthy',
       evidence: [],
       recommendedAction: 'none',
       cacheHealth: await probeCacheHealth(identity),
-      capabilities: capabilitiesFromToken(graph.token),
+      capabilities: capabilitiesFromTokenPayload(payload),
       secretsPrinted: false
     };
   }
 
   const ews = getExchangeBackend() === 'graph' ? null : await resolveAuth({ identity, envPath });
   if (ews?.success && ews.token) {
+    const payload = decodeJwtPayload(ews.token);
     return {
       status: 'healthy',
       identity,
-      signedInAs: getJwtPayloadUpn(ews.token),
-      tenantId: getJwtPayloadTenantId(ews.token),
+      signedInAs: upnFromJwtPayload(payload),
+      tenantId: tenantIdFromJwtPayload(payload),
+      authBackend: 'ews',
       failureClass: 'healthy',
       evidence: [],
       recommendedAction: 'none',
       cacheHealth: await probeCacheHealth(identity),
-      capabilities: [],
+      capabilities: EWS_FULL_ACCESS_CAPABILITIES,
       secretsPrinted: false
     };
   }

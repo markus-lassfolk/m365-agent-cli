@@ -10,10 +10,10 @@ import { arch, platform, release } from 'node:os';
 import { checkMailboxAccess, diagnoseAuth } from './auth-diagnostics.js';
 import { getExchangeBackend } from './exchange-backend.js';
 import { resolveGraphAuth } from './graph-auth.js';
-import { getDefaultProfileName, listProfiles } from './identity-profiles.js';
+import { getProfilesSnapshot } from './identity-profiles.js';
 import { getM365AgentCliConfigDir, tokenCachePath } from './m365-token-cache.js';
 import { getPackageVersionSync } from './package-info.js';
-import { deepRedact } from './redact.js';
+import { deepRedact, IDENTITY_LABEL_SAFE_KEYS } from './redact.js';
 import { getGlobalEnvFilePath } from './utils.js';
 
 /** Bump when the bundle shape changes in a way tooling should branch on. */
@@ -91,30 +91,39 @@ export interface BuildDoctorBundleOptions {
   allowUnsafeFields?: boolean;
 }
 
+async function computeMailboxCheck(
+  diag: Awaited<ReturnType<typeof diagnoseAuth>>,
+  options: BuildDoctorBundleOptions
+): Promise<DoctorBundle['mailboxCheck']> {
+  if (!options.mailbox) return null;
+  if (diag.status !== 'healthy') {
+    return { checked: false, mailbox: options.mailbox, ok: null };
+  }
+  if (diag.authBackend !== 'graph') {
+    // Mailbox delegation is only checkable via Graph today (`checkMailboxAccess` calls the Graph
+    // API) — an EWS-only-healthy identity is genuinely healthy, but this specific check can't run
+    // for it. Report unchecked rather than a misleading "no token" failure.
+    return { checked: false, mailbox: options.mailbox, ok: null };
+  }
+  const graphAuth = await resolveGraphAuth({ identity: diag.identity, envPath: options.envPath });
+  const access =
+    graphAuth.success && graphAuth.token
+      ? await checkMailboxAccess(graphAuth.token, options.mailbox)
+      : { checked: true, ok: false };
+  return { checked: true, mailbox: options.mailbox, ok: access.ok ?? false };
+}
+
 export async function buildDoctorBundle(options: BuildDoctorBundleOptions): Promise<DoctorBundle> {
   const { identity } = options;
   const diag = await diagnoseAuth({ identity, envPath: options.envPath });
 
-  let mailboxCheck: DoctorBundle['mailboxCheck'] = null;
-  if (options.mailbox) {
-    if (diag.status === 'healthy') {
-      const graphAuth = await resolveGraphAuth({ identity, envPath: options.envPath });
-      const access =
-        graphAuth.success && graphAuth.token
-          ? await checkMailboxAccess(graphAuth.token, options.mailbox)
-          : { checked: true, ok: false };
-      mailboxCheck = { checked: true, mailbox: options.mailbox, ok: access.ok ?? false };
-    } else {
-      mailboxCheck = { checked: false, mailbox: options.mailbox, ok: null };
-    }
-  }
-
-  const [envFileInfo, cacheFileInfo, profiles, defaultProfile] = await Promise.all([
+  const [mailboxCheck, envFileInfo, cacheFileInfo, profilesSnapshot] = await Promise.all([
+    computeMailboxCheck(diag, options),
     inspectFile(options.envPath ?? getGlobalEnvFilePath()),
     inspectFile(tokenCachePath(identity)),
-    listProfiles(),
-    getDefaultProfileName()
+    getProfilesSnapshot()
   ]);
+  const { profiles, defaultProfile } = profilesSnapshot;
 
   const bundle: DoctorBundle = {
     schemaVersion: DOCTOR_BUNDLE_SCHEMA_VERSION,
@@ -156,5 +165,5 @@ export async function buildDoctorBundle(options: BuildDoctorBundleOptions): Prom
     unsafeFieldsIncluded: false
   };
 
-  return deepRedact(bundle);
+  return deepRedact(bundle, { safeKeys: IDENTITY_LABEL_SAFE_KEYS });
 }

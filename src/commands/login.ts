@@ -8,8 +8,12 @@ import { type BrowserLoginResult, runBrowserLogin } from '../lib/browser-login.j
 import { persistRefreshTokenToEnv } from '../lib/env-persist.js';
 import { parseCacheTtlMs } from '../lib/graph-cache.js';
 import { GRAPH_DEVICE_CODE_LOGIN_SCOPES } from '../lib/graph-oauth-scopes.js';
-import { getMicrosoftTenantPathSegment, isValidJwtStructure } from '../lib/jwt-utils.js';
-import { bindLoginIdentityOrThrow, LoginAccountMismatchError } from '../lib/login-identity-binding.js';
+import { getJwtPayloadUpn, getMicrosoftTenantPathSegment, isValidJwtStructure } from '../lib/jwt-utils.js';
+import {
+  assertLoginIdentityOrThrow,
+  commitLoginIdentity,
+  LoginAccountMismatchError
+} from '../lib/login-identity-binding.js';
 import { applyEnvFileOverrides, getGlobalEnvFilePath, resolveEnvFilePathArgument } from '../lib/utils.js';
 
 /**
@@ -152,11 +156,12 @@ async function performDeviceCodeFlow(
 
       try {
         if (isValidJwtStructure(tokenJson.access_token)) {
-          const parts = tokenJson.access_token.split('.');
-          const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
-
-          const rawUsername = payload.upn || payload.email;
-          const username = rawUsername ? rawUsername.replace(/[\r\n]/g, '') : undefined;
+          // getJwtPayloadUpn covers upn/preferred_username/email (in that precedence) and already
+          // strips embedded CR/LF — the same claim-order and sanitization every other
+          // identity-guard consumer (auth-diagnostics.ts, identity-guard.ts, browser-login.ts) uses,
+          // so `login` and `readiness`/`auth repair` never disagree about the signed-in UPN for the
+          // same token.
+          const username = getJwtPayloadUpn(tokenJson.access_token);
           signedInAs = username;
 
           if (username) {
@@ -310,17 +315,21 @@ export async function runDeviceCodeLogin(options: RunLoginOptions): Promise<RunL
   );
   const refreshToken = rawToken.replace(/[\r\n]/g, '');
 
-  // Bind/verify identity BEFORE persisting anything, so a refused login (wrong-account mismatch)
-  // leaves the env file untouched — "refuse to complete" means no local state changes. Left as a
-  // throw (not fatalJson) so callers other than the `login` command itself — e.g. `auth repair
+  // Two-phase: assert (no writes) BEFORE persisting anything, so a refused login (wrong-account
+  // mismatch) leaves the env file untouched — "refuse to complete" means no local state changes.
+  // commit (the actual profiles.json write) only happens AFTER the refresh token is durably
+  // persisted, so a later unrelated failure (disk full, read-only env path) can never leave
+  // profiles.json falsely claiming a fresh, verified login with no usable token behind it. Left as
+  // a throw (not fatalJson) so callers other than the `login` command itself — e.g. `auth repair
   // --start-login` — can catch LoginAccountMismatchError and present it their own way.
-  await bindLoginIdentityOrThrow({
+  await assertLoginIdentityOrThrow({
     identity: options.identity,
     signedInAs,
     force: options.forceIdentitySwitch
   });
 
   await persistRefreshTokenToEnv(refreshToken, { envPath });
+  await commitLoginIdentity({ identity: options.identity, signedInAs });
   humanLog(`Saved M365_REFRESH_TOKEN (and legacy GRAPH_REFRESH_TOKEN / EWS_REFRESH_TOKEN) to ${envPath}`);
   if (options.identity) {
     humanLog(`Identity profile "${options.identity}" verified as ${signedInAs ?? '(unknown — no UPN on token)'}.`);
@@ -380,15 +389,17 @@ export async function runBrowserLoginFlow(options: RunBrowserLoginOptions): Prom
     result = await fatalJson(json, { event: 'error', error: 'browser_login_failed', error_description: message });
   }
 
-  // See runDeviceCodeLogin's comment: identity binding stays a throw, not fatalJson, so other
-  // callers (auth repair --start-login) can present a mismatch their own way.
-  await bindLoginIdentityOrThrow({
+  // See runDeviceCodeLogin's comment: identity assertion stays a throw, not fatalJson, so other
+  // callers (auth repair --start-login) can present a mismatch their own way; the actual profile
+  // commit happens after the refresh token is durably persisted.
+  await assertLoginIdentityOrThrow({
     identity: options.identity,
     signedInAs: result.signedInAs,
     force: options.forceIdentitySwitch
   });
 
   await persistRefreshTokenToEnv(result.refreshToken, { envPath });
+  await commitLoginIdentity({ identity: options.identity, signedInAs: result.signedInAs });
   humanLog('\nLogin complete.');
   humanLog(`Signed in as: ${result.signedInAs ?? '(unknown — no UPN on token)'}`);
   humanLog(`Saved M365_REFRESH_TOKEN (and legacy GRAPH_REFRESH_TOKEN / EWS_REFRESH_TOKEN) to ${envPath}`);

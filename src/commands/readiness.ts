@@ -2,8 +2,10 @@ import { Command } from 'commander';
 import { checkMailboxAccess, diagnoseAuth, type MailboxAccessResult } from '../lib/auth-diagnostics.js';
 import { resolveGraphAuth } from '../lib/graph-auth.js';
 import { evaluateGraphCapabilities, GRAPH_CAPABILITY_MATRIX } from '../lib/graph-capability-matrix.js';
-import { getDefaultProfileIdentity, getProfile } from '../lib/identity-profiles.js';
+import { upnsMatch } from '../lib/identity-guard.js';
+import { getProfileByIdentity, resolveIdentitySlug } from '../lib/identity-profiles.js';
 import { loadM365TokenCache } from '../lib/m365-token-cache.js';
+import { deepRedact, IDENTITY_LABEL_SAFE_KEYS } from '../lib/redact.js';
 import { applyEnvFileOverrides, resolveEnvFilePathArgument } from '../lib/utils.js';
 
 /** Bump when the JSON shape changes in a way automation should branch on. */
@@ -63,24 +65,34 @@ export interface ComputeReadinessOptions {
   envPath?: string;
 }
 
-export async function computeReadiness(options: ComputeReadinessOptions): Promise<ReadinessResult> {
-  const identity = options.identity || (await getDefaultProfileIdentity()) || 'default';
-  const diag = await diagnoseAuth({ identity, envPath: options.envPath });
-
-  let mailboxAccess: MailboxAccessResult | null = null;
-  if (diag.status === 'healthy' && options.mailbox) {
-    const graphAuth = await resolveGraphAuth({ identity, envPath: options.envPath });
-    if (graphAuth.success && graphAuth.token) {
-      mailboxAccess = await checkMailboxAccess(graphAuth.token, options.mailbox);
-    } else {
-      mailboxAccess = {
-        checked: true,
-        mailbox: options.mailbox,
-        ok: false,
-        error: 'Could not obtain a token to check mailbox access.'
-      };
-    }
+async function computeMailboxAccess(
+  diag: Awaited<ReturnType<typeof diagnoseAuth>>,
+  options: ComputeReadinessOptions
+): Promise<MailboxAccessResult | null> {
+  if (diag.status !== 'healthy' || !options.mailbox) return null;
+  if (diag.authBackend !== 'graph') {
+    // Mailbox delegation is only checkable via Graph today (`checkMailboxAccess` calls the Graph
+    // API) — an EWS-only-healthy identity is genuinely healthy, but this specific check can't run
+    // for it. Report unchecked rather than a misleading "no token" failure that would flip
+    // `ready` to false for an identity that can actually operate on mail/calendar via EWS.
+    return { checked: false, mailbox: options.mailbox };
   }
+  const graphAuth = await resolveGraphAuth({ identity: diag.identity, envPath: options.envPath });
+  if (graphAuth.success && graphAuth.token) {
+    return checkMailboxAccess(graphAuth.token, options.mailbox);
+  }
+  return {
+    checked: true,
+    mailbox: options.mailbox,
+    ok: false,
+    error: 'Could not obtain a token to check mailbox access.'
+  };
+}
+
+export async function computeReadiness(options: ComputeReadinessOptions): Promise<ReadinessResult> {
+  const identity = await resolveIdentitySlug(options.identity);
+  const diag = await diagnoseAuth({ identity, envPath: options.envPath });
+  const mailboxAccess = await computeMailboxAccess(diag, options);
 
   const requireTokens = options.requireTokens ?? [];
   const permSet = new Set(diag.capabilities);
@@ -97,30 +109,34 @@ export async function computeReadiness(options: ComputeReadinessOptions): Promis
     if (!ok) missingCapabilities.push(token);
   }
 
-  const identityMismatch = Boolean(
-    options.expectIdentity &&
-      (!diag.signedInAs || diag.signedInAs.toLowerCase() !== options.expectIdentity.toLowerCase())
-  );
+  const identityMismatch = Boolean(options.expectIdentity && !upnsMatch(diag.signedInAs, options.expectIdentity));
 
   const ready =
     diag.status === 'healthy' && missingCapabilities.length === 0 && mailboxAccess?.ok !== false && !identityMismatch;
 
-  let recommendedAction: string | null = diag.status === 'healthy' ? null : diag.recommendedAction;
-  let safeCommand: string | null = diag.status === 'healthy' ? null : (diag.safeCommand ?? null);
-  if (diag.status === 'healthy' && identityMismatch) {
-    recommendedAction = 'interactive_login';
-    safeCommand = `m365-agent-cli login --identity ${identity}`;
-  } else if (diag.status === 'healthy' && missingCapabilities.length > 0) {
-    recommendedAction = 'interactive_login';
-    safeCommand = 'm365-agent-cli login';
-  } else if (diag.status === 'healthy' && mailboxAccess?.ok === false) {
-    recommendedAction = 'check_config';
-    safeCommand = `m365-agent-cli delegates list --mailbox ${options.mailbox}`;
+  let recommendedAction: string | null = null;
+  let safeCommand: string | null = null;
+  if (diag.status === 'healthy') {
+    if (identityMismatch) {
+      recommendedAction = 'interactive_login';
+      safeCommand = `m365-agent-cli login --identity ${identity}`;
+    } else if (missingCapabilities.length > 0) {
+      recommendedAction = 'interactive_login';
+      safeCommand = 'm365-agent-cli login';
+    } else if (mailboxAccess?.ok === false) {
+      recommendedAction = 'check_config';
+      safeCommand = `m365-agent-cli delegates list --mailbox ${options.mailbox}`;
+    }
+  } else {
+    recommendedAction = diag.recommendedAction;
+    safeCommand = diag.safeCommand ?? null;
   }
 
-  const cache = await loadM365TokenCache(identity).catch(() => null);
+  const [cache, profile] = await Promise.all([
+    loadM365TokenCache(identity).catch(() => null),
+    getProfileByIdentity(identity)
+  ]);
   const tokenExpiresAt = cache?.graph?.expiresAt ?? cache?.ews?.expiresAt;
-  const profile = await getProfile(identity);
 
   return {
     schemaVersion: READINESS_SCHEMA_VERSION,
@@ -185,7 +201,7 @@ export const readinessCommand = new Command('readiness')
       });
 
       if (opts.json) {
-        console.log(JSON.stringify(result, null, 2));
+        console.log(JSON.stringify(deepRedact(result, { safeKeys: IDENTITY_LABEL_SAFE_KEYS }), null, 2));
       } else {
         console.log(`Ready: ${result.ready ? 'yes' : 'no'}`);
         console.log(`Signed in as: ${result.signedInAs ?? '(not signed in)'}`);
