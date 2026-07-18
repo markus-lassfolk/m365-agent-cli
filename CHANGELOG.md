@@ -8,6 +8,8 @@ For install and tagging, see [docs/RELEASE.md](docs/RELEASE.md).
 
 ## [Unreleased]
 
+## [2026.7.19] — 2026-07-18
+
 ### Added
 
 - **`auth repair`** (#243) — diagnoses broken delegated auth (revoked/expired refresh grant, interaction required, MFA/conditional access, missing credentials, malformed cache, tenant/client mismatch) and prints one safe recovery command. `AADSTS50173` (`TokensValidFrom` after grant issue) is classified as a tenant-side revoked grant, not local cache corruption. `--start-login` launches device-code login immediately when repair is needed. Never prints raw token/refresh material. `src/lib/auth-diagnostics.ts`, `src/commands/auth.ts`.
