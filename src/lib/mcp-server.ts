@@ -17,6 +17,20 @@ import type { CommandManifest, ManifestArgument, ManifestOption, ProgramManifest
 /** Top-level commands never exposed as MCP tools: self-referential, interactive, or long-running/blocking. */
 const MCP_EXCLUDED_TOP_LEVEL_COMMANDS = new Set(['mcp', 'serve', 'login', 'update']);
 
+/**
+ * Per-command flags never exposed as an MCP tool parameter, even though the command itself is
+ * otherwise safe (read-only/non-blocking) for an MCP client to call. `auth repair --start-login`
+ * launches the same interactive device-code flow `login` does — an MCP client invoking it would
+ * hang the subprocess waiting on a terminal prompt no one is attached to — but plain `auth repair`
+ * is a safe, read-only diagnostic that shouldn't be hidden along with it. Excluded structurally
+ * (the flag never appears in the tool's `inputSchema`/`argSpecs`) rather than checked at call time,
+ * so an MCP client can't pass it even via an out-of-schema property — `toolArgsToArgv` only ever
+ * emits flags present in `argSpecs`.
+ */
+const MCP_EXCLUDED_COMMAND_FLAGS: Readonly<Record<string, ReadonlySet<string>>> = {
+  'auth repair': new Set(['--start-login'])
+};
+
 const MCP_PROTOCOL_VERSION = '2024-11-05';
 
 export interface McpArgSpec {
@@ -92,9 +106,11 @@ export function buildToolDefForCommand(cmd: CommandManifest): McpToolDef {
     if (a.required) required.push(propName);
   }
 
+  const excludedFlags = MCP_EXCLUDED_COMMAND_FLAGS[cmd.path];
   for (const o of cmd.options) {
     const flag = o.long ?? o.short ?? undefined;
     if (!flag) continue;
+    if (excludedFlags?.has(flag)) continue;
     const isBoolean = !o.valueRequired && !o.valueOptional;
     // Repeatable options in this codebase are usually built with a custom accumulator function
     // (`(v, prev) => [...prev, v]`) and an empty-array default, not Commander's native `<x...>`

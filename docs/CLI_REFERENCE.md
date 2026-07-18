@@ -15,10 +15,12 @@ Complete command-line reference for **m365-agent-cli**: global flags, read-only 
 `m365-agent-cli --help` shows only options registered on the **root** program, currently:
 
 ```bash
---read-only         # Run in read-only mode, blocking mutating operations
---dry-run           # Preview the resolved request for a mutating command without sending it
---cache <duration>  # Cache idempotent Graph GET responses on disk (e.g. 30s, 5m, 1h). Off by default.
---version, -V       # CLI version (semver from package)
+--read-only              # Run in read-only mode, blocking mutating operations
+--dry-run                # Preview the resolved request for a mutating command without sending it
+--cache <duration>       # Cache idempotent Graph GET responses on disk (e.g. 30s, 5m, 1h). Off by default.
+--require-identity <upn> # Wrong-account guardrail: fail before running unless signed-in UPN matches exactly
+--as-delegate-of <upn>   # Wrong-account guardrail for --mailbox commands: assert who you're signed in as
+--version, -V            # CLI version (semver from package)
 ```
 
 Many **subcommands** accept their own flags. Common patterns (not every command has every flag—use `m365-agent-cli <command> --help`):
@@ -1081,8 +1083,12 @@ These commands are not expanded step-by-step above; use **`m365-agent-cli <comma
 
 | Command | What it does |
 | --- | --- |
+| **`profiles`** | Named identity profiles: **`list`** / **`show [name]`** / **`set-default <name>`** / **`delete <name> [--purge-cache]`**. `set-default` becomes the fallback `--identity` for every command. See [Authentication](./AUTHENTICATION.md#identity-profiles-and-wrong-account-guardrails). |
+| **`auth`** | **`auth repair`** diagnoses broken delegated auth (revoked/expired refresh grant, interaction required, MFA, conditional access, missing credentials, tenant/client mismatch — `AADSTS50173` classified correctly as a revoked grant) and prints the safe recovery command; **`--start-login`** launches it immediately; never prints raw token material. See [Authentication](./AUTHENTICATION.md#auth-repair-auth-repair). |
+| **`readiness`** | Machine-readable **`ready`/`missingCapabilities`** contract: `--identity`, `--mailbox`, repeatable `--require <capability>` (e.g. `mail.read`, `mail.send`, `calendar.read`), `--expect-identity <upn>`. Exits `0` whenever the CLI itself ran, whether or not `ready` is `true`. See [Authentication](./AUTHENTICATION.md#readiness-contract-readiness---json). |
+| **`doctor`** | Non-secret diagnostic summary; **`--json`** for machine-readable, **`--redacted-bundle [path]`** (zip) or **`--format dir --output <path>`** for a shareable file — file **presence/size/mtime** only, never contents or token material. See [Authentication](./AUTHENTICATION.md#diagnostic-bundle-doctor). |
 | **`describe`** | Machine-readable **JSON manifest** of every command/subcommand, option, and argument — for agents/tools discovering the CLI surface programmatically instead of parsing `--help` text. **`--list`** for a fast top-level overview, **`--command "rules create"`** to scope to one (sub)command. |
-| **`mcp`** | Starts a native **MCP (Model Context Protocol) stdio server**: reflects the `describe` manifest into one MCP tool per leaf command (e.g. `rules create` → tool `rules_create`), with a JSON schema built from that command's own arguments/options. A tool call runs this same CLI as a subprocess with the equivalent argv (`--json` auto-appended when the command supports it), so behavior — read-only mode, `--dry-run`, structured `--json` errors — is identical to running the command directly. `mcp`, `serve`, `login`, and `update` are not exposed as tools (self-referential / interactive / long-running / system-mutating). Point an MCP client at `{ "command": "m365-agent-cli", "args": ["mcp"] }`. |
+| **`mcp`** | Starts a native **MCP (Model Context Protocol) stdio server**: reflects the `describe` manifest into one MCP tool per leaf command (e.g. `rules create` → tool `rules_create`), with a JSON schema built from that command's own arguments/options. A tool call runs this same CLI as a subprocess with the equivalent argv (`--json` auto-appended when the command supports it), so behavior — read-only mode, `--dry-run`, structured `--json` errors — is identical to running the command directly. `mcp`, `serve`, `login`, `update`, and `auth` are not exposed as tools (self-referential / interactive / long-running / system-mutating — `auth repair --start-login` launches the same interactive device-code flow as `login`). Point an MCP client at `{ "command": "m365-agent-cli", "args": ["mcp"] }`. |
 | **`contacts`** | **Graph-only** Outlook contacts: folders (CRUD), list/search/delta, photo, attachments (file + **link** via `attachments add-link`), **`--user`** for delegated mailboxes ([GRAPH_SCOPES.md](./GRAPH_SCOPES.md)). |
 | **`onenote`** | **Graph-only** OneNote: notebooks (incl. **resolve by web URL** — `notebook from-web-url`), section groups, sections (**copy-to-notebook**, **copy-to-section-group**), pages, HTML export/create, **patch-page-content**, **copy-page**, async **operation** poll; **`--group`** / **`--site`** roots. |
 | **`meeting`** | **Graph** standalone Teams meetings (`/me/onlineMeetings`): create (simple or **`--json-file`**), get, update, delete. Calendar invitations with Teams: use **`create-event … --teams`**. |

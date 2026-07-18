@@ -56,7 +56,11 @@ These map to top-level `m365-agent-cli` commands (run **`m365-agent-cli --help`*
 ### Sign-in and CLI
 
 - **whoami** — signed-in user / token identity
-- **login** — device-code OAuth
+- **login** — device-code OAuth, or `--browser` for authorization-code + PKCE
+- **profiles** — named identity profiles, default selection, wrong-account guardrails
+- **auth** — `auth repair` diagnoses and fixes broken delegated auth
+- **readiness** — machine-readable `ready`/`missingCapabilities` contract for agents
+- **doctor** — non-secret diagnostic summary; `--redacted-bundle` for a shareable file
 - **update** — install/update from npm
 - **verify-token** — scopes and feature matrix vs your token
 

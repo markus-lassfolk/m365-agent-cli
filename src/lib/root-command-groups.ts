@@ -4,7 +4,18 @@ import type { Command, Help } from 'commander';
 const ROOT_COMMAND_GROUPS: readonly { readonly title: string; readonly commands: readonly string[] }[] = [
   {
     title: 'Sign-in and CLI',
-    commands: ['whoami', 'login', 'update', 'verify-token', 'describe', 'mcp']
+    commands: [
+      'whoami',
+      'login',
+      'profiles',
+      'auth',
+      'readiness',
+      'doctor',
+      'update',
+      'verify-token',
+      'describe',
+      'mcp'
+    ]
   },
   {
     title: 'Calendar and meetings',

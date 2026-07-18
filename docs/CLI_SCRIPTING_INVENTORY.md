@@ -3,6 +3,7 @@
 | Root command (from `Command("name")`) | Source file | `--json` anywhere | `checkReadOnly` used |
 | --- | --- | --- | --- |
 | `approvals` | `src/commands/approvals.ts` | yes | yes |
+| `auth` | `src/commands/auth.ts` | yes | no |
 | `auto-reply` | `src/commands/auto-reply.ts` | yes | yes |
 | `bookings` | `src/commands/bookings.ts` | yes | yes |
 | `calendar` | `src/commands/calendar.ts` | yes | no |
@@ -12,6 +13,8 @@
 | `create-event` | `src/commands/create-event.ts` | yes | yes |
 | `delegates` | `src/commands/delegates.ts` | yes | yes |
 | `delete-event` | `src/commands/delete-event.ts` | yes | yes |
+| `describe` | `src/commands/describe.ts` | no | no |
+| `doctor` | `src/commands/doctor.ts` | yes | no |
 | `drafts` | `src/commands/drafts.ts` | yes | yes |
 | `excel` | `src/commands/excel.ts` | yes | yes |
 | `files` | `src/commands/files.ts` | yes | yes |
@@ -24,9 +27,10 @@
 | `graph` | `src/commands/graph.ts` | no | yes |
 | `groups` | `src/commands/groups.ts` | yes | yes |
 | `insights` | `src/commands/insights.ts` | yes | no |
-| `login` | `src/commands/login.ts` | no | no |
+| `login` | `src/commands/login.ts` | yes | no |
 | `mail` | `src/commands/mail.ts` | yes | yes |
 | `mailbox-settings` | `src/commands/mailbox-settings.ts` | yes | yes |
+| `mcp` | `src/commands/mcp.ts` | no | no |
 | `meeting` | `src/commands/meeting.ts` | yes | yes |
 | `onenote` | `src/commands/onenote.ts` | yes | yes |
 | `oof` | `src/commands/oof.ts` | yes | yes |
@@ -37,6 +41,8 @@
 | `planner` | `src/commands/planner.ts` | yes | yes |
 | `powerpoint` | `src/commands/powerpoint.ts` | yes | yes |
 | `presence` | `src/commands/presence.ts` | yes | yes |
+| `profiles` | `src/commands/profiles.ts` | yes | no |
+| `readiness` | `src/commands/readiness.ts` | yes | no |
 | `respond` | `src/commands/respond.ts` | yes | yes |
 | `rooms` | `src/commands/rooms.ts` | yes | no |
 | `rules` | `src/commands/rules.ts` | yes | yes |
@@ -51,7 +57,7 @@
 | `teams` | `src/commands/teams.ts` | yes | yes |
 | `todo` | `src/commands/todo.ts` | yes | yes |
 | `update-event` | `src/commands/update-event.ts` | yes | yes |
-| `update` | `src/commands/update.ts` | no | no |
+| `update` | `src/commands/update.ts` | no | yes |
 | `verify-token` | `src/commands/verify-token.ts` | yes | no |
 | `viva` | `src/commands/viva.ts` | yes | yes |
 | `whoami` | `src/commands/whoami.ts` | yes | no |

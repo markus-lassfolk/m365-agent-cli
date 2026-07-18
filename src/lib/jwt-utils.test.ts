@@ -4,6 +4,7 @@ import {
   getJwtPayloadAppId,
   getJwtPayloadScopeSet,
   getJwtPayloadTenantId,
+  getJwtPayloadUpn,
   getMicrosoftTenantPathSegment,
   isPinnedTenantGuid,
   isValidJwtStructure,
@@ -43,6 +44,30 @@ describe('getJwtPayloadTenantId', () => {
     const p = Buffer.from(JSON.stringify({ appid: 'x' })).toString('base64url');
     expect(getJwtPayloadTenantId(`${h}.${p}.x`)).toBeUndefined();
     expect(getJwtPayloadTenantId('not-a-jwt')).toBeUndefined();
+  });
+});
+
+describe('getJwtPayloadUpn', () => {
+  function token(payload: Record<string, unknown>): string {
+    const h = Buffer.from(JSON.stringify({ alg: 'none' })).toString('base64url');
+    const p = Buffer.from(JSON.stringify(payload)).toString('base64url');
+    return `${h}.${p}.x`;
+  }
+
+  test('prefers upn', () => {
+    expect(getJwtPayloadUpn(token({ upn: 'doris@lassfolk.net', email: 'other@lassfolk.net' }))).toBe(
+      'doris@lassfolk.net'
+    );
+  });
+
+  test('falls back to preferred_username, then email', () => {
+    expect(getJwtPayloadUpn(token({ preferred_username: 'doris@lassfolk.net' }))).toBe('doris@lassfolk.net');
+    expect(getJwtPayloadUpn(token({ email: 'doris@lassfolk.net' }))).toBe('doris@lassfolk.net');
+  });
+
+  test('returns undefined when no identity claim is present or token is malformed', () => {
+    expect(getJwtPayloadUpn(token({ appid: 'x' }))).toBeUndefined();
+    expect(getJwtPayloadUpn('not-a-jwt')).toBeUndefined();
   });
 });
 

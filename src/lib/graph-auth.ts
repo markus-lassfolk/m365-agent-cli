@@ -1,6 +1,7 @@
 import { getActiveEnvFilePath } from './active-env.js';
 import { persistRefreshTokenToEnv } from './env-persist.js';
 import { GRAPH_CRITICAL_DELEGATED_SCOPES, GRAPH_REFRESH_SCOPE_CANDIDATES } from './graph-oauth-scopes.js';
+import { getDefaultProfileIdentity } from './identity-profiles.js';
 import {
   getJwtExpiration,
   getJwtPayloadAppId,
@@ -140,7 +141,7 @@ export async function resolveGraphAuth(options?: {
       };
     }
 
-    const identity = options?.identity || 'default';
+    const identity = options?.identity || (await getDefaultProfileIdentity()) || 'default';
     if (!/^[a-zA-Z0-9_-]+$/.test(identity)) {
       return {
         success: false,
