@@ -13,9 +13,28 @@ and the section on when *not* to use it.
 - **`device-login.mjs`** — Playwright automation of the Microsoft sign-in pages (code → account → password
   → consent → TOTP → done). Reads everything from env vars; writes a screenshot only on failure, into a
   temp dir.
+- **`enroll-totp.mjs`** — one-time helper for a *fresh* account: signs in with the password, drives the
+  Security info wizard, scrapes the base32 seed off the **Can't scan image?** screen, activates it, and
+  prints `{"totp_secret":"…","account_name":"…"}` to **stdout** for you to store. See the "Automated
+  first-time TOTP enrollment" section of the docs for when this is (and isn't) possible.
 - **`refresh-token.sh`** — orchestration: fetch creds from *your* secret store, run `m365-agent-cli login
   --json`, parse the `device_code` event, run `device-login.mjs`, then verify. Caps retries.
 - **`package.json`** — the two dependencies (`playwright`, `otplib`).
+
+## One-time enrollment (optional)
+
+If you're bootstrapping a brand-new account and want the automation to obtain the TOTP seed itself:
+
+```bash
+# Capture the seed straight into your vault — never a log file:
+M365_EMAIL=agent@contoso.com M365_PASSWORD="$(fetch_secret agent-password)" \
+  node enroll-totp.mjs | your-vault put agent-totp-seed
+```
+
+This only works when the tenant allows self-service registration from this host (no "require MFA to
+register security info" Conditional Access policy — that needs a Temporary Access Pass). It captures
+**Microsoft's** generated seed; to inject a seed *you* generate you need the admin OATH-token API instead.
+Both paths are covered in the docs.
 
 ## Setup
 
