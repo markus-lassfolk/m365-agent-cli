@@ -374,7 +374,10 @@ export async function runBrowserLoginFlow(options: RunBrowserLoginOptions): Prom
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`\nBrowser login failed: ${message}`);
-    await fatalJson(json, { event: 'error', error: 'browser_login_failed', error_description: message });
+    // fatalJson always calls process.exit — this assignment is never actually reached at runtime,
+    // but satisfies TS's definite-assignment analysis for `result` below (a `never` value is
+    // assignable to anything).
+    result = await fatalJson(json, { event: 'error', error: 'browser_login_failed', error_description: message });
   }
 
   // See runDeviceCodeLogin's comment: identity binding stays a throw, not fatalJson, so other
