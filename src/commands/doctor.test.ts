@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { Command } from 'commander';
 import { Buffer } from 'node:buffer';
 import { execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Command } from 'commander';
 import { GRAPH_CRITICAL_DELEGATED_SCOPES } from '../lib/graph-oauth-scopes.js';
 import { doctorCommand } from './doctor.js';
 

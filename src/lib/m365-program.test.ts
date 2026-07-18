@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { Command } from 'commander';
 import { Buffer } from 'node:buffer';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Command } from 'commander';
 import { GRAPH_CRITICAL_DELEGATED_SCOPES } from './graph-oauth-scopes.js';
 import { createM365Program } from './m365-program.js';
 

@@ -3,8 +3,8 @@ import { Buffer } from 'node:buffer';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { checkIdentityGuards, resolveSignedInUpn } from './identity-guard.js';
 import { GRAPH_CRITICAL_DELEGATED_SCOPES } from './graph-oauth-scopes.js';
+import { checkIdentityGuards, resolveSignedInUpn } from './identity-guard.js';
 import { setDefaultProfile } from './identity-profiles.js';
 
 const CLIENT_ID = '5f2abcea-d6ea-4460-b468-3d80d7a900eb';

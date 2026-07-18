@@ -5,8 +5,8 @@
  * without per-command changes — the same pattern `--dry-run`/`--cache` already use.
  */
 import { resolveAuth } from './auth.js';
-import { getDefaultProfileIdentity } from './identity-profiles.js';
 import { resolveGraphAuth } from './graph-auth.js';
+import { getDefaultProfileIdentity } from './identity-profiles.js';
 import { getJwtPayloadUpn } from './jwt-utils.js';
 
 export interface IdentityGuardOptions {

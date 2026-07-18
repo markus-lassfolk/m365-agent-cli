@@ -8,10 +8,10 @@
  */
 import { resolveAuth } from './auth.js';
 import { getExchangeBackend } from './exchange-backend.js';
-import { permissionSetFromGraphPayload } from './graph-capability-matrix.js';
-import { graphUserPath } from './graph-user-path.js';
 import { resolveGraphAuth } from './graph-auth.js';
+import { permissionSetFromGraphPayload } from './graph-capability-matrix.js';
 import { callGraph, GraphApiError } from './graph-client.js';
+import { graphUserPath } from './graph-user-path.js';
 import { type CacheHealth, probeCacheHealth } from './identity-profiles.js';
 import { getJwtPayloadTenantId, getJwtPayloadUpn } from './jwt-utils.js';
 import { getUnifiedRefreshTokenFromEnv } from './m365-token-cache.js';

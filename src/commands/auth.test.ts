@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { Command } from 'commander';
 import { Buffer } from 'node:buffer';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { authCommand } from './auth.js';
+import { Command } from 'commander';
 import { GRAPH_CRITICAL_DELEGATED_SCOPES } from '../lib/graph-oauth-scopes.js';
+import { authCommand } from './auth.js';
 
 const CLIENT_ID = '5f2abcea-d6ea-4460-b468-3d80d7a900eb';
 

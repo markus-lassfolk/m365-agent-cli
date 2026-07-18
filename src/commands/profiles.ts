@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { permissionSetFromGraphPayload } from '../lib/graph-capability-matrix.js';
 import {
   type CacheHealth,
   deleteProfile,
@@ -9,7 +10,6 @@ import {
   probeCacheHealth,
   setDefaultProfile
 } from '../lib/identity-profiles.js';
-import { permissionSetFromGraphPayload } from '../lib/graph-capability-matrix.js';
 import { toJsonError } from '../lib/json-error.js';
 import { loadM365TokenCache } from '../lib/m365-token-cache.js';
 

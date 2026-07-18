@@ -13,8 +13,8 @@
  *   success or failure, so it can't linger as an open local port.
  */
 import { spawn } from 'node:child_process';
-import { createServer } from 'node:http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { createServer } from 'node:http';
 import { platform } from 'node:os';
 import { getJwtExpiration, getJwtPayloadUpn, isValidJwtStructure } from './jwt-utils.js';
 import { generateOAuthState, generatePkcePair } from './pkce.js';
