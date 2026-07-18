@@ -1,0 +1,14 @@
+{
+  "name": "m365-agent-cli-unattended-login-example",
+  "private": true,
+  "type": "module",
+  "description": "Reference example: automate m365-agent-cli device-code login in a headless browser. Copy and adapt. See ../../docs/UNATTENDED_LOGIN.md.",
+  "scripts": {
+    "login": "node device-login.mjs",
+    "enroll": "node enroll-totp.mjs"
+  },
+  "dependencies": {
+    "otplib": "^12.0.1",
+    "playwright": "^1.48.0"
+  }
+}

@@ -9,14 +9,63 @@ import { GRAPH_DEVICE_CODE_LOGIN_SCOPES } from '../lib/graph-oauth-scopes.js';
 import { getMicrosoftTenantPathSegment, isValidJwtStructure } from '../lib/jwt-utils.js';
 import { applyEnvFileOverrides, getGlobalEnvFilePath, resolveEnvFilePathArgument } from '../lib/utils.js';
 
+/**
+ * In `--json` mode the command writes newline-delimited JSON events to stdout so an unattended
+ * wrapper can parse them without scraping free-form log lines. No-op when JSON mode is off.
+ * See docs/UNATTENDED_LOGIN.md for the event shapes and an end-to-end automation example.
+ */
+function emitEvent(json: boolean, event: Record<string, unknown>): void {
+  if (json) {
+    process.stdout.write(`${JSON.stringify(event)}\n`);
+  }
+}
+
+/**
+ * Emit a terminal JSON error event (in `--json` mode) and exit. Unlike emitEvent + process.exit,
+ * this awaits the stdout write callback first: on POSIX a piped stdout is asynchronous, so a bare
+ * exit could truncate the final event before it flushes. A short fallback timer still exits if the
+ * write callback never fires (e.g. the reader closed the pipe → EPIPE).
+ */
+async function fatalJson(json: boolean, event: Record<string, unknown>, code = 1): Promise<never> {
+  if (json) {
+    await new Promise<void>((resolve) => {
+      let settled = false;
+      const finish = (): void => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+      const timer = setTimeout(finish, 1000);
+      if (typeof timer.unref === 'function') timer.unref();
+      process.stdout.write(`${JSON.stringify(event)}\n`, finish);
+    });
+  }
+  process.exit(code);
+}
+
+/**
+ * Route human-readable text to stderr in JSON mode (so stdout stays a clean event stream), else to
+ * stdout. Single source of truth for the routing rule used across the command.
+ */
+function makeHumanLog(json: boolean): (msg: string) => void {
+  return (msg: string): void => {
+    if (json) console.error(msg);
+    else console.log(msg);
+  };
+}
+
 async function performDeviceCodeFlow(
   clientId: string,
   tenant: string,
   scope: string,
   label: string,
-  envPath: string
+  envPath: string,
+  json: boolean
 ): Promise<string> {
-  console.log(`\nInitiating Device Code flow for ${label}...`);
+  // Human-readable text goes to stderr in JSON mode so stdout stays a clean JSON event stream.
+  const humanLog = makeHumanLog(json);
+
+  humanLog(`\nInitiating Device Code flow for ${label}...`);
 
   const deviceCodeRes = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/devicecode`, {
     method: 'POST',
@@ -31,12 +80,27 @@ async function performDeviceCodeFlow(
 
   if (!deviceCodeRes.ok) {
     console.error(`Failed to initiate ${label} device code flow:`, deviceCodeJson);
-    process.exit(1);
+    await fatalJson(json, {
+      event: 'error',
+      error: deviceCodeJson.error ?? 'devicecode_request_failed',
+      error_description: deviceCodeJson.error_description
+    });
   }
 
-  console.log('\n=========================================================');
-  console.log(deviceCodeJson.message);
-  console.log('=========================================================\n');
+  humanLog('\n=========================================================');
+  humanLog(deviceCodeJson.message);
+  humanLog('=========================================================\n');
+
+  // Machine-readable device-code details for unattended automation (see docs/UNATTENDED_LOGIN.md).
+  emitEvent(json, {
+    event: 'device_code',
+    user_code: deviceCodeJson.user_code,
+    verification_uri: deviceCodeJson.verification_uri,
+    verification_uri_complete: deviceCodeJson.verification_uri_complete ?? null,
+    expires_in: deviceCodeJson.expires_in,
+    interval: deviceCodeJson.interval,
+    message: deviceCodeJson.message
+  });
 
   const deviceCode = deviceCodeJson.device_code;
   const interval = (deviceCodeJson.interval || 5) * 1000;
@@ -44,14 +108,19 @@ async function performDeviceCodeFlow(
 
   let authenticated = false;
   let refreshToken = '';
+  let username: string | undefined;
   let pollInterval = interval;
 
-  console.log(`Waiting for ${label} authentication...`);
+  humanLog(`Waiting for ${label} authentication...`);
 
   while (!authenticated) {
     if (Date.now() > expiresAt) {
       console.error(`\n${label} device code expired. Please run the command again.`);
-      process.exit(1);
+      await fatalJson(json, {
+        event: 'error',
+        error: 'expired_token',
+        error_description: 'Device code expired before sign-in completed.'
+      });
     }
 
     await new Promise((resolve) => setTimeout(resolve, pollInterval));
@@ -79,7 +148,7 @@ async function performDeviceCodeFlow(
           const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
 
           const rawUsername = payload.upn || payload.email;
-          const username = rawUsername ? rawUsername.replace(/[\r\n]/g, '') : undefined;
+          username = rawUsername ? rawUsername.replace(/[\r\n]/g, '') : undefined;
 
           if (username) {
             let envContent = '';
@@ -101,7 +170,7 @@ async function performDeviceCodeFlow(
 
             await atomicWriteUtf8File(envPath, `${envContent.trim()}\n`, 0o600);
 
-            console.log(`Saved EWS_USERNAME (${username}) to ${envPath}`);
+            humanLog(`Saved EWS_USERNAME (${username}) to ${envPath}`);
           }
         }
       } catch (_e) {
@@ -109,7 +178,11 @@ async function performDeviceCodeFlow(
       }
       if (!refreshToken) {
         console.error(`\nFailed to obtain ${label} refresh token. Ensure the offline_access scope is granted.`);
-        process.exit(1);
+        await fatalJson(json, {
+          event: 'error',
+          error: 'no_refresh_token',
+          error_description: 'No refresh token returned; ensure the offline_access scope is granted.'
+        });
       }
     } else if (tokenJson.error === 'authorization_pending') {
       // Continue polling
@@ -117,11 +190,16 @@ async function performDeviceCodeFlow(
       pollInterval += 5000;
     } else {
       console.error(`\n${label} authentication failed:`, tokenJson.error_description || tokenJson.error);
-      process.exit(1);
+      await fatalJson(json, {
+        event: 'error',
+        error: tokenJson.error ?? 'authentication_failed',
+        error_description: tokenJson.error_description
+      });
     }
   }
 
-  console.log(`\n${label} authentication successful!`);
+  humanLog(`\n${label} authentication successful!`);
+  emitEvent(json, { event: 'authenticated', username: username ?? null });
 
   return refreshToken;
 }
@@ -132,7 +210,14 @@ export const loginCommand = new Command('login')
     '--env-file <path>',
     'Load/save EWS_CLIENT_ID and refresh tokens in this file (e.g. ~/.config/m365-agent-cli/.env.beta). Overrides vars from the default .env loaded at startup.'
   )
-  .action(async (opts: { envFile?: string }) => {
+  .option(
+    '--json',
+    'Emit newline-delimited JSON events (device_code, authenticated, complete, error) to stdout for unattended automation; human-readable text goes to stderr. Requires EWS_CLIENT_ID to be preset (no interactive prompt). See docs/UNATTENDED_LOGIN.md.'
+  )
+  .action(async (opts: { envFile?: string; json?: boolean }) => {
+    const json = opts.json ?? false;
+    const humanLog = makeHumanLog(json);
+
     let envPath = getGlobalEnvFilePath();
     if (opts.envFile) {
       envPath = resolveEnvFilePathArgument(opts.envFile);
@@ -154,6 +239,15 @@ export const loginCommand = new Command('login')
     }
 
     if (!clientId) {
+      if (json) {
+        // Non-interactive mode must not block on stdin waiting for a client id.
+        await fatalJson(json, {
+          event: 'error',
+          error: 'missing_client_id',
+          error_description: 'Set EWS_CLIENT_ID in the environment or .env before using --json (non-interactive) mode.'
+        });
+      }
+
       const rl = createInterface({
         input: process.stdin,
         output: process.stdout
@@ -172,15 +266,15 @@ export const loginCommand = new Command('login')
       await atomicWriteUtf8File(envPath, `${envContent.trim()}\n`, 0o600);
     }
 
-    console.log('');
-    console.log(`Configuration file: ${envPath}`);
+    humanLog('');
+    humanLog(`Configuration file: ${envPath}`);
     if (!process.env.M365_AGENT_ENV_FILE?.trim() && !opts.envFile) {
-      console.log(
+      humanLog(
         'Tip: For a second app (e.g. beta), use --env-file ~/.config/m365-agent-cli/.env.beta or export M365_AGENT_ENV_FILE to that path before running the CLI.'
       );
     }
-    console.log(`Application (client) ID: ${clientId}`);
-    console.log('');
+    humanLog(`Application (client) ID: ${clientId}`);
+    humanLog('');
 
     const tenant = getMicrosoftTenantPathSegment();
 
@@ -190,11 +284,13 @@ export const loginCommand = new Command('login')
       tenant,
       GRAPH_DEVICE_CODE_LOGIN_SCOPES,
       'Microsoft 365',
-      envPath
+      envPath,
+      json
     );
     const refreshToken = rawToken.replace(/[\r\n]/g, '');
 
     await persistRefreshTokenToEnv(refreshToken, { envPath });
 
-    console.log(`Saved M365_REFRESH_TOKEN (and legacy GRAPH_REFRESH_TOKEN / EWS_REFRESH_TOKEN) to ${envPath}`);
+    humanLog(`Saved M365_REFRESH_TOKEN (and legacy GRAPH_REFRESH_TOKEN / EWS_REFRESH_TOKEN) to ${envPath}`);
+    emitEvent(json, { event: 'complete', env_path: envPath });
   });

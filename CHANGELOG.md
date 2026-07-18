@@ -10,6 +10,16 @@ For install and tagging, see [docs/RELEASE.md](docs/RELEASE.md).
 
 ---
 
+## [2026.7.18] — 2026-07-18
+
+### Added
+
+- **`login --json` unattended mode.** `m365-agent-cli login --json` emits newline-delimited JSON events (`device_code`, `authenticated`, `complete`, `error`) on stdout so a wrapper can capture the `user_code` / `verification_uri` without scraping human-readable log text (which stays on stderr). Requires `EWS_CLIENT_ID` to be preset — `--json` mode does not prompt.
+- **Unattended-login guide and reference scripts.** [docs/UNATTENDED_LOGIN.md](docs/UNATTENDED_LOGIN.md) documents automating the device-code step end-to-end, and [`examples/unattended-login/`](examples/unattended-login/) provides adaptable references: `device-login.mjs` (Playwright automation of the sign-in pages incl. TOTP), `refresh-token.sh` (steady-state login orchestration with capped retries), and `enroll.sh` + `enroll-totp.mjs` (headless first-time software-TOTP enrollment that scrapes and stores the seed, signing in with a password **or** a Temporary Access Pass for hardened tenants / accounts that already have MFA). Secret access is via `fetch_secret`/`store_secret` placeholders; no secrets are hardcoded or logged.
+- **Auth documentation.** [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md) gains device-code-focused login guidance, a *Driving `login` from a script or agent* section, and pointers to the unattended-login and TOTP/TAP enrollment material (also surfaced from the skill).
+
+---
+
 ## [2026.7.7] — 2026-07-17
 
 ### Fixed

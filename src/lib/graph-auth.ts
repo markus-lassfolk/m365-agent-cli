@@ -203,11 +203,7 @@ export async function resolveGraphAuth(options?: {
       const afterWait = tryCachedGraph(cached);
       if (afterWait) return afterWait;
 
-      const refreshTokens = [
-        ...new Set(
-          [cached?.refreshToken, getUnifiedRefreshTokenFromEnv() ?? envRefreshToken].filter((t): t is string => !!t)
-        )
-      ];
+      const refreshTokens = [...new Set([cached?.refreshToken, envRefreshToken].filter((t): t is string => !!t))];
 
       // Resolve the active env file once so all refresh attempts persist to the same file the
       // CLI loaded from (M365_AGENT_ENV_FILE / --env-file / default). Without this, refreshes
