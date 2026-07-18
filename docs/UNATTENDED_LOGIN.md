@@ -117,44 +117,56 @@ for the same secret (or that it completes one manual sign-in). A wrong secret �
 
 ## Automated first-time TOTP enrollment
 
-Option A above is a manual sitting. You can also **automate** it for a fresh account, so the agent obtains its
-own seed with no human — [`examples/unattended-login/enroll-totp.mjs`](../examples/unattended-login/enroll-totp.mjs)
-signs in with the password, drives the Security info wizard to *I want to use a different authenticator app*,
-scrapes the base32 key off the **Can't scan image?** screen, activates it with a generated code, and prints
-the seed as JSON on stdout for you to store:
+Option A above is a manual sitting. You can also **automate** it, so the agent obtains its own seed with no
+human — [`examples/unattended-login/enroll-totp.mjs`](../examples/unattended-login/enroll-totp.mjs) signs in
+(with a **password** or a **Temporary Access Pass**), confirms the sign-in actually worked, drives the Security
+info wizard to *I want to use a different authenticator app*, scrapes the base32 key off the **Can't scan
+image?** screen, activates it with a generated code, and prints the seed as JSON on stdout for you to store:
 
 ```bash
+# password (permissive tenants):
 M365_EMAIL=agent@contoso.com M365_PASSWORD="$(fetch_secret agent-password)" \
+  node enroll-totp.mjs | your-vault put agent-totp-seed
+
+# Temporary Access Pass (hardened tenants, or an account that already has MFA):
+M365_EMAIL=agent@contoso.com M365_TAP="$(fetch_secret agent-tap)" \
   node enroll-totp.mjs | your-vault put agent-totp-seed
 # stdout on success: {"totp_secret":"…","account_name":"agent@contoso.com"}
 ```
 
-For the full hands-off bootstrap, [`enroll.sh`](../examples/unattended-login/enroll.sh) wraps it: fetch
-email + password from your store → run `enroll-totp.mjs` → store the returned seed → **verify** by running
+For the full hands-off bootstrap, [`enroll.sh`](../examples/unattended-login/enroll.sh) wraps it: fetch the
+credential from your store (a TAP `m365-tap` if present, else a password `m365-password`) → run
+`enroll-totp.mjs` → store the returned seed → **verify** by running
 [`refresh-token.sh`](../examples/unattended-login/refresh-token.sh), which re-reads the stored seed and
 completes a real device-code sign-in (so it also proves the seed round-tripped your store). Implement
 `fetch_secret()`/`store_secret()` for your vault, then `bash enroll.sh`.
 
-This works only when **two independent gates** are open — know them before you rely on it:
+This works only when **two gates** are open — know them before you rely on it:
 
-1. **Getting in with a password.** Fine interactively (this script drives the browser). It does **not** work via
-   a pure API/token call: the only no-UI option is ROPC, which **security defaults block by default** on every
-   new tenant (ROPC is legacy auth), and which is incompatible with any MFA or Conditional Access. That's why
-   this is browser automation, not a Graph call.
-2. **Registering the first method.** Allowed only if there's **no "require MFA to register security info"
-   Conditional Access policy** — that policy (Microsoft's recommended hardening) forces a Temporary Access Pass
-   or trusted location, which the password alone can't satisfy. With it enabled, first-time self-enrollment
-   needs an admin-issued TAP.
+1. **Getting in.** With a password this is a normal interactive sign-in (the script drives the browser); it does
+   **not** work via a pure API/token call — the only no-UI option is ROPC, which **security defaults block by
+   default** on new tenants and which is incompatible with MFA/Conditional Access. A **TAP** is entered the same
+   interactive way (in the TAP field instead of the password). Either way it's browser automation, not a Graph call.
+2. **Registering the method.** With a plain **password** this only works if there's **no "require MFA to register
+   security info"** Conditional Access policy — that policy forces a Temporary Access Pass or trusted location the
+   password can't satisfy. Signing in with a **TAP clears this gate** (a TAP satisfies MFA), which is exactly why
+   the TAP path also works on **hardened tenants** and on accounts that **already have MFA**. A TAP is admin-issued
+   and redeemed in the browser; a one-time TAP must be used within ~10 minutes.
 
-Two more things to keep straight:
+A few more things to keep straight:
 
+- **A TAP enrolls TOTP but can't set a password.** TOTP is only a *second* factor, so steady-state device-code
+  login still needs a *first-factor* password in your vault. A TAP can't create one (self-service password change
+  needs the existing password), so set it separately — e.g. an admin Graph `passwordProfile` write. The TAP path
+  covers only the TOTP enrollment.
 - **You capture Microsoft's seed — you don't inject your own.** Self-service only ever *reveals* the secret
   Microsoft generated. To provision a seed **you** generate (never touching a browser), use the admin
   **OATH-token** path (Option B) instead — there is no self-service Graph API that lets you supply or read back
   a TOTP secret, by design.
-- **It's inherently brittle.** The Security info wizard is a Microsoft SPA whose markup shifts; the selectors in
-  the script are a **starting point** and will need tuning against your tenant. Treat a green run as "verify the
-  seed with a real sign-in," not "done" — and prefer the admin path (Option B) for anything you can't babysit.
+- **It's inherently brittle.** The Security info wizard (and the TAP entry page) is a Microsoft SPA whose markup
+  shifts; the selectors in the script are a **starting point** and will need tuning against your tenant. Treat a
+  green run as "verify the seed with a real sign-in," not "done" — and prefer the admin path (Option B) for
+  anything you can't babysit.
 
 ---
 
