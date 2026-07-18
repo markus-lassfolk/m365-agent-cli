@@ -1,6 +1,6 @@
 ---
 name: m365-agent-cli
-version: 2026.7.7
+version: 2026.7.18
 description: Microsoft 365 CLI (EWS + Graph) for calendar, mail, OneDrive, Planner, SharePoint, To Do, Teams, Bookings, Excel-on-drive, presence, inbox rules, delegates, subscriptions, Graph Search, Microsoft Viva / employee experience (`viva` — Graph beta: tenant `/employeeExperience`, user work time/insights/roles/learning, admin+org itemInsights, workHoursAndLocations, meeting Engage Q&A), Microsoft 365 Copilot APIs (`copilot` — retrieval, search, chat, reports, packages, meeting insights, interaction export, notify-help), and raw `graph invoke`/`graph batch`. Use when the user needs Outlook/Exchange, Graph, or M365 automation from the terminal.
 # `version` matches the npm CLI release; run `npm run sync-skill` after bumping package.json.
 metadata:
