@@ -13,7 +13,8 @@
  *   success or failure, so it can't linger as an open local port.
  */
 import { spawn } from 'node:child_process';
-import { createServer, type Server } from 'node:http';
+import { createServer } from 'node:http';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import { platform } from 'node:os';
 import { getJwtExpiration, getJwtPayloadUpn, isValidJwtStructure } from './jwt-utils.js';
 import { generateOAuthState, generatePkcePair } from './pkce.js';
@@ -24,6 +25,22 @@ const SUCCESS_HTML =
   '<!doctype html><html><body style="font-family:sans-serif"><h2>Signed in.</h2><p>You can close this tab and return to the terminal.</p></body></html>';
 const FAILURE_HTML =
   '<!doctype html><html><body style="font-family:sans-serif"><h2>Sign-in did not complete.</h2><p>Return to the terminal for details.</p></body></html>';
+
+/**
+ * Minimal structural subset of `node:http`'s `Server` that {@link runBrowserLogin} actually uses.
+ * A real `http.Server` satisfies this automatically; tests can substitute a lightweight in-memory
+ * fake (see `browser-login.test.ts`) so the PKCE/state-validation/token-exchange logic is verified
+ * without binding a real OS socket — real-socket binding under heavy concurrent load (e.g. this
+ * repo's full test suite) is inherently less deterministic than the logic it's testing.
+ */
+export interface LoopbackServerLike {
+  listen(port: number, host: string, callback: () => void): void;
+  address(): { port: number } | string | null;
+  close(): void;
+  on(event: 'request', handler: (req: IncomingMessage, res: ServerResponse) => void): void;
+  on(event: 'error', handler: (err: Error) => void): void;
+  once(event: 'error', handler: (err: Error) => void): void;
+}
 
 export interface BrowserLoginOptions {
   clientId: string;
@@ -40,6 +57,8 @@ export interface BrowserLoginOptions {
   openBrowser?: (url: string) => void;
   /** Called once the authorization URL is known (before opening it) — printing hook for the CLI. */
   onAuthorizationUrl?: (url: string) => void;
+  /** Injectable loopback listener (tests only) — defaults to a real `node:http` server. */
+  _createLoopbackServer?: () => LoopbackServerLike;
 }
 
 export interface BrowserLoginResult {
@@ -64,7 +83,11 @@ function defaultOpenBrowser(url: string): void {
   }
 }
 
-function waitForCallback(server: Server, expectedState: string, timeoutMs: number): Promise<{ code: string }> {
+function waitForCallback(
+  server: LoopbackServerLike,
+  expectedState: string,
+  timeoutMs: number
+): Promise<{ code: string }> {
   return new Promise((resolve, reject) => {
     let settled = false;
     const timer = setTimeout(() => {
@@ -148,7 +171,7 @@ export async function runBrowserLogin(options: BrowserLoginOptions): Promise<Bro
   const pkce = generatePkcePair();
   const state = generateOAuthState();
 
-  const server = createServer();
+  const server: LoopbackServerLike = (options._createLoopbackServer ?? (() => createServer()))();
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject);
     // Loopback only — never bind 0.0.0.0, this listener must not be reachable off-host.

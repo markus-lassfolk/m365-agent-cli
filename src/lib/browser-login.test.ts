@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { Buffer } from 'node:buffer';
-import { BrowserLoginError, runBrowserLogin } from './browser-login.js';
+import { EventEmitter } from 'node:events';
+import type { IncomingMessage, ServerResponse } from 'node:http';
+import { BrowserLoginError, type LoopbackServerLike, runBrowserLogin } from './browser-login.js';
 
 function fixtureAccessToken(upn: string): string {
   const h = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url');
@@ -9,18 +11,42 @@ function fixtureAccessToken(upn: string): string {
 }
 
 /**
- * Resolves the instant `onAuthorizationUrl` fires — a single promise, not a `setTimeout` polling
- * loop. Polling with a fixed interval needs many event-loop ticks to "catch" a state change and
- * gets increasingly unreliable (spurious timeouts) as the scheduler falls behind under heavy
- * concurrent load (e.g. the full suite's `--isolate` run); a directly-resolved promise has no such
- * dependency — it fires on the first tick after the callback runs, however delayed that tick is.
+ * In-memory stand-in for `node:http`'s `Server`, driven directly by tests instead of a real OS
+ * socket. `runBrowserLogin`'s PKCE/state-validation/token-exchange logic only needs the small
+ * `LoopbackServerLike` surface (`listen`/`address`/`close`/`on`) — it never inspects the transport
+ * itself — so a fake that emits synthetic `request` events exercises exactly the same code paths
+ * as a real HTTP round trip, deterministically and without depending on real socket binding
+ * succeeding promptly under heavy concurrent load (this repo's full `--isolate` suite spans 97
+ * files; real-socket tests were measurably less reliable there than the logic warrants).
  */
-function authUrlWaiter(): { onAuthorizationUrl: (url: string) => void; promise: Promise<string> } {
-  let resolve!: (url: string) => void;
-  const promise = new Promise<string>((res) => {
-    resolve = res;
-  });
-  return { onAuthorizationUrl: (url: string) => resolve(url), promise };
+class FakeLoopbackServer extends EventEmitter implements LoopbackServerLike {
+  closed = false;
+
+  listen(_port: number, _host: string, callback: () => void): void {
+    queueMicrotask(callback);
+  }
+
+  address(): { port: number } {
+    return { port: 44444 };
+  }
+
+  close(): void {
+    this.closed = true;
+  }
+
+  /** Simulate the browser's redirect landing on `/callback?...`. */
+  fireCallback(query: string): void {
+    const req = { url: `/callback${query}` } as IncomingMessage;
+    const res = {
+      writeHead(_status: number, _headers?: Record<string, string>) {
+        return res;
+      },
+      end(_body?: string) {
+        return res;
+      }
+    } as unknown as ServerResponse;
+    this.emit('request', req, res);
+  }
 }
 
 describe('runBrowserLogin', () => {
@@ -43,121 +69,137 @@ describe('runBrowserLogin', () => {
     }) as unknown as typeof fetch;
   }
 
-  test('completes a full loopback PKCE round trip and returns tokens', async () => {
+  test('completes a full PKCE round trip and returns tokens', async () => {
     mockTokenEndpoint({
       access_token: fixtureAccessToken('doris@lassfolk.net'),
       refresh_token: 'rt-1',
       expires_in: 3600
     });
 
-    const waiter = authUrlWaiter();
+    const fakeServer = new FakeLoopbackServer();
+    let authUrl: string | undefined;
     const resultPromise = runBrowserLogin({
       clientId: 'client-1',
       tenant: 'common',
       scope: 'offline_access',
       open: false,
-      onAuthorizationUrl: waiter.onAuthorizationUrl
+      _createLoopbackServer: () => fakeServer,
+      onAuthorizationUrl: (u) => {
+        authUrl = u;
+      }
     });
 
-    const authUrl = await waiter.promise;
-    const parsed = new URL(authUrl);
+    // onAuthorizationUrl fires synchronously once `listen()`'s queued callback runs.
+    await new Promise((r) => queueMicrotask(r as () => void));
+    const parsed = new URL(authUrl as string);
     expect(parsed.searchParams.get('code_challenge_method')).toBe('S256');
     expect(parsed.hostname).toBe('login.microsoftonline.com');
     const state = parsed.searchParams.get('state');
     const redirectUri = parsed.searchParams.get('redirect_uri') as string;
     expect(new URL(redirectUri).hostname).toBe('127.0.0.1');
 
-    await originalFetch(`${redirectUri}?code=abc123&state=${state}`);
+    fakeServer.fireCallback(`?code=abc123&state=${state}`);
 
     const result = await resultPromise;
     expect(result.refreshToken).toBe('rt-1');
     expect(result.signedInAs).toBe('doris@lassfolk.net');
     expect(result.expiresAt).toBeGreaterThan(Date.now());
-  }, 20_000);
+    expect(fakeServer.closed).toBe(true);
+  });
 
   test('does not call openBrowser when open:false, but does when open:true', async () => {
     mockTokenEndpoint({ access_token: fixtureAccessToken('a@b.com'), refresh_token: 'rt', expires_in: 3600 });
+    const fakeServer = new FakeLoopbackServer();
     let opened: string | undefined;
-    const waiter = authUrlWaiter();
+    let authUrl: string | undefined;
     const resultPromise = runBrowserLogin({
       clientId: 'c',
       tenant: 'common',
       scope: 'offline_access',
       open: true,
+      _createLoopbackServer: () => fakeServer,
       openBrowser: (u) => {
         opened = u;
       },
-      onAuthorizationUrl: waiter.onAuthorizationUrl
+      onAuthorizationUrl: (u) => {
+        authUrl = u;
+      }
     });
-    const authUrl = await waiter.promise;
+    await new Promise((r) => queueMicrotask(r as () => void));
     expect(opened).toBe(authUrl);
-    const state = new URL(authUrl).searchParams.get('state');
-    const redirectUri = new URL(authUrl).searchParams.get('redirect_uri') as string;
-    await originalFetch(`${redirectUri}?code=abc&state=${state}`);
+    const state = new URL(authUrl as string).searchParams.get('state');
+    fakeServer.fireCallback(`?code=abc&state=${state}`);
     await resultPromise;
-  }, 20_000);
+  });
 
   test('rejects with BrowserLoginError on state mismatch', async () => {
-    const waiter = authUrlWaiter();
+    const fakeServer = new FakeLoopbackServer();
     const resultPromise = runBrowserLogin({
       clientId: 'c',
       tenant: 'common',
       scope: 'offline_access',
       open: false,
-      onAuthorizationUrl: waiter.onAuthorizationUrl
+      _createLoopbackServer: () => fakeServer
     });
-    resultPromise.catch(() => {}); // mark handled before the network round trip below settles it
-    const authUrl = await waiter.promise;
-    const redirectUri = new URL(authUrl).searchParams.get('redirect_uri') as string;
-    await originalFetch(`${redirectUri}?code=abc&state=wrong-state`);
+    resultPromise.catch(() => {}); // mark handled before the synthetic callback below settles it
+    await new Promise((r) => queueMicrotask(r as () => void));
+    fakeServer.fireCallback('?code=abc&state=wrong-state');
     await expect(resultPromise).rejects.toBeInstanceOf(BrowserLoginError);
     await expect(resultPromise).rejects.toThrow(/state mismatch/i);
-  }, 20_000);
+  });
 
   test('rejects with BrowserLoginError when Microsoft returns an error (e.g. user cancelled)', async () => {
-    const waiter = authUrlWaiter();
+    const fakeServer = new FakeLoopbackServer();
+    let authUrl: string | undefined;
     const resultPromise = runBrowserLogin({
       clientId: 'c',
       tenant: 'common',
       scope: 'offline_access',
       open: false,
-      onAuthorizationUrl: waiter.onAuthorizationUrl
+      _createLoopbackServer: () => fakeServer,
+      onAuthorizationUrl: (u) => {
+        authUrl = u;
+      }
     });
-    resultPromise.catch(() => {}); // mark handled before the network round trip below settles it
-    const authUrl = await waiter.promise;
-    const state = new URL(authUrl).searchParams.get('state');
-    const redirectUri = new URL(authUrl).searchParams.get('redirect_uri') as string;
-    await originalFetch(`${redirectUri}?error=access_denied&error_description=User+cancelled&state=${state}`);
+    resultPromise.catch(() => {}); // mark handled before the synthetic callback below settles it
+    await new Promise((r) => queueMicrotask(r as () => void));
+    const state = new URL(authUrl as string).searchParams.get('state');
+    fakeServer.fireCallback(`?error=access_denied&error_description=User+cancelled&state=${state}`);
     await expect(resultPromise).rejects.toThrow(/Microsoft sign-in failed/);
-  }, 20_000);
+  });
 
   test('rejects with BrowserLoginError on callback timeout', async () => {
+    const fakeServer = new FakeLoopbackServer();
     await expect(
       runBrowserLogin({
         clientId: 'c',
         tenant: 'common',
         scope: 'offline_access',
         open: false,
-        callbackTimeoutMs: 30
+        callbackTimeoutMs: 30,
+        _createLoopbackServer: () => fakeServer
       })
     ).rejects.toThrow(/Timed out/);
-  }, 20_000);
+  });
 
   test('rejects when the token endpoint returns an OAuth error', async () => {
     mockTokenEndpoint({ error: 'invalid_grant', error_description: 'code expired' }, 400);
-    const waiter = authUrlWaiter();
+    const fakeServer = new FakeLoopbackServer();
+    let authUrl: string | undefined;
     const resultPromise = runBrowserLogin({
       clientId: 'c',
       tenant: 'common',
       scope: 'offline_access',
       open: false,
-      onAuthorizationUrl: waiter.onAuthorizationUrl
+      _createLoopbackServer: () => fakeServer,
+      onAuthorizationUrl: (u) => {
+        authUrl = u;
+      }
     });
-    resultPromise.catch(() => {}); // mark handled before the network round trip below settles it
-    const authUrl = await waiter.promise;
-    const state = new URL(authUrl).searchParams.get('state');
-    const redirectUri = new URL(authUrl).searchParams.get('redirect_uri') as string;
-    await originalFetch(`${redirectUri}?code=abc&state=${state}`);
+    resultPromise.catch(() => {}); // mark handled before the synthetic callback below settles it
+    await new Promise((r) => queueMicrotask(r as () => void));
+    const state = new URL(authUrl as string).searchParams.get('state');
+    fakeServer.fireCallback(`?code=abc&state=${state}`);
     await expect(resultPromise).rejects.toThrow(/Token exchange failed/);
-  }, 20_000);
+  });
 });
