@@ -13,14 +13,6 @@ function fixtureAccessToken(upn: string): string {
   return `${h}.${p}.x`;
 }
 
-async function pollUntil(predicate: () => boolean, timeoutMs = 10_000): Promise<void> {
-  const start = Date.now();
-  while (!predicate()) {
-    if (Date.now() - start > timeoutMs) throw new Error('pollUntil timed out');
-    await new Promise((r) => setTimeout(r, 5));
-  }
-}
-
 describe('login command flows', () => {
   let testHome: string;
   let envPath: string;
@@ -143,42 +135,33 @@ describe('login command flows', () => {
   });
 
   describe('runBrowserLoginFlow', () => {
-    function mockTokenEndpoint(upn: string): void {
-      global.fetch = (async (input: string | URL | Request) => {
-        const url = typeof input === 'string' ? input : input.toString();
-        if (url.includes('login.microsoftonline.com')) {
-          return new Response(
-            JSON.stringify({ access_token: fixtureAccessToken(upn), refresh_token: 'browser-rt-1', expires_in: 3600 }),
-            { status: 200, headers: { 'content-type': 'application/json' } }
-          );
-        }
-        return originalFetch(input as never);
-      }) as unknown as typeof fetch;
+    // The real loopback + PKCE round trip is covered exhaustively in `browser-login.test.ts`.
+    // Here we inject a fake browser-login runner (via `_runBrowserLogin`) so the command wrapper's
+    // env-persist + identity-binding wiring is tested deterministically, without standing up a real
+    // HTTP server that can starve under full-suite `--isolate` load (see the module's injection doc).
+    function fakeBrowserLogin(result: {
+      accessToken?: string;
+      refreshToken: string;
+      signedInAs?: string;
+    }): NonNullable<Parameters<typeof runBrowserLoginFlow>[0]['_runBrowserLogin']> {
+      return (async (opts) => {
+        opts.onAuthorizationUrl?.('https://login.microsoftonline.com/common/oauth2/v2.0/authorize?state=x');
+        return {
+          accessToken: result.accessToken ?? fixtureAccessToken(result.signedInAs ?? 'a@b.com'),
+          refreshToken: result.refreshToken,
+          expiresAt: Date.now() + 3_600_000,
+          signedInAs: result.signedInAs
+        };
+      }) as NonNullable<Parameters<typeof runBrowserLoginFlow>[0]['_runBrowserLogin']>;
     }
 
-    function extractPrintedAuthUrl(): URL | undefined {
-      for (const line of logs) {
-        if (line.startsWith('https://login.microsoftonline.com/')) {
-          return new URL(line);
-        }
-      }
-      return undefined;
-    }
-
-    test('completes the loopback round trip, persists the refresh token, and binds the identity', async () => {
-      mockTokenEndpoint('doris@lassfolk.net');
-      const resultPromise = runBrowserLoginFlow({ envFile: envPath, identity: 'doris', open: false });
-
-      let authUrl: URL | undefined;
-      await pollUntil(() => {
-        authUrl = extractPrintedAuthUrl();
-        return authUrl !== undefined;
+    test('persists the refresh token and binds the identity on a successful browser login', async () => {
+      const result = await runBrowserLoginFlow({
+        envFile: envPath,
+        identity: 'doris',
+        open: false,
+        _runBrowserLogin: fakeBrowserLogin({ refreshToken: 'browser-rt-1', signedInAs: 'doris@lassfolk.net' })
       });
-      const state = authUrl?.searchParams.get('state');
-      const redirectUri = authUrl?.searchParams.get('redirect_uri') as string;
-      await originalFetch(`${redirectUri}?code=abc123&state=${state}`);
-
-      const result = await resultPromise;
       expect(result.signedInAs).toBe('doris@lassfolk.net');
 
       const written = await readFile(envPath, 'utf8');
@@ -186,9 +169,31 @@ describe('login command flows', () => {
 
       const profile = await getProfile('doris');
       expect(profile?.signedInAs).toBe('doris@lassfolk.net');
-    }, 15_000);
+    });
 
-    test('exits 1 with a clear message when the browser login fails (e.g. timeout)', async () => {
+    test('refuses (does not persist) when the browser login returns a different account than a verified identity', async () => {
+      await runBrowserLoginFlow({
+        envFile: envPath,
+        identity: 'doris',
+        open: false,
+        _runBrowserLogin: fakeBrowserLogin({ refreshToken: 'browser-rt-1', signedInAs: 'doris@lassfolk.net' })
+      });
+      await expect(
+        runBrowserLoginFlow({
+          envFile: envPath,
+          identity: 'doris',
+          open: false,
+          _runBrowserLogin: fakeBrowserLogin({ refreshToken: 'browser-rt-2', signedInAs: 'lotta@lassfolk.net' })
+        })
+      ).rejects.toThrow(LoginAccountMismatchError);
+      // env still bound to the first account's token.
+      const written = await readFile(envPath, 'utf8');
+      expect(written).toContain('M365_REFRESH_TOKEN=browser-rt-1');
+    });
+
+    test('exits 1 with a clear message when the real browser login fails (e.g. timeout)', async () => {
+      // Uses the REAL runBrowserLogin with a 30ms callback timeout — exercises the failure path
+      // end-to-end without waiting on a redirect that never comes.
       const resultPromise = runBrowserLoginFlow({
         envFile: envPath,
         open: false,
