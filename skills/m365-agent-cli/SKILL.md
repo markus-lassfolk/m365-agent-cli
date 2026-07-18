@@ -21,7 +21,6 @@ CLI for Microsoft 365: **Exchange Web Services (EWS)** and **Microsoft Graph**. 
 - **`--identity <name>`** — use a named cache profile (Graph- and EWS-backed commands that expose the flag). Default is `default`.
 - **`--token <token>`** — override cached access token for that request (advanced).
 - Interactive login: `m365-agent-cli login` (device code); tokens land in `.env` / caches. **Delegated Graph scopes** (Entra app + CLI features): **`docs/GRAPH_SCOPES.md`**. For **another user’s** mail/calendar (`--mailbox`), include **Mail/Calendars \*.Shared**; for **`find`**, **Places**/**`rooms`**, add scopes listed there; re-`login` after changing the app registration.
-- **Unattended agents:** device code is the **only** built-in sign-in flow — run it **once** (human), then every later command uses the persisted refresh token non-interactively. Standard no-human alternatives (**app-only client-credentials**, **workload identity federation**) are **not built in**; see [`docs/AUTHENTICATION.md`](../../docs/AUTHENTICATION.md) *Login methods*. Don't automate the device-code **browser UI** to fake unattended login (brittle; raises Conditional Access risk) — use a real **app-only** credential when you need no-human auth.
 - Check session: `m365-agent-cli whoami`, `m365-agent-cli verify-token [--identity <name>]`, `verify-token --capabilities` for a read/write feature matrix from token scopes.
 
 ## Quick command choice (agents)

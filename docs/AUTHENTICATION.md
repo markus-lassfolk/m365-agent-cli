@@ -40,20 +40,6 @@ EWS_TENANT_ID=common  # or your tenant ID
 
 **Tenant ID precedence** (for the OAuth endpoint path, `--tenant`, login device-code flow): `M365_TENANT_ID` > `MICROSOFT_TENANT_ID` > `EWS_TENANT_ID` (legacy) > `common`. The legacy `EWS_TENANT_ID` name remains supported for backwards compatibility.
 
-### Login methods: interactive vs. unattended agents
-
-`m365-agent-cli` ships **one built-in sign-in flow: OAuth2 device code** (interactive). A human completes sign-in once in a browser; the CLI stores a **refresh token**, and every later command runs non-interactively, refreshing short-lived access tokens automatically (see **How It Works** below). For most agents this is enough — the human step happens **once**, not per run.
-
-For a **fully unattended** sign-in with no human at all, the standard OAuth options are below. **These are not currently implemented in the CLI** (device code is the only built-in flow) — they are documented so you can pick the right direction and, where needed, obtain a token out-of-band.
-
-| Method | Acts as | Human? | Credential | Notes |
-| --- | --- | --- | --- | --- |
-| **Device code** (built-in) | signed-in **user** (delegated) | once, interactively | none beyond the resulting refresh token | Default. Full delegated scope set — see [GRAPH_SCOPES.md](./GRAPH_SCOPES.md). |
-| **App-only (client credentials)** | the **application** | no | client **secret** or **certificate** | `grant_type=client_credentials`, `scope=https://graph.microsoft.com/.default`. Needs **application** Graph permissions + **admin consent**. Permissions are **tenant-wide** unless scoped with an [Application Access Policy](https://learn.microsoft.com/en-us/graph/auth-limit-mailbox-access). Any `/me/...` call and some delegated-only surfaces (certain Teams chat, presence, Copilot/Viva user contexts) are unavailable app-only. |
-| **Workload identity federation** | the **application** | no | none (federated OIDC token) | Zero stored secret when the agent runs in an OIDC-capable host (Azure, GitHub Actions, Kubernetes). Same app-only permission model and caveats as above. |
-
-**Prefer a real credential over faking the interactive flow.** Do **not** script the device-code sign-in **UI** with a headless browser to simulate "unattended" login: Microsoft's sign-in markup changes without notice, repeated automated sign-ins raise **Conditional Access** risk scoring (and can trigger a harder lockout), and feeding it a stored password **plus** a stored MFA/TOTP seed collapses two factors into a single stored secret. When you need no-human auth, use **app-only** (secret or certificate) — no password, no MFA seed, no browser.
-
 ### Driving `login` from a script or agent
 
 - **`login` is a synchronous, foreground poll.** It calls Microsoft's token endpoint on an interval until sign-in completes in a browser or the device code expires (`expires_in`, ~15 min). A wrapper that backgrounds `login` **must keep the process alive** until sign-in finishes — killing it early discards the pending device-code session even if the browser page already shows "signed in".
