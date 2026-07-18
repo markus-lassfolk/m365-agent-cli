@@ -42,6 +42,9 @@ EWS_TENANT_ID=common  # or your tenant ID
 
 ### Driving `login` from a script or agent
 
+For a full walkthrough of automating the interactive step end-to-end (headless browser + TOTP) so an agent can re-authenticate on its own, see **[UNATTENDED_LOGIN.md](./UNATTENDED_LOGIN.md)** and the adaptable reference scripts in [`examples/unattended-login/`](../examples/unattended-login/).
+
+- **Machine-readable output:** `m365-agent-cli login --json` emits newline-delimited JSON events (`device_code`, `authenticated`, `complete`, `error`) to stdout so a wrapper can capture the `user_code` / `verification_uri` without scraping log text; human-readable messages go to stderr. Requires `EWS_CLIENT_ID` to be preset (it does not prompt in `--json` mode).
 - **`login` is a synchronous, foreground poll.** It calls Microsoft's token endpoint on an interval until sign-in completes in a browser or the device code expires (`expires_in`, ~15 min). A wrapper that backgrounds `login` **must keep the process alive** until sign-in finishes — killing it early discards the pending device-code session even if the browser page already shows "signed in".
 - **Verify from the CLI, not the wrapper.** After any login, confirm with `m365-agent-cli whoami` and `m365-agent-cli verify-token --capabilities`; don't rely on a wrapper's own success message.
 - **No manual lock cleanup.** Refresh-token exchange is serialized per identity via `.refresh-{identity}.lock` in the config dir, which **auto-heals** stale locks (holder PID gone, or older than 120 s). You never need to delete a lock file by hand between runs.
