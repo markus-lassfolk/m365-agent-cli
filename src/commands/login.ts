@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdirSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, writeSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { createInterface } from 'node:readline/promises';
@@ -16,8 +16,22 @@ import { applyEnvFileOverrides, getGlobalEnvFilePath, resolveEnvFilePathArgument
  */
 function emitEvent(json: boolean, event: Record<string, unknown>): void {
   if (json) {
-    process.stdout.write(`${JSON.stringify(event)}\n`);
+    // Synchronous write to fd 1 (not process.stdout.write): on POSIX a piped stdout is async and
+    // buffered, so an immediate process.exit(1) after an error event could truncate it before it
+    // flushes. writeSync hands the (small) line to the OS before returning, and keeps events ordered.
+    writeSync(1, `${JSON.stringify(event)}\n`);
   }
+}
+
+/**
+ * Route human-readable text to stderr in JSON mode (so stdout stays a clean event stream), else to
+ * stdout. Single source of truth for the routing rule used across the command.
+ */
+function makeHumanLog(json: boolean): (msg: string) => void {
+  return (msg: string): void => {
+    if (json) console.error(msg);
+    else console.log(msg);
+  };
 }
 
 async function performDeviceCodeFlow(
@@ -29,10 +43,7 @@ async function performDeviceCodeFlow(
   json: boolean
 ): Promise<string> {
   // Human-readable text goes to stderr in JSON mode so stdout stays a clean JSON event stream.
-  const humanLog = (msg: string) => {
-    if (json) console.error(msg);
-    else console.log(msg);
-  };
+  const humanLog = makeHumanLog(json);
 
   humanLog(`\nInitiating Device Code flow for ${label}...`);
 
@@ -189,10 +200,7 @@ export const loginCommand = new Command('login')
   )
   .action(async (opts: { envFile?: string; json?: boolean }) => {
     const json = opts.json ?? false;
-    const humanLog = (msg: string) => {
-      if (json) console.error(msg);
-      else console.log(msg);
-    };
+    const humanLog = makeHumanLog(json);
 
     let envPath = getGlobalEnvFilePath();
     if (opts.envFile) {

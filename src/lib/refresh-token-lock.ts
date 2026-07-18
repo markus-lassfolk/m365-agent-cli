@@ -98,7 +98,7 @@ async function releaseIfOwned(lockPath: string, token: string): Promise<void> {
 export type RefreshTokenLockOptions = {
   /** Consider a lock stale after this age (or sooner if holder PID is gone). Default 120s. */
   staleMs?: number;
-  /** Give up waiting after this long. Should exceed staleMs so a stale lock can be reclaimed. Default 180s. */
+  /** Give up waiting after this long; clamped up to at least staleMs so a stale lock stays reclaimable. Default 180s. */
   maxWaitMs?: number;
   /** Poll interval while waiting. Default 50ms. */
   pollMs?: number;
@@ -118,7 +118,9 @@ export async function withRefreshTokenLock<T>(
   }
 
   const staleMs = options?.staleMs ?? DEFAULT_STALE_MS;
-  const maxWaitMs = options?.maxWaitMs ?? DEFAULT_MAX_WAIT_MS;
+  // Never wait less than the stale threshold, or a waiter would give up before the held lock is
+  // even eligible to be reclaimed as stale (enforces the invariant for custom staleMs too).
+  const maxWaitMs = Math.max(options?.maxWaitMs ?? DEFAULT_MAX_WAIT_MS, staleMs);
   const pollMs = options?.pollMs ?? DEFAULT_POLL_MS;
   const lockPath = refreshTokenLockPath(identity);
   const dir = getM365AgentCliConfigDir();
