@@ -8,12 +8,19 @@ function fixtureAccessToken(upn: string): string {
   return `${h}.${p}.x`;
 }
 
-async function pollUntil(predicate: () => boolean, timeoutMs = 10_000): Promise<void> {
-  const start = Date.now();
-  while (!predicate()) {
-    if (Date.now() - start > timeoutMs) throw new Error('pollUntil timed out');
-    await new Promise((r) => setTimeout(r, 5));
-  }
+/**
+ * Resolves the instant `onAuthorizationUrl` fires — a single promise, not a `setTimeout` polling
+ * loop. Polling with a fixed interval needs many event-loop ticks to "catch" a state change and
+ * gets increasingly unreliable (spurious timeouts) as the scheduler falls behind under heavy
+ * concurrent load (e.g. the full suite's `--isolate` run); a directly-resolved promise has no such
+ * dependency — it fires on the first tick after the callback runs, however delayed that tick is.
+ */
+function authUrlWaiter(): { onAuthorizationUrl: (url: string) => void; promise: Promise<string> } {
+  let resolve!: (url: string) => void;
+  const promise = new Promise<string>((res) => {
+    resolve = res;
+  });
+  return { onAuthorizationUrl: (url: string) => resolve(url), promise };
 }
 
 describe('runBrowserLogin', () => {
@@ -43,19 +50,17 @@ describe('runBrowserLogin', () => {
       expires_in: 3600
     });
 
-    let authUrl: string | undefined;
+    const waiter = authUrlWaiter();
     const resultPromise = runBrowserLogin({
       clientId: 'client-1',
       tenant: 'common',
       scope: 'offline_access',
       open: false,
-      onAuthorizationUrl: (u) => {
-        authUrl = u;
-      }
+      onAuthorizationUrl: waiter.onAuthorizationUrl
     });
 
-    await pollUntil(() => authUrl !== undefined);
-    const parsed = new URL(authUrl as string);
+    const authUrl = await waiter.promise;
+    const parsed = new URL(authUrl);
     expect(parsed.searchParams.get('code_challenge_method')).toBe('S256');
     expect(parsed.hostname).toBe('login.microsoftonline.com');
     const state = parsed.searchParams.get('state');
@@ -68,12 +73,12 @@ describe('runBrowserLogin', () => {
     expect(result.refreshToken).toBe('rt-1');
     expect(result.signedInAs).toBe('doris@lassfolk.net');
     expect(result.expiresAt).toBeGreaterThan(Date.now());
-  }, 15_000);
+  }, 20_000);
 
   test('does not call openBrowser when open:false, but does when open:true', async () => {
     mockTokenEndpoint({ access_token: fixtureAccessToken('a@b.com'), refresh_token: 'rt', expires_in: 3600 });
     let opened: string | undefined;
-    let authUrl: string | undefined;
+    const waiter = authUrlWaiter();
     const resultPromise = runBrowserLogin({
       clientId: 'c',
       tenant: 'common',
@@ -82,79 +87,77 @@ describe('runBrowserLogin', () => {
       openBrowser: (u) => {
         opened = u;
       },
-      onAuthorizationUrl: (u) => {
-        authUrl = u;
-      }
+      onAuthorizationUrl: waiter.onAuthorizationUrl
     });
-    await pollUntil(() => authUrl !== undefined);
+    const authUrl = await waiter.promise;
     expect(opened).toBe(authUrl);
-    const state = new URL(authUrl as string).searchParams.get('state');
-    const redirectUri = new URL(authUrl as string).searchParams.get('redirect_uri') as string;
+    const state = new URL(authUrl).searchParams.get('state');
+    const redirectUri = new URL(authUrl).searchParams.get('redirect_uri') as string;
     await originalFetch(`${redirectUri}?code=abc&state=${state}`);
     await resultPromise;
-  });
+  }, 20_000);
 
   test('rejects with BrowserLoginError on state mismatch', async () => {
-    let authUrl: string | undefined;
+    const waiter = authUrlWaiter();
     const resultPromise = runBrowserLogin({
       clientId: 'c',
       tenant: 'common',
       scope: 'offline_access',
       open: false,
-      onAuthorizationUrl: (u) => {
-        authUrl = u;
-      }
+      onAuthorizationUrl: waiter.onAuthorizationUrl
     });
     resultPromise.catch(() => {}); // mark handled before the network round trip below settles it
-    await pollUntil(() => authUrl !== undefined);
-    const redirectUri = new URL(authUrl as string).searchParams.get('redirect_uri') as string;
+    const authUrl = await waiter.promise;
+    const redirectUri = new URL(authUrl).searchParams.get('redirect_uri') as string;
     await originalFetch(`${redirectUri}?code=abc&state=wrong-state`);
     await expect(resultPromise).rejects.toBeInstanceOf(BrowserLoginError);
     await expect(resultPromise).rejects.toThrow(/state mismatch/i);
-  });
+  }, 20_000);
 
   test('rejects with BrowserLoginError when Microsoft returns an error (e.g. user cancelled)', async () => {
-    let authUrl: string | undefined;
+    const waiter = authUrlWaiter();
     const resultPromise = runBrowserLogin({
       clientId: 'c',
       tenant: 'common',
       scope: 'offline_access',
       open: false,
-      onAuthorizationUrl: (u) => {
-        authUrl = u;
-      }
+      onAuthorizationUrl: waiter.onAuthorizationUrl
     });
     resultPromise.catch(() => {}); // mark handled before the network round trip below settles it
-    await pollUntil(() => authUrl !== undefined);
-    const state = new URL(authUrl as string).searchParams.get('state');
-    const redirectUri = new URL(authUrl as string).searchParams.get('redirect_uri') as string;
+    const authUrl = await waiter.promise;
+    const state = new URL(authUrl).searchParams.get('state');
+    const redirectUri = new URL(authUrl).searchParams.get('redirect_uri') as string;
     await originalFetch(`${redirectUri}?error=access_denied&error_description=User+cancelled&state=${state}`);
     await expect(resultPromise).rejects.toThrow(/Microsoft sign-in failed/);
-  });
+  }, 20_000);
 
   test('rejects with BrowserLoginError on callback timeout', async () => {
     await expect(
-      runBrowserLogin({ clientId: 'c', tenant: 'common', scope: 'offline_access', open: false, callbackTimeoutMs: 30 })
+      runBrowserLogin({
+        clientId: 'c',
+        tenant: 'common',
+        scope: 'offline_access',
+        open: false,
+        callbackTimeoutMs: 30
+      })
     ).rejects.toThrow(/Timed out/);
-  });
+  }, 20_000);
 
   test('rejects when the token endpoint returns an OAuth error', async () => {
     mockTokenEndpoint({ error: 'invalid_grant', error_description: 'code expired' }, 400);
-    let authUrl: string | undefined;
+    const waiter = authUrlWaiter();
     const resultPromise = runBrowserLogin({
       clientId: 'c',
       tenant: 'common',
       scope: 'offline_access',
       open: false,
-      onAuthorizationUrl: (u) => {
-        authUrl = u;
-      }
+      onAuthorizationUrl: waiter.onAuthorizationUrl
     });
     resultPromise.catch(() => {}); // mark handled before the network round trip below settles it
-    await pollUntil(() => authUrl !== undefined);
-    const state = new URL(authUrl as string).searchParams.get('state');
-    const redirectUri = new URL(authUrl as string).searchParams.get('redirect_uri') as string;
+    const authUrl = await waiter.promise;
+    const state = new URL(authUrl).searchParams.get('state');
+    const redirectUri = new URL(authUrl).searchParams.get('redirect_uri') as string;
     await originalFetch(`${redirectUri}?code=abc&state=${state}`);
     await expect(resultPromise).rejects.toThrow(/Token exchange failed/);
-  });
+  }, 20_000);
 });
