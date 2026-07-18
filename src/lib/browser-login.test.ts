@@ -59,7 +59,9 @@ describe('runBrowserLogin', () => {
   function mockTokenEndpoint(responseBody: unknown, status = 200): void {
     global.fetch = (async (input: string | URL | Request) => {
       const url = typeof input === 'string' ? input : input.toString();
-      if (url.includes('login.microsoftonline.com')) {
+      // Exact hostname check, not a substring match — a substring check would also match an
+      // attacker-controlled URL like https://evil.example/login.microsoftonline.com.
+      if (new URL(url).hostname === 'login.microsoftonline.com') {
         return new Response(JSON.stringify(responseBody), {
           status,
           headers: { 'content-type': 'application/json' }
