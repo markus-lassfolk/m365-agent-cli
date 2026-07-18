@@ -74,8 +74,8 @@ main() {
     echo "FAIL: empty credentials (implement fetch_secret for your secret store)" >&2
     exit 1
   fi
-  # Log lengths only, never values.
-  echo "creds: email_len=${#email} password_len=${#password} totp_secret_len=${#totp_secret}" >&2
+  # Never log the credential values (or their lengths).
+  echo "credentials loaded; starting sign-in" >&2
 
   for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
     echo "=== attempt ${attempt}/${MAX_ATTEMPTS} ===" >&2

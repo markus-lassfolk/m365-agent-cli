@@ -42,7 +42,7 @@ const VERIFICATION_URI = process.env.M365_VERIFICATION_URI?.trim() || 'https://m
 const VERIFICATION_URI_COMPLETE = process.env.M365_VERIFICATION_URI_COMPLETE?.trim() || '';
 const STEP_TIMEOUT = Number(process.env.M365_LOGIN_TIMEOUT_MS || '20000');
 
-// Log to stderr only, and never a secret value — lengths and page context only.
+// Log to stderr only, and never a secret value (not even its length) — page context only.
 function step(msg) {
   console.error(`[device-login] ${msg}`);
 }
@@ -72,7 +72,7 @@ async function clickAny(page, selectors) {
 }
 
 async function main() {
-  step(`email_len=${EMAIL.length} password_len=${PASSWORD.length} totp_secret_len=${TOTP_SECRET.length}`);
+  step('starting device-code sign-in');
   const profileDir = mkdtempSync(join(tmpdir(), 'm365-device-login-'));
   let success = false;
 

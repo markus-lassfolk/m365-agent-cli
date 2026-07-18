@@ -130,7 +130,8 @@ Drive these in order (selectors change over time — treat them as a starting po
 ## Hygiene and safety (every run)
 
 - **Never hardcode secrets** in scripts or files under the repo/workspace. Pass them via environment
-  variables set at execution time; log **lengths**, never values.
+  variables set at execution time; **never log their values — not even lengths**, which can trip secret
+  scanners. Log a generic status line instead.
 - **Keep the browser profile and screenshots in a temp dir** (`mktemp -d` / `os.tmpdir()`), never in your
   workspace or the repo, and delete them on success.
 - **Cap automated attempts** (e.g. ≤ 5 per incident). Repeated automated sign-ins against the same account
