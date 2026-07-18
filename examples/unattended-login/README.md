@@ -17,16 +17,28 @@ and the section on when *not* to use it.
   Security info wizard, scrapes the base32 seed off the **Can't scan image?** screen, activates it, and
   prints `{"totp_secret":"…","account_name":"…"}` to **stdout** for you to store. See the "Automated
   first-time TOTP enrollment" section of the docs for when this is (and isn't) possible.
-- **`refresh-token.sh`** — orchestration: fetch creds from *your* secret store, run `m365-agent-cli login
-  --json`, parse the `device_code` event, run `device-login.mjs`, then verify. Caps retries.
+- **`enroll.sh`** — orchestration for enrollment: fetch email + password from *your* secret store, run
+  `enroll-totp.mjs`, store the returned seed back, then verify end-to-end by running `refresh-token.sh`
+  (which re-reads the stored seed — so it also proves the round-trip).
+- **`refresh-token.sh`** — orchestration for steady-state login: fetch creds from *your* secret store, run
+  `m365-agent-cli login --json`, parse the `device_code` event, run `device-login.mjs`, then verify. Caps
+  retries.
 - **`package.json`** — the two dependencies (`playwright`, `otplib`).
 
 ## One-time enrollment (optional)
 
-If you're bootstrapping a brand-new account and want the automation to obtain the TOTP seed itself:
+If you're bootstrapping a brand-new account and want the automation to obtain the TOTP seed itself,
+implement `fetch_secret()` + `store_secret()` in `enroll.sh` and run it once:
 
 ```bash
-# Capture the seed straight into your vault — never a log file:
+bash enroll.sh
+# fetch email+password -> enroll-totp.mjs -> store the seed -> verify via refresh-token.sh
+# prints FINAL_RESULT=SUCCESS or FINAL_RESULT=FAILURE
+```
+
+Or drive `enroll-totp.mjs` directly and capture the seed straight into your vault — never a log file:
+
+```bash
 M365_EMAIL=agent@contoso.com M365_PASSWORD="$(fetch_secret agent-password)" \
   node enroll-totp.mjs | your-vault put agent-totp-seed
 ```

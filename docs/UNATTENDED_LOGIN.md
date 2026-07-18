@@ -129,6 +129,12 @@ M365_EMAIL=agent@contoso.com M365_PASSWORD="$(fetch_secret agent-password)" \
 # stdout on success: {"totp_secret":"…","account_name":"agent@contoso.com"}
 ```
 
+For the full hands-off bootstrap, [`enroll.sh`](../examples/unattended-login/enroll.sh) wraps it: fetch
+email + password from your store → run `enroll-totp.mjs` → store the returned seed → **verify** by running
+[`refresh-token.sh`](../examples/unattended-login/refresh-token.sh), which re-reads the stored seed and
+completes a real device-code sign-in (so it also proves the seed round-tripped your store). Implement
+`fetch_secret()`/`store_secret()` for your vault, then `bash enroll.sh`.
+
 This works only when **two independent gates** are open — know them before you rely on it:
 
 1. **Getting in with a password.** Fine interactively (this script drives the browser). It does **not** work via
