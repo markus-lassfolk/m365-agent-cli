@@ -21,6 +21,7 @@ CLI for Microsoft 365: **Exchange Web Services (EWS)** and **Microsoft Graph**. 
 - **`--identity <name>`** — use a named cache profile (Graph- and EWS-backed commands that expose the flag). Default is `default`.
 - **`--token <token>`** — override cached access token for that request (advanced).
 - Interactive login: `m365-agent-cli login` (device code); tokens land in `.env` / caches. **Delegated Graph scopes** (Entra app + CLI features): **`docs/GRAPH_SCOPES.md`**. For **another user’s** mail/calendar (`--mailbox`), include **Mail/Calendars \*.Shared**; for **`find`**, **Places**/**`rooms`**, add scopes listed there; re-`login` after changing the app registration.
+- **Unattended / headless login & MFA enrollment:** automate the device-code step, and bootstrap a software **TOTP** (optionally signing in with a **Temporary Access Pass** when the tenant requires MFA to register, or the account already has MFA) — see **`docs/UNATTENDED_LOGIN.md`** and **`examples/unattended-login/`** (`enroll-totp.mjs`, `enroll.sh`). A TAP can't set a password and TOTP is only a second factor, so a first-factor password must still exist for refreshes.
 - Check session: `m365-agent-cli whoami`, `m365-agent-cli verify-token [--identity <name>]`, `verify-token --capabilities` for a read/write feature matrix from token scopes.
 
 ## Quick command choice (agents)
