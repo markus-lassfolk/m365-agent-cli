@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdirSync, writeSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { createInterface } from 'node:readline/promises';
@@ -16,11 +16,31 @@ import { applyEnvFileOverrides, getGlobalEnvFilePath, resolveEnvFilePathArgument
  */
 function emitEvent(json: boolean, event: Record<string, unknown>): void {
   if (json) {
-    // Synchronous write to fd 1 (not process.stdout.write): on POSIX a piped stdout is async and
-    // buffered, so an immediate process.exit(1) after an error event could truncate it before it
-    // flushes. writeSync hands the (small) line to the OS before returning, and keeps events ordered.
-    writeSync(1, `${JSON.stringify(event)}\n`);
+    process.stdout.write(`${JSON.stringify(event)}\n`);
   }
+}
+
+/**
+ * Emit a terminal JSON error event (in `--json` mode) and exit. Unlike emitEvent + process.exit,
+ * this awaits the stdout write callback first: on POSIX a piped stdout is asynchronous, so a bare
+ * exit could truncate the final event before it flushes. A short fallback timer still exits if the
+ * write callback never fires (e.g. the reader closed the pipe → EPIPE).
+ */
+async function fatalJson(json: boolean, event: Record<string, unknown>, code = 1): Promise<never> {
+  if (json) {
+    await new Promise<void>((resolve) => {
+      let settled = false;
+      const finish = (): void => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+      const timer = setTimeout(finish, 1000);
+      if (typeof timer.unref === 'function') timer.unref();
+      process.stdout.write(`${JSON.stringify(event)}\n`, finish);
+    });
+  }
+  process.exit(code);
 }
 
 /**
@@ -60,12 +80,11 @@ async function performDeviceCodeFlow(
 
   if (!deviceCodeRes.ok) {
     console.error(`Failed to initiate ${label} device code flow:`, deviceCodeJson);
-    emitEvent(json, {
+    await fatalJson(json, {
       event: 'error',
       error: deviceCodeJson.error ?? 'devicecode_request_failed',
       error_description: deviceCodeJson.error_description
     });
-    process.exit(1);
   }
 
   humanLog('\n=========================================================');
@@ -97,12 +116,11 @@ async function performDeviceCodeFlow(
   while (!authenticated) {
     if (Date.now() > expiresAt) {
       console.error(`\n${label} device code expired. Please run the command again.`);
-      emitEvent(json, {
+      await fatalJson(json, {
         event: 'error',
         error: 'expired_token',
         error_description: 'Device code expired before sign-in completed.'
       });
-      process.exit(1);
     }
 
     await new Promise((resolve) => setTimeout(resolve, pollInterval));
@@ -160,12 +178,11 @@ async function performDeviceCodeFlow(
       }
       if (!refreshToken) {
         console.error(`\nFailed to obtain ${label} refresh token. Ensure the offline_access scope is granted.`);
-        emitEvent(json, {
+        await fatalJson(json, {
           event: 'error',
           error: 'no_refresh_token',
           error_description: 'No refresh token returned; ensure the offline_access scope is granted.'
         });
-        process.exit(1);
       }
     } else if (tokenJson.error === 'authorization_pending') {
       // Continue polling
@@ -173,12 +190,11 @@ async function performDeviceCodeFlow(
       pollInterval += 5000;
     } else {
       console.error(`\n${label} authentication failed:`, tokenJson.error_description || tokenJson.error);
-      emitEvent(json, {
+      await fatalJson(json, {
         event: 'error',
         error: tokenJson.error ?? 'authentication_failed',
         error_description: tokenJson.error_description
       });
-      process.exit(1);
     }
   }
 
@@ -225,12 +241,11 @@ export const loginCommand = new Command('login')
     if (!clientId) {
       if (json) {
         // Non-interactive mode must not block on stdin waiting for a client id.
-        emitEvent(json, {
+        await fatalJson(json, {
           event: 'error',
           error: 'missing_client_id',
           error_description: 'Set EWS_CLIENT_ID in the environment or .env before using --json (non-interactive) mode.'
         });
-        process.exit(1);
       }
 
       const rl = createInterface({
