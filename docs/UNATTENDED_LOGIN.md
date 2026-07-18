@@ -47,7 +47,71 @@ cap your attempts and be ready to fall back to a person.
   In `--json` mode the CLI does **not** prompt for a missing client id — it errors instead.
 - **Node.js** and **Playwright** with a Chromium build on the host (`npm i playwright`).
 - A **TOTP library** to generate codes from your seed — Node: `otplib`; Python: `pyotp`.
-- The account **password** and **base32 TOTP seed**, retrievable from your secret store at runtime.
+- The account **password** and **base32 TOTP seed** — see [Setting up software TOTP](#setting-up-software-totp-one-time) below for how to obtain the seed. Both are read from your secret store at runtime.
+
+---
+
+## Setting up software TOTP (one-time)
+
+The automation needs the account's **TOTP shared secret** — a base32 string — so it can generate codes the
+way a phone authenticator would. A normal phone setup hides that secret behind a QR code; for automation you
+need the **raw value**. Two ways to get one:
+
+### Option A — reveal the secret during self-service registration
+
+Best when you (or the account owner) can sign in to the account's security-info page once.
+
+1. Sign in at **<https://mysignins.microsoft.com/security-info>** (also **<https://aka.ms/mfasetup>**) as the
+   account. A brand-new account with no method yet needs a **one-time bootstrap**: have an admin issue a
+   **Temporary Access Pass** (Entra admin center → the user → **Authentication methods → Add → Temporary
+   Access Pass**) and sign in with it. TAP is a bootstrap *only* — you switch to TOTP in the same sitting and
+   never rely on TAP for the running automation (**each TAP rotation revokes all refresh tokens**).
+2. **+ Add sign-in method → Authenticator app → Add**.
+3. On "Start by getting the app", click **I want to use a different authenticator app → Next**.
+4. On "Set up your account", click **Can't scan image?**. This reveals the **Secret key** (the base32 TOTP
+   seed) plus an account name. **Copy the secret key straight into your secret manager — do not scan the QR
+   into a phone.**
+5. Generate a current 6-digit code from that secret (see [Generating codes](#generating-codes)) and enter it
+   to finish registration.
+
+### Option B — provision your own secret as an admin (OATH token)
+
+Cleaner for a controlled automation account: *you* generate the secret, so there's no screen to scrape.
+Requires an admin and that the tenant allows OATH tokens.
+
+1. Generate a random base32 secret with your TOTP library — Node `otplib`: `authenticator.generateSecret()`;
+   Python `pyotp`: `pyotp.random_base32()`.
+2. In the **Entra admin center → Protection → Authentication methods → OATH tokens**, upload a CSV row for the
+   account (UPN, serial number, secret key, … per the on-screen template), then **Activate** the token —
+   activation asks for a current code, which you generate from that secret.
+3. Store the same secret in your secret manager.
+
+Either path leaves you with one thing: a **base32 seed** in your secret store.
+
+### Tenant / admin prerequisites
+
+- The tenant's **Authentication methods policy** (Entra admin center → **Protection → Authentication
+  methods**) must permit the method you chose — allow non-Microsoft / "different" authenticator apps for
+  Option A, or **Software OATH tokens** for Option B. An admin may need to enable it.
+- **Conditional Access** must not block the automation host. A new location or an unmanaged device can trigger
+  an extra challenge the script can't answer — see [When it stops working](#when-it-stops-working).
+
+### Generating codes
+
+Microsoft software TOTP uses the standard parameters: **SHA-1, 6 digits, 30-second period** — the default in
+most libraries, so no extra configuration is needed.
+
+```bash
+# Node (otplib) — what the reference example uses
+node -e "import('otplib').then(({authenticator}) => console.log(authenticator.generate(process.env.M365_TOTP_SECRET)))"
+
+# Python (pyotp)
+python3 -c "import os, pyotp; print(pyotp.TOTP(os.environ['M365_TOTP_SECRET']).now())"
+```
+
+**Verify once before relying on it:** generate a code and confirm it matches what a phone authenticator shows
+for the same secret (or that it completes one manual sign-in). A wrong secret — or non-default parameters
+(SHA-256, 8 digits) — produces codes Microsoft silently rejects.
 
 ---
 
